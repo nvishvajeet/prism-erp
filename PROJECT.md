@@ -511,8 +511,9 @@ Attachments can be linked to specific messages.
 
 | Setting          | Value                                           |
 |------------------|-------------------------------------------------|
-| VCS              | Git (local only — no remote configured yet)     |
+| VCS              | Git — 100% open-source, no proprietary services |
 | Repo root        | `Main/` (same directory as `app.py`)            |
+| Local remote     | `../lab-scheduler.git` (bare repo, same parent folder) |
 | Default branch   | `master`                                        |
 | Git user.name    | AAAA                                            |
 | Git user.email   | general.goje@gmail.com                          |
@@ -523,6 +524,7 @@ Attachments can be linked to specific messages.
 - All work happens on `master` until a branching strategy is adopted.
 - Every AI agent session **must** create at least one commit covering
   its changes **plus** the updated `PROJECT.md`.
+- After committing, **always push**: `git push origin master`
 - Commit messages: imperative mood, first line ≤ 72 chars, blank line
   then body if needed.  Append:
   ```
@@ -553,11 +555,37 @@ python app.py          # starts on http://127.0.0.1:5055
 - No formatter or linter is enforced yet — candidates for future
   adoption: `black`, `ruff`.
 
-### Remote / CI (not yet configured)
+### Local Remote (Bare Repo)
 
-- No remote origin is set. When one is added, update this section with
-  the URL, hosting provider, and any CI pipeline details.
-- Planned: GitHub remote, GitHub Actions for linting + basic tests.
+The project uses a **local bare Git repository** as its remote origin.
+This is pure open-source Git — no proprietary cloud service required.
+
+```
+Scheduler/
+├── Main/                  ← working repo (you edit files here)
+│   └── .git/
+└── lab-scheduler.git/     ← bare remote (push/pull target)
+```
+
+**How it works:** `Main/` has `origin` pointed at `../lab-scheduler.git`.
+AI agents and humans push/pull to this bare repo just like they would
+to GitHub. Standard `git push origin master` / `git pull origin master`.
+
+**Adding a cloud remote later (optional — update this section if you do):**
+```bash
+# Example: connect to GitHub alongside the local remote
+git remote add github https://github.com/youruser/lab-scheduler.git
+git push github master
+# Or replace origin entirely:
+git remote set-url origin https://github.com/youruser/lab-scheduler.git
+```
+Compatible with: GitHub, GitLab, Gitea, Codeberg, Bitbucket, any
+standard Git host. No lock-in.
+
+### CI (not yet configured)
+
+- No CI pipeline is set. When one is added, update this section.
+- Candidates: GitHub Actions, Gitea Actions, or a local pre-push hook.
 
 ---
 

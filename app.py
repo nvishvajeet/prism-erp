@@ -4808,10 +4808,10 @@ def request_detail(request_id: int):
         if step["id"] in actionable_step_ids and can_approve_step(user, step, sample_request["instrument_id"])
     ]
     remarks_author_row = query_one(
-        """SELECT u.name FROM request_events re
-           JOIN users u ON u.id = re.user_id
-           WHERE re.request_id = ? AND re.user_id IS NOT NULL
-           ORDER BY re.created_at DESC LIMIT 1""",
+        """SELECT u.name FROM audit_logs al
+           JOIN users u ON u.id = al.actor_id
+           WHERE al.entity_type = 'sample_request' AND al.entity_id = ? AND al.actor_id IS NOT NULL
+           ORDER BY al.created_at DESC LIMIT 1""",
         (request_id,),
     )
     remarks_author = remarks_author_row["name"] if remarks_author_row else None
@@ -6075,4 +6075,4 @@ def activate():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True, port=5055)
+    app.run(debug=False, port=5055)

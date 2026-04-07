@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="new-request-layout">
+  <div class="card new-request-card">
+    <div class="section-head">
+      <div>
+        <h2>New Request</h2>
+      </div>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="form-grid new-request-form">
+      <section class="form-section">
+        <h3>Instrument</h3>
+        <label>
+          <select name="instrument_id" id="requestInstrumentSelect" required>
+            {% for instrument in instruments %}
+            <option
+              value="{{ instrument['id'] }}"
+              data-name="{{ instrument['name'] }}"
+              data-code="{{ instrument['code'] }}"
+              data-location="{{ instrument['location'] }}"
+              data-capacity="{{ instrument['daily_capacity'] }}"
+              data-operation="{{ intake_mode_label(instrument_intake_mode(instrument)) }}"
+            >
+              {{ instrument["name"] }}{% if instrument_intake_mode(instrument) != 'accepting' %} · {{ intake_mode_label(instrument_intake_mode(instrument)) }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if can_submit_for_others %}
+        <label>
+          <select name="requester_id">
+            {% for requester in requester_candidates %}
+            <option value="{{ requester['id'] }}">{{ requester["name"] }} · {{ requester["email"] }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <textarea name="originator_note" rows="3" placeholder="Optional note"></textarea>
+        </label>
+        {% endif %}
+      </section>
+
+      <section class="form-section">
+        <h3>Sample</h3>
+        <label>Request Title
+          <input type="text" name="title" placeholder="Short name for this job" required>
+        </label>
+        <label>Sample Name
+          <input type="text" name="sample_name" placeholder="What is being submitted" required>
+        </label>
+        <div class="new-request-inline-grid">
+          <label>Sample Count
+            <input type="number" name="sample_count" min="0" max="99" value="1" required>
+          </label>
+          <label>Priority
+            <select name="priority">
+              <option value="low">Low</option>
+              <option value="normal" selected>Normal</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label>Internal / External
+            <select name="sample_origin" id="sampleOriginSelect">
+              <option value="internal" selected>Internal</option>
+              <option value="external">External</option>
+            </select>
+          </label>
+        </div>
+        <label>Description
+          <textarea name="description" rows="5" placeholder="What needs to be done, any preparation or handling note" required></textarea>
+        </label>
+      </section>
+
+      <section class="form-section" id="financeFieldsCard">
+        <h3>Finance</h3>
+        <div class="new-request-inline-grid">
+          <label>Receipt Number
+            <input type="text" name="receipt_number" placeholder="Leave blank to generate one">
+          </label>
+          <label>Amount Due
+            <input type="number" step="0.01" min="0" name="amount_due" value="0">
+          </label>
+          <label>Amount Paid
+            <input type="number" step="0.01" min="0" name="amount_paid" value="0">
+          </label>
+          <label>Payment Status
+            <select name="finance_status">
+              <option value="n/a" selected>Not applicable</option>
+              <option value="pending">Pending</option>
+              <option value="partial">Partial</option>
+              <option value="paid">Paid</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h3>File</h3>
+        <label>
+          <input type="file" name="initial_attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt">
+        </label>
+      </section>
+
+      <div class="new-request-submit-row">
+        <button type="submit" class="primary-action">Create Request Card</button>
+      </div>
+    </form>
+  </div>
+
+  <aside class="new-request-side">
+    <div class="card compact">
+      <h2>Instrument</h2>
+      <dl class="detail-grid compact-detail-grid new-request-summary-grid">
+        <dt>Name</dt><dd id="requestInstrumentName">-</dd>
+        <dt>Code</dt><dd id="requestInstrumentCode">-</dd>
+        <dt>Location</dt><dd id="requestInstrumentLocation">-</dd>
+        <dt>Capacity</dt><dd id="requestInstrumentCapacity">-</dd>
+        <dt>Operation</dt><dd id="requestInstrumentOperation">-</dd>
+      </dl>
+    </div>
+  </aside>
+</section>
+<script>
+  (function () {
+    const instrumentSelect = document.getElementById("requestInstrumentSelect");
+    const originSelect = document.getElementById("sampleOriginSelect");
+    const financeCard = document.getElementById("financeFieldsCard");
+    const fields = {
+      name: document.getElementById("requestInstrumentName"),
+      code: document.getElementById("requestInstrumentCode"),
+      location: document.getElementById("requestInstrumentLocation"),
+      capacity: document.getElementById("requestInstrumentCapacity"),
+      operation: document.getElementById("requestInstrumentOperation")
+    };
+
+    function updateInstrumentSummary() {
+      if (!instrumentSelect) return;
+      const option = instrumentSelect.options[instrumentSelect.selectedIndex];
+      if (!option) return;
+      fields.name.textContent = option.dataset.name || "-";
+      fields.code.textContent = option.dataset.code || "-";
+      fields.location.textContent = option.dataset.location || "-";
+      fields.capacity.textContent = (option.dataset.capacity || "-") + (option.dataset.capacity ? " / day" : "");
+      fields.operation.textContent = option.dataset.operation || "-";
+    }
+
+    function updateOriginMode() {
+      if (!originSelect || !financeCard) return;
+      financeCard.classList.toggle("is-muted", originSelect.value !== "external");
+    }
+
+    if (instrumentSelect) {
+      instrumentSelect.addEventListener("change", updateInstrumentSummary);
+      updateInstrumentSummary();
+    }
+    if (originSelect) {
+      originSelect.addEventListener("change", updateOriginMode);
+      updateOriginMode();
+    }
+  })();
+</script>
+{% endblock %}

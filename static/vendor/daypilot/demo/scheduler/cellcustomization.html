@@ -1,0 +1,148 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>JavaScript Scheduler</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note">
+        You can customize the cells using the onBeforeCellRender event.
+
+        Read more about <a href="https://javascript.daypilot.org/scheduler/cell-customization/">cell customization</a>.
+    </div>
+
+    <div id="dp"></div>
+
+    <script type="text/javascript">
+
+        const dp = new DayPilot.Scheduler("dp", {
+            startDate: "2026-04-01",
+            days: 365,
+            scale: "Day",
+            timeHeaders: [
+                {groupBy: "Month", format: "MMMM yyyy"},
+                {groupBy: "Day", format: "d"}
+            ],
+            heightSpec: "Max",
+            height: 400,
+            cellWidth: 80,
+            contextMenu: new DayPilot.Menu({
+                items: [
+                    {
+                        text: "Edit",
+                        onClick: async (args) => {
+                            const result = await app.editEvent(args.source.data);
+                            if (!result) {
+                                return;
+                            }
+                            dp.events.update(result);
+                        }
+                    },
+                    {
+                        text: "-"
+                    },
+                    {
+                        text: "Delete",
+                        onClick: (args) => {
+                            dp.events.remove(args.source);
+                        }
+                    },
+                ]
+            }),
+            onTimeRangeSelected: async (args) => {
+                const data = {
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    resource: args.resource,
+                    text: "New event"
+                };
+                const result = await app.editEvent(data);
+                dp.clearSelection();
+                if (!result) {
+                    return;
+                }
+                dp.events.add(result);
+            },
+            onEventClick: async (args) => {
+                const result = await app.editEvent(args.e.data);
+                if (!result) {
+                    return;
+                }
+                dp.events.update(result);
+            },
+            onBeforeCellRender: args => {
+                args.cell.properties.text = args.cell.start.toString("MMM d");
+                args.cell.properties.fontColor = "#ddd";
+                args.cell.properties.verticalAlignment = "center";
+                args.cell.properties.horizontalAlignment = "center";
+            },
+
+        });
+
+        dp.init();
+        dp.scrollTo("2026-04-01");
+
+        const app = {
+            async editEvent(data) {
+                const form = [
+                    { name: "Text", id: "text"},
+                    { name: "Start", id: "start", type: "datetime", disabled: true },
+                    { name: "End", id: "end", type: "datetime", disabled: true },
+                    { name: "Resource", id: "resource", options: dp.resources}
+                ];
+                const modal = await DayPilot.Modal.form(form, data);
+                if (modal.canceled) {
+                    return null;
+                }
+                return modal.result;
+            },
+            loadData() {
+                const resources = [
+                  {name: "Room 1", id: "A"},
+                  {name: "Room 2", id: "B"},
+                  {name: "Room 3", id: "C"},
+                  {name: "Room 4", id: "D"},
+                  {name: "Person 1", id: "E"},
+                  {name: "Person 2", id: "F"},
+                  {name: "Person 3", id: "G"},
+                  {name: "Person 4", id: "H"},
+                  {name: "Tool 1", id: "I"},
+                  {name: "Tool 2", id: "J"},
+                  {name: "Tool 3", id: "K"},
+                  {name: "Tool 4", id: "L"}
+                ];
+
+                dp.update({resources});
+            },
+        };
+
+        app.loadData();
+
+    </script>
+
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+<!-- /bottom -->
+
+
+</body>
+</html>
+

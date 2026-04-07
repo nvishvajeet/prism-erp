@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
+{% from "_page_macros.html" import card_heading %}
+{% block content %}
+
+{% if dashboard_metrics %}
+<section class="grid-two">
+  <div class="card">
+    {{ card_heading("", "This Week") }}
+    <section class="stats compact-stats">
+      <a class="stat dark-stat stat-link stat-tone-week-jobs" href="{{ url_for('stats', horizon='weekly') }}"><span>{{ dashboard_metrics.this_week_jobs }}</span><small>Jobs Done</small></a>
+      <a class="stat dark-stat stat-link stat-tone-week-samples" href="{{ url_for('stats', horizon='weekly') }}"><span>{{ dashboard_metrics.this_week_samples }}</span><small>Samples Done</small></a>
+      <a class="stat stat-link stat-tone-wait" href="{{ url_for('schedule', bucket='pending') }}"><span>{{ dashboard_metrics.pending_this_week }}</span><small>Pending</small></a>
+      {% if dashboard_metrics.avg_return_hours is not none %}
+      <a class="stat stat-link stat-tone-active" href="{{ url_for('stats') }}">
+        <span>
+          {% set h = dashboard_metrics.avg_return_hours %}
+          {% if h < 24 %}{{ "%.1f"|format(h) }}h{% else %}{{ "%.1f"|format(h / 24) }}d{% endif %}
+        </span>
+        <small>Avg Return</small>
+      </a>
+      {% endif %}
+    </section>
+    <div class="chart-list">
+      {% for row in dashboard_metrics.weekly_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span>{{ format_date(row.label) }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track">
+          <div class="chart-fill dark" style="width: {{ row.width }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    {{ card_heading("", "This Month") }}
+    <section class="stats compact-stats">
+      <a class="stat dark-stat stat-link stat-tone-month-jobs" href="{{ url_for('stats', horizon='monthly') }}"><span>{{ dashboard_metrics.this_month_jobs }}</span><small>Jobs Done</small></a>
+      <a class="stat dark-stat stat-link stat-tone-month-samples" href="{{ url_for('stats', horizon='monthly') }}"><span>{{ dashboard_metrics.this_month_samples }}</span><small>Samples Done</small></a>
+    </section>
+    <div class="chart-list">
+      {% for row in dashboard_metrics.monthly_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track">
+          <div class="chart-fill dark" style="width: {{ row.width }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if has_instrument_area_access_user and instrument_fifo_queue %}
+<section class="card" id="instrument-fifo-pane">
+  {% call card_heading("", "Instrument Queues") %}
+    <a class="btn-open-queue" href="{{ url_for('schedule') }}">Open Queue</a>
+  {% endcall %}
+
+  {% if pending_receipt_lookup_rows %}
+  <div class="quick-intake-panel">
+    <label class="quick-intake-search">
+      <input type="text" id="quickIntakeSearch" placeholder="Type job number or sample number">
+    </label>
+    <div class="quick-intake-list scroll-pane wrapped-list" id="quickIntakeList">
+      {% for row in pending_receipt_lookup_rows %}
+      <div class="quick-intake-item" data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}" data-request-id="{{ row['id'] }}">
+        <button type="button" class="quick-intake-button" data-quick-receive="{{ url_for('quick_receive_request', request_id=row['id']) }}">
+          <strong>{{ row["request_no"] }}</strong>
+          <span>{{ row["sample_name"] }}</span>
+          <span class="hint">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="instrument-carousel-wrapper">
+    <div class="instrument-carousel" id="instrumentCarousel">
+      {% for queue in instrument_fifo_queue %}
+      <div class="instrument-card">
+        <div class="instrument-card-head">
+          <strong>{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
+          <a class="btn-open-queue-sm" href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}">Open Queue</a>
+        </div>
+        <div class="instrument-card-body table-scroll scroll-pane">
+          {% if queue.rows %}
+          <table>
+            <thead><tr><th>#</th><th>Request</th><th>Status</th><th>Queued</th></tr></thead>
+            <tbody>
+            {% for row in queue.rows %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ request_identity(row, compact=True) }}</td>
+                <td>{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
+                <td>{{ format_dt(row["sample_submitted_at"] or row["sample_received_at"] or row["created_at"]) }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="muted-note">No jobs queued.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if instrument_fifo_queue|length > 3 %}
+    <div class="carousel-controls">
+      <button class="carousel-btn" id="carouselPrev" aria-label="Previous">&#8592;</button>
+      <span class="carousel-page-indicator" id="carouselIndicator"></span>
+      <button class="carousel-btn" id="carouselNext" aria-label="Next">&#8594;</button>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if not has_instrument_area_access_user %}
+<section class="card">
+  {{ card_heading("", "Your Jobs") }}
+  <div class="link-row">
+    <a class="btn-open-queue" href="{{ url_for('schedule') }}">Open Queue</a>
+    <a class="text-link" href="{{ url_for('new_request') }}">Submit Request</a>
+  </div>
+</section>
+{% endif %}
+
+{% if has_instrument_area_access_user %}
+<script>
+  (function () {
+    var carousel = document.getElementById("instrumentCarousel");
+    var prevBtn = document.getElementById("carouselPrev");
+    var nextBtn = document.getElementById("carouselNext");
+    var indicator = document.getElementById("carouselIndicator");
+    if (!carousel) return;
+    var cards = Array.from(carousel.querySelectorAll(".instrument-card"));
+    var perPage = 3;
+    var page = 0;
+    var total = Math.ceil(cards.length / perPage);
+    function render() {
+      cards.forEach(function (card, i) {
+        card.style.display = (i >= page * perPage && i < (page + 1) * perPage) ? "" : "none";
+      });
+      if (indicator) indicator.textContent = total > 1 ? (page + 1) + " / " + total : "";
+      if (prevBtn) prevBtn.disabled = page === 0;
+      if (nextBtn) nextBtn.disabled = page >= total - 1;
+    }
+    if (prevBtn) prevBtn.addEventListener("click", function () { if (page > 0) { page--; render(); } });
+    if (nextBtn) nextBtn.addEventListener("click", function () { if (page < total - 1) { page++; render(); } });
+    render();
+  })();
+</script>
+{% endif %}
+
+{% if has_instrument_area_access_user and pending_receipt_lookup_rows %}
+<script>
+  (function () {
+    const input = document.getElementById("quickIntakeSearch");
+    const container = document.getElementById("quickIntakeList");
+    if (!input || !container) return;
+    const items = Array.from(container.querySelectorAll(".quick-intake-item"));
+    input.addEventListener("input", function () {
+      const token = input.value.trim().toLowerCase();
+      items.forEach(function (item) {
+        item.hidden = !!(token && !(item.dataset.lookup || "").includes(token));
+      });
+    });
+    container.addEventListener("click", function (event) {
+      const button = event.target.closest("[data-quick-receive]");
+      if (!button || button.disabled) return;
+      event.preventDefault();
+      button.disabled = true;
+      const item = button.closest(".quick-intake-item");
+      fetch(button.dataset.quickReceive, { method: "POST", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (result) {
+          if (!result.ok || !result.data.ok) throw new Error((result.data && result.data.error) || "Could not mark received.");
+          if (item) item.remove();
+        })
+        .catch(function (err) { button.disabled = false; window.alert(err.message); });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

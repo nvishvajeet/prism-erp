@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Instruments</h2>
+    </div>
+    {% if can_add_instrument %}
+    <div class="section-actions">
+      <button type="button" class="mini-icon-button" id="toggleInstrumentCreate" aria-expanded="false" aria-controls="instrumentCreatePanel" title="Add New Instrument">+</button>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% if can_add_instrument %}
+<section class="card edit-panel is-hidden" id="instrumentCreatePanel">
+  <div class="section-head compact-head">
+    <div>
+      <h2>Add New Instrument</h2>
+    </div>
+  </div>
+  <form method="post" class="form-grid compact-admin-form">
+    <input type="hidden" name="action" value="create_instrument">
+    <label>Name
+      <input type="text" name="new_name" required>
+    </label>
+    <label>Code
+      <input type="text" name="new_code" value="{{ suggested_new_code }}" placeholder="INST-011">
+    </label>
+    <label>Category
+      <input type="text" name="new_category" required>
+    </label>
+    <label>Location
+      <input type="text" name="new_location" required>
+    </label>
+    <label>Daily Capacity
+      <input type="number" name="new_daily_capacity" min="1" max="50" value="3">
+    </label>
+    <div class="inline-form-row">
+      <button type="submit">Add Instrument</button>
+      <button type="button" class="link-button subtle" id="cancelInstrumentCreate">Cancel</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+<section class="card">
+  <div class="{% if instruments|length > 25 %}table-scroll scroll-pane instruments-table-shell{% endif %}">
+  <table class="instruments-table">
+    <colgroup>
+      <col class="col-name">
+      <col class="col-links">
+      <col class="col-operation">
+      <col class="col-return">
+      <col class="col-operators">
+      <col class="col-faculty">
+      <col class="col-location">
+      <col class="col-office">
+    </colgroup>
+    <thead>
+      <tr><th>Name</th><th>Links</th><th>Operation</th><th>Avg Return</th><th>Operators</th><th>Faculty In-Charge</th><th>Location</th><th>Office</th></tr>
+    </thead>
+    <tbody>
+      {% for instrument in instruments %}
+      {% if loop.first or instrument["category"] != instruments[loop.index0 - 1]["category"] %}
+      <tr class="category-header-row">
+        <td colspan="8">{{ instrument["category"] or "Uncategorised" }}</td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td>{% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}</td>
+        <td>
+          {% if visible_links[instrument['id']] %}
+          <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], back=url_for('instruments'), source_label='Instruments') }}">Queue</a><br>
+          <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}">Calendar</a><br>
+          <a class="text-link" href="{{ url_for('instrument_history', instrument_id=instrument['id']) }}">History</a>
+          {% else %}
+          <span class="hint">Restricted</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table">
+            <span class="operation-dot" aria-hidden="true"></span>
+            <strong>{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
+          </span>
+        </td>
+        <td>{% set _dur = format_duration_short(turnaround_map.get(instrument["id"])) %}{% if _dur and _dur != '-' %}<span class="duration-blob">{{ _dur }}</span>{% else %}<span class="hint">—</span>{% endif %}</td>
+        <td>
+          {% if instrument["operators"] %}
+          <div class="people-list compact-people-list">
+            {% for person in instrument["operators"].split(',') %}
+            {% set name = person.strip() %}
+            {% if name %}
+            <div>{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        <td>
+          {% if instrument["faculty_in_charge"] %}
+          <div class="people-list compact-people-list">
+            {% for person in instrument["faculty_in_charge"].split(',') %}
+            {% set name = person.strip() %}
+            {% if name %}
+            <div>{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        <td>{{ instrument["location"] }}</td>
+        <td>{{ instrument["office_info"] or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% if can_view_archived and archived_instruments %}
+<section class="card">
+  <div class="section-head">
+    <div>
+      <h2>Archived Instruments</h2>
+    </div>
+  </div>
+  <div class="{% if archived_instruments|length > 25 %}table-scroll scroll-pane instruments-table-shell{% endif %}">
+  <table class="instruments-table archived-instruments-table">
+    <thead>
+      <tr><th>Name</th><th>Links</th><th>Operation</th><th>Location</th><th>Operators</th><th>Faculty In-Charge</th></tr>
+    </thead>
+    <tbody>
+      {% for instrument in archived_instruments %}
+      <tr>
+        <td>{% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}</td>
+        <td>{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">Open</a>{% else %}<span class="hint">Restricted</span>{% endif %}</td>
+        <td>
+          <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table">
+            <span class="operation-dot" aria-hidden="true"></span>
+            <strong>{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
+          </span>
+        </td>
+        <td>{{ instrument["location"] }}</td>
+        <td>
+          {% if instrument["operators"] %}
+          <div class="people-list compact-people-list">
+            {% for person in instrument["operators"].split(',') %}
+            {% set name = person.strip() %}
+            {% if name %}
+            <div>{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        <td>
+          {% if instrument["faculty_in_charge"] %}
+          <div class="people-list compact-people-list">
+            {% for person in instrument["faculty_in_charge"].split(',') %}
+            {% set name = person.strip() %}
+            {% if name %}
+            <div>{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% if can_add_instrument %}
+<script>
+  (function () {
+    const toggle = document.getElementById("toggleInstrumentCreate");
+    const panel = document.getElementById("instrumentCreatePanel");
+    const cancel = document.getElementById("cancelInstrumentCreate");
+    if (!toggle || !panel) return;
+    function closePanel() {
+      panel.classList.add("is-hidden");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+    toggle.addEventListener("click", function () {
+      const hidden = panel.classList.toggle("is-hidden");
+      toggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+    });
+    if (cancel) {
+      cancel.addEventListener("click", closePanel);
+    }
+  })();
+</script>
+{% endif %}
+{% endblock %}

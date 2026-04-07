@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% from "_request_macros.html" import request_identity, instrument_name_link, requester_block, operator_block, meta_link, attachment_list with context %}
+{% from "_stream_macros.html" import stream_header, quick_filter_strip %}
+{% block content %}
+{{ stream_header(title) }}
+<section class="card compact queue-controls-card">
+  {{ quick_filter_strip('processedHistoryQuickFilters', [('completed', 'Done', 'completed', rows|length)], 'completed', 'data-slice-key') }}
+  <div class="queue-control-strip history-control-strip">
+    <label class="queue-search">
+      <span class="hint">Search</span>
+      <input type="text" id="historySearch" value="{{ filters.q }}" placeholder="Request no, sample, requester, operator">
+    </label>
+    {% if instrument_selector_enabled %}
+    <label>
+      <span class="hint">Instrument</span>
+      <select id="historyInstrumentFilter">
+        <option value="">All instruments</option>
+        {% for instrument in instruments %}
+        <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %}>{{ instrument["name"] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% elif instruments %}
+    <label>
+      <span class="hint">Instrument</span>
+      <input type="text" value="{{ instruments[0]['name'] }}" disabled>
+    </label>
+    {% endif %}
+    <label>
+      <span class="hint">From</span>
+      <input type="date" id="historyDateFrom" value="{{ filters.date_from }}">
+    </label>
+    <label>
+      <span class="hint">To</span>
+      <input type="date" id="historyDateTo" value="{{ filters.date_to }}">
+    </label>
+    <label>
+      <span class="hint">Sort</span>
+      <select id="historySort">
+        <option value="completed_desc" {% if filters.sort == 'completed_desc' %}selected{% endif %}>Latest completed</option>
+        <option value="created_desc" {% if filters.sort == 'created_desc' %}selected{% endif %}>Newest submitted</option>
+        <option value="created_asc" {% if filters.sort == 'created_asc' %}selected{% endif %}>Oldest submitted</option>
+        <option value="instrument_asc" {% if filters.sort == 'instrument_asc' %}selected{% endif %}>Instrument</option>
+      </select>
+    </label>
+  </div>
+</section>
+
+<section class="card queue-table-card">
+  <div class="table-scroll scroll-pane archive-table-shell">
+    <table id="historyStreamTable">
+      <thead>
+        <tr>
+          <th>Request</th>
+          <th>Instrument</th>
+          <th>Requester</th>
+          <th>Operator</th>
+          <th>Completed</th>
+          <th>Submitted</th>
+          <th>Files</th>
+        </tr>
+      </thead>
+      <tbody id="historyStreamBody">
+        {% for row in rows %}
+        <tr
+          data-instrument-id="{{ row['instrument_id'] }}"
+          data-instrument-name="{{ (row['instrument_name'] or '')|lower }}"
+          data-completed-at="{{ row['completed_at'] or '' }}"
+          data-created-at="{{ row['created_at'] or '' }}"
+          data-request-id="{{ row['id'] }}"
+          data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}"
+        >
+          <td>{{ request_identity(row, compact=True) }}</td>
+          <td>{{ instrument_name_link(row) }}</td>
+          <td>{{ requester_block(row, show_originator=False, show_email=False) }}</td>
+          <td>{{ operator_block(row) }}</td>
+          <td>{{ meta_link(row, format_dt(row["completed_at"])) }}</td>
+          <td>{{ meta_link(row, format_dt(row["created_at"])) }}</td>
+          <td>{{ attachment_list(row, attachment_map) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">No processed samples found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<script>
+  (function () {
+    const body = document.getElementById("historyStreamBody");
+    const search = document.getElementById("historySearch");
+    const instrument = document.getElementById("historyInstrumentFilter");
+    const dateFrom = document.getElementById("historyDateFrom");
+    const dateTo = document.getElementById("historyDateTo");
+    const sort = document.getElementById("historySort");
+    if (!body) return;
+    const rows = Array.from(body.querySelectorAll("tr[data-search]"));
+
+    function toDay(value) {
+      return value ? value.slice(0, 10) : "";
+    }
+
+    function sortRows() {
+      const selected = sort ? sort.value : "completed_desc";
+      const ordered = rows.slice().sort(function (a, b) {
+        const aCompleted = a.dataset.completedAt || "";
+        const bCompleted = b.dataset.completedAt || "";
+        const aCreated = a.dataset.createdAt || "";
+        const bCreated = b.dataset.createdAt || "";
+        const aInstrument = a.dataset.instrumentName || "";
+        const bInstrument = b.dataset.instrumentName || "";
+        const aId = Number(a.dataset.requestId || "0");
+        const bId = Number(b.dataset.requestId || "0");
+        if (selected === "created_asc") return aCreated.localeCompare(bCreated) || aId - bId;
+        if (selected === "created_desc") return bCreated.localeCompare(aCreated) || bId - aId;
+        if (selected === "instrument_asc") return aInstrument.localeCompare(bInstrument) || bCompleted.localeCompare(aCompleted) || bId - aId;
+        return bCompleted.localeCompare(aCompleted) || bId - aId;
+      });
+      ordered.forEach(function (row) { body.appendChild(row); });
+    }
+
+    function applyFilters() {
+      const token = (search && search.value || "").trim().toLowerCase();
+      const instrumentId = instrument ? instrument.value : {{ filters.instrument_id|tojson }};
+      const from = dateFrom ? dateFrom.value : "";
+      const to = dateTo ? dateTo.value : "";
+      let visible = 0;
+      rows.forEach(function (row) {
+        const rowInstrument = row.dataset.instrumentId || "";
+        const haystack = row.dataset.search || "";
+        const completedAt = toDay(row.dataset.completedAt || row.dataset.createdAt || "");
+        const searchOk = !token || haystack.includes(token);
+        const instrumentOk = !instrumentId || rowInstrument === instrumentId;
+        const fromOk = !from || (completedAt && completedAt >= from);
+        const toOk = !to || (completedAt && completedAt <= to);
+        const show = searchOk && instrumentOk && fromOk && toOk;
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+    }
+
+    [search, instrument, dateFrom, dateTo].forEach(function (node) {
+      if (!node) return;
+      node.addEventListener("input", applyFilters);
+      node.addEventListener("change", applyFilters);
+    });
+    if (sort) {
+      sort.addEventListener("change", function () {
+        sortRows();
+        applyFilters();
+      });
+    }
+    sortRows();
+    applyFilters();
+  })();
+</script>
+{% endblock %}

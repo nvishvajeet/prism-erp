@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import page_intro %}
+{% block content %}
+{% call page_intro("", "Site Map") %}{% endcall %}
+<section class="grid-two sitemap-grid">
+  {% for section in sections %}
+  <div class="card">
+    <h2>{{ section.title }}</h2>
+    <div class="sitemap-list">
+      {% for link in section.links %}
+      <a class="sitemap-link" href="{{ link.href }}">{{ link.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

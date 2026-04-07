@@ -1,0 +1,118 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Resources View (Open-Source JavaScript Event Calendar)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note"><b>Note:</b> Read more about the <a href="https://doc.daypilot.org/calendar/resources-view/">resource calendar</a> [doc.daypilot.org].
+    </div>
+
+    <div id="calendar"></div>
+
+    <script type="text/javascript">
+
+        const calendar = new DayPilot.Calendar("calendar", {
+            startDate: "2025-06-24",
+            viewType: "Resources",
+            headerHeight: 40,
+            eventBorderRadius: 5,
+            columns: [
+                {name: "Room A", id: "A"},
+                {name: "Room B", id: "B"},
+                {name: "Room C", id: "C"},
+                {name: "Room D", id: "D"},
+                {name: "Room E", id: "E"},
+                {name: "Room F", id: "F"},
+                {name: "Room G", id: "G"},
+                {name: "Room H", id: "H"},
+            ],
+            onTimeRangeSelected: async (args) => {
+                const modal = await DayPilot.Modal.prompt("New event name:", "Event");
+                calendar.clearSelection();
+                if (modal.canceled) {
+                    return;
+                }
+                const name = modal.result;
+                calendar.events.add({
+                    start: args.start,
+                    end: args.end,
+                    resource: args.resource,
+                    id: DayPilot.guid(),
+                    text: name
+                });
+            }
+
+        });
+        calendar.init();
+
+        const app = {
+            loadEventData() {
+                const events = [
+                    {
+                        start: "2025-06-24T12:00:00",
+                        end: "2025-06-24T15:00:00",
+                        resource: "B",
+                        id: DayPilot.guid(),
+                        text: "Reservation #101",
+                        barColor: "#f6b26b"
+                    },
+                    {
+                        start: "2025-06-24T10:00:00",
+                        end: "2025-06-24T13:00:00",
+                        resource: "C",
+                        id: DayPilot.guid(),
+                        text: "Reservation #102",
+                        barColor: "#93c47d"
+                    },
+                    {
+                        start: "2025-06-24T14:00:00",
+                        end: "2025-06-24T17:00:00",
+                        resource: "C",
+                        id: DayPilot.guid(),
+                        text: "Reservation #103",
+                        barColor: "#6fa8dc"
+                    },
+                    {
+                        start: "2025-06-24T11:00:00",
+                        end: "2025-06-24T15:00:00",
+                        resource: "D",
+                        id: DayPilot.guid(),
+                        text: "Reservation #104",
+                        barColor: "#f1c232"
+                    },
+                ];
+                calendar.update({events});
+            },
+            init() {
+                this.loadEventData();
+            }
+        };
+        app.init();
+
+    </script>
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+
+<!-- /bottom -->
+
+</body>
+</html>
+

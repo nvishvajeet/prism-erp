@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import page_intro, card_heading %}
+{% block content %}
+{% call page_intro("", page_title) %}
+  {% if scope_kind == 'instrument' and current_instrument %}
+  <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=current_instrument['id']) }}">Instrument Page</a>
+  {% endif %}
+  {% if can_access_stats_user %}
+  <a class="text-link" href="{{ url_for('stats') }}">Statistics</a>
+  {% endif %}
+  {% if can_access_schedule_user %}
+  <a class="text-link" href="{{ url_for('schedule') }}">Queue</a>
+  {% endif %}
+{% endcall %}
+
+<section class="grid-two">
+  <div class="card">
+    {{ card_heading("", "Filters") }}
+    <form method="get" class="form-grid filters-grid">
+      {% if scope_kind == 'global' and instrument_selector_enabled %}
+      <label>Instrument
+        <select name="instrument_id">
+          <option value="">All instruments</option>
+          {% for instrument in instruments %}
+          <option value="{{ instrument['id'] }}" {% if report_filters.instrument_id == instrument['id']|string %}selected{% endif %}>{{ instrument["code"] }} - {{ instrument["name"] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% elif scope_kind == 'global' and instruments|length == 1 %}
+      <label>Instrument
+        <input type="hidden" name="instrument_id" value="{{ instruments[0]['id'] }}">
+        <input type="text" value="{{ instruments[0]['code'] }} - {{ instruments[0]['name'] }}" disabled>
+      </label>
+      {% endif %}
+      <label>Horizon
+        <select name="horizon">
+          <option value="weekly" {% if report_filters.horizon == 'weekly' %}selected{% endif %}>Weekly</option>
+          <option value="monthly" {% if report_filters.horizon == 'monthly' %}selected{% endif %}>Monthly</option>
+          <option value="yearly" {% if report_filters.horizon == 'yearly' %}selected{% endif %}>Yearly</option>
+          <option value="range" {% if report_filters.horizon == 'range' %}selected{% endif %}>Custom Range</option>
+          <option value="all" {% if report_filters.horizon == 'all' %}selected{% endif %}>All Time</option>
+        </select>
+      </label>
+      <label>Date From
+        <input type="date" name="date_from" value="{{ report_filters.date_from }}">
+      </label>
+      <label>Date To
+        <input type="date" name="date_to" value="{{ report_filters.date_to }}">
+      </label>
+      <button type="submit">Apply</button>
+    </form>
+  </div>
+
+  <div class="card">
+    {{ card_heading("", "Export") }}
+    <form method="post" action="{{ url_for(export_endpoint) }}" class="action-form">
+      <input type="hidden" name="horizon" value="{{ report_filters.horizon }}">
+      <input type="hidden" name="date_from" value="{{ report_filters.date_from }}">
+      <input type="hidden" name="date_to" value="{{ report_filters.date_to }}">
+      {% if export_scope.instrument_id %}
+      <input type="hidden" name="instrument_id" value="{{ export_scope.instrument_id }}">
+      {% endif %}
+      {% if export_scope.group_name %}
+      <input type="hidden" name="group_name" value="{{ export_scope.group_name }}">
+      {% endif %}
+      <button type="submit">Download Data Sheet</button>
+    </form>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="stat"><span>{{ stats.summary.this_week_jobs }}</span><small>This Week Jobs</small></div>
+  <div class="stat"><span>{{ stats.summary.this_week_samples }}</span><small>This Week Samples</small></div>
+  <div class="stat"><span>{{ stats.summary.last_week_jobs }}</span><small>Last Week Jobs</small></div>
+  <div class="stat"><span>{{ stats.summary.month_to_date_jobs }}</span><small>Month-To-Date Jobs</small></div>
+  <div class="stat"><span>{{ stats.summary.avg_jobs_per_week }}</span><small>Avg Jobs / Week</small></div>
+  <div class="stat"><span>{{ stats.summary.avg_samples_per_week }}</span><small>Avg Samples / Week</small></div>
+</section>
+
+<section class="grid-two">
+  <div class="card">
+    <h2>Daily Throughput</h2>
+    <div class="chart-list">
+      {% for row in daily_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track"><div class="chart-fill dark" style="width: {{ row.width }}%"></div></div>
+      </div>
+      {% else %}
+      <p class="hint">No data.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Monthly Samples</h2>
+    <div class="chart-list">
+      {% for row in monthly_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span>{{ row.label }}</span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track"><div class="chart-fill warm" style="width: {{ row.width }}%"></div></div>
+      </div>
+      {% else %}
+      <p class="hint">No data.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{% if scope_kind != 'instrument' %}
+<section class="grid-two">
+  <div class="card">
+    <div class="section-head">
+      <div>
+        <h2>By Instrument</h2>
+      </div>
+    </div>
+    <div class="chart-list">
+      {% for row in instrument_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span><a class="text-link" href="{{ url_for('instrument_visualization', instrument_id=stats.by_instrument[loop.index0]['instrument_id']) }}">{{ row.label }}</a></span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track"><div class="chart-fill" style="width: {{ row.width }}%"></div></div>
+      </div>
+      {% else %}
+      <p class="hint">No data.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <div>
+        <h2>By Group</h2>
+      </div>
+    </div>
+    <div class="chart-list">
+      {% for row in group_chart %}
+      <div class="chart-row">
+        <div class="chart-meta">
+          <span>
+            {% set group_row = stats.by_group[loop.index0] %}
+            {% if group_row['group_name'] != 'Ungrouped' %}
+            <a class="text-link" href="{{ url_for('group_visualization', group_name=group_row['group_name']) }}">{{ row.label }}</a>
+            {% else %}
+            {{ row.label }}
+            {% endif %}
+          </span>
+          <strong>{{ row.value }}</strong>
+        </div>
+        <div class="chart-track"><div class="chart-fill dark" style="width: {{ row.width }}%"></div></div>
+      </div>
+      {% else %}
+      <p class="hint">No data.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="grid-two">
+  <div class="card">
+    <h2>Weekly Table</h2>
+    <table>
+      <thead><tr><th>Week</th><th>Jobs</th><th>Samples</th></tr></thead>
+      <tbody>
+      {% for row in stats.weekly %}
+        <tr><td>{{ row["bucket"] }}</td><td>{{ row["jobs"] }}</td><td>{{ row["samples"] }}</td></tr>
+      {% else %}
+        <tr><td colspan="3">No data.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Instrument Table</h2>
+    <table>
+      <thead><tr><th>Instrument</th><th>Total</th><th>Completed</th><th>Samples</th></tr></thead>
+      <tbody>
+      {% for row in stats.by_instrument %}
+        <tr>
+          <td>
+            {% if scope_kind != 'instrument' %}
+            <a class="text-link" href="{{ url_for('instrument_visualization', instrument_id=row['instrument_id']) }}">{{ row["instrument_name"] }}</a>
+            {% else %}
+            {{ row["instrument_name"] }}
+            {% endif %}
+          </td>
+          <td>{{ row["total_requests"] }}</td>
+          <td>{{ row["completed_jobs"] }}</td>
+          <td>{{ row["completed_samples"] }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No data.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

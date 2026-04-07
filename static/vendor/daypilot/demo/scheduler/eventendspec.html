@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Event End Date/Time (JavaScript Scheduler)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note">
+        The event <code>start</code> and <code>end</code> can be specified as date-only values. The end date will be treated as the
+        end of the day (23:59:59) in this case. <br/>
+        You can enable this behavior by setting the <code>eventEndSpec</code> property to <code>Date</code>.
+
+        Read more about the <a href="https://doc.daypilot.org/scheduler/event-end-date-time/">event end date/time</a>.
+    </div>
+
+    <div id="dp"></div>
+
+    <script type="text/javascript">
+
+        const dp = new DayPilot.Scheduler("dp", {
+            startDate: "2026-04-01",
+            days: 365,
+            scale: "Day",
+            timeHeaders: [
+                {groupBy: "Month", format: "MMMM yyyy"},
+                {groupBy: "Day", format: "d"}
+            ],
+            heightSpec: "Max",
+            height: 400,
+            eventEndSpec: "Date",
+            contextMenu: new DayPilot.Menu({
+                items: [
+                    {
+                        text: "Edit",
+                        onClick: async (args) => {
+                            const result = await app.editEvent(args.source.data);
+                            if (!result) {
+                                return;
+                            }
+                            dp.events.update(result);
+                        }
+                    },
+                    {
+                        text: "-"
+                    },
+                    {
+                        text: "Delete",
+                        onClick: (args) => {
+                            dp.events.remove(args.source);
+                        }
+                    },
+                ]
+            }),
+            onTimeRangeSelected: async (args) => {
+                const data = {
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    resource: args.resource,
+                    text: "New event"
+                };
+                const result = await app.editEvent(data);
+                dp.clearSelection();
+                if (!result) {
+                    return;
+                }
+                dp.events.add(result);
+            },
+            onEventClick: async (args) => {
+                const result = await app.editEvent(args.e.data);
+                if (!result) {
+                    return;
+                }
+                dp.events.update(result);
+            },
+            onBeforeEventRender: args => {
+                args.data.toolTip = `${args.data.start.toString("yyyy-MM-dd")} - ${args.data.end.toString("yyyy-MM-dd")}`;
+            }
+        });
+
+        dp.init();
+        dp.scrollTo("2026-04-01");
+
+        const app = {
+            barColor(i) {
+                const colors = ["#3c78d8", "#6aa84f", "#f1c232", "#cc0000"];
+                return colors[i % 4];
+            },
+            barBackColor(i) {
+                const colors = ["#a4c2f4", "#b6d7a8", "#ffe599", "#ea9999"];
+                return colors[i % 4];
+            },
+            async editEvent(data) {
+                const form = [
+                    { name: "Text", id: "text"},
+                    { name: "Start", id: "start", type: "date", disabled: true },
+                    { name: "End", id: "end", type: "date", disabled: true },
+                    { name: "Resource", id: "resource", options: dp.resources}
+                ];
+                const modal = await DayPilot.Modal.form(form, data);
+                if (modal.canceled) {
+                    return null;
+                }
+                return modal.result;
+            },
+            loadData() {
+                const resources = [
+                  {name: "Room 1", id: "A"},
+                  {name: "Room 2", id: "B"},
+                  {name: "Room 3", id: "C"},
+                  {name: "Room 4", id: "D"},
+                  {name: "Person 1", id: "E"},
+                  {name: "Person 2", id: "F"},
+                  {name: "Person 3", id: "G"},
+                  {name: "Person 4", id: "H"},
+                  {name: "Tool 1", id: "I"},
+                  {name: "Tool 2", id: "J"},
+                  {name: "Tool 3", id: "K"},
+                  {name: "Tool 4", id: "L"}
+                ];
+
+                const events = [];
+                for (let i = 0; i < 12; i++) {
+                    const durationDays = Math.floor(Math.random() * 6) + 1; // 1 to 6
+                    const startDays = Math.floor(Math.random() * 6) + 2; // 2 to 7
+
+                    const start = new DayPilot.Date("2026-04-05").addDays(startDays);
+                    const end = new DayPilot.Date("2026-04-05").addDays(startDays).addDays(durationDays);
+
+                    const e = {
+                        start: start,
+                        end: end,
+                        id: i + 1,
+                        resource: String.fromCharCode(65 + i),
+                        text: "Event " + (i + 1),
+                        barColor: app.barColor(i),
+                        barBackColor: app.barBackColor(i)
+                    };
+
+                    events.push(e);
+                }
+
+                dp.update({resources, events});
+            },
+        };
+
+        app.loadData();
+
+    </script>
+
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+<!-- /bottom -->
+
+
+</body>
+</html>
+

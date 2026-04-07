@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or "Lab Scheduler MVP" }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    (function () {
+      const stored = localStorage.getItem("labTheme");
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const theme = stored || (systemDark ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1><a class="brand-link" href="{{ url_for('index') }}">Lab Scheduler MVP</a></h1>
+    </div>
+    {% if current_user %}
+    <div class="topbar-right">
+      <div class="userbox">
+        <div class="user-meta">
+          <strong><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}">{{ current_user["name"] }}</a></strong>
+          <span>{{ current_user["role"].replace("_", " ").title() }}</span>
+        </div>
+        <div class="user-controls">
+          <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle light and dark mode">
+            <span class="theme-icon theme-icon-light" aria-hidden="true"></span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true"></span>
+            <span class="switch-thumb" aria-hidden="true"></span>
+          </button>
+          <a class="link-button subtle" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </header>
+
+  {% if current_user %}
+  <nav class="nav">
+    {% set endpoint = request.endpoint or '' %}
+    {% if not access_profile_user.can_access_instruments %}
+    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}">Home</a>
+    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}">Queue</a>
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}">Map</a>
+    {% else %}
+
+    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}">Home</a>
+    {% if access_profile_user.can_access_instruments %}
+    <a class="{% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}">Instruments</a>
+    {% endif %}
+    {% if can_access_schedule_user %}
+    <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}">Queue</a>
+    {% endif %}
+    {% if can_access_calendar_user %}
+    <a class="{% if endpoint in ['calendar', 'calendar_events'] %}nav-active{% endif %}" href="{{ url_for('calendar') }}">Calendar</a>
+    {% endif %}
+    {% if can_access_stats_user %}
+    <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}">Statistics</a>
+    {% endif %}
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}">Map</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  <main class="page">
+    {% if not current_user %}
+    <nav class="nav">
+      <a class="{% if request.endpoint == 'login' %}nav-active{% endif %}" href="{{ url_for('login') }}">Login</a>
+      <a class="{% if request.endpoint == 'activate' %}nav-active{% endif %}" href="{{ url_for('activate') }}">Activate Invite</a>
+    </nav>
+    {% endif %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </section>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    /* ── Shared paginated-pane engine ── */
+    window.PaginatedPane = (function () {
+      var registry = {};
+      var storageKey = 'labPaneHeights';
+
+      function savedHeights() {
+        try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch(e) { return {}; }
+      }
+      function saveHeight(id, px) {
+        var h = savedHeights(); h[id] = px; localStorage.setItem(storageKey, JSON.stringify(h));
+      }
+
+      function init(paneId) {
+        var pane = document.querySelector('[data-pane-id="' + paneId + '"]');
+        if (!pane) return;
+        var pageSize = parseInt(pane.dataset.pageSize, 10) || 10;
+        var scrollEl = document.getElementById(paneId + 'Scroll');
+        var tbody = document.getElementById(paneId + 'Body');
+        if (!tbody && !scrollEl) return;
+        var controls = document.getElementById(paneId + 'Controls');
+        var prevBtn  = document.getElementById(paneId + 'Prev');
+        var nextBtn  = document.getElementById(paneId + 'Next');
+        var label    = document.getElementById(paneId + 'Label');
+        var handle   = pane.querySelector('[data-resize-for="' + paneId + '"]');
+        var currentPage = 0;
+
+        // Restore saved height
+        var saved = savedHeights()[paneId];
+        if (saved && scrollEl) scrollEl.style.maxHeight = saved + 'px';
+
+        // Resize handle drag
+        if (handle && scrollEl) {
+          handle.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            handle.classList.add('dragging');
+            var startY = e.clientY;
+            var startH = scrollEl.getBoundingClientRect().height;
+            function onMove(ev) {
+              var newH = Math.max(80, startH + (ev.clientY - startY));
+              scrollEl.style.maxHeight = newH + 'px';
+            }
+            function onUp() {
+              handle.classList.remove('dragging');
+              saveHeight(paneId, parseInt(scrollEl.style.maxHeight, 10));
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
+        }
+
+        function visibleRows() {
+          // Support both table rows and generic pane items
+          var container = tbody || scrollEl;
+          var sel = 'tr[data-bucket],tr[data-search],tr[data-status],[data-pane-item]';
+          return Array.from(container.querySelectorAll(sel))
+            .filter(function (r) { return !r.hidden; });
+        }
+
+        function render() {
+          var rows = visibleRows();
+          var totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+          if (currentPage >= totalPages) currentPage = totalPages - 1;
+
+          // First: un-page all visible rows
+          rows.forEach(function (r) { r.classList.remove('pane-page-hidden'); });
+          // Then hide those outside current page
+          rows.forEach(function (row, i) {
+            if (i < currentPage * pageSize || i >= (currentPage + 1) * pageSize) {
+              row.classList.add('pane-page-hidden');
+            }
+          });
+
+          if (controls) controls.style.display = totalPages > 1 ? '' : 'none';
+          if (label) label.textContent = rows.length ? (currentPage + 1) + ' / ' + totalPages : '';
+          if (prevBtn) prevBtn.disabled = currentPage === 0;
+          if (nextBtn) nextBtn.disabled = currentPage >= totalPages - 1;
+        }
+
+        if (prevBtn) prevBtn.addEventListener('click', function () { if (currentPage > 0) { currentPage--; render(); } });
+        if (nextBtn) nextBtn.addEventListener('click', function () { currentPage++; render(); });
+
+        registry[paneId] = { refresh: function () { currentPage = 0; render(); }, renderCurrent: render };
+        render();
+      }
+
+      function initAll() {
+        document.querySelectorAll('[data-pane-id]').forEach(function (el) { init(el.dataset.paneId); });
+      }
+
+      return { init: init, initAll: initAll, refresh: function (id) { if (registry[id]) registry[id].refresh(); }, get: function(id) { return registry[id]; } };
+    })();
+
+    document.addEventListener('DOMContentLoaded', function () { window.PaginatedPane.initAll(); });
+  </script>
+  <script>
+    (function () {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const toggle = document.getElementById("themeToggle");
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        if (toggle) {
+          const isDark = theme === "dark";
+          toggle.setAttribute("aria-pressed", String(isDark));
+          toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+          toggle.setAttribute("title", isDark ? "Switch to light mode" : "Switch to dark mode");
+        }
+      }
+
+      function currentTheme() {
+        return localStorage.getItem("labTheme") || (media.matches ? "dark" : "light");
+      }
+
+      applyTheme(currentTheme());
+
+      if (toggle) {
+        toggle.addEventListener("click", function () {
+          const next = currentTheme() === "dark" ? "light" : "dark";
+          localStorage.setItem("labTheme", next);
+          applyTheme(next);
+        });
+      }
+
+      media.addEventListener("change", function () {
+        if (!localStorage.getItem("labTheme")) {
+          applyTheme(media.matches ? "dark" : "light");
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

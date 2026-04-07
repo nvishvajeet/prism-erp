@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Open-Source JavaScript Monthly Calendar</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+	<!-- /head -->
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+<!-- /top -->
+
+    <div class="note">
+        <b>Note:</b>
+
+        Customize the component using <a href="https://builder.daypilot.org/month?edition=lite">Monthly Calendar UI Builder</a>
+        and download a ready-to-run project.
+
+        Read more about the <a href="https://javascript.daypilot.org/month/">JavaScript monthly calendar</a>.
+    </div>
+
+<div id="dp"></div>
+
+<script type="text/javascript">
+    const dp = new DayPilot.Month("dp", {
+        startDate: "2026-09-01",
+        onTimeRangeSelected: async function (args) {
+
+            const colors = [
+                {name: "Blue", id: "#3c78d8"},
+                {name: "Green", id: "#6aa84f"},
+                {name: "Yellow", id: "#f1c232"},
+                {name: "Red", id: "#cc0000"},
+            ];
+
+            const form = [
+                {name: "Text", id: "text"},
+                {name: "Color", id: "barColor", options: colors}
+            ];
+
+            const data = {
+                text: "Event",
+                barColor: "#6aa84f"
+            };
+
+            const modal = await DayPilot.Modal.form(form, data);
+
+            dp.clearSelection();
+
+            if (modal.canceled) {
+                return;
+            }
+
+            dp.events.add({
+                start: args.start,
+                end: args.end,
+                id: DayPilot.guid(),
+                text: modal.result.text,
+                barColor: modal.result.barColor
+            });
+        },
+        contextMenu: new DayPilot.Menu({
+            items: [
+                {
+                    text: "Edit",
+                    onClick: async (args) => {
+                        const form = [
+                            {id: "text", name: "Event Name", type: "text"}
+                        ];
+                        const e = args.source;
+                        const modal = await DayPilot.Modal.form(form, e.data);
+                        if (modal.canceled) {
+                            return;
+                        }
+                        dp.events.update(modal.result);
+
+                    }
+                },
+                {text: "-"},
+                {
+                    text: "Delete",
+                    onClick: (args) => {
+                        dp.events.remove(args.source);
+                    }
+                },
+            ]
+        }),
+        onBeforeEventRender: args => {
+            args.data.areas = [
+                {
+                    right: 4,
+                    top: "calc(50% - 9px)",
+                    width: 18,
+                    height: 18,
+                    style: "cursor:pointer;",
+                    backColor: "#cccccc88",
+                    borderRadius: "50%",
+                    padding: 2,
+                    fontColor: "#333333",
+                    symbol: "../icons/daypilot.svg#threedots-h",
+                    action: "ContextMenu",
+                    toolTip: "Menu"
+                }
+            ];
+        },
+    });
+
+    // generate and load events
+    for (let i = 0; i < 10; i++) {
+        const duration = Math.floor(Math.random() * 1.2);
+        const start = Math.floor(Math.random() * 6) - 3; // -3 to 3
+
+        dp.events.add({
+            start: new DayPilot.Date("2026-09-04T00:00:00").addDays(start),
+            end: new DayPilot.Date("2026-09-04T12:00:00").addDays(start).addDays(duration),
+            id: DayPilot.guid(),
+            text: "Event " + i
+        });
+    }
+
+    dp.init();
+
+
+</script>
+
+<!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+
+<!-- /bottom -->
+
+</body>
+</html>
+

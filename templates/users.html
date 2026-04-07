@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import page_intro, card_heading %}
+{% block content %}
+{% call page_intro("", "User Management") %}
+{% endcall %}
+<section class="card">
+  {{ card_heading("", "Create / Invite User") }}
+  {% if can_create_users %}
+  <form method="post" class="form-grid">
+    <input type="hidden" name="action" value="create_user">
+    <label>Name
+      <input type="text" name="name" required>
+    </label>
+    <label>Email
+      <input type="email" name="email" required>
+    </label>
+    <label>Role
+      <select name="role">
+        <option value="requester" selected>Requester</option>
+        <option value="finance_admin">Finance</option>
+        <option value="professor_approver">Professor Approver</option>
+        <option value="site_admin">Website-Wide Admin</option>
+        <option value="instrument_admin">Instrument Admin</option>
+        <option value="operator">Operator</option>
+        <option value="super_admin">Super Admin</option>
+      </select>
+    </label>
+    <label>Temporary Password
+      <input type="text" name="password" value="SimplePass123">
+    </label>
+    <button type="submit">Create User</button>
+  </form>
+  {% else %}
+  <p class="hint">Restricted.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  {{ card_heading("", "Members") }}
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Invite Status</th><th>Active</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for user in members %}
+      <tr>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["name"] }}</a></td>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["email"] }}</a></td>
+        <td>{{ user["role"] }}</td>
+        <td>{{ user["invite_status"] }}</td>
+        <td>{{ "Yes" if user["active"] else "No" }}</td>
+        <td>
+          {% if can_elevate_members and user["active"] %}
+          <form method="post" class="inline-form">
+            <input type="hidden" name="action" value="elevate_member">
+            <input type="hidden" name="user_id" value="{{ user['id'] }}">
+            <select name="new_role">
+              <option value="operator">Operator</option>
+              <option value="instrument_admin">Instrument Admin</option>
+              <option value="site_admin">Site Admin</option>
+              <option value="finance_admin">Finance Admin</option>
+              <option value="professor_approver">Professor Approver</option>
+            </select>
+            <button type="submit">Elevate</button>
+          </form>
+          {% endif %}
+          {% if can_delete_members and user["active"] %}
+          <form method="post" class="inline-form">
+            <input type="hidden" name="action" value="delete_member">
+            <input type="hidden" name="user_id" value="{{ user['id'] }}">
+            <button type="submit" class="danger">Delete Member</button>
+          </form>
+          {% elif not can_elevate_members %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  {{ card_heading("", "Admins and Staff Roles") }}
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Invite Status</th><th>Active</th></tr></thead>
+    <tbody>
+      {% for user in admins %}
+      <tr>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["name"] }}</a></td>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["email"] }}</a></td>
+        <td>{{ user["role"] }}</td>
+        <td>{{ user["invite_status"] }}</td>
+        <td>{{ "Yes" if user["active"] else "No" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  {{ card_heading("", "Owners") }}
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr></thead>
+    <tbody>
+      {% for user in owners %}
+      <tr>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["name"] }}</a></td>
+        <td><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}">{{ user["email"] }}</a></td>
+        <td>{{ user["role"] }}</td>
+        <td>{{ "Yes" if user["active"] else "No" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

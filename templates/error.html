@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import page_intro %}
+{% block content %}
+{% call page_intro("", heading) %}
+  {% if current_user %}
+  <a class="text-link" href="{{ url_for('index') }}">Home</a>
+  {% endif %}
+{% endcall %}
+<section class="card compact">
+  <div class="inline-status-row">
+    <span class="badge">{{ code }}</span>
+  </div>
+  <p>{{ message }}</p>
+</section>
+{% endblock %}

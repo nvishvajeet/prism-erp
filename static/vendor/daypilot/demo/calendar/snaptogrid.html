@@ -1,0 +1,154 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Snap to Grid (Open-Source JavaScript Event Calendar)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note">
+        You can disable the snap-to-grid feature to allow for more precise event positioning during drag-and-drop operations (such as moving, resizing, and time range selection). This feature is enabled by default.
+
+        Read more about the <a href="https://doc.daypilot.org/calendar/snap-to-grid/">snap-to-grid</a>.
+    </div>
+
+    <div id="dp"></div>
+
+    <script type="text/javascript">
+
+        const dp = new DayPilot.Calendar("dp", {
+            viewType: "Week",
+            startDate: "2022-03-21",
+            headerDateFormat: "dddd",
+            useEventBoxes: "Never",
+            snapToGrid: false,
+            onEventClick: async args => {
+
+                const colors = [
+                    {name: "Blue", id: "#3c78d8"},
+                    {name: "Green", id: "#6aa84f"},
+                    {name: "Yellow", id: "#f1c232"},
+                    {name: "Red", id: "#cc0000"},
+                ];
+
+                const form = [
+                    {name: "Text", id: "text"},
+                    {name: "Start", id: "start", type: "datetime"},
+                    {name: "End", id: "end", type: "datetime"},
+                    {name: "Color", id: "barColor", type: "select", options: colors},
+                ];
+
+                const modal = await DayPilot.Modal.form(form, args.e.data);
+
+                if (modal.canceled) {
+                    return;
+                }
+
+                dp.events.update(modal.result);
+
+            },
+            onBeforeEventRender: args => {
+                args.data.barBackColor = "transparent";
+                if (!args.data.barColor) {
+                    args.data.barColor = "#333";
+                }
+            },
+            onTimeRangeSelected: async args => {
+
+                const form = [
+                    {name: "Name", id: "text"}
+                ];
+
+                const data = {
+                    text: "Event"
+                };
+
+                const modal = await DayPilot.Modal.form(form, data);
+
+                dp.clearSelection();
+
+                if (modal.canceled) {
+                    return;
+                }
+
+                dp.events.add({
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    text: modal.result.text,
+                    barColor: "#3c78d8"
+                });
+            },
+            onEventMove: args => {
+                console.log(args.newStart);
+            }
+        });
+
+        dp.init();
+
+        const app = {
+            init() {
+                this.loadEvents();
+            },
+            loadEvents() {
+                const events = [
+                    {
+                        start: "2022-03-21T11:15:00",
+                        end: "2022-03-21T14:15:00",
+                        id: 1,
+                        text: "Event 1",
+                        barColor: "#3c78d8"
+                    },
+                    {
+                        start: "2022-03-22T12:00:00",
+                        end: "2022-03-22T15:00:00",
+                        id: 2,
+                        text: "Event 2",
+                        barColor: "#6aa84f"
+                    },
+                    {
+                        start: "2022-03-23T10:00:00",
+                        end: "2022-03-23T15:00:00",
+                        id: 3,
+                        text: "Event 3",
+                        barColor: "#f1c232"
+                    },
+                    {
+                        start: "2022-03-24T12:00:00",
+                        end: "2022-03-24T16:00:00",
+                        id: 4,
+                        text: "Event 4",
+                        barColor: "#cc0000"
+                    },
+                ];
+                dp.update({events});
+            }
+        };
+        app.init();
+
+
+    </script>
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+
+<!-- /bottom -->
+
+</body>
+</html>
+

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Database (regenerated from code)
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.xcworkspace/
+*.xcodeproj/
+
+# Uploads and exports (user data, not code)
+uploads/
+exports/
+
+# Environment variables
+.env
+.env.local

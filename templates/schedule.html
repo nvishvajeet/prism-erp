@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% from "_request_macros.html" import request_identity, instrument_name_link, requester_block, operator_block, status_block, meta_link, attachment_list with context %}
+{% from "_page_macros.html" import paginated_pane %}
+{% block content %}
+
+<div class="stream-page-header">
+  <h2 class="stream-title">
+    {% if selected_instrument %}{{ selected_instrument["name"] }} — {% endif %}Jobs
+  </h2>
+</div>
+
+{# ── Controls blob ── #}
+<section class="card compact queue-controls-card">
+
+  {# Status pills #}
+  <div class="stream-pill-row" id="streamPills">
+    <button class="stream-pill" data-bucket="">All</button>
+    <button class="stream-pill stream-pill-pending" data-bucket="pending">Pending</button>
+    <button class="stream-pill" data-bucket="approvals">Approvals</button>
+    <button class="stream-pill" data-bucket="pending_receipt">Pending Receipt</button>
+    <button class="stream-pill" data-bucket="ready">Ready</button>
+    <button class="stream-pill" data-bucket="active">Active</button>
+    <button class="stream-pill stream-pill-done" data-bucket="completed">Completed</button>
+    <button class="stream-pill stream-pill-rejected" data-bucket="rejected">Rejected</button>
+    {% if can_access_schedule_user %}
+    <button class="stream-pill stream-pill-unsubmitted" data-bucket="unsubmitted" id="showUnsubmittedPill" title="Jobs created but not yet submitted to the queue">Unsubmitted</button>
+    {% endif %}
+  </div>
+
+  {# Search + filters #}
+  <div class="queue-control-strip">
+    <label class="queue-search">
+      <span class="hint">Search</span>
+      <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator">
+    </label>
+    {% if instrument_selector_enabled %}
+    <label>
+      <span class="hint">Instrument</span>
+      <select id="queueInstrumentFilter">
+        <option value="">All instruments</option>
+        {% for instrument in instruments %}
+        <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %}>{{ instrument["name"] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% elif instruments %}
+    <label>
+      <span class="hint">Instrument</span>
+      <input type="text" value="{{ instruments[0]['name'] }}" disabled>
+    </label>
+    {% endif %}
+    <label>
+      <span class="hint">From</span>
+      <input type="date" id="queueDateFrom" value="{{ filters.date_from }}">
+    </label>
+    <label>
+      <span class="hint">To</span>
+      <input type="date" id="queueDateTo" value="{{ filters.date_to }}">
+    </label>
+    <label>
+      <span class="hint">Sort</span>
+      <select id="queueSort">
+        <option value="time_desc">Newest first</option>
+        <option value="time_asc">Oldest first</option>
+        <option value="status_asc">By status</option>
+        <option value="instrument_asc">By instrument</option>
+      </select>
+    </label>
+  </div>
+</section>
+
+{# ── Stream table ── #}
+<section class="card queue-table-card">
+  {% call paginated_pane('centralQueue', page_size=15, max_height='36rem', css_class='queue-table-shell') %}
+    <table id="centralQueueTable">
+      <colgroup>
+        <col class="col-request"><col class="col-stage"><col class="col-instrument">
+        <col class="col-requester"><col class="col-time"><col class="col-operator">
+        <col class="col-files"><col class="col-action">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Request</th><th>Stage</th><th>Instrument</th>
+          <th>Requester</th><th>Time</th><th>Operator</th>
+          <th>Files</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="centralQueueBody">
+        {% for row in queue_rows %}
+        {% set row_bucket = 'all' %}
+        {% if row["status"] == "under_review" %}{% set row_bucket = 'approvals' %}{% endif %}
+        {% if row["status"] == "sample_submitted" %}{% set row_bucket = 'pending_receipt' %}{% endif %}
+        {% if row["status"] == "sample_received" %}{% set row_bucket = 'ready' %}{% endif %}
+        {% if row["status"] in ["scheduled", "in_progress"] %}{% set row_bucket = 'active' %}{% endif %}
+        {% if row["status"] in ["submitted", "awaiting_sample_submission"] %}{% set row_bucket = 'unsubmitted' %}{% endif %}
+        {% if row["status"] == "completed" %}{% set row_bucket = 'completed' %}{% endif %}
+        {% if row["status"] == "rejected" %}{% set row_bucket = 'rejected' %}{% endif %}
+        {% set is_pending = row["status"] not in ["completed", "rejected", "submitted", "awaiting_sample_submission"] %}
+        {% set row_time_value = row["created_at"] %}
+        {% if row["status"] == "sample_submitted" and row["sample_submitted_at"] %}{% set row_time_value = row["sample_submitted_at"] %}{% endif %}
+        {% if row["status"] == "sample_received" and row["sample_received_at"] %}{% set row_time_value = row["sample_received_at"] %}{% endif %}
+        {% if row["status"] in ["scheduled", "in_progress"] and row["scheduled_for"] %}{% set row_time_value = row["scheduled_for"] %}{% endif %}
+        {% if row["status"] == "completed" and row["completed_at"] %}{% set row_time_value = row["completed_at"] %}{% endif %}
+        <tr id="queue-request-{{ row['id'] }}"
+            class="{% if focus_request_id and focus_request_id == row['id']|string %}queue-row-focus{% endif %}"
+            data-bucket="{{ row_bucket }}"
+            data-pending="{{ 'true' if is_pending else 'false' }}"
+            data-instrument-id="{{ row['instrument_id'] }}"
+            data-instrument-name="{{ (row['instrument_name'] or '')|lower }}"
+            data-status="{{ row['status'] }}"
+            data-time="{{ row_time_value or '' }}"
+            data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}">
+          <td>{{ request_identity(row, compact=True) }}</td>
+          <td>{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
+          <td>{{ instrument_name_link(row) }}</td>
+          <td>{{ requester_block(row, show_originator=False, show_email=False) }}</td>
+          <td>
+            {% if row["status"] == "sample_submitted" %}
+              {{ meta_link(row, format_dt(row["sample_submitted_at"])) if row["sample_submitted_at"] else meta_link(row, '-') }}
+            {% elif row["status"] == "sample_received" %}
+              {{ meta_link(row, format_dt(row["sample_received_at"])) if row["sample_received_at"] else meta_link(row, '-') }}
+            {% elif row["status"] in ["scheduled", "in_progress"] %}
+              {{ meta_link(row, format_dt(row["scheduled_for"])) if row["scheduled_for"] else meta_link(row, '-') }}
+            {% elif row["status"] == "completed" %}
+              {{ meta_link(row, format_dt(row["completed_at"])) if row["completed_at"] else meta_link(row, '-') }}
+            {% else %}
+              {{ meta_link(row, format_dt(row["created_at"])) if row["created_at"] else meta_link(row, '-') }}
+            {% endif %}
+          </td>
+          <td>
+            {% if row["status"] == "sample_received" and row["received_by_name"] %}
+              {{ row["received_by_name"] }}
+            {% else %}
+              {{ operator_block(row) }}
+            {% endif %}
+          </td>
+          <td>{{ attachment_list(row, attachment_map) }}</td>
+          <td>
+            <div class="queue-action-stack">
+            {% if row["status"] == "sample_submitted" %}
+            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack">
+              <input type="hidden" name="action" value="mark_received">
+              <input type="hidden" name="request_id" value="{{ row['id'] }}">
+              <input type="hidden" name="bucket" value="{{ filters.bucket }}">
+              <input type="hidden" name="q" value="{{ filters.q }}">
+              <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
+              <input type="hidden" name="date_from" value="{{ filters.date_from }}">
+              <input type="hidden" name="date_to" value="{{ filters.date_to }}">
+              <button type="submit" class="small-button primary-action">Accept</button>
+            </form>
+            {% endif %}
+            {% if row["status"] not in ["completed", "rejected", "submitted"] %}
+            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack">
+              <input type="hidden" name="action" value="quick_assign">
+              <input type="hidden" name="request_id" value="{{ row['id'] }}">
+              <input type="hidden" name="bucket" value="{{ filters.bucket }}">
+              <input type="hidden" name="q" value="{{ filters.q }}">
+              <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
+              <input type="hidden" name="date_from" value="{{ filters.date_from }}">
+              <input type="hidden" name="date_to" value="{{ filters.date_to }}">
+              <input type="hidden" name="back" value="{{ queue_back_url }}">
+              <input type="hidden" name="source_label" value="{{ queue_source_label }}">
+              <select name="assigned_operator_id">
+                <option value="">Assign</option>
+                {% for operator in operators %}
+                <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %}>{{ operator["name"] }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="small-button">Assign</button>
+            </form>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No jobs found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+</section>
+
+<script>
+  (function () {
+    const body = document.getElementById("centralQueueBody");
+    const search = document.getElementById("queueSearch");
+    const instrumentEl = document.getElementById("queueInstrumentFilter");
+    const dateFrom = document.getElementById("queueDateFrom");
+    const dateTo = document.getElementById("queueDateTo");
+    const sortEl = document.getElementById("queueSort");
+    const pills = Array.from(document.querySelectorAll("#streamPills .stream-pill"));
+    if (!body) return;
+    const rows = Array.from(body.querySelectorAll("tr[data-bucket]"));
+
+    // Seed bucket from URL param
+    let activeBucket = {{ filters.bucket|tojson }};
+    // Unsubmitted rows are hidden from view unless explicitly selected
+    const isScheduleUser = {{ 'true' if can_access_schedule_user else 'false' }};
+
+    // Pre-select instrument from URL
+    const initialInstrument = {{ filters.instrument_id|tojson }};
+    if (instrumentEl && initialInstrument) instrumentEl.value = initialInstrument;
+
+    const statusRank = {
+      under_review: 1, sample_submitted: 2, sample_received: 3,
+      scheduled: 4, in_progress: 5, submitted: 6, awaiting_sample_submission: 7,
+      completed: 8, rejected: 9
+    };
+
+    function syncPills() {
+      pills.forEach(function (pill) {
+        pill.classList.toggle("stream-pill-active", pill.dataset.bucket === activeBucket);
+      });
+    }
+
+    function updatePillCounts() {
+      const counts = {};
+      rows.forEach(function (row) {
+        if (!baseRowMatches(row)) return;
+        const b = row.dataset.bucket;
+        counts[b] = (counts[b] || 0) + 1;
+        counts[""] = (counts[""] || 0) + 1;
+        if (row.dataset.pending === "true") counts["pending"] = (counts["pending"] || 0) + 1;
+      });
+      pills.forEach(function (pill) {
+        const n = counts[pill.dataset.bucket] || 0;
+        const existing = pill.querySelector(".pill-count");
+        if (existing) existing.remove();
+        if (n > 0) {
+          const span = document.createElement("span");
+          span.className = "pill-count";
+          span.textContent = n;
+          pill.appendChild(span);
+        }
+      });
+    }
+
+    function toDay(value) { return value ? value.slice(0, 10) : ""; }
+
+    function baseRowMatches(row) {
+      const token = (search && search.value || "").trim().toLowerCase();
+      const instrumentId = instrumentEl ? instrumentEl.value : "";
+      const from = dateFrom ? dateFrom.value : "";
+      const to = dateTo ? dateTo.value : "";
+      const searchOk = !token || (row.dataset.search || "").includes(token);
+      const instrumentOk = !instrumentId || row.dataset.instrumentId === instrumentId;
+      const rowDay = toDay(row.dataset.time || "");
+      const fromOk = !from || (rowDay && rowDay >= from);
+      const toOk = !to || (rowDay && rowDay <= to);
+      return searchOk && instrumentOk && fromOk && toOk;
+    }
+
+    function applyFilters() {
+      rows.forEach(function (row) {
+        const bucket = row.dataset.bucket;
+        // Unsubmitted always hidden unless explicitly selected (mods only)
+        if (bucket === "unsubmitted" && activeBucket !== "unsubmitted") {
+          row.hidden = true;
+          return;
+        }
+        let bucketOk;
+        if (activeBucket === "" || activeBucket === "all") {
+          bucketOk = true;
+        } else if (activeBucket === "pending") {
+          bucketOk = row.dataset.pending === "true";
+        } else {
+          bucketOk = bucket === activeBucket;
+        }
+        row.hidden = !(bucketOk && baseRowMatches(row));
+      });
+      updatePillCounts();
+      if (window.PaginatedPane) window.PaginatedPane.refresh('centralQueue');
+    }
+
+    function sortRows() {
+      const selected = sortEl ? sortEl.value : "time_desc";
+      const ordered = rows.slice().sort(function (a, b) {
+        const aTime = a.dataset.time || "";
+        const bTime = b.dataset.time || "";
+        if (selected === "time_asc") return aTime.localeCompare(bTime);
+        if (selected === "status_asc") return (statusRank[a.dataset.status] || 99) - (statusRank[b.dataset.status] || 99) || bTime.localeCompare(aTime);
+        if (selected === "instrument_asc") return (a.dataset.instrumentName || "").localeCompare(b.dataset.instrumentName || "") || bTime.localeCompare(aTime);
+        return bTime.localeCompare(aTime); // time_desc default
+      });
+      ordered.forEach(function (row) { body.appendChild(row); });
+    }
+
+    pills.forEach(function (pill) {
+      pill.addEventListener("click", function () {
+        const clicked = pill.dataset.bucket;
+        activeBucket = (activeBucket === clicked) ? "" : clicked; // toggle off on re-click
+        syncPills();
+        applyFilters();
+      });
+    });
+
+    if (search) search.addEventListener("input", applyFilters);
+    if (instrumentEl) instrumentEl.addEventListener("change", applyFilters);
+    if (dateFrom) dateFrom.addEventListener("change", applyFilters);
+    if (dateTo) dateTo.addEventListener("change", applyFilters);
+    if (sortEl) sortEl.addEventListener("change", function () { sortRows(); applyFilters(); });
+
+    syncPills();
+    sortRows();
+    applyFilters();
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Transparent CSS Theme (JavaScript Scheduler)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+    <link type="text/css" rel="stylesheet" href="../themes/scheduler_transparent.css?v=2026.2.813"/>
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note">You can create a theme using the online <strong>DayPilot Theme Designer</strong>: <a
+        href="https://themes.daypilot.org/">https://themes.daypilot.org/</a></div>
+
+    <div id="dp"></div>
+
+    <script type="text/javascript">
+        const dp = new DayPilot.Scheduler("dp", {
+            theme: "scheduler_transparent",
+            startDate: new DayPilot.Date("2026-01-01"),
+            cellGroupBy: "Month",
+            days: 365,
+            scale: "Day",
+            rowMarginTop: 2,
+            rowMarginBottom: 2,
+            resources: [
+              {name: "Room 1", id: "A"},
+              {name: "Room 2", id: "B"},
+              {name: "Room 3", id: "C"},
+              {name: "Room 4", id: "D"},
+              {name: "Person 1", id: "E"},
+              {name: "Person 2", id: "F"},
+              {name: "Person 3", id: "G"},
+              {name: "Person 4", id: "H"},
+              {name: "Tool 1", id: "I"},
+              {name: "Tool 2", id: "J"},
+              {name: "Tool 3", id: "K"},
+              {name: "Tool 4", id: "L"}
+            ],
+            onTimeRangeSelected: async args => {
+                const modal = await DayPilot.Modal.prompt("New event name:", "Event");
+                dp.clearSelection();
+                if (modal.canceled) {
+                    return;
+                }
+                dp.events.add({
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    resource: args.resource,
+                    text: modal.result
+                });
+            },
+            onBeforeEventRender: args => {
+                args.data.areas = [
+                    {
+                        right: 4,
+                        top: 6,
+                        width: 24,
+                        height: 24,
+                        padding: 3,
+                        fontColor: "#666666",
+                        backColor: "#ffffff88",
+                        borderRadius: "50%",
+                        toolTip: "Edit",
+                        symbol: "../icons/daypilot.svg#edit",
+                        onClick: async args => {
+                            const form = [
+                                {id: "text", name: "Event Name", type: "text"}
+                            ];
+                            const e = args.source;
+                            const modal = await DayPilot.Modal.form(form, e.data);
+                            if (modal.canceled) {
+                                return;
+                            }
+                            dp.events.update(modal.result);
+                        }
+                    }
+                ]
+            },
+            height: 350
+        });
+        dp.init();
+        dp.scrollTo("2026-03-01");
+
+        const app = {
+            init() {
+                this.loadEventData();
+            },
+            loadEventData() {
+                // generate and load events
+                const events = [];
+
+                for (let i = 0; i < 15; i++) {
+                    const duration = Math.floor(Math.random() * 6) + 1; // 1 to 6
+                    const durationDays = Math.floor(Math.random() * 6 + 2); // 2 to 7
+                    const start = Math.floor(Math.random() * 6) + 2; // 2 to 7
+
+                    const resId = String.fromCharCode(65 + i);
+
+                    const event = {
+                        start: new DayPilot.Date("2026-03-01T00:00:00").addDays(start),
+                        end: new DayPilot.Date("2026-03-01T12:00:00").addDays(start).addDays(durationDays).addHours(duration),
+                        id: DayPilot.guid(),
+                        resource: resId,
+                        text: `Event ${i + 1}`
+                    };
+
+                    events.push(event);
+                }
+                dp.update({events});
+            }
+        };
+        app.init();
+
+    </script>
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+<!-- /bottom -->
+
+</body>
+</html>
+

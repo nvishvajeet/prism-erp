@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow">
+  <h2>Activate Invited Account</h2>
+  <form method="post" class="form-grid">
+    <label>Email
+      <input type="email" name="email" required>
+    </label>
+    <label>Name
+      <input type="text" name="name" placeholder="Optional display name update">
+    </label>
+    <label>New Password
+      <input type="password" name="password" minlength="8" required>
+    </label>
+    <button type="submit">Activate Account</button>
+  </form>
+</section>
+{% endblock %}

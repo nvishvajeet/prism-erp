@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" fill="none">
+  <rect width="1200" height="640" fill="#EEF4F5"/>
+  <rect x="72" y="92" width="1056" height="456" rx="28" fill="#DCE7EA"/>
+  <rect x="160" y="180" width="480" height="280" rx="22" fill="#BFD1D7"/>
+  <rect x="694" y="164" width="250" height="126" rx="18" fill="#A5BEC6"/>
+  <rect x="694" y="326" width="334" height="42" rx="14" fill="#A5BEC6"/>
+  <rect x="694" y="386" width="270" height="32" rx="14" fill="#B7CBD1"/>
+  <circle cx="550" cy="500" r="28" fill="#8EA9B1"/>
+  <circle cx="636" cy="500" r="28" fill="#8EA9B1"/>
+  <text x="160" y="128" fill="#35535D" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700">Instrument Photo Placeholder</text>
+  <text x="694" y="234" fill="#35535D" font-family="Helvetica, Arial, sans-serif" font-size="28">Upload a machine image</text>
+  <text x="694" y="270" fill="#5C7982" font-family="Helvetica, Arial, sans-serif" font-size="22">or keep this subtle default graphic</text>
+</svg>

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% from "_request_macros.html" import request_identity, instrument_name_link, operator_block, status_block, meta_link with context %}
+{% from "_page_macros.html" import page_intro %}
+{% block content %}
+{% call page_intro("", target_user["name"]) %}
+  {% if is_self %}
+  <a class="text-link" href="{{ url_for('my_history') }}">My History</a>
+  {% endif %}
+  <a class="text-link" href="{{ url_for('index') }}">Home</a>
+{% endcall %}
+
+<section class="grid-two">
+  <div class="card">
+    <h2>User Metadata</h2>
+    <div class="meta-stack">
+      <section class="meta-section">
+        <h3>Identity</h3>
+        <dl class="detail-grid">
+          <dt>Name</dt><dd>{{ target_user["name"] }}</dd>
+          <dt>Email</dt><dd>{{ target_user["email"] }}</dd>
+          <dt>Role</dt><dd>{{ target_user["role"].replace("_", " ").title() }}</dd>
+        </dl>
+      </section>
+      <section class="meta-section">
+        <h3>Access State</h3>
+        <dl class="detail-grid">
+          <dt>Invite Status</dt><dd>{{ target_user["invite_status"] }}</dd>
+          <dt>Active</dt><dd>{{ "Yes" if target_user["active"] else "No" }}</dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Work Summary</h2>
+    <div class="meta-stack">
+      <section class="meta-section">
+        <h3>Submitted Work</h3>
+        <dl class="detail-grid">
+          <dt>Jobs Submitted</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#submitted-jobs">{{ submitted_summary["total_jobs"] or 0 }}</a></dd>
+          <dt>Samples Submitted</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#submitted-jobs">{{ submitted_summary["total_samples"] or 0 }}</a></dd>
+          <dt>Requests Originated</dt><dd>{{ originated_count }}</dd>
+        </dl>
+      </section>
+      <section class="meta-section">
+        <h3>Current State</h3>
+        <dl class="detail-grid">
+          <dt>Completed Jobs</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#submitted-jobs">{{ submitted_summary["completed_jobs"] or 0 }}</a></dd>
+          <dt>Open Jobs</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#submitted-jobs">{{ submitted_summary["open_jobs"] or 0 }}</a></dd>
+        </dl>
+      </section>
+      <section class="meta-section">
+        <h3>Handled Work</h3>
+        <dl class="detail-grid">
+          <dt>Jobs Handled</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#handled-jobs">{{ handled_summary["total_jobs"] or 0 }}</a></dd>
+          <dt>Samples Handled</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#handled-jobs">{{ handled_summary["total_samples"] or 0 }}</a></dd>
+          <dt>Completed By Them</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#handled-jobs">{{ handled_summary["completed_jobs"] or 0 }}</a></dd>
+          <dt>Open Assigned</dt><dd><a class="text-link" href="{{ url_for('user_profile', user_id=target_user['id']) }}#handled-jobs">{{ handled_summary["open_jobs"] or 0 }}</a></dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+</section>
+
+{% if can_remove_access %}
+<section class="card compact">
+  <div class="section-head">
+    <div>
+      <h2>Member Access</h2>
+    </div>
+  </div>
+  <form method="post" class="inline-form">
+    <input type="hidden" name="action" value="remove_access">
+    <button type="submit" class="danger">Remove Access</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card" id="submitted-jobs">
+  <h2>Submitted Jobs</h2>
+  <table>
+    <thead><tr><th>Request</th><th>Instrument</th><th>Status</th><th>Submitted</th><th>Operator</th><th>Files</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ request_identity(row) }}</td>
+        <td>{{ instrument_name_link(row) }}</td>
+        <td>{{ status_block(row, show_group=True, show_summary=True, link=False) }}</td>
+        <td>{{ meta_link(row, format_dt(row["created_at"])) }}</td>
+        <td>{{ operator_block(row) }}</td>
+        <td>{{ row["attachment_count"] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No submitted jobs yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if handled_rows %}
+<section class="card" id="handled-jobs">
+  <h2>Handled Jobs</h2>
+  <table>
+    <thead><tr><th>Request</th><th>Instrument</th><th>Status</th><th>Submitted</th><th>Operator</th><th>Files</th></tr></thead>
+    <tbody>
+      {% for row in handled_rows %}
+      <tr>
+        <td>{{ request_identity(row) }}</td>
+        <td>{{ instrument_name_link(row) }}</td>
+        <td>{{ status_block(row, show_group=True, show_summary=True, link=False) }}</td>
+        <td>{{ meta_link(row, format_dt(row["created_at"])) }}</td>
+        <td>{{ operator_block(row) }}</td>
+        <td>{{ row["attachment_count"] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

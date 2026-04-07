@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% from "_stream_macros.html" import stream_header %}
+{% block content %}
+{{ stream_header("Calendar") }}
+<section class="card compact queue-controls-card">
+  {% if instrument_selector_enabled %}
+  <div class="role-switch-grid role-toggle-strip">
+    <a class="role-toggle {% if not filters.instrument_id %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id='', operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress=filters.show_in_progress, show_completed=filters.show_completed, show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}">All Instruments</a>
+    {% for instrument in instruments %}
+    <a class="role-toggle {% if filters.instrument_id == instrument['id']|string %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id=instrument['id'], operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress=filters.show_in_progress, show_completed=filters.show_completed, show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}">{{ instrument["name"] }}</a>
+    {% endfor %}
+  </div>
+  {% elif instruments %}
+  <div class="role-switch-grid role-toggle-strip">
+    <span class="role-toggle role-toggle-active">{{ instruments[0]["name"] }}</span>
+  </div>
+  {% endif %}
+
+  <div class="role-switch-grid role-toggle-strip">
+    <a class="role-toggle {% if filters.show_scheduled == '1' %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id=filters.instrument_id, operator_id=filters.operator_id, show_scheduled='0' if filters.show_scheduled == '1' else '1', show_in_progress=filters.show_in_progress, show_completed=filters.show_completed, show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}">Scheduled</a>
+    <a class="role-toggle {% if filters.show_in_progress == '1' %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id=filters.instrument_id, operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress='0' if filters.show_in_progress == '1' else '1', show_completed=filters.show_completed, show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}">In Progress</a>
+    <a class="role-toggle {% if filters.show_completed == '1' %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id=filters.instrument_id, operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress=filters.show_in_progress, show_completed='0' if filters.show_completed == '1' else '1', show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}">Completed</a>
+    <a class="role-toggle {% if filters.show_maintenance == '1' %}role-toggle-active{% endif %}" href="{{ url_for('calendar', instrument_id=filters.instrument_id, operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress=filters.show_in_progress, show_completed=filters.show_completed, show_maintenance='0' if filters.show_maintenance == '1' else '1', view=filters.view, date=anchor_date.isoformat()) }}">Maintenance</a>
+  </div>
+
+  <form method="get" class="queue-control-strip history-control-strip">
+    <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
+    <input type="hidden" name="show_scheduled" value="{{ filters.show_scheduled }}">
+    <input type="hidden" name="show_in_progress" value="{{ filters.show_in_progress }}">
+    <input type="hidden" name="show_completed" value="{{ filters.show_completed }}">
+    <input type="hidden" name="show_maintenance" value="{{ filters.show_maintenance }}">
+    <input type="hidden" name="view" value="{{ filters.view }}">
+    <input type="hidden" name="date" value="{{ anchor_date.isoformat() }}">
+    <label><span class="hint">Operator</span>
+      <select name="operator_id">
+        <option value="">All operators</option>
+        {% for operator in operators %}
+        <option value="{{ operator['id'] }}" {% if filters.operator_id == operator['id']|string %}selected{% endif %}>{{ operator["name"] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Apply</button>
+  </form>
+</section>
+
+<section class="card">
+  <div id="calendar_app" class="calendar-shell"></div>
+</section>
+
+<div id="calCardOverlay" class="cal-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Job Details">
+  <div class="cal-card-panel">
+    <button type="button" class="cal-card-close" id="calCardClose" aria-label="Close">✕</button>
+    <div id="calCardBody" class="cal-card-body">
+      <p class="hint">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/fullcalendar/index.global.min.js') }}"></script>
+<script>
+  const calendarViewMap = {
+    day: "timeGridDay",
+    week: "timeGridWeek",
+    month: "dayGridMonth"
+  };
+
+  const filterValues = {
+    instrument_id: {{ filters.instrument_id|tojson }},
+    operator_id: {{ filters.operator_id|tojson }},
+    show_scheduled: {{ filters.show_scheduled|tojson }},
+    show_in_progress: {{ filters.show_in_progress|tojson }},
+    show_completed: {{ filters.show_completed|tojson }},
+    show_maintenance: {{ filters.show_maintenance|tojson }}
+  };
+
+  const overlay = document.getElementById("calCardOverlay");
+  const calCardBody = document.getElementById("calCardBody");
+  const calCardClose = document.getElementById("calCardClose");
+
+  function openCalCard(requestId) {
+    overlay.classList.remove("is-hidden");
+    calCardBody.innerHTML = '<p class="hint">Loading…</p>';
+    fetch("/requests/" + requestId + "/calendar-card", { credentials: "same-origin" })
+      .then(function(r) { return r.text(); })
+      .then(function(html) { calCardBody.innerHTML = html; })
+      .catch(function() { calCardBody.innerHTML = '<p class="hint">Could not load job details.</p>'; });
+  }
+
+  function closeCalCard() {
+    overlay.classList.add("is-hidden");
+    calCardBody.innerHTML = "";
+  }
+
+  calCardClose.addEventListener("click", closeCalCard);
+  overlay.addEventListener("click", function(e) {
+    if (e.target === overlay) closeCalCard();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeCalCard();
+  });
+
+  const calendarEl = document.getElementById("calendar_app");
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: calendarViewMap[{{ filters.view|tojson }}] || "timeGridWeek",
+    initialDate: {{ anchor_date.isoformat()|tojson }},
+    height: "auto",
+    nowIndicator: true,
+    firstDay: 1,
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay"
+    },
+    buttonText: {
+      today: "Today",
+      month: "Month",
+      week: "Week",
+      day: "Day"
+    },
+    events: function(fetchInfo, successCallback, failureCallback) {
+      const params = new URLSearchParams({
+        start: fetchInfo.startStr,
+        end: fetchInfo.endStr,
+        instrument_id: filterValues.instrument_id || "",
+        operator_id: filterValues.operator_id || "",
+        show_scheduled: filterValues.show_scheduled || "0",
+        show_in_progress: filterValues.show_in_progress || "0",
+        show_completed: filterValues.show_completed || "0",
+        show_maintenance: filterValues.show_maintenance || "0"
+      });
+      fetch({{ url_for('calendar_events')|tojson }} + "?" + params.toString(), {
+        credentials: "same-origin"
+      })
+        .then(function(r) { return r.json(); })
+        .then(successCallback)
+        .catch(failureCallback);
+    },
+    eventClick: function(info) {
+      info.jsEvent.preventDefault();
+      const props = info.event.extendedProps || {};
+      if (props.downtime) {
+        return;
+      }
+      const requestId = props.request_id;
+      if (requestId) {
+        openCalCard(requestId);
+      } else if (info.event.url) {
+        window.location.href = info.event.url;
+      }
+    },
+    eventDidMount: function(info) {
+      const props = info.event.extendedProps || {};
+      const subtitle = props.instrument_code ? `${props.instrument_code} | ${props.operator || "-"}` : (props.instrument || "");
+      if (subtitle) {
+        info.el.title = `${info.event.title}\n${subtitle}`;
+      }
+    },
+    datesSet: function(info) {
+      const nextView = info.view.type === "dayGridMonth" ? "month" : (info.view.type === "timeGridDay" ? "day" : "week");
+      const dateInput = document.querySelector('input[name="date"]');
+      const viewInput = document.querySelector('input[name="view"]');
+      if (dateInput) dateInput.value = info.startStr.slice(0, 10);
+      if (viewInput) viewInput.value = nextView;
+    }
+  });
+
+  calendar.render();
+</script>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% macro request_identity(row, compact=False) -%}
+{% if compact %}
+<div class="request-identity-compact">
+  <a class="request-link" href="{{ url_for('request_detail', request_id=row['id']) }}" title="{{ row['sample_name'] }}{% if row['sample_ref'] %} · {{ row['sample_ref'] }}{% endif %}">{{ row["request_no"] }}{% if row["sample_count"] and row["sample_count"]|int > 1 %}<span class="sample-count-badge">{{ row["sample_count"] }}</span>{% endif %}</a>
+  {% if row["sample_name"] %}<div class="request-sample-subline">{{ row["sample_name"] }}</div>{% endif %}
+</div>
+{% else %}
+<a class="request-link" href="{{ url_for('request_detail', request_id=row['id']) }}">{{ row["request_no"] }}{% if row["sample_count"] and row["sample_count"]|int > 1 %}<span class="sample-count-badge">{{ row["sample_count"] }}</span>{% endif %}</a>
+<div><small>{{ row["sample_name"] }}</small></div>
+{% if row["sample_ref"] %}
+<div><small class="hint">{{ row["sample_ref"] }}</small></div>
+{% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro instrument_name_link(row) -%}
+{% if can_open_instrument_detail_id_user(row['instrument_id']) %}
+<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=row['instrument_id']) }}">{{ row["instrument_name"] }}</a>
+{% else %}
+{{ row["instrument_name"] }}
+{% endif %}
+{%- endmacro %}
+
+{% macro person_name_link(user_id, name) -%}
+{% if user_id and name %}
+  {% if can_view_user_profile_id_user(user_id) %}
+  <a class="text-link" href="{{ url_for('user_profile', user_id=user_id) }}">{{ name }}</a>
+  {% else %}
+  {{ name }}
+  {% endif %}
+{% else %}
+-
+{% endif %}
+{%- endmacro %}
+
+{% macro requester_block(row, show_originator=False, show_email=False) -%}
+{% if request_card_can_view_field_user(row, 'requester_identity') %}
+{{ person_name_link(row['requester_id'], row['requester_name']) }}
+{% if show_email and row["requester_email"] %}
+<div><small>{{ row["requester_email"] }}</small></div>
+{% endif %}
+{% if show_originator %}
+<div><small>Originator: {% if row["created_by_user_id"] %}{{ person_name_link(row['created_by_user_id'], row["originator_name"] or row["requester_name"]) }}{% else %}{{ row["originator_name"] or row["requester_name"] }}{% endif %}</small></div>
+{% endif %}
+{% else %}
+<span class="hint">Restricted</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro operator_block(row) -%}
+{% if request_card_can_view_field_user(row, 'operator_identity') %}
+{{ person_name_link(row['assigned_operator_id'], row["operator_name"]) }}
+{% else %}
+<span class="hint">Restricted</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro status_block(row, show_group=True, show_summary=False, link=True) -%}
+{% if link %}<a class="job-meta-link" href="{{ url_for('request_detail', request_id=row['id']) }}">{% endif %}
+<span class="badge status-{{ row['status'] }}">{{ request_display_status(row["status"]) }}</span>
+{% if show_group %}<div><small>{{ request_status_group(row["status"]) }}</small></div>{% endif %}
+{% if show_summary %}<div><small class="hint">{{ request_status_summary(row) }}</small></div>{% endif %}
+{% if link %}</a>{% endif %}
+{%- endmacro %}
+
+{% macro meta_link(row, value, fallback='-') -%}
+<a class="job-meta-link" href="{{ url_for('request_detail', request_id=row['id']) }}">{{ value if value else fallback }}</a>
+{%- endmacro %}
+
+{% macro attachment_list(row, attachment_map, count_first=False) -%}
+{% if count_first %}{{ row["attachment_count"] }}{% endif %}
+{% if attachment_map.get(row["id"]) %}
+  {% for attachment in attachment_map[row["id"]] %}
+  <div><a href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}"><small>{{ attachment["original_filename"] }}</small></a></div>
+  {% endfor %}
+{% endif %}
+{%- endmacro %}

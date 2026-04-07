@@ -1,0 +1,117 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Green CSS Theme (Open-Source JavaScript Event Calendar)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+    <link href="../themes/calendar_green.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note"><b>Note:</b> You can create a theme using the online <strong>DayPilot Theme Designer</strong>: <a
+        href="https://themes.daypilot.org/">https://themes.daypilot.org/</a></div>
+
+    <div id="dp"></div>
+
+    <div id="print"></div>
+
+    <script type="text/javascript">
+
+        const dp = new DayPilot.Calendar("dp", {
+            theme: "calendar_green",
+            viewType: "Week",
+            startDate: DayPilot.Date.today(),
+            showAllDayEvents: true,
+            onTimeRangeSelected: function (args) {
+                var name = prompt("New event name:", "Event");
+                if (!name) return;
+                var e = new DayPilot.Event({
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    resource: args.resource,
+                    text: "Event"
+                });
+                dp.events.add(e);
+                dp.clearSelection();
+                console.log("Created");
+            },
+            onBeforeEventRender: args => {
+                args.data.areas = [
+                    {
+                        right: 4,
+                        top: 6,
+                        width: 24,
+                        height: 24,
+                        padding: 2,
+                        symbol: "../icons/daypilot.svg#x-2",
+                        onClick: args => {
+                            dp.events.remove(args.source);
+                        }
+                    }
+                ]
+            }
+        });
+
+        dp.init();
+
+        const startDate = DayPilot.Date.today().firstDayOfWeek();
+        const events = [
+            {
+                start: startDate.addDays(1).addHours(12),
+                end: startDate.addDays(1).addHours(15),
+                id: 1,
+                text: "Event 1"
+            },
+            {
+                start: startDate.addDays(2).addHours(11),
+                end: startDate.addDays(2).addHours(16),
+                id: 2,
+                text: "Event 2"
+            },
+            {
+                start: startDate.addDays(3).addHours(9).addMinutes(30),
+                end: startDate.addDays(3).addHours(12),
+                id: 3,
+                text: "Event 3"
+            },
+            {
+                start: startDate.addDays(3).addHours(13),
+                end: startDate.addDays(3).addHours(15).addMinutes(30),
+                id: 4,
+                text: "Event 4"
+            },
+            {
+                start: startDate.addDays(3).addHours(14),
+                end: startDate.addDays(3).addHours(16).addMinutes(30),
+                id: 5,
+                text: "Event 5"
+            },
+        ];
+        dp.update({events});
+
+    </script>
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+
+<!-- /bottom -->
+
+</body>
+</html>
+

@@ -1,0 +1,104 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Row Header Active Areas (JavaScript Scheduler)</title>
+
+    <!-- head -->
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="../helpers/v2/main.css?v=2026.2.813" type="text/css" rel="stylesheet"/>
+    <script src="../js/daypilot-all.min.js?v=2026.2.813"></script>
+
+    <!-- /head -->
+
+</head>
+<body>
+
+<!-- top -->
+<template id="content" data-version="2026.2.813">
+
+    <!-- /top -->
+
+    <div class="note">You can add custom icons and action buttons to the Scheduler row headers using active areas. This demo shows an icon on hover that opens an edit dialog on click. Read more about the <a href="https://doc.daypilot.org/scheduler/row-header-active-areas/">row header active areas</a>.
+    </div>
+
+    <div id="dp"></div>
+
+    <script type="text/javascript">
+
+        const dp = new DayPilot.Scheduler("dp", {
+            startDate: "2026-01-01",
+            days: 365,
+            scale: "Day",
+            timeHeaders: [
+                {groupBy: "Month", format: "MMM yyyy"},
+                {groupBy: "Cell", format: "d"}
+            ],
+            treeEnabled: true,
+            resources: [
+                {name: "Room 1", id: "A"},
+                {name: "Room 2", id: "B"},
+                {name: "Room 3", id: "C"},
+                {name: "Room 4", id: "D"},
+                {name: "Person 1", id: "E"},
+                {name: "Person 2", id: "F"},
+                {name: "Person 3", id: "G"},
+                {name: "Person 4", id: "H"},
+                {name: "Tool 1", id: "I"},
+                {name: "Tool 2", id: "J"},
+                {name: "Tool 3", id: "K"},
+                {name: "Tool 4", id: "L"}
+            ],
+            onTimeRangeSelected: args => {
+                const name = prompt("New event name:", `Event${args.start}`);
+                dp.clearSelection();
+                if (!name) return;
+                dp.events.add({
+                    start: args.start,
+                    end: args.end,
+                    id: DayPilot.guid(),
+                    resource: args.resource,
+                    text: name
+                });
+            },
+            onBeforeRowHeaderRender: args => {
+                args.row.areas = [
+                    {
+                        right: 5,
+                        top: "calc(50% - 8px)",
+                        width: 20,
+                        height: 20,
+                        visibility: "Hover",
+                        symbol: "../icons/daypilot.svg#edit",
+                        backColor: "#fff",
+                        padding: 2,
+                        borderRadius: "50%",
+                        borderColor: "#999999",
+                        style: "cursor:pointer",
+                        onClick: async args => {
+                            const row = args.source;
+                            const modal = await DayPilot.Modal.prompt("New name:", row.name);
+                            if (!modal.canceled) {
+                                row.data.name = modal.result;
+                                dp.rows.update(row);
+                            }
+                        }
+                    },
+                ];
+            },
+        });
+
+        dp.init();
+        dp.scrollTo("2026-03-25");
+
+    </script>
+
+    <!-- bottom -->
+</template>
+
+<script src="../helpers/v2/app.js?v=2026.2.813"></script>
+<!-- /bottom -->
+
+</body>
+</html>
+

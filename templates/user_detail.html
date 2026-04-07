@@ -4,7 +4,7 @@
 {% block content %}
 {% call page_intro("", target_user["name"]) %}
   {% if is_self %}
-  <a class="text-link" href="{{ url_for('my_history') }}">My History</a>
+  <a class="text-link" href="{{ url_for('schedule') }}">My History</a>
   {% endif %}
   <a class="text-link" href="{{ url_for('index') }}">Home</a>
 {% endcall %}

@@ -3437,7 +3437,7 @@ def sitemap():
             "links": [
                 {"label": "Home", "href": url_for("index")},
                 {"label": "New Request", "href": url_for("new_request")},
-                {"label": "My History", "href": url_for("my_history")},
+                {"label": "My History", "href": url_for("schedule")},
                 {"label": "My Profile", "href": url_for("user_profile", user_id=user["id"])},
             ],
         }
@@ -3448,7 +3448,7 @@ def sitemap():
             ops_links.append({"label": "Instruments", "href": url_for("instruments")})
         if access_profile["can_access_schedule"]:
             ops_links.append({"label": "Queue", "href": url_for("schedule")})
-            ops_links.append({"label": "Processed History", "href": url_for("processed_history")})
+            ops_links.append({"label": "Processed History", "href": url_for("schedule", bucket="completed")})
         sections.append({"title": "Operations", "links": ops_links})
     if access_profile["can_access_calendar"] or access_profile["can_access_stats"]:
         report_links = []
@@ -5197,97 +5197,6 @@ def my_history():
     args = request.args.to_dict()
     return redirect(url_for("schedule", **args))
 
-@app.route("/my/history/_legacy")
-@login_required
-def my_history_legacy():
-    user = current_user()
-    filters = request_filter_values()
-    history_view = (request.args.get("view") or "").strip().lower()
-    has_operational_scope = bool(
-        user["role"] in {"super_admin", "site_admin", "finance_admin", "professor_approver"}
-        or assigned_instrument_ids(user)
-    )
-    if history_view not in {"submitted", "operational"}:
-        history_view = "operational" if has_operational_scope else "submitted"
-    if history_view == "submitted":
-        base_clauses = ["(sr.requester_id = ? OR sr.created_by_user_id = ?)"]
-        base_params = [user["id"], user["id"]]
-        title = "Submission History"
-    else:
-        base_clauses, base_params = request_scope_sql(user, "sr")
-        if user["role"] in {"super_admin", "site_admin"}:
-            title = "Operational History"
-        elif assigned_instrument_ids(user):
-            title = "Operational History"
-        elif user["role"] == "finance_admin":
-            title = "Finance Review History"
-        elif user["role"] == "professor_approver":
-            title = "Professor Review History"
-        else:
-            title = "Submission History"
-    sql, filtered_params = request_history_query(base_clauses, base_params, filters)
-    rows = query_all(sql, tuple(filtered_params))
-
-    if history_view == "operational" and user["role"] in {"super_admin", "site_admin"}:
-        instruments = query_all("SELECT id, name FROM instruments ORDER BY name")
-    elif history_view == "operational" and assigned_instrument_ids(user):
-        ids = assigned_instrument_ids(user)
-        placeholders = ",".join("?" for _ in ids)
-        instruments = query_all(
-            f"SELECT id, name FROM instruments WHERE id IN ({placeholders}) ORDER BY name",
-            tuple(ids),
-        )
-    else:
-        instruments = query_all(
-            f"""
-            SELECT DISTINCT i.id, i.name
-            FROM instruments i
-            JOIN sample_requests sr ON sr.instrument_id = i.id
-            WHERE {' AND '.join(base_clauses) if base_clauses else '1 = 1'}
-            ORDER BY i.name
-            """,
-            tuple(base_params),
-        )
-
-    requesters = []
-    operators = []
-    if history_view == "operational" and user["role"] != "requester":
-        requesters = query_all(
-            f"""
-            SELECT DISTINCT u.id, u.name
-            FROM users u
-            JOIN sample_requests sr ON sr.requester_id = u.id
-            WHERE {' AND '.join(base_clauses) if base_clauses else '1 = 1'}
-            ORDER BY u.name
-            """,
-            tuple(base_params),
-        )
-        operators = query_all(
-            f"""
-            SELECT DISTINCT u.id, u.name
-            FROM users u
-            JOIN sample_requests sr ON sr.assigned_operator_id = u.id
-            WHERE {' AND '.join(base_clauses) if base_clauses else '1 = 1'}
-            ORDER BY u.name
-            """,
-            tuple(base_params),
-        )
-    attachment_map = attachments_by_request_ids([row["id"] for row in rows])
-    return render_template(
-        "history.html",
-        title=title,
-        rows=rows,
-        filters=filters,
-        instruments=instruments,
-        requesters=requesters,
-        operators=operators,
-        scope="my",
-        history_view=history_view,
-        has_operational_scope=has_operational_scope,
-        attachment_map=attachment_map,
-    )
-
-
 @app.route("/me")
 @login_required
 def my_profile():
@@ -5300,50 +5209,6 @@ def processed_history():
     args = request.args.to_dict()
     args.setdefault("bucket", "completed")
     return redirect(url_for("schedule", **args))
-
-@app.route("/history/processed/_legacy")
-@login_required
-def processed_history_legacy():
-    user = current_user()
-    if not can_access_schedule(user):
-        abort(403)
-    filters = request_filter_values()
-    base_clauses, base_params = request_scope_sql(user, "sr")
-    from_sql, where_sql, query_params = processed_history_query_parts(base_clauses, base_params, filters)
-    processed_order_map = {
-        "created_desc": "COALESCE(sr.created_at, '') DESC, sr.id DESC",
-        "created_asc": "COALESCE(sr.created_at, '') ASC, sr.id ASC",
-        "completed_desc": "COALESCE(sr.completed_at, sr.created_at) DESC, sr.id DESC",
-        "scheduled_desc": "COALESCE(sr.scheduled_for, '') DESC, sr.id DESC",
-        "instrument_asc": "i.name ASC, COALESCE(sr.completed_at, sr.created_at) DESC",
-        "status_asc": "sr.status ASC, COALESCE(sr.completed_at, sr.created_at) DESC",
-    }
-    processed_order_sql = processed_order_map.get(filters.get("sort", "completed_desc"), processed_order_map["completed_desc"])
-    rows = query_all(
-        f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code, r.name AS requester_name,
-               c.name AS originator_name, c.email AS originator_email, c.role AS originator_role,
-               op.name AS operator_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count,
-               GROUP_CONCAT(ra.original_filename, ', ') AS attachment_names
-        {from_sql}
-        {where_sql}
-        GROUP BY sr.id
-        ORDER BY {processed_order_sql}
-        """,
-        tuple(query_params),
-    )
-    instruments = query_all("SELECT id, name FROM instruments ORDER BY name")
-    attachment_map = attachments_by_request_ids([row["id"] for row in rows])
-    return render_template(
-        "processed_history.html",
-        title="Processed Sample Archive",
-        rows=rows,
-        filters=filters,
-        instruments=instruments,
-        attachment_map=attachment_map,
-        instrument_selector_enabled=len(instruments) > 1,
-    )
 
 
 @app.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -5442,25 +5307,13 @@ def user_profile(user_id: int):
 @app.route("/users/<int:user_id>/history")
 @role_required("super_admin")
 def user_history(user_id: int):
-    filters = request_filter_values()
-    target_user = query_one("SELECT id, name, email FROM users WHERE id = ?", (user_id,))
+    target_user = query_one("SELECT id, name FROM users WHERE id = ?", (user_id,))
     if target_user is None:
         abort(404)
-    sql, params = request_history_query(["sr.requester_id = ?"], [user_id], filters)
-    rows = query_all(sql, tuple(params))
-    instruments = query_all("SELECT id, name FROM instruments ORDER BY name")
-    attachment_map = attachments_by_request_ids([row["id"] for row in rows])
-    return render_template(
-        "history.html",
-        title=f"History: {target_user['name']}",
-        rows=rows,
-        filters=filters,
-        instruments=instruments,
-        requesters=[],
-        operators=[],
-        scope="user",
-        attachment_map=attachment_map,
-    )
+    args = request.args.to_dict()
+    args["requester_id"] = str(user_id)
+    args["source_label"] = target_user["name"]
+    return redirect(url_for("schedule", **args))
 
 
 @app.route("/instruments/<int:instrument_id>/history")
@@ -5472,52 +5325,10 @@ def instrument_history(instrument_id: int):
         abort(404)
     if not can_view_instrument_history(user, instrument_id):
         abort(403)
-    filters = request_filter_values()
-    sql, params = request_history_query(["sr.instrument_id = ?"], [instrument_id], filters)
-    all_rows = query_all(sql, tuple(params))
-    per_page = 25
-    try:
-        page = max(1, int(request.args.get("page", "1")))
-    except (TypeError, ValueError):
-        page = 1
-    total_rows = len(all_rows)
-    total_pages = max(1, math.ceil(total_rows / per_page)) if total_rows else 1
-    if page > total_pages:
-        page = total_pages
-    start = (page - 1) * per_page
-    rows = all_rows[start : start + per_page]
-    requesters = query_all(
-        """
-        SELECT DISTINCT u.id, u.name
-        FROM users u
-        JOIN sample_requests sr ON sr.requester_id = u.id
-        WHERE sr.instrument_id = ?
-        ORDER BY u.name
-        """,
-        (instrument_id,),
-    )
-    operators = query_all(
-        """
-        SELECT DISTINCT u.id, u.name
-        FROM users u
-        JOIN sample_requests sr ON sr.assigned_operator_id = u.id
-        WHERE sr.instrument_id = ?
-        ORDER BY u.name
-        """,
-        (instrument_id,),
-    )
-    attachment_map = attachments_by_request_ids([row["id"] for row in rows])
-    return render_template(
-        "instrument_history.html",
-        instrument=instrument,
-        rows=rows,
-        filters=filters,
-        requesters=requesters,
-        operators=operators,
-        attachment_map=attachment_map,
-        page=page,
-        total_pages=total_pages,
-    )
+    args = request.args.to_dict()
+    args["instrument_id"] = str(instrument_id)
+    args["source_label"] = instrument["name"]
+    return redirect(url_for("schedule", **args))
 
 
 def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_start: date, range_end: date) -> list[dict]:

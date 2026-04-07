@@ -502,7 +502,66 @@ Attachments can be linked to specific messages.
 
 ---
 
-## 10. CHANGELOG
+## 10. Git & Development Environment
+
+> **AI agents: update this section if you change any repo settings,
+> branch strategy, or dev tooling.**
+
+### Repository
+
+| Setting          | Value                                           |
+|------------------|-------------------------------------------------|
+| VCS              | Git (local only — no remote configured yet)     |
+| Repo root        | `Main/` (same directory as `app.py`)            |
+| Default branch   | `master`                                        |
+| Git user.name    | AAAA                                            |
+| Git user.email   | general.goje@gmail.com                          |
+| .gitignore       | `__pycache__/`, `.venv/`, `venv/`, `*.db`, `.DS_Store`, `uploads/`, `exports/`, `.env`, IDE files |
+
+### Branch & Commit Conventions
+
+- All work happens on `master` until a branching strategy is adopted.
+- Every AI agent session **must** create at least one commit covering
+  its changes **plus** the updated `PROJECT.md`.
+- Commit messages: imperative mood, first line ≤ 72 chars, blank line
+  then body if needed.  Append:
+  ```
+  Co-Authored-By: <Agent Name> <noreply@anthropic.com>
+  ```
+- Never force-push or rewrite published history.
+
+### Running the App Locally
+
+```bash
+cd Main/
+# activate your virtualenv if you use one
+pip install flask
+python app.py          # starts on http://127.0.0.1:5055
+```
+
+- **Debug mode** is controlled at the bottom of `app.py`
+  (`app.run(debug=False, port=5055)`). Flip to `True` while
+  developing, set back to `False` before committing.
+- The SQLite database `lab_scheduler.db` is git-ignored; it is created
+  automatically on first run via `init_db()`.
+
+### Editor / IDE Notes
+
+- Primary editor: **VS Code** (Xcode also available but not used for
+  this project).
+- Recommended VS Code extensions: Python, Jinja, SQLite Viewer.
+- No formatter or linter is enforced yet — candidates for future
+  adoption: `black`, `ruff`.
+
+### Remote / CI (not yet configured)
+
+- No remote origin is set. When one is added, update this section with
+  the URL, hosting provider, and any CI pipeline details.
+- Planned: GitHub remote, GitHub Actions for linting + basic tests.
+
+---
+
+## 11. CHANGELOG
 
 <!-- AI agents: add your entries here, newest first.
      Format:
@@ -542,7 +601,7 @@ with 221 files (76,536 lines).
 
 ---
 
-## 11. TODO / Roadmap
+## 12. TODO / Roadmap
 
 <!-- AI agents: check off items as you complete them.
      Add new items as you discover them.

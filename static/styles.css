@@ -804,7 +804,7 @@ a:hover {
 
 .request-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
   gap: 0.95rem;
   align-items: start;
 }
@@ -814,7 +814,16 @@ a:hover {
   gap: 0.95rem;
   align-self: start;
   position: sticky;
-  top: 6.25rem;
+  top: 5.5rem;
+  max-height: calc(100vh - 6.5rem);
+  overflow-y: auto;
+}
+
+.request-left-stack {
+  display: grid;
+  gap: 0.95rem;
+  align-self: start;
+  min-width: 0;
 }
 
 .request-main-card {
@@ -1636,7 +1645,7 @@ input[type="file"] {
 }
 
 .queue-table-shell {
-  max-height: 42rem;
+  max-height: none;
 }
 
 .history-control-strip {
@@ -1649,20 +1658,18 @@ input[type="file"] {
 
 /* ── Uniform compact row height across ALL tables ── */
 table {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 
 table th,
 table td {
-  padding: 0.4rem 0.55rem;
-  height: 3.4rem;
-  max-height: 3.4rem;
-  line-height: 1.35;
+  padding: 0.5rem 0.6rem;
+  line-height: 1.4;
   vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 16rem;
+  max-width: 18rem;
 }
 
 /* Fixed layout prevents column shifts on pagination */
@@ -1686,7 +1693,6 @@ table td {
 .instrument-card table th,
 .instrument-card table td {
   max-width: 10rem;
-  height: 2.75rem;
 }
 
 /* Resizable pane handle */
@@ -3521,5 +3527,61 @@ code {
 }
 .context-filter-label strong {
   color: var(--ink);
+}
+
+/* ══════════════════════════════════════════════════════
+   Panel, scroll, and table standardisation patch
+   ══════════════════════════════════════════════════════ */
+
+/* ── Broken / missing images: hide gracefully ── */
+img.instrument-photo {
+  min-height: 0;
+}
+img.instrument-photo[src=""],
+img.instrument-photo:not([src]) {
+  display: none;
+}
+
+/* ── Paginated pane: ensure last page doesn't collapse ── */
+.paginated-pane-scroll table {
+  min-height: 0;
+}
+.paginated-pane-scroll tbody tr.pane-page-hidden {
+  display: none;
+}
+
+/* ── Queue table: let action column wrap so buttons don't clip ── */
+.queue-action-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+.queue-action-stack .inline-action-stack {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ── Text overflow: allow wrapping in key columns ── */
+#centralQueueTable td:first-child,
+#centralQueueTable td:nth-child(2) {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ── Consistent scroll-pane sizing ── */
+.paginated-pane-scroll {
+  min-height: 12rem;
+}
+
+/* ── Card sizing consistency ── */
+.stat {
+  padding: 0.75rem 0.9rem;
+}
+
+/* ── Instrument detail: machine info card ── */
+.instrument-side-col .card {
+  overflow: hidden;
 }
 

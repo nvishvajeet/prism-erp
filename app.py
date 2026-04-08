@@ -4730,6 +4730,12 @@ def request_detail(request_id: int):
                 user["id"], "sample_request", request_id, "request_cancelled",
                 {"previous_status": sample_request["status"], "reason": cancel_reason},
             )
+            queue_email_notification("request_cancelled", request_id, sample_request["requester_email"], {
+                "request_no": sample_request["request_no"],
+                "instrument_name": sample_request["instrument_name"],
+                "recipient_name": sample_request["requester_name"],
+                "reason": cancel_reason,
+            })
             write_request_metadata_snapshot(request_id)
             flash("Request cancelled.", "success")
             return redirect(url_for("request_detail", request_id=request_id))
@@ -5142,6 +5148,17 @@ def request_detail(request_id: int):
                 user["id"], "sample_request", request_id, "results_confirmed",
                 {"confirmation_note": confirmation_note},
             )
+            if sample_request.get("operator_name"):
+                operator_email = query_one(
+                    "SELECT email FROM users WHERE id = ?",
+                    (sample_request["assigned_operator_id"],),
+                )
+                if operator_email:
+                    queue_email_notification("results_confirmed", request_id, operator_email["email"], {
+                        "request_no": sample_request["request_no"],
+                        "instrument_name": sample_request["instrument_name"],
+                        "recipient_name": sample_request["operator_name"],
+                    })
         else:
             abort(403)
         write_request_metadata_snapshot(request_id)
@@ -5695,6 +5712,106 @@ def user_history(user_id: int):
     args["requester_id"] = str(user_id)
     args["source_label"] = target_user["name"]
     return redirect(url_for("schedule", **args))
+
+
+@app.route("/instruments/<int:instrument_id>/config", methods=["GET", "POST"])
+@login_required
+def instrument_config(instrument_id: int):
+    """Instrument configuration panel — manage capacity, intake mode, approval chain."""
+    user = current_user()
+    instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
+    if instrument is None:
+        abort(404)
+    if not can_manage_instrument(user["id"], instrument_id, user["role"]):
+        abort(403)
+
+    approval_chain = query_all(
+        """
+        SELECT iac.*, u.name AS approver_name, u.email AS approver_email
+        FROM instrument_approval_config iac
+        LEFT JOIN users u ON u.id = iac.approver_user_id
+        WHERE iac.instrument_id = ?
+        ORDER BY iac.step_order
+        """,
+        (instrument_id,),
+    )
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+
+        if action == "update_settings":
+            daily_capacity = int(request.form.get("daily_capacity", instrument["daily_capacity"]))
+            accepting = 1 if request.form.get("accepting_requests") == "1" else 0
+            soft_accept = 1 if request.form.get("soft_accept_enabled") == "1" else 0
+            notes = request.form.get("notes", instrument["notes"]).strip()
+            execute(
+                """
+                UPDATE instruments
+                SET daily_capacity = ?, accepting_requests = ?, soft_accept_enabled = ?, notes = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (daily_capacity, accepting, soft_accept, notes, now_iso(), instrument_id),
+            )
+            log_action(
+                user["id"], "instrument", instrument_id, "config_updated",
+                {"daily_capacity": daily_capacity, "accepting_requests": accepting, "soft_accept_enabled": soft_accept},
+            )
+            flash("Instrument settings updated.", "success")
+            return redirect(url_for("instrument_config", instrument_id=instrument_id))
+
+        elif action == "add_approval_step":
+            approver_role = request.form.get("approver_role", "").strip()
+            approver_user_id = int(request.form.get("approver_user_id") or 0) or None
+            if approver_role not in {"finance", "professor", "operator"}:
+                flash("Invalid approver role.", "error")
+                return redirect(url_for("instrument_config", instrument_id=instrument_id))
+            max_order = query_one(
+                "SELECT COALESCE(MAX(step_order), 0) AS m FROM instrument_approval_config WHERE instrument_id = ?",
+                (instrument_id,),
+            )
+            next_order = (max_order["m"] if max_order else 0) + 1
+            execute(
+                "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id) VALUES (?, ?, ?, ?)",
+                (instrument_id, next_order, approver_role, approver_user_id),
+            )
+            log_action(
+                user["id"], "instrument", instrument_id, "approval_step_added",
+                {"step_order": next_order, "approver_role": approver_role},
+            )
+            flash("Approval step added.", "success")
+            return redirect(url_for("instrument_config", instrument_id=instrument_id))
+
+        elif action == "remove_approval_step":
+            step_id = int(request.form.get("step_id", 0))
+            step = query_one(
+                "SELECT * FROM instrument_approval_config WHERE id = ? AND instrument_id = ?",
+                (step_id, instrument_id),
+            )
+            if step is None:
+                abort(404)
+            execute("DELETE FROM instrument_approval_config WHERE id = ?", (step_id,))
+            remaining = query_all(
+                "SELECT id FROM instrument_approval_config WHERE instrument_id = ? ORDER BY step_order",
+                (instrument_id,),
+            )
+            for idx, row in enumerate(remaining, 1):
+                execute("UPDATE instrument_approval_config SET step_order = ? WHERE id = ?", (idx, row["id"]))
+            log_action(
+                user["id"], "instrument", instrument_id, "approval_step_removed",
+                {"step_id": step_id, "approver_role": step["approver_role"]},
+            )
+            flash("Approval step removed.", "success")
+            return redirect(url_for("instrument_config", instrument_id=instrument_id))
+
+    eligible_approvers = query_all(
+        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('super_admin', 'site_admin', 'operator', 'professor') ORDER BY name",
+    )
+    return render_template(
+        "instrument_config.html",
+        instrument=instrument,
+        approval_chain=approval_chain,
+        eligible_approvers=eligible_approvers,
+    )
 
 
 @app.route("/instruments/<int:instrument_id>/history")

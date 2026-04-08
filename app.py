@@ -484,6 +484,97 @@ REQUEST_SORT_MAP: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+#  Email notification infrastructure
+# ---------------------------------------------------------------------------
+
+EMAIL_EVENT_TEMPLATES: dict[str, dict[str, str]] = {
+    "status_changed": {
+        "subject": "Request {request_no} status: {new_status}",
+        "body": (
+            "Hello {recipient_name},\n\n"
+            "Request {request_no} for {instrument_name} has changed status to {new_status}.\n"
+            "Sample: {sample_name}\n\n"
+            "Regards,\nLab Facility"
+        ),
+    },
+    "request_cancelled": {
+        "subject": "Request {request_no} cancelled",
+        "body": (
+            "Hello {recipient_name},\n\n"
+            "Request {request_no} for {instrument_name} has been cancelled.\n"
+            "Reason: {reason}\n\n"
+            "Regards,\nLab Facility"
+        ),
+    },
+    "results_confirmed": {
+        "subject": "Results confirmed: {request_no}",
+        "body": (
+            "Hello {recipient_name},\n\n"
+            "The requester has confirmed receipt of results for request {request_no} ({instrument_name}).\n\n"
+            "Regards,\nLab Facility"
+        ),
+    },
+    "approval_needed": {
+        "subject": "Approval needed: {request_no}",
+        "body": (
+            "Hello {recipient_name},\n\n"
+            "Request {request_no} for {instrument_name} requires your {approver_role} approval.\n"
+            "Sample: {sample_name}\n\n"
+            "Regards,\nLab Facility"
+        ),
+    },
+}
+
+
+def queue_email_notification(event_type: str, request_id: int, recipient_email: str, context: dict) -> int | None:
+    """Insert an email into the email_queue table for deferred sending."""
+    template = EMAIL_EVENT_TEMPLATES.get(event_type)
+    if not template:
+        return None
+    try:
+        subject = template["subject"].format_map(context)
+        body = template["body"].format_map(context)
+    except KeyError:
+        return None
+    return execute(
+        """
+        INSERT INTO email_queue (event_type, request_id, recipient_email, subject, body, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (event_type, request_id, recipient_email, subject, body, now_iso()),
+    )
+
+
+def process_email_queue(batch_size: int = 10) -> int:
+    """Send up to batch_size queued emails. Returns number sent."""
+    rows = query_all(
+        "SELECT * FROM email_queue WHERE status = 'pending' ORDER BY created_at LIMIT ?",
+        (batch_size,),
+    )
+    sent_count = 0
+    for row in rows:
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = row["subject"]
+            msg["From"] = "noreply@lab.local"
+            msg["To"] = row["recipient_email"]
+            msg.set_content(row["body"])
+            with smtplib.SMTP(app.config["SMTP_HOST"], app.config["SMTP_PORT"], timeout=5) as server:
+                server.send_message(msg)
+            execute(
+                "UPDATE email_queue SET status = 'sent', sent_at = ? WHERE id = ?",
+                (now_iso(), row["id"]),
+            )
+            sent_count += 1
+        except Exception as exc:
+            execute(
+                "UPDATE email_queue SET status = 'failed', error_message = ?, retry_count = retry_count + 1 WHERE id = ?",
+                (str(exc)[:500], row["id"]),
+            )
+    return sent_count
+
+
 def send_completion_email(sample_request: sqlite3.Row, results_summary: str) -> tuple[bool, str]:
     msg = EmailMessage()
     msg["Subject"] = f"Lab Result Ready: {sample_request['request_no']}"
@@ -511,6 +602,31 @@ def send_completion_email(sample_request: sqlite3.Row, results_summary: str) -> 
         return True, "Email sent"
     except Exception as exc:
         return False, f"Email not sent: {exc}"
+
+
+def approval_pill_chain(approval_steps: list[sqlite3.Row | dict]) -> list[dict[str, str]]:
+    """Build a list of pill descriptors for rendering the approval chain visually.
+
+    Each pill: {role, label, status, acted_at, approver_name, css_class}
+    """
+    pills = []
+    for step in approval_steps:
+        status = step["status"]
+        css_map = {
+            "approved": "pill-approved",
+            "rejected": "pill-rejected",
+            "pending": "pill-pending",
+        }
+        pills.append({
+            "role": step["approver_role"],
+            "label": approval_role_label(step["approver_role"]),
+            "status": status,
+            "acted_at": step.get("acted_at"),
+            "approver_name": step.get("approver_name", "Unassigned"),
+            "css_class": css_map.get(status, "pill-pending"),
+            "step_order": step["step_order"],
+        })
+    return pills
 
 
 def build_request_status(db: sqlite3.Connection, request_id: int) -> str:
@@ -3216,6 +3332,21 @@ def init_db() -> None:
                 route_path TEXT NOT NULL,
                 timestamp TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS email_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                request_id INTEGER,
+                recipient_email TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error_message TEXT,
+                retry_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                sent_at TEXT,
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id)
+            );
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3268,6 +3399,10 @@ def init_db() -> None:
         user_columns = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "last_notification_check" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN last_notification_check TEXT DEFAULT '1970-01-01T00:00:00'")
+        if "result_confirmed_at" not in columns:
+            cur.execute("ALTER TABLE sample_requests ADD COLUMN result_confirmed_at TEXT")
+        if "result_confirmed_by" not in columns:
+            cur.execute("ALTER TABLE sample_requests ADD COLUMN result_confirmed_by INTEGER")
         db.commit()
     db.close()
     seed_data()
@@ -3458,6 +3593,7 @@ def inject_globals():
         "request_card_policy_user": lambda request_row: request_card_policy(user, request_row),
         "request_card_can_view_field_user": lambda request_row, field_name: request_card_field_allowed(user, request_row, field_name),
         "unread_notification_count_user": unread_notification_count(user),
+        "approval_pill_chain": approval_pill_chain,
     }
 
 
@@ -3468,6 +3604,17 @@ def api_notif_count():
     user = current_user()
     count = unread_notification_count(user)
     return {"count": count}
+
+
+@app.route("/api/process-email-queue", methods=["POST"])
+@login_required
+def api_process_email_queue():
+    """Trigger email queue processing (admin only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    sent = process_email_queue()
+    return {"sent": sent}
 
 
 @app.route("/api/notif-mark-read", methods=["POST"])
@@ -4565,6 +4712,27 @@ def request_detail(request_id: int):
             except ValueError as exc:
                 flash(str(exc), "error")
             return redirect(url_for("request_detail", request_id=request_id))
+        if action == "cancel_request":
+            cancellable_statuses = {"submitted", "under_review", "awaiting_sample_submission"}
+            is_requester = sample_request["requester_id"] == user["id"]
+            is_originator = sample_request.get("created_by_user_id") == user["id"]
+            if not (is_requester or is_originator or can_manage):
+                abort(403)
+            if sample_request["status"] not in cancellable_statuses:
+                flash("This request can no longer be cancelled.", "error")
+                return redirect(url_for("request_detail", request_id=request_id))
+            cancel_reason = request.form.get("cancel_reason", "").strip() or "Cancelled by user"
+            execute(
+                "UPDATE sample_requests SET status = 'cancelled', remarks = ?, updated_at = ? WHERE id = ?",
+                (cancel_reason, now_iso(), request_id),
+            )
+            log_action(
+                user["id"], "sample_request", request_id, "request_cancelled",
+                {"previous_status": sample_request["status"], "reason": cancel_reason},
+            )
+            write_request_metadata_snapshot(request_id)
+            flash("Request cancelled.", "success")
+            return redirect(url_for("request_detail", request_id=request_id))
 
         if action == "admin_set_status" and can_manage:
             new_status = request.form.get("new_status", "").strip()
@@ -4580,6 +4748,7 @@ def request_detail(request_id: int):
                 "in_progress",
                 "completed",
                 "rejected",
+                "cancelled",
             }
             if new_status not in allowed_statuses:
                 flash("Choose a valid status.", "error")
@@ -4960,6 +5129,19 @@ def request_detail(request_id: int):
             remarks = request.form.get("remarks", "").strip()
             execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, "rejected", {})
+        elif action == "confirm_results" and sample_request["requester_id"] == user["id"]:
+            if sample_request["status"] != "completed":
+                flash("Results can only be confirmed on completed requests.", "error")
+                return redirect(url_for("request_detail", request_id=request_id))
+            confirmation_note = request.form.get("confirmation_note", "").strip()
+            execute(
+                "UPDATE sample_requests SET result_confirmed_at = ?, result_confirmed_by = ?, updated_at = ? WHERE id = ?",
+                (now_iso(), user["id"], now_iso(), request_id),
+            )
+            log_action(
+                user["id"], "sample_request", request_id, "results_confirmed",
+                {"confirmation_note": confirmation_note},
+            )
         else:
             abort(403)
         write_request_metadata_snapshot(request_id)

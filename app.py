@@ -6382,6 +6382,194 @@ def activate():
     return render_template("activate.html")
 
 
+# ---------------------------------------------------------------------------
+#  Phase 3 — Operator Efficiency & Reporting Helpers
+# ---------------------------------------------------------------------------
+
+def operator_workload_summary() -> list[dict]:
+    """Return per-operator workload stats: active jobs, completed (30d), avg turnaround."""
+    rows = query_all(
+        """
+        SELECT u.id, u.name, u.email,
+               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected', 'cancelled') THEN 1 ELSE 0 END) AS active_jobs,
+               SUM(CASE WHEN sr.status = 'completed' AND sr.completed_at >= date('now', '-30 days') THEN 1 ELSE 0 END) AS completed_30d,
+               AVG(CASE
+                   WHEN sr.status = 'completed' AND sr.completed_at IS NOT NULL AND sr.created_at IS NOT NULL
+                   THEN julianday(sr.completed_at) - julianday(sr.created_at)
+                   ELSE NULL
+               END) AS avg_turnaround_days
+        FROM users u
+        LEFT JOIN sample_requests sr ON sr.assigned_operator_id = u.id
+        WHERE u.active = 1 AND u.role IN ('operator', 'instrument_admin', 'site_admin', 'super_admin')
+        GROUP BY u.id
+        ORDER BY active_jobs DESC, completed_30d DESC
+        """,
+    )
+    return [dict(r) for r in rows]
+
+
+def instrument_utilization_summary(days: int = 30) -> list[dict]:
+    """Return per-instrument utilization: capacity, actual jobs, utilization %."""
+    rows = query_all(
+        """
+        SELECT i.id, i.name, i.code, i.daily_capacity,
+               COUNT(CASE WHEN sr.status = 'completed' AND sr.completed_at >= date('now', ?) THEN 1 ELSE NULL END) AS completed_jobs,
+               COUNT(CASE WHEN sr.status NOT IN ('completed', 'rejected', 'cancelled') THEN 1 ELSE NULL END) AS active_jobs,
+               i.daily_capacity * ? AS total_capacity_period
+        FROM instruments i
+        LEFT JOIN sample_requests sr ON sr.instrument_id = i.id
+        WHERE i.status = 'active'
+        GROUP BY i.id
+        ORDER BY completed_jobs DESC
+        """,
+        (f"-{days} days", days),
+    )
+    result = []
+    for r in rows:
+        d = dict(r)
+        cap = d["total_capacity_period"] or 1
+        d["utilization_pct"] = round((d["completed_jobs"] / cap) * 100, 1) if cap > 0 else 0
+        result.append(d)
+    return result
+
+
+def turnaround_percentiles(instrument_id: int | None = None, days: int = 90) -> dict:
+    """Return turnaround time percentiles (p50, p75, p90, avg) in days."""
+    clauses = [
+        "sr.status = 'completed'",
+        "sr.completed_at IS NOT NULL",
+        "sr.created_at IS NOT NULL",
+        f"sr.completed_at >= date('now', '-{days} days')",
+    ]
+    params: list = []
+    if instrument_id:
+        clauses.append("sr.instrument_id = ?")
+        params.append(instrument_id)
+    rows = query_all(
+        f"""
+        SELECT julianday(sr.completed_at) - julianday(sr.created_at) AS days_taken
+        FROM sample_requests sr
+        WHERE {' AND '.join(clauses)}
+        ORDER BY days_taken
+        """,
+        tuple(params),
+    )
+    if not rows:
+        return {"p50": 0, "p75": 0, "p90": 0, "avg": 0, "count": 0}
+    vals = [r["days_taken"] for r in rows if r["days_taken"] is not None]
+    if not vals:
+        return {"p50": 0, "p75": 0, "p90": 0, "avg": 0, "count": 0}
+    n = len(vals)
+    return {
+        "p50": round(vals[n // 2], 2),
+        "p75": round(vals[int(n * 0.75)], 2) if n > 3 else round(vals[-1], 2),
+        "p90": round(vals[int(n * 0.90)], 2) if n > 9 else round(vals[-1], 2),
+        "avg": round(sum(vals) / n, 2),
+        "count": n,
+    }
+
+
+def audit_trail_search(
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+    action: str | None = None,
+    actor_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Search audit logs with flexible filters. Returns (rows, total_count)."""
+    clauses: list[str] = []
+    params: list = []
+    if entity_type:
+        clauses.append("al.entity_type = ?")
+        params.append(entity_type)
+    if entity_id:
+        clauses.append("al.entity_id = ?")
+        params.append(entity_id)
+    if action:
+        clauses.append("al.action LIKE ?")
+        params.append(f"%{action}%")
+    if actor_id:
+        clauses.append("al.actor_id = ?")
+        params.append(actor_id)
+    if date_from:
+        clauses.append("al.created_at >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("al.created_at <= ?")
+        params.append(date_to)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    count_row = query_one(f"SELECT COUNT(*) AS c FROM audit_logs al {where}", tuple(params))
+    total = count_row["c"] if count_row else 0
+    rows = query_all(
+        f"""
+        SELECT al.*, u.name AS actor_name
+        FROM audit_logs al
+        LEFT JOIN users u ON u.id = al.actor_id
+        {where}
+        ORDER BY al.created_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        tuple(params) + (limit, offset),
+    )
+    return [dict(r) for r in rows], total
+
+
+@app.route("/api/operator-workload")
+@login_required
+def api_operator_workload():
+    """JSON endpoint returning operator workload summary (admin only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    return {"operators": operator_workload_summary()}
+
+
+@app.route("/api/instrument-utilization")
+@login_required
+def api_instrument_utilization():
+    """JSON endpoint returning instrument utilization summary."""
+    user = current_user()
+    if not can_access_stats(user):
+        abort(403)
+    days = int(request.args.get("days", 30))
+    return {"instruments": instrument_utilization_summary(days)}
+
+
+@app.route("/api/turnaround-stats")
+@login_required
+def api_turnaround_stats():
+    """JSON endpoint returning turnaround time percentiles."""
+    user = current_user()
+    if not can_access_stats(user):
+        abort(403)
+    instrument_id = request.args.get("instrument_id", type=int)
+    days = int(request.args.get("days", 90))
+    return {"turnaround": turnaround_percentiles(instrument_id, days)}
+
+
+@app.route("/api/audit-search")
+@login_required
+def api_audit_search():
+    """JSON endpoint for searchable audit trail (admin only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    rows, total = audit_trail_search(
+        entity_type=request.args.get("entity_type"),
+        entity_id=request.args.get("entity_id", type=int),
+        action=request.args.get("action"),
+        actor_id=request.args.get("actor_id", type=int),
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
+        limit=min(int(request.args.get("limit", 100)), 500),
+        offset=int(request.args.get("offset", 0)),
+    )
+    return {"results": rows, "total": total}
+
+
 if __name__ == "__main__":
     init_db()
     app.run(debug=False, port=5055)

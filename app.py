@@ -2123,149 +2123,6 @@ def row_matches_period(row: sqlite3.Row, period: str) -> bool:
     return True
 
 
-def request_history_query(
-    where_clauses: list[str] | None = None,
-    params: list | None = None,
-    filters: dict[str, str] | None = None,
-) -> tuple[str, list]:
-    clauses = list(where_clauses or [])
-    query_params = list(params or [])
-    active_filters = filters or {}
-    if active_filters.get("q"):
-        clauses.append(
-            """
-            (
-                sr.request_no LIKE ? OR
-                COALESCE(sr.sample_ref, '') LIKE ? OR
-                sr.title LIKE ? OR
-                sr.sample_name LIKE ? OR
-                COALESCE(sr.description, '') LIKE ? OR
-                COALESCE(sr.receipt_number, '') LIKE ? OR
-                COALESCE(sr.finance_status, '') LIKE ? OR
-                COALESCE(sr.priority, '') LIKE ? OR
-                COALESCE(sr.remarks, '') LIKE ? OR
-                COALESCE(sr.results_summary, '') LIKE ? OR
-                COALESCE(i.name, '') LIKE ? OR
-                COALESCE(i.code, '') LIKE ? OR
-                COALESCE(r.name, '') LIKE ? OR
-                COALESCE(c.name, '') LIKE ? OR
-                COALESCE(op.name, '') LIKE ?
-            )
-            """
-        )
-        token = f"%{active_filters['q']}%"
-        query_params.extend([token] * 15)
-    if active_filters.get("status"):
-        clauses.append("sr.status = ?")
-        query_params.append(active_filters["status"])
-    if active_filters.get("instrument_id"):
-        clauses.append("sr.instrument_id = ?")
-        query_params.append(int(active_filters["instrument_id"]))
-    if active_filters.get("operator_id"):
-        clauses.append("sr.assigned_operator_id = ?")
-        query_params.append(int(active_filters["operator_id"]))
-    if active_filters.get("requester_id"):
-        clauses.append("sr.requester_id = ?")
-        query_params.append(int(active_filters["requester_id"]))
-    if active_filters.get("date_from"):
-        clauses.append("substr(sr.created_at, 1, 10) >= ?")
-        query_params.append(active_filters["date_from"])
-    if active_filters.get("date_to"):
-        clauses.append("substr(sr.created_at, 1, 10) <= ?")
-        query_params.append(active_filters["date_to"])
-    sort_key = active_filters.get("sort", "created_desc")
-    order_map = {
-        "created_desc": "sr.created_at DESC, sr.id DESC",
-        "created_asc": "sr.created_at ASC, sr.id ASC",
-        "completed_desc": "COALESCE(sr.completed_at, '') DESC, sr.id DESC",
-        "scheduled_desc": "COALESCE(sr.scheduled_for, '') DESC, sr.id DESC",
-        "instrument_asc": "i.name ASC, sr.created_at DESC",
-        "status_asc": "sr.status ASC, sr.created_at DESC",
-    }
-    order_sql = order_map.get(sort_key, order_map["created_desc"])
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    sql = f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code, r.name AS requester_name,
-               c.name AS originator_name, c.email AS originator_email, c.role AS originator_role,
-               op.name AS operator_name, recv.name AS received_by_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count,
-               GROUP_CONCAT(ra.original_filename, ', ') AS attachment_names
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        JOIN users r ON r.id = sr.requester_id
-        LEFT JOIN users c ON c.id = sr.created_by_user_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN users recv ON recv.id = sr.received_by_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-        {where_sql}
-        GROUP BY sr.id
-        ORDER BY {order_sql}
-    """
-    return sql, query_params
-
-
-def processed_history_query_parts(
-    where_clauses: list[str] | None = None,
-    params: list | None = None,
-    filters: dict[str, str] | None = None,
-) -> tuple[str, str, list]:
-    clauses = list(where_clauses or [])
-    query_params = list(params or [])
-    active_filters = filters or {}
-    clauses.append("sr.status = 'completed'")
-    if active_filters.get("q"):
-        clauses.append(
-            """
-            (
-                sr.request_no LIKE ? OR
-                COALESCE(sr.sample_ref, '') LIKE ? OR
-                sr.title LIKE ? OR
-                sr.sample_name LIKE ? OR
-                COALESCE(sr.description, '') LIKE ? OR
-                COALESCE(sr.receipt_number, '') LIKE ? OR
-                COALESCE(sr.finance_status, '') LIKE ? OR
-                COALESCE(sr.priority, '') LIKE ? OR
-                COALESCE(sr.remarks, '') LIKE ? OR
-                COALESCE(sr.results_summary, '') LIKE ? OR
-                COALESCE(i.name, '') LIKE ? OR
-                COALESCE(i.code, '') LIKE ? OR
-                COALESCE(r.name, '') LIKE ? OR
-                COALESCE(r.email, '') LIKE ? OR
-                COALESCE(c.name, '') LIKE ? OR
-                COALESCE(op.name, '') LIKE ?
-            )
-            """
-        )
-        token = f"%{active_filters['q']}%"
-        query_params.extend([token] * 16)
-    if active_filters.get("instrument_id"):
-        clauses.append("sr.instrument_id = ?")
-        query_params.append(int(active_filters["instrument_id"]))
-    if active_filters.get("operator_id"):
-        clauses.append("sr.assigned_operator_id = ?")
-        query_params.append(int(active_filters["operator_id"]))
-    if active_filters.get("requester_id"):
-        clauses.append("sr.requester_id = ?")
-        query_params.append(int(active_filters["requester_id"]))
-    if active_filters.get("date_from"):
-        clauses.append("substr(COALESCE(sr.completed_at, sr.created_at), 1, 10) >= ?")
-        query_params.append(active_filters["date_from"])
-    if active_filters.get("date_to"):
-        clauses.append("substr(COALESCE(sr.completed_at, sr.created_at), 1, 10) <= ?")
-        query_params.append(active_filters["date_to"])
-
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    from_sql = """
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        JOIN users r ON r.id = sr.requester_id
-        LEFT JOIN users c ON c.id = sr.created_by_user_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-    """
-    return from_sql, where_sql, query_params
-
-
 def stats_payload(user: sqlite3.Row | None = None, report_filters: dict[str, str] | None = None) -> dict:
     scoped_user = user or current_user()
     return stats_payload_for_scope(scoped_user, report_filters)
@@ -4100,8 +3957,11 @@ def instrument_detail(instrument_id: int):
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         abort(400)
 
-    queue_sql, queue_params = request_history_query(["sr.instrument_id = ?"], [instrument_id], {})
-    instrument_rows_all = query_all(queue_sql, tuple(queue_params))
+    instrument_rows_all = (
+        request_stream()
+        .where("sr.instrument_id = ?", instrument_id)
+        .fetch_all()
+    )
     queue_rank = {
         "under_review": 1,
         "sample_submitted": 2,
@@ -5122,10 +4982,7 @@ def schedule():
     visible_instruments = visible_instruments_for_user(user)
     if len(visible_instruments) == 1 and not filters.get("instrument_id"):
         filters["instrument_id"] = str(visible_instruments[0]["id"])
-    clauses, params = request_scope_sql(user, "sr")
-    schedule_query_filters = {"sort": "created_desc"}  # always fetch newest-first from DB
-    base_sql, base_params = request_history_query(clauses, params, schedule_query_filters)
-    rows_all = query_all(base_sql, tuple(base_params))
+    rows_all = request_stream(user).fetch_all()
     live_statuses = {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "in_progress"}
     live_rows = [row for row in rows_all if row["status"] in live_statuses]
     completed_rows = [row for row in rows_all if row["status"] == "completed"]
@@ -5259,12 +5116,10 @@ def schedule_actions():
             return redirect_to_queue()
         planner_date = parse_schedule_day(request.form.get("planner_date"))
         scope_filters = schedule_filter_values()
-        clauses, params = request_scope_sql(user, "sr")
+        q = request_stream(user, scope_filters)
         if scope_filters.get("requester_id"):
-            clauses.append("sr.requester_id = ?")
-            params.append(int(scope_filters["requester_id"]))
-        base_sql, base_params = request_history_query(clauses, params, scope_filters)
-        rows_all = [row for row in query_all(base_sql, tuple(base_params)) if row_matches_period(row, scope_filters["period"])]
+            q.where("sr.requester_id = ?", int(scope_filters["requester_id"]))
+        rows_all = [row for row in q.fetch_all() if row_matches_period(row, scope_filters["period"])]
         same_day_rows = []
         for row in rows_all:
             if row["status"] not in {"scheduled", "in_progress"} or not row["scheduled_for"]:

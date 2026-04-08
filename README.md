@@ -587,24 +587,50 @@ processed_history.html), user_detail.html
 
 ### Progress (as of 2026-04-08)
 
-    Phase 1 ████████████████░░░░░░░░░░░░  Waves A+B done (StreamQuery + data-vis)
-    Phase 2 ████████████████████░░░░░░░░  Waves C+D+E done (10 features landed)
-    Phase 3 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Not started
+    ┌───────────────────────────────────────────────────────────┐
+    │  PROGRESS PANEL — Git-verified status only               │
+    │  Last updated: 2026-04-08                                │
+    ├───────────────────────────────────────────────────────────┤
+    │                                                           │
+    │  Phase 1 — Architecture Foundation                        │
+    │  ████████████████████████████  6 / 6 modules   (100%)    │
+    │  StreamQuery, data-vis, filter specs, factories           │
+    │                                                           │
+    │  Phase 2 — Core Features                                  │
+    │  ████████████████████░░░░░░░  10 / 14 modules  ( 71%)    │
+    │  Rate limit, cancel, notif badge, email queue,            │
+    │  result confirm, approval pills, config panel,            │
+    │  chain editor, email wiring                               │
+    │  Remaining: notif badge UI, email prefs page,             │
+    │             template wiring for new features              │
+    │                                                           │
+    │  Phase 3 — Polish & Reporting                             │
+    │  ██████░░░░░░░░░░░░░░░░░░░░░   3 / 13 modules  ( 23%)   │
+    │  Operator workload, audit search, utilization stats       │
+    │  Remaining: maintenance cal, request duplication,         │
+    │             print CSS, sparklines, bulk actions,          │
+    │             announcements, password reset                 │
+    │                                                           │
+    │  OVERALL: 19 / 33 modules  (58%)                         │
+    │  ████████████████░░░░░░░░░░░░                            │
+    │                                                           │
+    └───────────────────────────────────────────────────────────┘
 
-    COMPLETED:
-      Wave A — StreamQuery classes + factories + refactored 3 call sites  [git: 68196cb]
-      Wave B — data-vis 100% across all 24+ templates                    [git: 43d9b97]
-      Wave C — rate_limit decorator + request cancellation + notification badge  [git: e3345b9]
-      Wave D — cancel route + result confirmation + email queue + approval pills  [git: b7b122d]
-      Wave E — instrument config panel + email wiring + approval chain editor  [git: 3f5e8ea]
+    GIT-VERIFIED WAVES (only code confirmed in git counts):
+      Wave A — StreamQuery classes + factories + 3 call sites      [68196cb]
+      Wave B — data-vis 100% across 24+ templates                  [43d9b97]
+      Wave C — rate_limit + cancelled status + notification badge  [e3345b9]
+      Wave D — cancel route + result confirm + email queue + pills [b7b122d]
+      Wave E — instrument config + chain CRUD + email wiring       [3f5e8ea]
+      Wave F — operator workload + utilization + turnaround + audit [d821b2b]
 
     VERIFIED:
-      app.py syntax: OK (6387 lines)
+      app.py syntax: OK (6575 lines, py_compile clean)
       CSS braces: balanced (552/552)
       Jinja blocks: all balanced (smart parser confirmed)
       Flask not available in sandbox — needs on-device test
 
-    NEXT: Wave F — Phase 3 features (audits, operator efficiency, reporting)
+    NEXT: Wave G — Phase 3 remaining (maintenance cal, sparklines, bulk actions)
 
 ### Execution Model
 
@@ -674,9 +700,17 @@ Templates only — no app.py conflicts.
 | 2.6.2 | app.py | Approval chain CRUD: add step, remove step, auto-reorder | Done |
 | 2.7.2 | app.py | Wire `queue_email_notification` into cancel + result confirmation handlers | Done |
 
+### Wave F (sequential on app.py — completed, git: d821b2b)
+
+| Module | File(s) | Task | Status |
+|--------|---------|------|--------|
+| 3.1.1 | app.py | `operator_workload_summary()` + `/api/operator-workload` endpoint | Done |
+| 3.1.2 | app.py | `audit_trail_search()` + `/api/audit-search` with flexible filters | Done |
+| 3.1.3 | app.py | `instrument_utilization_summary()` + `turnaround_percentiles()` + 2 API endpoints | Done |
+
 **NOTE:** Waves C-K from the previous session were destroyed when parallel
 agents overwrote app.py. The code was reverted to git HEAD and rebuilt
-from scratch. Only Waves A-E above are confirmed in git.
+from scratch. Only Waves A-F above are confirmed in git.
 
 ---
 

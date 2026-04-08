@@ -741,21 +741,22 @@ processed_history.html), user_detail.html
 ### Progress (as of 2026-04-08)
 
     Phase 1 ████████████████░░░░░░░░░░░░  Waves A+B done (StreamQuery + data-vis)
-    Phase 2 ████████░░░░░░░░░░░░░░░░░░░░  Wave C done (rate limit + cancel + notif)
+    Phase 2 ████████████████░░░░░░░░░░░░  Waves C+D done (7 features landed)
     Phase 3 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Not started
 
     COMPLETED:
       Wave A — StreamQuery classes + factories + refactored 3 call sites  [git: 68196cb]
       Wave B — data-vis 100% across all 24+ templates                    [git: 43d9b97]
       Wave C — rate_limit decorator + request cancellation + notification badge  [git: e3345b9]
+      Wave D — cancel route + result confirmation + email queue + approval pills  [git: b7b122d]
 
     VERIFIED:
-      app.py syntax: OK (6088 lines)
+      app.py syntax: OK (6270 lines)
       CSS braces: balanced (552/552)
       Jinja blocks: all balanced (smart parser confirmed)
       Flask not available in sandbox — needs on-device test
 
-    NEXT: Wave D — result confirmation + email backend + approval visualization
+    NEXT: Wave E — form control panel + email wiring + Phase 3 features
 
 ### Execution Model
 
@@ -808,9 +809,18 @@ Templates only — no app.py conflicts.
 | 2.1.0 | app.py | Request cancellation: `cancelled` status in display/group/summary helpers | Done |
 | 2.4.1 | app.py | Notification badge: `unread_notification_count()` + `/api/notif-count` + `/api/notif-mark-read` + context processor + `last_notification_check` migration | Done |
 
+### Wave D (sequential on app.py — completed, git: b7b122d)
+
+| Module | File(s) | Task | Status |
+|--------|---------|------|--------|
+| 2.1.1 | app.py | `cancel_request` action + cancellable statuses guard + added to admin_set_status | Done |
+| 2.2.1 | app.py | `confirm_results` action for requester + `result_confirmed_at`/`result_confirmed_by` migrations | Done |
+| 2.7.1 | app.py | Email queue: `EMAIL_EVENT_TEMPLATES`, `queue_email_notification()`, `process_email_queue()`, `email_queue` table, `/api/process-email-queue` | Done |
+| 2.3.1 | app.py | `approval_pill_chain()` helper + context processor injection | Done |
+
 **NOTE:** Waves C-K from the previous session were destroyed when parallel
 agents overwrote app.py. The code was reverted to git HEAD and rebuilt
-from scratch. Only Waves A-C above are confirmed in git.
+from scratch. Only Waves A-D above are confirmed in git.
 
 ---
 

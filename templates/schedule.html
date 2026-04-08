@@ -3,89 +3,89 @@
 {% from "_page_macros.html" import paginated_pane %}
 {% block content %}
 
-<div class="stream-page-header">
-  <h2 class="stream-title">
+<div class="stream-page-header" data-vis="{{ V }}">
+  <h2 class="stream-title" data-vis="{{ V }}">
     {% if selected_instrument %}{{ selected_instrument["name"] }} — {% endif %}Jobs
   </h2>
 </div>
 
 {# ── Controls blob ── #}
-<section class="card compact queue-controls-card">
+<section class="card compact queue-controls-card" data-vis="{{ V }}">
 
   {# Status pills #}
-  <div class="stream-pill-row" id="streamPills">
-    <button class="stream-pill" data-bucket="">All</button>
-    <button class="stream-pill stream-pill-pending" data-bucket="pending">Pending</button>
-    <button class="stream-pill" data-bucket="approvals">Approvals</button>
-    <button class="stream-pill" data-bucket="pending_receipt">Pending Receipt</button>
-    <button class="stream-pill" data-bucket="ready">Ready</button>
-    <button class="stream-pill" data-bucket="active">Active</button>
-    <button class="stream-pill stream-pill-done" data-bucket="completed">Completed</button>
-    <button class="stream-pill stream-pill-rejected" data-bucket="rejected">Rejected</button>
+  <div class="stream-pill-row" id="streamPills" data-vis="{{ V }}">
+    <button class="stream-pill" data-bucket="" data-vis="{{ V }}">All</button>
+    <button class="stream-pill stream-pill-pending" data-bucket="pending" data-vis="{{ V }}">Pending</button>
+    <button class="stream-pill" data-bucket="approvals" data-vis="{{ V }}">Approvals</button>
+    <button class="stream-pill" data-bucket="pending_receipt" data-vis="{{ V }}">Pending Receipt</button>
+    <button class="stream-pill" data-bucket="ready" data-vis="{{ V }}">Ready</button>
+    <button class="stream-pill" data-bucket="active" data-vis="{{ V }}">Active</button>
+    <button class="stream-pill stream-pill-done" data-bucket="completed" data-vis="{{ V }}">Completed</button>
+    <button class="stream-pill stream-pill-rejected" data-bucket="rejected" data-vis="{{ V }}">Rejected</button>
     {% if can_access_schedule_user %}
-    <button class="stream-pill stream-pill-unsubmitted" data-bucket="unsubmitted" id="showUnsubmittedPill" title="Jobs created but not yet submitted to the queue">Unsubmitted</button>
+    <button class="stream-pill stream-pill-unsubmitted" data-bucket="unsubmitted" id="showUnsubmittedPill" title="Jobs created but not yet submitted to the queue" data-vis="{{ V }}">Unsubmitted</button>
     {% endif %}
   </div>
 
   {# Search + filters #}
-  <div class="queue-control-strip">
-    <label class="queue-search">
-      <span class="hint">Search</span>
-      <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator">
+  <div class="queue-control-strip" data-vis="{{ V }}">
+    <label class="queue-search" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Search</span>
+      <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator" data-vis="{{ V }}">
     </label>
     {% if instrument_selector_enabled %}
-    <label>
-      <span class="hint">Instrument</span>
-      <select id="queueInstrumentFilter">
-        <option value="">All instruments</option>
+    <label data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Instrument</span>
+      <select id="queueInstrumentFilter" data-vis="{{ V }}">
+        <option value="" data-vis="{{ V }}">All instruments</option>
         {% for instrument in instruments %}
-        <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %}>{{ instrument["name"] }}</option>
+        <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %} data-vis="{{ V }}">{{ instrument["name"] }}</option>
         {% endfor %}
       </select>
     </label>
     {% elif instruments %}
-    <label>
-      <span class="hint">Instrument</span>
-      <input type="text" value="{{ instruments[0]['name'] }}" disabled>
+    <label data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Instrument</span>
+      <input type="text" value="{{ instruments[0]['name'] }}" disabled data-vis="{{ V }}">
     </label>
     {% endif %}
-    <label>
-      <span class="hint">From</span>
-      <input type="date" id="queueDateFrom" value="{{ filters.date_from }}">
+    <label data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">From</span>
+      <input type="date" id="queueDateFrom" value="{{ filters.date_from }}" data-vis="{{ V }}">
     </label>
-    <label>
-      <span class="hint">To</span>
-      <input type="date" id="queueDateTo" value="{{ filters.date_to }}">
+    <label data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">To</span>
+      <input type="date" id="queueDateTo" value="{{ filters.date_to }}" data-vis="{{ V }}">
     </label>
-    <label>
-      <span class="hint">Sort</span>
-      <select id="queueSort">
-        <option value="time_desc">Newest first</option>
-        <option value="time_asc">Oldest first</option>
-        <option value="status_asc">By status</option>
-        <option value="instrument_asc">By instrument</option>
+    <label data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Sort</span>
+      <select id="queueSort" data-vis="{{ V }}">
+        <option value="time_desc" data-vis="{{ V }}">Newest first</option>
+        <option value="time_asc" data-vis="{{ V }}">Oldest first</option>
+        <option value="status_asc" data-vis="{{ V }}">By status</option>
+        <option value="instrument_asc" data-vis="{{ V }}">By instrument</option>
       </select>
     </label>
   </div>
 </section>
 
 {# ── Stream table ── #}
-<section class="card queue-table-card">
+<section class="card queue-table-card" data-vis="{{ V }}">
   {% call paginated_pane('centralQueue', page_size=15, max_height='36rem', css_class='queue-table-shell') %}
-    <table id="centralQueueTable">
+    <table id="centralQueueTable" data-vis="{{ V }}">
       <colgroup>
         <col class="col-request"><col class="col-stage"><col class="col-instrument">
         <col class="col-requester"><col class="col-time"><col class="col-operator">
         <col class="col-files"><col class="col-action">
       </colgroup>
-      <thead>
-        <tr>
-          <th>Request</th><th>Stage</th><th>Instrument</th>
-          <th>Requester</th><th>Time</th><th>Operator</th>
-          <th>Files</th><th>Action</th>
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Stage</th><th data-vis="{{ V }}">Instrument</th>
+          <th data-vis="{{ V }}">Requester</th><th data-vis="{{ V }}">Time</th><th data-vis="{{ V }}">Operator</th>
+          <th data-vis="{{ V }}">Files</th><th data-vis="{{ V }}">Action</th>
         </tr>
       </thead>
-      <tbody id="centralQueueBody">
+      <tbody id="centralQueueBody" data-vis="{{ V }}">
         {% for row in queue_rows %}
         {% set row_bucket = 'all' %}
         {% if row["status"] == "under_review" %}{% set row_bucket = 'approvals' %}{% endif %}
@@ -109,12 +109,13 @@
             data-instrument-name="{{ (row['instrument_name'] or '')|lower }}"
             data-status="{{ row['status'] }}"
             data-time="{{ row_time_value or '' }}"
-            data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}">
-          <td>{{ request_identity(row, compact=True) }}</td>
-          <td>{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
-          <td>{{ instrument_name_link(row) }}</td>
-          <td>{{ requester_block(row, show_originator=False, show_email=False) }}</td>
-          <td>
+            data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}"
+            data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
+          <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
+          <td data-vis="{{ V }}">{{ instrument_name_link(row) }}</td>
+          <td data-vis="{{ V }}">{{ requester_block(row, show_originator=False, show_email=False) }}</td>
+          <td data-vis="{{ V }}">
             {% if row["status"] == "sample_submitted" %}
               {{ meta_link(row, format_dt(row["sample_submitted_at"])) if row["sample_submitted_at"] else meta_link(row, '-') }}
             {% elif row["status"] == "sample_received" %}
@@ -127,18 +128,18 @@
               {{ meta_link(row, format_dt(row["created_at"])) if row["created_at"] else meta_link(row, '-') }}
             {% endif %}
           </td>
-          <td>
+          <td data-vis="{{ V }}">
             {% if row["status"] == "sample_received" and row["received_by_name"] %}
               {{ row["received_by_name"] }}
             {% else %}
               {{ operator_block(row) }}
             {% endif %}
           </td>
-          <td>{{ attachment_list(row, attachment_map) }}</td>
-          <td>
-            <div class="queue-action-stack">
+          <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map) }}</td>
+          <td data-vis="{{ V }}">
+            <div class="queue-action-stack" data-vis="{{ V }}">
             {% if row["status"] == "sample_submitted" %}
-            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack">
+            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
               <input type="hidden" name="action" value="mark_received">
               <input type="hidden" name="request_id" value="{{ row['id'] }}">
               <input type="hidden" name="bucket" value="{{ filters.bucket }}">
@@ -146,11 +147,11 @@
               <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
               <input type="hidden" name="date_from" value="{{ filters.date_from }}">
               <input type="hidden" name="date_to" value="{{ filters.date_to }}">
-              <button type="submit" class="small-button primary-action">Accept</button>
+              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept</button>
             </form>
             {% endif %}
             {% if row["status"] not in ["completed", "rejected", "submitted"] %}
-            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack">
+            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
               <input type="hidden" name="action" value="quick_assign">
               <input type="hidden" name="request_id" value="{{ row['id'] }}">
               <input type="hidden" name="bucket" value="{{ filters.bucket }}">
@@ -160,20 +161,20 @@
               <input type="hidden" name="date_to" value="{{ filters.date_to }}">
               <input type="hidden" name="back" value="{{ queue_back_url }}">
               <input type="hidden" name="source_label" value="{{ queue_source_label }}">
-              <select name="assigned_operator_id">
-                <option value="">Assign</option>
+              <select name="assigned_operator_id" data-vis="{{ V }}">
+                <option value="" data-vis="{{ V }}">Assign</option>
                 {% for operator in operators %}
-                <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %}>{{ operator["name"] }}</option>
+                <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %} data-vis="{{ V }}">{{ operator["name"] }}</option>
                 {% endfor %}
               </select>
-              <button type="submit" class="small-button">Assign</button>
+              <button type="submit" class="small-button" data-vis="{{ V }}">Assign</button>
             </form>
             {% endif %}
             </div>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8">No jobs found.</td></tr>
+        <tr data-vis="{{ V }}"><td colspan="8" data-vis="{{ V }}">No jobs found.</td></tr>
         {% endfor %}
       </tbody>
     </table>

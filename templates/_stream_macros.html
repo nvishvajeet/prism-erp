@@ -1,10 +1,10 @@
 {% macro stream_header(title, back_url='', back_label='Back') -%}
 {% if back_url %}
-<section>
-  <div class="section-head stream-page-head">
+<section data-vis="{{ V }}">
+  <div class="section-head stream-page-head" data-vis="{{ V }}">
     {% if back_url %}
-    <div class="section-actions">
-      <a class="text-link" href="{{ back_url }}">{{ back_label }}</a>
+    <div class="section-actions" data-vis="{{ V }}">
+      <a class="text-link" href="{{ back_url }}" data-vis="{{ V }}">{{ back_label }}</a>
     </div>
     {% endif %}
   </div>
@@ -13,15 +13,15 @@
 {%- endmacro %}
 
 {% macro quick_filter_strip(strip_id, items, active_key='all', key_attr='data-slice-key') -%}
-<div class="stream-filter-strip" id="{{ strip_id }}">
+<div class="stream-filter-strip" id="{{ strip_id }}" data-vis="{{ V }}">
   {% for item in items %}
   {% set key = item[0] %}
   {% set label = item[1] %}
   {% set tone = item[2] %}
   {% set count = item[3] if item|length > 3 else 0 %}
-  <button type="button" class="bucket-link bucket-{{ tone }}{% if active_key == key %} bucket-active{% endif %}" {{ key_attr }}="{{ key }}">
-    <span>{{ count }}</span>
-    <small>{{ label }}</small>
+  <button type="button" class="bucket-link bucket-{{ tone }}{% if active_key == key %} bucket-active{% endif %}" {{ key_attr }}="{{ key }}" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ count }}</span>
+    <small data-vis="{{ V }}">{{ label }}</small>
   </button>
   {% endfor %}
 </div>

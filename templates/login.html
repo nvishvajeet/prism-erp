@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card narrow">
-  <h2>Sign In</h2>
-  <form method="post" class="form-grid">
-    <label>Email
-      <input type="email" name="email" required>
+<section class="card narrow" data-vis="requester">
+  <h2 data-vis="requester">Sign In</h2>
+  <form method="post" class="form-grid" data-vis="requester">
+    <label data-vis="requester">Email
+      <input type="email" name="email" required data-vis="requester">
     </label>
-    <label>Password
-      <input type="password" name="password" required>
+    <label data-vis="requester">Password
+      <input type="password" name="password" required data-vis="requester">
     </label>
-    <button type="submit">Login</button>
+    <button type="submit" data-vis="requester">Login</button>
   </form>
 </section>
 {% endblock %}

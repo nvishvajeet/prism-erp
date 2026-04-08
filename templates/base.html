@@ -15,24 +15,24 @@
   </script>
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <h1><a class="brand-link" href="{{ url_for('index') }}">Lab Scheduler MVP</a></h1>
+  <header class="topbar" data-vis="{{ V }}">
+    <div data-vis="{{ V }}">
+      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Lab Scheduler MVP</a></h1>
     </div>
     {% if current_user %}
-    <div class="topbar-right">
-      <div class="userbox">
-        <div class="user-meta">
-          <strong><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}">{{ current_user["name"] }}</a></strong>
-          <span>{{ current_user["role"].replace("_", " ").title() }}</span>
+    <div class="topbar-right" data-vis="{{ V }}">
+      <div class="userbox" data-vis="{{ V }}">
+        <div class="user-meta" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}" data-vis="{{ V }}">{{ current_user["name"] }}</a></strong>
+          <span data-vis="{{ V }}">{{ current_user["role"].replace("_", " ").title() }}</span>
         </div>
-        <div class="user-controls">
-          <button type="button" id="themeToggle" class="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle light and dark mode">
-            <span class="theme-icon theme-icon-light" aria-hidden="true"></span>
-            <span class="theme-icon theme-icon-dark" aria-hidden="true"></span>
-            <span class="switch-thumb" aria-hidden="true"></span>
+        <div class="user-controls" data-vis="{{ V }}">
+          <button type="button" id="themeToggle" class="theme-toggle" data-vis="{{ V }}" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle light and dark mode">
+            <span class="theme-icon theme-icon-light" aria-hidden="true" data-vis="{{ V }}"></span>
+            <span class="theme-icon theme-icon-dark" aria-hidden="true" data-vis="{{ V }}"></span>
+            <span class="switch-thumb" aria-hidden="true" data-vis="{{ V }}"></span>
           </button>
-          <a class="link-button subtle" href="{{ url_for('logout') }}">Logout</a>
+          <a class="link-button subtle" href="{{ url_for('logout') }}" data-vis="{{ V }}">Logout</a>
         </div>
       </div>
     </div>
@@ -40,44 +40,44 @@
   </header>
 
   {% if current_user %}
-  <nav class="nav">
+  <nav class="nav" data-vis="{{ V }}">
     {% set endpoint = request.endpoint or '' %}
     {% if not access_profile_user.can_access_instruments %}
-    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}">Home</a>
-    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}">Queue</a>
-    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}">Map</a>
+    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Map</a>
     {% else %}
 
-    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}">Home</a>
+    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     {% if access_profile_user.can_access_instruments %}
-    <a class="{% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}">Instruments</a>
+    <a class="{% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
     {% endif %}
     {% if can_access_schedule_user %}
-    <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}">Queue</a>
+    <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
     {% endif %}
     {% if can_access_calendar_user %}
-    <a class="{% if endpoint in ['calendar', 'calendar_events'] %}nav-active{% endif %}" href="{{ url_for('calendar') }}">Calendar</a>
+    <a class="{% if endpoint in ['calendar', 'calendar_events'] %}nav-active{% endif %}" href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
     {% endif %}
     {% if can_access_stats_user %}
-    <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}">Statistics</a>
+    <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
-    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}">Map</a>
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Map</a>
     {% endif %}
   </nav>
   {% endif %}
 
-  <main class="page">
+  <main class="page" data-vis="{{ V }}">
     {% if not current_user %}
-    <nav class="nav">
-      <a class="{% if request.endpoint == 'login' %}nav-active{% endif %}" href="{{ url_for('login') }}">Login</a>
-      <a class="{% if request.endpoint == 'activate' %}nav-active{% endif %}" href="{{ url_for('activate') }}">Activate Invite</a>
+    <nav class="nav" data-vis="requester">
+      <a class="{% if request.endpoint == 'login' %}nav-active{% endif %}" href="{{ url_for('login') }}" data-vis="requester">Login</a>
+      <a class="{% if request.endpoint == 'activate' %}nav-active{% endif %}" href="{{ url_for('activate') }}" data-vis="requester">Activate Invite</a>
     </nav>
     {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <section class="flash-stack">
+        <section class="flash-stack" data-vis="{{ V }}">
           {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
+            <div class="flash {{ category }}" data-vis="{{ V }}">{{ message }}</div>
           {% endfor %}
         </section>
       {% endif %}

@@ -5,29 +5,29 @@
   External filter code must call window.panes[pane_id].refresh() after hiding/showing rows.
 #}
 {% macro paginated_pane(pane_id, page_size=10, max_height='28rem', css_class='') -%}
-<div class="paginated-pane {{ css_class }}" data-pane-id="{{ pane_id }}" data-page-size="{{ page_size }}" data-default-height="{{ max_height }}" style="--pane-max-height: {{ max_height }};">
-  <div class="paginated-pane-scroll" id="{{ pane_id }}Scroll">
+<div class="paginated-pane {{ css_class }}" data-pane-id="{{ pane_id }}" data-page-size="{{ page_size }}" data-default-height="{{ max_height }}" style="--pane-max-height: {{ max_height }};" data-vis="{{ V }}">
+  <div class="paginated-pane-scroll" id="{{ pane_id }}Scroll" data-vis="{{ V }}">
     {{ caller() }}
   </div>
-  <div class="pane-resize-handle" data-resize-for="{{ pane_id }}" title="Drag to resize"></div>
-  <div class="paginated-pane-controls" id="{{ pane_id }}Controls" style="display:none;">
-    <button class="pane-nav-btn" id="{{ pane_id }}Prev" disabled>&#8592; Prev</button>
-    <span class="pane-page-label" id="{{ pane_id }}Label"></span>
-    <button class="pane-nav-btn" id="{{ pane_id }}Next">Next &#8594;</button>
+  <div class="pane-resize-handle" data-resize-for="{{ pane_id }}" title="Drag to resize" data-vis="{{ V }}"></div>
+  <div class="paginated-pane-controls" id="{{ pane_id }}Controls" style="display:none;" data-vis="{{ V }}">
+    <button class="pane-nav-btn" id="{{ pane_id }}Prev" disabled data-vis="{{ V }}">&#8592; Prev</button>
+    <span class="pane-page-label" id="{{ pane_id }}Label" data-vis="{{ V }}"></span>
+    <button class="pane-nav-btn" id="{{ pane_id }}Next" data-vis="{{ V }}">Next &#8594;</button>
   </div>
 </div>
 {%- endmacro %}
 
 {% macro page_intro(kicker, title, hint='') -%}
-<section class="card">
-  <div class="section-head">
-    <div>
-      {% if kicker %}<p class="section-kicker">{{ kicker }}</p>{% endif %}
-      <h2>{{ title }}</h2>
-      {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+<section class="card" data-vis="{{ V }}">
+  <div class="section-head" data-vis="{{ V }}">
+    <div data-vis="{{ V }}">
+      {% if kicker %}<p class="section-kicker" data-vis="{{ V }}">{{ kicker }}</p>{% endif %}
+      <h2 data-vis="{{ V }}">{{ title }}</h2>
+      {% if hint %}<p class="hint" data-vis="{{ V }}">{{ hint }}</p>{% endif %}
     </div>
     {% if caller is defined %}
-    <div class="section-actions">
+    <div class="section-actions" data-vis="{{ V }}">
       {{ caller() }}
     </div>
     {% endif %}
@@ -36,14 +36,14 @@
 {%- endmacro %}
 
 {% macro card_heading(kicker, title, hint='') -%}
-<div class="section-head">
-  <div>
-    {% if kicker %}<p class="section-kicker">{{ kicker }}</p>{% endif %}
-    <h2>{{ title }}</h2>
-    {% if hint %}<p class="hint">{{ hint }}</p>{% endif %}
+<div class="section-head" data-vis="{{ V }}">
+  <div data-vis="{{ V }}">
+    {% if kicker %}<p class="section-kicker" data-vis="{{ V }}">{{ kicker }}</p>{% endif %}
+    <h2 data-vis="{{ V }}">{{ title }}</h2>
+    {% if hint %}<p class="hint" data-vis="{{ V }}">{{ hint }}</p>{% endif %}
   </div>
   {% if caller is defined %}
-  <div class="section-actions">
+  <div class="section-actions" data-vis="{{ V }}">
     {{ caller() }}
   </div>
   {% endif %}

@@ -1,17 +1,18 @@
 {% extends "base.html" %}
+{% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
 {% block content %}
-<section class="new-request-layout">
-  <div class="card new-request-card">
-    <div class="section-head">
-      <div>
-        <h2>New Request</h2>
+<section class="new-request-layout" data-vis="{{ V }}">
+  <div class="card new-request-card" data-vis="{{ V }}">
+    <div class="section-head" data-vis="{{ V }}">
+      <div data-vis="{{ V }}">
+        <h2 data-vis="{{ V }}">New Request</h2>
       </div>
     </div>
-    <form method="post" enctype="multipart/form-data" class="form-grid new-request-form">
-      <section class="form-section">
-        <h3>Instrument</h3>
-        <label>
-          <select name="instrument_id" id="requestInstrumentSelect" required>
+    <form method="post" enctype="multipart/form-data" class="form-grid new-request-form" data-vis="{{ V }}">
+      <section class="form-section" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Instrument</h3>
+        <label data-vis="{{ V }}">
+          <select name="instrument_id" id="requestInstrumentSelect" required data-vis="{{ V }}">
             {% for instrument in instruments %}
             <option
               value="{{ instrument['id'] }}"
@@ -27,64 +28,64 @@
           </select>
         </label>
         {% if can_submit_for_others %}
-        <label>
-          <select name="requester_id">
+        <label data-vis="{{ V }}">
+          <select name="requester_id" data-vis="{{ V }}">
             {% for requester in requester_candidates %}
             <option value="{{ requester['id'] }}">{{ requester["name"] }} · {{ requester["email"] }}</option>
             {% endfor %}
           </select>
         </label>
-        <label>
-          <textarea name="originator_note" rows="3" placeholder="Optional note"></textarea>
+        <label data-vis="{{ V }}">
+          <textarea name="originator_note" rows="3" placeholder="Optional note" data-vis="{{ V }}"></textarea>
         </label>
         {% endif %}
       </section>
 
-      <section class="form-section">
-        <h3>Sample</h3>
-        <label>Request Title
-          <input type="text" name="title" placeholder="Short name for this job" required>
+      <section class="form-section" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Sample</h3>
+        <label data-vis="{{ V }}">Request Title
+          <input type="text" name="title" placeholder="Short name for this job" required data-vis="{{ V }}">
         </label>
-        <label>Sample Name
-          <input type="text" name="sample_name" placeholder="What is being submitted" required>
+        <label data-vis="{{ V }}">Sample Name
+          <input type="text" name="sample_name" placeholder="What is being submitted" required data-vis="{{ V }}">
         </label>
-        <div class="new-request-inline-grid">
-          <label>Sample Count
-            <input type="number" name="sample_count" min="0" max="99" value="1" required>
+        <div class="new-request-inline-grid" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Sample Count
+            <input type="number" name="sample_count" min="0" max="99" value="1" required data-vis="{{ V }}">
           </label>
-          <label>Priority
-            <select name="priority">
+          <label data-vis="{{ V }}">Priority
+            <select name="priority" data-vis="{{ V }}">
               <option value="low">Low</option>
               <option value="normal" selected>Normal</option>
               <option value="high">High</option>
             </select>
           </label>
-          <label>Internal / External
-            <select name="sample_origin" id="sampleOriginSelect">
+          <label data-vis="{{ V }}">Internal / External
+            <select name="sample_origin" id="sampleOriginSelect" data-vis="{{ V }}">
               <option value="internal" selected>Internal</option>
               <option value="external">External</option>
             </select>
           </label>
         </div>
-        <label>Description
-          <textarea name="description" rows="5" placeholder="What needs to be done, any preparation or handling note" required></textarea>
+        <label data-vis="{{ V }}">Description
+          <textarea name="description" rows="5" placeholder="What needs to be done, any preparation or handling note" required data-vis="{{ V }}"></textarea>
         </label>
       </section>
 
-      <section class="form-section" id="financeFieldsCard">
-        <h3>Finance</h3>
-        <div class="new-request-inline-grid">
-          <label>Receipt Number
-            <input type="text" name="receipt_number" placeholder="Leave blank to generate one">
+      <section class="form-section" id="financeFieldsCard" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Finance</h3>
+        <div class="new-request-inline-grid" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Receipt Number
+            <input type="text" name="receipt_number" placeholder="Leave blank to generate one" data-vis="{{ V }}">
           </label>
-          <label>Amount Due
-            <input type="number" step="0.01" min="0" name="amount_due" value="0">
+          <label data-vis="{{ V }}">Amount Due
+            <input type="number" step="0.01" min="0" name="amount_due" value="0" data-vis="{{ V }}">
           </label>
-          <label>Amount Paid
-            <input type="number" step="0.01" min="0" name="amount_paid" value="0">
+          <label data-vis="{{ V }}">Amount Paid
+            <input type="number" step="0.01" min="0" name="amount_paid" value="0" data-vis="{{ V }}">
           </label>
-          <label>Payment Status
-            <select name="finance_status">
+          <label data-vis="{{ V }}">Payment Status
+            <select name="finance_status" data-vis="{{ V }}">
               <option value="n/a" selected>Not applicable</option>
               <option value="pending">Pending</option>
               <option value="partial">Partial</option>
@@ -94,28 +95,28 @@
         </div>
       </section>
 
-      <section class="form-section">
-        <h3>File</h3>
-        <label>
-          <input type="file" name="initial_attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt">
+      <section class="form-section" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">File</h3>
+        <label data-vis="{{ V }}">
+          <input type="file" name="initial_attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt" data-vis="{{ V }}">
         </label>
       </section>
 
-      <div class="new-request-submit-row">
-        <button type="submit" class="primary-action">Create Request Card</button>
+      <div class="new-request-submit-row" data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Create Request Card</button>
       </div>
     </form>
   </div>
 
-  <aside class="new-request-side">
-    <div class="card compact">
-      <h2>Instrument</h2>
-      <dl class="detail-grid compact-detail-grid new-request-summary-grid">
-        <dt>Name</dt><dd id="requestInstrumentName">-</dd>
-        <dt>Code</dt><dd id="requestInstrumentCode">-</dd>
-        <dt>Location</dt><dd id="requestInstrumentLocation">-</dd>
-        <dt>Capacity</dt><dd id="requestInstrumentCapacity">-</dd>
-        <dt>Operation</dt><dd id="requestInstrumentOperation">-</dd>
+  <aside class="new-request-side" data-vis="{{ V }}">
+    <div class="card compact" data-vis="{{ V }}">
+      <h2 data-vis="{{ V }}">Instrument</h2>
+      <dl class="detail-grid compact-detail-grid new-request-summary-grid" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Name</dt><dd id="requestInstrumentName" data-vis="{{ V }}">-</dd>
+        <dt data-vis="{{ V }}">Code</dt><dd id="requestInstrumentCode" data-vis="{{ V }}">-</dd>
+        <dt data-vis="{{ V }}">Location</dt><dd id="requestInstrumentLocation" data-vis="{{ V }}">-</dd>
+        <dt data-vis="{{ V }}">Capacity</dt><dd id="requestInstrumentCapacity" data-vis="{{ V }}">-</dd>
+        <dt data-vis="{{ V }}">Operation</dt><dd id="requestInstrumentOperation" data-vis="{{ V }}">-</dd>
       </dl>
     </div>
   </aside>

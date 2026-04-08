@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="page-back" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="all">Back to Instrument</a>
+<div class="page-title-bar" data-vis="all">
+  <h1 class="page-title" data-vis="all">Configure {{ instrument["name"] }}</h1>
+</div>
+
+<section class="config-grid" data-vis="super_admin site_admin instrument_admin operator">
+  <div class="card" data-vis="all">
+    <h2>General Settings</h2>
+    <form method="post" class="form-grid top-gap" data-vis="all">
+      <input type="hidden" name="action" value="update_metadata" data-vis="all">
+      <div class="new-request-row-2" data-vis="all">
+        <label data-vis="all">Code <input type="text" name="code" value="{{ instrument['code'] }}" required data-vis="all"></label>
+        <label data-vis="all">Category <input type="text" name="category" value="{{ instrument['category'] }}" data-vis="all"></label>
+      </div>
+      <label data-vis="all">Location <input type="text" name="location" value="{{ instrument['location'] }}" required data-vis="all"></label>
+      <div class="new-request-row-2" data-vis="all">
+        <label data-vis="all">Manufacturer <input type="text" name="manufacturer" value="{{ instrument['manufacturer'] }}" data-vis="all"></label>
+        <label data-vis="all">Model <input type="text" name="model_number" value="{{ instrument['model_number'] }}" data-vis="all"></label>
+      </div>
+      <label data-vis="all">Intake Mode
+        <select name="intake_mode" data-vis="all">
+          <option value="accepting" {% if intake_mode == 'accepting' %}selected{% endif %} data-vis="all">Accepting Requests</option>
+          <option value="on_hold" {% if intake_mode == 'on_hold' %}selected{% endif %} data-vis="all">On Hold (Queue Only)</option>
+          <option value="maintenance" {% if intake_mode == 'maintenance' %}selected{% endif %} data-vis="all">Maintenance (Shutdown)</option>
+        </select>
+      </label>
+      {% if can_edit_assignments %}
+      <label data-vis="all">Assigned Operators
+        <select name="operator_ids" multiple class="multi-select" data-vis="all">
+          {% for u in operator_candidates %}
+          <option value="{{ u.id }}" {% if u.id in selected_operator_ids %}selected{% endif %} data-vis="all">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="all">Faculty In-Charge
+        <select name="faculty_admin_ids" multiple class="multi-select" data-vis="all">
+          {% for u in faculty_candidates %}
+          <option value="{{ u.id }}" {% if u.id in selected_faculty_ids %}selected{% endif %} data-vis="all">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <button type="submit" class="primary-action" data-vis="all">Save General Settings</button>
+    </form>
+  </div>
+
+  <div class="card" data-vis="all">
+    <h2>Approval Chain</h2>
+    <p class="hint" data-vis="all">Define the sequence of approvals required for new requests.</p>
+    <form method="post" class="form-grid top-gap" data-vis="all">
+      <input type="hidden" name="action" value="save_approval_config" data-vis="all">
+      {% for idx in range(1, 7) %}
+      {% set step = approval_config[idx-1] if (approval_config|length >= idx) else None %}
+      <div class="approval-config-row" data-vis="all">
+        <span class="step-num" data-vis="all">{{ idx }}</span>
+        <select name="step_role_{{ idx }}" data-vis="all">
+          <option value="" data-vis="all">No Step</option>
+          <option value="finance" {% if step and step.approver_role == 'finance' %}selected{% endif %} data-vis="all">Finance</option>
+          <option value="professor" {% if step and step.approver_role == 'professor' %}selected{% endif %} data-vis="all">Professor</option>
+          <option value="operator" {% if step and step.approver_role == 'operator' %}selected{% endif %} data-vis="all">Operator</option>
+        </select>
+        <select name="step_user_{{ idx }}" data-vis="all">
+          <option value="" data-vis="all">Default for role</option>
+          {% for u in approval_role_candidates %}
+          <option value="{{ u.id }}" {% if step and step.approver_user_id == u.id %}selected{% endif %} data-vis="all">{{ u.name }} ({{ u.role[:1]|upper }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+      <button type="submit" class="primary-action" data-vis="all">Update Approval Chain</button>
+    </form>
+  </div>
+</section>
+
+<style>
+  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .approval-config-row { display: grid; grid-template-columns: 30px 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .step-num { font-weight: 800; opacity: 0.5; }
+  .multi-select { height: 120px; }
+  @media (max-width: 900px) { .config-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}

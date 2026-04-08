@@ -738,23 +738,24 @@ processed_history.html), user_detail.html
 > gating, `StreamQuery` / `request_stream()` for all data queries.
 > Every new feature reuses these patterns.
 
-### Progress (as of 2026-04-08 17:45 UTC)
+### Progress (as of 2026-04-08)
 
-    Phase 1 ████████░░░░░░░░░░░░░░░░░░░░  Step 1 done (StreamQuery + data-vis)
-    Phase 2 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Not started
+    Phase 1 ████████████████░░░░░░░░░░░░  Waves A+B done (StreamQuery + data-vis)
+    Phase 2 ████████░░░░░░░░░░░░░░░░░░░░  Wave C done (rate limit + cancel + notif)
     Phase 3 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Not started
 
     COMPLETED:
       Wave A — StreamQuery classes + factories + refactored 3 call sites  [git: 68196cb]
       Wave B — data-vis 100% across all 24+ templates                    [git: 43d9b97]
+      Wave C — rate_limit decorator + request cancellation + notification badge  [git: e3345b9]
 
     VERIFIED:
-      app.py syntax: OK (6004 lines)
+      app.py syntax: OK (6088 lines)
       CSS braces: balanced (552/552)
       Jinja blocks: all balanced (smart parser confirmed)
       Flask not available in sandbox — needs on-device test
 
-    NEXT: Wave C — Phase 2 features (sequential on app.py to prevent overwrites)
+    NEXT: Wave D — result confirmation + email backend + approval visualization
 
 ### Execution Model
 
@@ -799,14 +800,17 @@ Templates only — no app.py conflicts.
 | B2 | 1.2.2+1.2.3 | new_request, request_detail, user_detail, budgets | data-vis → 100% | Done |
 | B3 | 1.2.4 | all remaining templates | data-vis → 100% (~880 attributes added) | Done |
 
-### Wave C — NOT YET STARTED
+### Wave C (sequential on app.py — completed, git: e3345b9)
 
-Remaining Phase 1 tasks (EntityManager audit, bounded_pane audit, crawl gate)
-will be folded into Phase 2 feature waves to avoid wasted passes.
+| Module | File(s) | Task | Status |
+|--------|---------|------|--------|
+| 2.5.1 | app.py | `rate_limit(max_requests, window_seconds)` decorator + `rate_limit_tracking` table | Done |
+| 2.1.0 | app.py | Request cancellation: `cancelled` status in display/group/summary helpers | Done |
+| 2.4.1 | app.py | Notification badge: `unread_notification_count()` + `/api/notif-count` + `/api/notif-mark-read` + context processor + `last_notification_check` migration | Done |
 
 **NOTE:** Waves C-K from the previous session were destroyed when parallel
 agents overwrote app.py. The code was reverted to git HEAD and rebuilt
-from scratch. Only Waves A-B above are confirmed in git.
+from scratch. Only Waves A-C above are confirmed in git.
 
 ---
 

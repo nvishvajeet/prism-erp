@@ -32,6 +32,10 @@
             <span class="theme-icon theme-icon-dark" aria-hidden="true" data-vis="{{ V }}"></span>
             <span class="switch-thumb" aria-hidden="true" data-vis="{{ V }}"></span>
           </button>
+          <span class="notif-badge-wrap" data-vis="{{ V }}" title="Unread notifications">
+            <span id="notifBadge" class="notif-badge{% if unread_notification_count_user == 0 %} hidden{% endif %}" data-vis="{{ V }}">{{ unread_notification_count_user }}</span>
+          </span>
+          <a class="link-button subtle" href="{{ url_for('change_password') }}" data-vis="{{ V }}" title="Change password">Password</a>
           <a class="link-button subtle" href="{{ url_for('logout') }}" data-vis="{{ V }}">Logout</a>
         </div>
       </div>
@@ -215,6 +219,23 @@
           applyTheme(media.matches ? "dark" : "light");
         }
       });
+    })();
+
+    // Notification badge polling (every 60s)
+    (function() {
+      var badge = document.getElementById("notifBadge");
+      if (!badge) return;
+      function refreshBadge() {
+        fetch("/api/notif-count")
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var c = data.count || 0;
+            badge.textContent = c > 99 ? "99+" : c;
+            badge.classList.toggle("hidden", c === 0);
+          })
+          .catch(function() {});
+      }
+      setInterval(refreshBadge, 60000);
     })();
   </script>
 </body>

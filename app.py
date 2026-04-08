@@ -3415,6 +3415,8 @@ def init_db() -> None:
         user_columns = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "last_notification_check" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN last_notification_check TEXT DEFAULT '1970-01-01T00:00:00'")
+        if "email_preferences" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN email_preferences TEXT")
         downtime_columns = {row[1] for row in cur.execute("PRAGMA table_info(instrument_downtime)").fetchall()}
         if "downtime_type" not in downtime_columns:
             cur.execute("ALTER TABLE instrument_downtime ADD COLUMN downtime_type TEXT NOT NULL DEFAULT 'maintenance'")
@@ -6781,6 +6783,37 @@ def api_bulk_action():
             count += 1
     flash(f"Bulk action applied to {count} request(s).", "success")
     return redirect(request.referrer or url_for("schedule"))
+
+
+@app.route("/profile/email-preferences", methods=["GET", "POST"])
+@login_required
+def email_preferences():
+    """View/update email notification preferences."""
+    user = current_user()
+    event_types = {
+        "status_changed": {"label": "Request status changes"},
+        "request_cancelled": {"label": "Request cancelled"},
+        "results_confirmed": {"label": "Results confirmed by requester"},
+        "approval_needed": {"label": "Approval needed for a request"},
+    }
+    # Preferences stored as JSON in user column (defaults to all enabled)
+    raw = user.get("email_preferences") if hasattr(user, "get") else None
+    preferences = json.loads(raw) if raw else {k: True for k in event_types}
+    if request.method == "POST":
+        new_prefs = {}
+        for key in event_types:
+            new_prefs[key] = request.form.get(f"enable_{key}") == "1"
+        execute(
+            "UPDATE users SET email_preferences = ? WHERE id = ?",
+            (json.dumps(new_prefs), user["id"]),
+        )
+        flash("Email preferences saved.", "success")
+        return redirect(url_for("email_preferences"))
+    return render_template(
+        "email_preferences.html",
+        event_types=event_types,
+        preferences=preferences,
+    )
 
 
 @app.route("/profile/change-password", methods=["GET", "POST"])

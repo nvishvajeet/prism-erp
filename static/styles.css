@@ -3585,6 +3585,16 @@ img.instrument-photo:not([src]) {
   overflow: hidden;
 }
 
+/* ── Notification badge ── */
+.notif-badge-wrap { position: relative; display: inline-block; cursor: default; }
+.notif-badge {
+  display: inline-block; min-width: 1.2rem; height: 1.2rem;
+  line-height: 1.2rem; text-align: center; border-radius: 999px;
+  background: #c53b3b; color: #fff; font-size: 0.7rem; font-weight: 700;
+  padding: 0 0.3rem; vertical-align: middle;
+}
+.notif-badge.hidden { display: none; }
+
 /* ── Approval pill chain ── */
 .pill-approved { background: #e7f6e5; color: #2d6a2d; border: 1px solid #4b8d3b; }
 .pill-rejected { background: #fce8e8; color: #8b2222; border: 1px solid #c53b3b; }

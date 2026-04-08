@@ -262,6 +262,28 @@ def verify_audit_chain(entity_type: str, entity_id: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+#  Notification helpers
+# ---------------------------------------------------------------------------
+
+def unread_notification_count(user: sqlite3.Row | None) -> int:
+    """Count unread notifications for a user based on audit_logs since last check."""
+    if user is None:
+        return 0
+    last_check = user["last_notification_check"] or "1970-01-01T00:00:00"
+    if user["role"] in ("super_admin", "site_admin"):
+        row = query_one("SELECT COUNT(*) AS c FROM audit_logs WHERE created_at > ?", (last_check,))
+    elif user["role"] == "requester":
+        row = query_one(
+            "SELECT COUNT(*) AS c FROM audit_logs WHERE entity_type = 'sample_request' AND created_at > ? "
+            "AND entity_id IN (SELECT id FROM sample_requests WHERE requester_id = ?)",
+            (last_check, user["id"]),
+        )
+    else:
+        row = query_one("SELECT COUNT(*) AS c FROM audit_logs WHERE created_at > ?", (last_check,))
+    return min(row["c"], 99) if row else 0
+
+
+# ---------------------------------------------------------------------------
 #  StreamQuery — composable query builder
 # ---------------------------------------------------------------------------
 
@@ -529,6 +551,7 @@ def request_display_status(status: str) -> str:
         "sample_received": "Sample Received",
         "scheduled": "Scheduled",
         "in_progress": "In Progress",
+        "cancelled": "Cancelled",
     }
     return labels.get(status, status.replace("_", " ").title())
 
@@ -552,7 +575,7 @@ def request_status_group(status: str | None) -> str:
         return "Processing"
     if status == "completed":
         return "Processed"
-    if status in {"rejected"}:
+    if status in {"rejected", "cancelled"}:
         return "Closed"
     return "Open"
 
@@ -595,6 +618,8 @@ def request_status_summary(request_row: sqlite3.Row | dict, approval_steps: list
         return "Job completed and the record is locked."
     if status == "rejected":
         return "Request was rejected and will not be processed."
+    if status == "cancelled":
+        return "Request was cancelled and will not be processed."
     return "Request is active."
 
 
@@ -2718,6 +2743,32 @@ def login_required(view):
     return wrapped
 
 
+def rate_limit(max_requests=10, window_seconds=300):
+    """Decorator to rate-limit a route by IP address."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(**kwargs):
+            key = request.remote_addr or "unknown"
+            route = request.path
+            cutoff = (datetime.utcnow() - timedelta(seconds=window_seconds)).isoformat()
+            execute("DELETE FROM rate_limit_tracking WHERE timestamp < ?", (cutoff,))
+            row = query_one(
+                "SELECT COUNT(*) AS c FROM rate_limit_tracking "
+                "WHERE tracking_key = ? AND route_path = ? AND timestamp >= ?",
+                (key, route, cutoff),
+            )
+            if row and row["c"] >= max_requests:
+                flash("Too many requests. Please wait a few minutes.", "error")
+                return redirect(request.referrer or url_for("index"))
+            execute(
+                "INSERT INTO rate_limit_tracking (tracking_key, route_path) VALUES (?, ?)",
+                (key, route),
+            )
+            return view(**kwargs)
+        return wrapped
+    return decorator
+
+
 def role_required(*roles: str):
     def decorator(view):
         @wraps(view)
@@ -2956,7 +3007,8 @@ def init_db() -> None:
                 role TEXT NOT NULL,
                 invited_by INTEGER,
                 invite_status TEXT NOT NULL DEFAULT 'active',
-                active INTEGER NOT NULL DEFAULT 1
+                active INTEGER NOT NULL DEFAULT 1,
+                last_notification_check TEXT DEFAULT '1970-01-01T00:00:00'
             );
 
             CREATE TABLE IF NOT EXISTS instruments (
@@ -3157,6 +3209,13 @@ def init_db() -> None:
                 FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
                 FOREIGN KEY (approver_user_id) REFERENCES users(id)
             );
+
+            CREATE TABLE IF NOT EXISTS rate_limit_tracking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tracking_key TEXT NOT NULL,
+                route_path TEXT NOT NULL,
+                timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+            );
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3206,6 +3265,9 @@ def init_db() -> None:
             cur.execute("ALTER TABLE instruments ADD COLUMN accepting_requests INTEGER NOT NULL DEFAULT 1")
         if "soft_accept_enabled" not in instrument_columns:
             cur.execute("ALTER TABLE instruments ADD COLUMN soft_accept_enabled INTEGER NOT NULL DEFAULT 0")
+        user_columns = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
+        if "last_notification_check" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN last_notification_check TEXT DEFAULT '1970-01-01T00:00:00'")
         db.commit()
     db.close()
     seed_data()
@@ -3395,7 +3457,29 @@ def inject_globals():
         "instrument_photo_src": instrument_photo_src,
         "request_card_policy_user": lambda request_row: request_card_policy(user, request_row),
         "request_card_can_view_field_user": lambda request_row, field_name: request_card_field_allowed(user, request_row, field_name),
+        "unread_notification_count_user": unread_notification_count(user),
     }
+
+
+@app.route("/api/notif-count")
+@login_required
+def api_notif_count():
+    """JSON endpoint for polling notification badge count."""
+    user = current_user()
+    count = unread_notification_count(user)
+    return {"count": count}
+
+
+@app.route("/api/notif-mark-read", methods=["POST"])
+@login_required
+def api_notif_mark_read():
+    """Mark notifications as read by updating user's last check timestamp."""
+    user = current_user()
+    execute(
+        "UPDATE users SET last_notification_check = ? WHERE id = ?",
+        (datetime.utcnow().isoformat(), user["id"]),
+    )
+    return {"ok": True}
 
 
 @app.route("/")

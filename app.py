@@ -261,6 +261,207 @@ def verify_audit_chain(entity_type: str, entity_id: int) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+#  StreamQuery — composable query builder
+# ---------------------------------------------------------------------------
+
+class _FilterSpec:
+    """Base class for declarative filter specifications."""
+    def __init__(self, column: str):
+        self.column = column
+
+    def apply(self, clauses: list[str], params: list, value: str) -> None:
+        raise NotImplementedError
+
+
+class ExactFilter(_FilterSpec):
+    """WHERE column = ?"""
+    def apply(self, clauses, params, value):
+        clauses.append(f"{self.column} = ?")
+        params.append(value)
+
+
+class InFilter(_FilterSpec):
+    """WHERE column IN (?, ?, ...)"""
+    def apply(self, clauses, params, value):
+        items = [v.strip() for v in value.split(",") if v.strip()]
+        if items:
+            placeholders = ", ".join("?" for _ in items)
+            clauses.append(f"{self.column} IN ({placeholders})")
+            params.extend(items)
+
+
+class SearchFilter(_FilterSpec):
+    """WHERE (col1 LIKE ? OR col2 LIKE ? OR ...)"""
+    def __init__(self, columns: list[str]):
+        self.columns = columns
+
+    def apply(self, clauses, params, value):
+        term = f"%{value}%"
+        or_parts = [f"{c} LIKE ?" for c in self.columns]
+        clauses.append(f"({' OR '.join(or_parts)})")
+        params.extend([term] * len(self.columns))
+
+
+class DateGteFilter(_FilterSpec):
+    """WHERE column >= ?"""
+    def apply(self, clauses, params, value):
+        clauses.append(f"{self.column} >= ?")
+        params.append(value)
+
+
+class DateLteFilter(_FilterSpec):
+    """WHERE column <= ?"""
+    def apply(self, clauses, params, value):
+        clauses.append(f"{self.column} <= ?")
+        params.append(value)
+
+
+class StreamQuery:
+    """Composable SQL query builder.
+
+    Fluent API:
+        .source() → .join() → .columns() → .where() → .scope_raw()
+        → .apply_filters() → .group_by() → .order() → .paginate()
+        → .build() / .fetch_all() / .fetch_one() / .fetch_count()
+    """
+
+    def __init__(self, label: str = ""):
+        self._label = label
+        self._table = ""
+        self._alias = ""
+        self._joins: list[str] = []
+        self._columns: list[str] = ["*"]
+        self._clauses: list[str] = []
+        self._params: list = []
+        self._group_by: str = ""
+        self._order: str = ""
+        self._limit: int | None = None
+        self._offset: int = 0
+
+    def source(self, table: str, alias: str = "") -> "StreamQuery":
+        self._table = table
+        self._alias = alias
+        return self
+
+    def join(self, table: str, alias: str, on: str) -> "StreamQuery":
+        self._joins.append(f"JOIN {table} {alias} ON {on}")
+        return self
+
+    def left_join(self, table: str, alias: str, on: str) -> "StreamQuery":
+        self._joins.append(f"LEFT JOIN {table} {alias} ON {on}")
+        return self
+
+    def columns(self, *cols: str) -> "StreamQuery":
+        self._columns = list(cols)
+        return self
+
+    def where(self, clause: str, *params) -> "StreamQuery":
+        self._clauses.append(clause)
+        self._params.extend(params)
+        return self
+
+    def scope_raw(self, clauses: list[str], params: list) -> "StreamQuery":
+        self._clauses.extend(clauses)
+        self._params.extend(params)
+        return self
+
+    def apply_filters(self, filters: dict[str, str], specs: dict[str, "_FilterSpec"]) -> "StreamQuery":
+        for key, spec in specs.items():
+            val = filters.get(key, "").strip()
+            if val:
+                spec.apply(self._clauses, self._params, val)
+        return self
+
+    def group_by(self, expr: str) -> "StreamQuery":
+        self._group_by = expr
+        return self
+
+    def order(self, expr: str) -> "StreamQuery":
+        self._order = expr
+        return self
+
+    def order_by_key(self, key: str, sort_map: dict[str, str], default: str = "") -> "StreamQuery":
+        self._order = sort_map.get(key, default or next(iter(sort_map.values()), ""))
+        return self
+
+    def paginate(self, page: int, per_page: int) -> "StreamQuery":
+        self._limit = per_page
+        self._offset = (page - 1) * per_page
+        return self
+
+    def limit(self, n: int) -> "StreamQuery":
+        self._limit = n
+        return self
+
+    def build(self) -> tuple[str, list]:
+        from_clause = f"{self._table} {self._alias}".strip()
+        joins = " ".join(self._joins)
+        where = f"WHERE {' AND '.join(self._clauses)}" if self._clauses else ""
+        group = f"GROUP BY {self._group_by}" if self._group_by else ""
+        order = f"ORDER BY {self._order}" if self._order else ""
+        limit_clause = ""
+        if self._limit is not None:
+            limit_clause = f"LIMIT {self._limit} OFFSET {self._offset}"
+        sql = f"SELECT {', '.join(self._columns)} FROM {from_clause} {joins} {where} {group} {order} {limit_clause}"
+        return sql, list(self._params)
+
+    def build_count(self) -> tuple[str, list]:
+        from_clause = f"{self._table} {self._alias}".strip()
+        joins = " ".join(self._joins)
+        where = f"WHERE {' AND '.join(self._clauses)}" if self._clauses else ""
+        group = f"GROUP BY {self._group_by}" if self._group_by else ""
+        inner = f"SELECT 1 FROM {from_clause} {joins} {where} {group}"
+        return f"SELECT COUNT(*) AS c FROM ({inner})", list(self._params)
+
+    def fetch_all(self) -> list[sqlite3.Row]:
+        sql, params = self.build()
+        return query_all(sql, tuple(params))
+
+    def fetch_one(self) -> sqlite3.Row | None:
+        sql, params = self.build()
+        return query_one(sql, tuple(params))
+
+    def fetch_count(self) -> int:
+        sql, params = self.build_count()
+        row = query_one(sql, tuple(params))
+        return row["c"] if row else 0
+
+    def clone(self) -> "StreamQuery":
+        import copy
+        return copy.deepcopy(self)
+
+
+# ---------------------------------------------------------------------------
+#  Filter / sort constants for request queries
+# ---------------------------------------------------------------------------
+
+REQUEST_SEARCH_COLUMNS = [
+    "sr.request_no", "sr.sample_ref", "sr.sample_name",
+    "r.name", "r.email", "i.name",
+]
+
+REQUEST_FILTERS: dict[str, _FilterSpec] = {
+    "q": SearchFilter(REQUEST_SEARCH_COLUMNS),
+    "status": ExactFilter("sr.status"),
+    "instrument_id": ExactFilter("sr.instrument_id"),
+    "requester_id": ExactFilter("sr.requester_id"),
+    "assigned_operator_id": ExactFilter("sr.assigned_operator_id"),
+}
+
+COMPLETED_DATE_FILTERS: dict[str, _FilterSpec] = {
+    "from": DateGteFilter("sr.completed_at"),
+    "to": DateLteFilter("sr.completed_at"),
+}
+
+REQUEST_SORT_MAP: dict[str, str] = {
+    "created_desc": "sr.created_at DESC, sr.id DESC",
+    "created_asc": "sr.created_at ASC, sr.id ASC",
+    "updated_desc": "sr.updated_at DESC, sr.id DESC",
+    "status_asc": "sr.status ASC, sr.created_at DESC",
+}
+
+
 def send_completion_email(sample_request: sqlite3.Row, results_summary: str) -> tuple[bool, str]:
     msg = EmailMessage()
     msg["Subject"] = f"Lab Result Ready: {sample_request['request_no']}"
@@ -2792,6 +2993,65 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
         return clauses, params
     clauses.append("1 = 0")
     return clauses, params
+
+
+# ---------------------------------------------------------------------------
+#  StreamQuery factories — canonical entry points for data queries
+# ---------------------------------------------------------------------------
+
+def request_stream(user=None, filters=None) -> StreamQuery:
+    """Return a pre-configured StreamQuery for sample_requests.
+
+    Applies the standard 6-table JOIN chain, role-scoped WHERE clauses,
+    and optional URL-param filters. New code should call this directly
+    instead of building SQL by hand.
+    """
+    q = (StreamQuery("requests")
+         .source("sample_requests", "sr")
+         .join("instruments", "i", "i.id = sr.instrument_id")
+         .join("users", "r", "r.id = sr.requester_id")
+         .left_join("users", "c", "c.id = sr.created_by_user_id")
+         .left_join("users", "op", "op.id = sr.assigned_operator_id")
+         .left_join("users", "recv", "recv.id = sr.received_by_operator_id")
+         .left_join("request_attachments", "ra",
+                     "ra.request_id = sr.id AND ra.is_active = 1")
+         .columns(
+             "sr.*",
+             "i.name AS instrument_name",
+             "i.code AS instrument_code",
+             "r.name AS requester_name",
+             "r.email AS requester_email",
+             "c.name AS created_by_name",
+             "op.name AS operator_name",
+             "recv.name AS received_by_name",
+             "GROUP_CONCAT(DISTINCT ra.id) AS attachment_ids",
+         )
+         .group_by("sr.id")
+         .order("sr.created_at DESC, sr.id DESC"))
+    if user is not None:
+        scope_clauses, scope_params = request_scope_sql(user, "sr")
+        q.scope_raw(scope_clauses, scope_params)
+    if filters:
+        q.apply_filters(filters, REQUEST_FILTERS)
+    return q
+
+
+def stats_stream(user=None, instrument_id=None, group_name=None) -> StreamQuery:
+    """Return a pre-configured StreamQuery for stats aggregation.
+
+    Lighter than request_stream — only joins instruments, no user tables.
+    """
+    q = (StreamQuery("stats")
+         .source("sample_requests", "sr")
+         .join("instruments", "i", "i.id = sr.instrument_id"))
+    if user is not None:
+        scope_clauses, scope_params = request_scope_sql(user, "sr")
+        q.scope_raw(scope_clauses, scope_params)
+    if instrument_id:
+        q.where("sr.instrument_id = ?", int(instrument_id))
+    if group_name:
+        q.where("i.group_name = ?", group_name)
+    return q
 
 
 def scoped_instrument_count(user: sqlite3.Row) -> int:

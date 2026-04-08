@@ -3585,3 +3585,63 @@ img.instrument-photo:not([src]) {
   overflow: hidden;
 }
 
+/* ── Approval pill chain ── */
+.pill-approved { background: #e7f6e5; color: #2d6a2d; border: 1px solid #4b8d3b; }
+.pill-rejected { background: #fce8e8; color: #8b2222; border: 1px solid #c53b3b; }
+.pill-pending  { background: #fff3cd; color: #6b5900; border: 1px solid #c5a41d; }
+.approval-pill {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 600; margin-right: 0.3rem;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRINT STYLES — @media print
+   Hide nav, sidebar, action buttons. Show content only.
+   ══════════════════════════════════════════════════════════════ */
+@media print {
+  /* Hide non-content elements */
+  nav, .navbar, .sidebar, .nav-actions, .btn, .action-bar,
+  .page-title-bar .btn, .modal, .flash-messages,
+  [data-vis-hide-print], .pagination-controls, .bounded-pane-controls,
+  .dropdown, .tooltip, footer, .back-btn, .breadcrumb {
+    display: none !important;
+  }
+
+  /* Reset layout */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  .main-content, .container, .page-content {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0.5cm !important;
+  }
+
+  /* Cards and panels */
+  .card, .panel, .stat, [data-pane] {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    margin-bottom: 0.5cm;
+  }
+
+  /* Tables */
+  table { font-size: 10pt; border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 4px 6px; }
+  th { background: #f0f0f0 !important; }
+
+  /* Links show URL */
+  a[href]:after { content: " (" attr(href) ")"; font-size: 8pt; color: #666; }
+  a[href^="#"]:after, a[href^="javascript"]:after { content: ""; }
+
+  /* Page breaks */
+  h1, h2, h3 { break-after: avoid; }
+  .request-card { break-inside: avoid; }
+}
+

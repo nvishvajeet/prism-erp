@@ -3299,6 +3299,7 @@ def init_db() -> None:
                 start_time TEXT NOT NULL,
                 end_time TEXT NOT NULL,
                 reason TEXT NOT NULL,
+                downtime_type TEXT NOT NULL DEFAULT 'maintenance',
                 created_by_user_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1,
@@ -3331,6 +3332,18 @@ def init_db() -> None:
                 tracking_key TEXT NOT NULL,
                 route_path TEXT NOT NULL,
                 timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                priority TEXT NOT NULL DEFAULT 'info',
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
             );
 
             CREATE TABLE IF NOT EXISTS email_queue (
@@ -3399,6 +3412,9 @@ def init_db() -> None:
         user_columns = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "last_notification_check" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN last_notification_check TEXT DEFAULT '1970-01-01T00:00:00'")
+        downtime_columns = {row[1] for row in cur.execute("PRAGMA table_info(instrument_downtime)").fetchall()}
+        if "downtime_type" not in downtime_columns:
+            cur.execute("ALTER TABLE instrument_downtime ADD COLUMN downtime_type TEXT NOT NULL DEFAULT 'maintenance'")
         if "result_confirmed_at" not in columns:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN result_confirmed_at TEXT")
         if "result_confirmed_by" not in columns:
@@ -4151,17 +4167,20 @@ def instrument_detail(instrument_id: int):
             start_time = request.form.get("start_time", "").strip()
             end_time = request.form.get("end_time", "").strip()
             reason = request.form.get("reason", "").strip()
+            downtime_type = request.form.get("downtime_type", "maintenance").strip()
+            if downtime_type not in {"maintenance", "calibration", "repair", "shutdown", "other"}:
+                downtime_type = "maintenance"
             if not start_time or not end_time or end_time <= start_time:
                 flash("Downtime end must be after start.", "error")
                 return redirect(url_for("instrument_detail", instrument_id=instrument_id))
             execute(
                 """
-                INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, created_by_user_id, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, downtime_type, created_by_user_id, created_at, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
                 """,
-                (instrument_id, start_time, end_time, reason, user["id"], now_iso()),
+                (instrument_id, start_time, end_time, reason, downtime_type, user["id"], now_iso()),
             )
-            log_action(user["id"], "instrument", instrument_id, "downtime_added", {"start_time": start_time, "end_time": end_time, "reason": reason})
+            log_action(user["id"], "instrument", instrument_id, "downtime_added", {"start_time": start_time, "end_time": end_time, "reason": reason, "downtime_type": downtime_type})
             flash("Downtime block added.", "success")
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         if action == "save_approval_config":
@@ -4363,6 +4382,31 @@ def instrument_detail(instrument_id: int):
             "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
         ),
     )
+
+
+@app.route("/requests/<int:request_id>/duplicate")
+@login_required
+def duplicate_request(request_id: int):
+    """Pre-fill the new request form from an existing request ('Submit similar')."""
+    user = current_user()
+    source = query_one(
+        "SELECT sr.*, i.name AS instrument_name FROM sample_requests sr JOIN instruments i ON i.id = sr.instrument_id WHERE sr.id = ?",
+        (request_id,),
+    )
+    if source is None:
+        abort(404)
+    if not can_view_request(user, source):
+        abort(403)
+    return redirect(url_for(
+        "new_request",
+        prefill_instrument_id=source["instrument_id"],
+        prefill_title=source["title"],
+        prefill_sample_name=source["sample_name"],
+        prefill_sample_count=source["sample_count"],
+        prefill_description=source["description"],
+        prefill_sample_origin=source["sample_origin"],
+        prefill_priority=source["priority"],
+    ))
 
 
 @app.route("/requests/new", methods=["GET", "POST"])
@@ -5923,21 +5967,32 @@ def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_st
                 },
             }
         )
+    downtime_colors = {
+        "maintenance": {"bg": "#fff0df", "border": "#c5741d", "text": "#6f4312"},
+        "calibration": {"bg": "#e8f0fe", "border": "#3b6dc5", "text": "#1a3a6f"},
+        "repair": {"bg": "#fce8e8", "border": "#c53b3b", "text": "#6f1a1a"},
+        "shutdown": {"bg": "#f0e8f5", "border": "#7b3bc5", "text": "#3d1a6f"},
+        "other": {"bg": "#e8e8e8", "border": "#6b6b6b", "text": "#333333"},
+    }
     for row in downtime_rows:
+        dtype = row.get("downtime_type", "maintenance") or "maintenance"
+        colors = downtime_colors.get(dtype, downtime_colors["maintenance"])
+        type_label = dtype.replace("_", " ").title()
         events.append(
             {
                 "id": f"downtime-{row['id']}",
-                "title": f"Maintenance | {row['instrument_code']} | {row['reason']}",
+                "title": f"{type_label} | {row['instrument_code']} | {row['reason']}",
                 "start": row["start_time"],
                 "end": row["end_time"],
-                "backgroundColor": "#fff0df",
-                "borderColor": "#c5741d",
-                "textColor": "#6f4312",
+                "backgroundColor": colors["bg"],
+                "borderColor": colors["border"],
+                "textColor": colors["text"],
                 "display": "block",
                 "extendedProps": {
                     "instrument": row["instrument_name"],
                     "created_by": row["created_by_name"],
                     "downtime": True,
+                    "downtime_type": dtype,
                 },
             }
         )
@@ -6517,6 +6572,36 @@ def audit_trail_search(
     return [dict(r) for r in rows], total
 
 
+def instrument_sparkline_data(instrument_id: int, days: int = 30) -> list[dict]:
+    """Return daily completed-job counts for the last N days for sparkline rendering."""
+    rows = query_all(
+        """
+        SELECT substr(sr.completed_at, 1, 10) AS day, COUNT(*) AS jobs
+        FROM sample_requests sr
+        WHERE sr.instrument_id = ? AND sr.status = 'completed'
+          AND sr.completed_at >= date('now', ?)
+        GROUP BY day
+        ORDER BY day
+        """,
+        (instrument_id, f"-{days} days"),
+    )
+    day_map = {r["day"]: r["jobs"] for r in rows}
+    result = []
+    for i in range(days):
+        d = (date.today() - timedelta(days=days - 1 - i)).isoformat()
+        result.append({"day": d, "jobs": day_map.get(d, 0)})
+    return result
+
+
+def announcements_list(limit: int = 10) -> list[dict]:
+    """Return recent active announcements."""
+    rows = query_all(
+        "SELECT a.*, u.name AS author_name FROM announcements a LEFT JOIN users u ON u.id = a.created_by_user_id WHERE a.is_active = 1 ORDER BY a.created_at DESC LIMIT ?",
+        (limit,),
+    )
+    return [dict(r) for r in rows]
+
+
 @app.route("/api/operator-workload")
 @login_required
 def api_operator_workload():
@@ -6550,6 +6635,17 @@ def api_turnaround_stats():
     return {"turnaround": turnaround_percentiles(instrument_id, days)}
 
 
+@app.route("/api/sparkline/<int:instrument_id>")
+@login_required
+def api_sparkline(instrument_id: int):
+    """JSON endpoint returning sparkline data for an instrument."""
+    user = current_user()
+    if not can_open_instrument_detail(user, instrument_id):
+        abort(403)
+    days = int(request.args.get("days", 30))
+    return {"data": instrument_sparkline_data(instrument_id, days)}
+
+
 @app.route("/api/audit-search")
 @login_required
 def api_audit_search():
@@ -6568,6 +6664,165 @@ def api_audit_search():
         offset=int(request.args.get("offset", 0)),
     )
     return {"results": rows, "total": total}
+
+
+# ---------------------------------------------------------------------------
+#  Wave H — Announcements, Audit Export, Bulk Actions, Password Reset
+# ---------------------------------------------------------------------------
+
+@app.route("/api/announcements", methods=["GET", "POST"])
+@login_required
+def api_announcements():
+    """GET: list active announcements. POST: create new (admin only)."""
+    user = current_user()
+    if request.method == "POST":
+        if user["role"] not in ("super_admin", "site_admin"):
+            abort(403)
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        priority = request.form.get("priority", "info")
+        if priority not in {"info", "warning", "urgent"}:
+            priority = "info"
+        expires_at = request.form.get("expires_at", "").strip() or None
+        if not title:
+            return {"error": "Title is required"}, 400
+        aid = execute(
+            "INSERT INTO announcements (title, body, priority, created_by_user_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (title, body, priority, user["id"], now_iso(), expires_at),
+        )
+        log_action(user["id"], "announcement", aid, "created", {"title": title})
+        return {"id": aid, "ok": True}
+    return {"announcements": announcements_list()}
+
+
+@app.route("/api/announcements/<int:ann_id>/dismiss", methods=["POST"])
+@login_required
+def api_dismiss_announcement(ann_id: int):
+    """Admin: deactivate an announcement."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    execute("UPDATE announcements SET is_active = 0 WHERE id = ?", (ann_id,))
+    return {"ok": True}
+
+
+@app.route("/api/audit-export")
+@login_required
+def api_audit_export():
+    """Download audit logs as CSV (admin only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    import csv
+    import io
+    rows, _ = audit_trail_search(
+        entity_type=request.args.get("entity_type"),
+        action=request.args.get("action"),
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
+        limit=10000,
+    )
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["id", "entity_type", "entity_id", "action", "actor_name", "payload_json", "created_at"])
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({k: row.get(k, "") for k in writer.fieldnames})
+    csv_bytes = output.getvalue().encode("utf-8")
+    from flask import Response
+    return Response(
+        csv_bytes,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=audit_export_{now_iso()[:10]}.csv"},
+    )
+
+
+@app.route("/api/bulk-action", methods=["POST"])
+@login_required
+def api_bulk_action():
+    """Apply a status action to multiple requests at once (admin/operator only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin", "operator", "instrument_admin"):
+        abort(403)
+    request_ids = request.form.getlist("request_ids", type=int)
+    action = request.form.get("bulk_action", "").strip()
+    remarks = request.form.get("remarks", "").strip()
+    if not request_ids or not action:
+        flash("Select requests and an action.", "error")
+        return redirect(request.referrer or url_for("schedule"))
+    allowed_bulk_actions = {"cancel", "reject", "mark_received"}
+    if action not in allowed_bulk_actions:
+        flash("Invalid bulk action.", "error")
+        return redirect(request.referrer or url_for("schedule"))
+    count = 0
+    for rid in request_ids:
+        sr = query_one("SELECT * FROM sample_requests WHERE id = ?", (rid,))
+        if sr is None:
+            continue
+        can_manage = can_manage_instrument(user["id"], sr["instrument_id"], user["role"])
+        if not can_manage:
+            continue
+        if action == "cancel" and sr["status"] in {"submitted", "under_review", "awaiting_sample_submission"}:
+            execute("UPDATE sample_requests SET status = 'cancelled', remarks = ?, updated_at = ? WHERE id = ?", (remarks or "Bulk cancelled", now_iso(), rid))
+            log_action(user["id"], "sample_request", rid, "bulk_cancelled", {"remarks": remarks})
+            count += 1
+        elif action == "reject" and sr["status"] not in {"completed", "rejected", "cancelled"}:
+            execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks or "Bulk rejected", now_iso(), rid))
+            log_action(user["id"], "sample_request", rid, "bulk_rejected", {"remarks": remarks})
+            count += 1
+        elif action == "mark_received" and sr["status"] == "sample_submitted":
+            execute(
+                "UPDATE sample_requests SET status = 'sample_received', sample_received_at = ?, received_by_operator_id = ?, updated_at = ? WHERE id = ?",
+                (now_iso(), user["id"], now_iso(), rid),
+            )
+            log_action(user["id"], "sample_request", rid, "bulk_received", {})
+            count += 1
+    flash(f"Bulk action applied to {count} request(s).", "success")
+    return redirect(request.referrer or url_for("schedule"))
+
+
+@app.route("/profile/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    """Self-service password change."""
+    user = current_user()
+    if request.method == "POST":
+        current_pw = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+        if not check_password_hash(user["password_hash"], current_pw):
+            flash("Current password is incorrect.", "error")
+            return redirect(url_for("change_password"))
+        if len(new_pw) < 8:
+            flash("New password must be at least 8 characters.", "error")
+            return redirect(url_for("change_password"))
+        if new_pw != confirm_pw:
+            flash("New passwords do not match.", "error")
+            return redirect(url_for("change_password"))
+        execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (generate_password_hash(new_pw, method='pbkdf2:sha256'), user["id"]),
+        )
+        log_action(user["id"], "user", user["id"], "password_changed", {})
+        flash("Password changed successfully.", "success")
+        return redirect(url_for("index"))
+    return render_template("change_password.html")
+
+
+@app.route("/api/db-backup", methods=["POST"])
+@login_required
+def api_db_backup():
+    """Create a timestamped backup of the database (admin only)."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    import shutil
+    backup_dir = Path(app.config.get("BACKUP_DIR", "backups"))
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_name = f"lab_scheduler_{now_iso()[:19].replace(':', '-')}.db"
+    backup_path = backup_dir / backup_name
+    shutil.copy2(DB_PATH, backup_path)
+    log_action(user["id"], "system", 0, "db_backup_created", {"filename": backup_name})
+    return {"ok": True, "filename": backup_name}
 
 
 if __name__ == "__main__":

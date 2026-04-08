@@ -18,6 +18,21 @@
 </div>
 {%- endmacro %}
 
+{# bounded_pane: variant of paginated_pane used in finance, pending, notifications, budgets #}
+{% macro bounded_pane(pane_id, page_size=10, max_height='28rem', css_class='') -%}
+<div class="paginated-pane {{ css_class }}" data-pane-id="{{ pane_id }}" data-page-size="{{ page_size }}" data-default-height="{{ max_height }}" style="--pane-max-height: {{ max_height }};" data-vis="{{ V }}">
+  <div class="paginated-pane-scroll" id="{{ pane_id }}Scroll" data-vis="{{ V }}">
+    {{ caller() }}
+  </div>
+  <div class="pane-resize-handle" data-resize-for="{{ pane_id }}" title="Drag to resize" data-vis="{{ V }}"></div>
+  <div class="paginated-pane-controls" id="{{ pane_id }}Controls" style="display:none;" data-vis="{{ V }}">
+    <button class="pane-nav-btn" id="{{ pane_id }}Prev" disabled data-vis="{{ V }}">&#8592; Prev</button>
+    <span class="pane-page-label" id="{{ pane_id }}Label" data-vis="{{ V }}"></span>
+    <button class="pane-nav-btn" id="{{ pane_id }}Next" data-vis="{{ V }}">Next &#8594;</button>
+  </div>
+</div>
+{%- endmacro %}
+
 {% macro page_intro(kicker, title, hint='') -%}
 <section class="card" data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">

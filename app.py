@@ -71,16 +71,6 @@ def now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def generate_unique_reference(prefix: str, table: str, column: str) -> str:
-    db = get_db()
-    while True:
-        candidate = f"{prefix}-{random.randint(100000, 999999)}"
-        existing = db.execute(
-            f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1",
-            (candidate,),
-        ).fetchone()
-        if existing is None:
-            return candidate
 
 
 def generate_receipt_reference(sample_origin: str) -> str:
@@ -1277,8 +1267,6 @@ def save_instrument_image(instrument_id: int, uploaded_file) -> str:
     return f"instrument_images/{stored_filename}"
 
 
-def user_upload_root(user_id: int) -> Path:
-    return UPLOAD_DIR / "users" / str(user_id)
 
 
 def request_folder_name(request_row: sqlite3.Row) -> str:
@@ -1729,8 +1717,6 @@ def parse_schedule_day(value: str | None) -> date:
     return parsed or datetime.utcnow().date()
 
 
-def planner_datetime_value(day_value: date, moment: datetime) -> str:
-    return moment.replace(year=day_value.year, month=day_value.month, day=day_value.day, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")
 
 
 def compute_next_schedule_slot(day_value: date, existing_rows: list[sqlite3.Row]) -> datetime:
@@ -2044,13 +2030,6 @@ def attachments_by_request_ids(request_ids: list[int]) -> dict[int, list[sqlite3
     return grouped
 
 
-def attachment_size_label(size: int | None) -> str:
-    value = size or 0
-    for unit in ["B", "KB", "MB", "GB"]:
-        if value < 1024 or unit == "GB":
-            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
-        value /= 1024
-    return f"{value:.1f} GB"
 
 
 def save_uploaded_attachment(
@@ -2195,9 +2174,6 @@ def parse_date_param(value: str | None) -> date | None:
         return None
 
 
-def week_start_for(value: str | None) -> date:
-    anchor = parse_date_param(value) or datetime.utcnow().date()
-    return anchor - timedelta(days=anchor.weekday())
 
 
 def request_filter_values() -> dict[str, str]:
@@ -2862,30 +2838,6 @@ def login_required(view):
     return wrapped
 
 
-def rate_limit(max_requests=10, window_seconds=300):
-    """Decorator to rate-limit a route by IP address."""
-    def decorator(view):
-        @wraps(view)
-        def wrapped(**kwargs):
-            key = request.remote_addr or "unknown"
-            route = request.path
-            cutoff = (datetime.utcnow() - timedelta(seconds=window_seconds)).isoformat()
-            execute("DELETE FROM rate_limit_tracking WHERE timestamp < ?", (cutoff,))
-            row = query_one(
-                "SELECT COUNT(*) AS c FROM rate_limit_tracking "
-                "WHERE tracking_key = ? AND route_path = ? AND timestamp >= ?",
-                (key, route, cutoff),
-            )
-            if row and row["c"] >= max_requests:
-                flash("Too many requests. Please wait a few minutes.", "error")
-                return redirect(request.referrer or url_for("index"))
-            execute(
-                "INSERT INTO rate_limit_tracking (tracking_key, route_path) VALUES (?, ?)",
-                (key, route),
-            )
-            return view(**kwargs)
-        return wrapped
-    return decorator
 
 
 def role_required(*roles: str):
@@ -2904,17 +2856,6 @@ def role_required(*roles: str):
     return decorator
 
 
-def owner_required(view):
-    @wraps(view)
-    def wrapped(**kwargs):
-        user = current_user()
-        if user is None:
-            return redirect(url_for("login"))
-        if not is_owner(user):
-            abort(403)
-        return view(**kwargs)
-
-    return wrapped
 
 
 def can_manage_instrument(user_id: int, instrument_id: int, role: str) -> bool:
@@ -3063,22 +3004,6 @@ def request_stream(user=None, filters=None) -> StreamQuery:
     return q
 
 
-def stats_stream(user=None, instrument_id=None, group_name=None) -> StreamQuery:
-    """Return a pre-configured StreamQuery for stats aggregation.
-
-    Lighter than request_stream — only joins instruments, no user tables.
-    """
-    q = (StreamQuery("stats")
-         .source("sample_requests", "sr")
-         .join("instruments", "i", "i.id = sr.instrument_id"))
-    if user is not None:
-        scope_clauses, scope_params = request_scope_sql(user, "sr")
-        q.scope_raw(scope_clauses, scope_params)
-    if instrument_id:
-        q.where("sr.instrument_id = ?", int(instrument_id))
-    if group_name:
-        q.where("i.group_name = ?", group_name)
-    return q
 
 
 def scoped_instrument_count(user: sqlite3.Row) -> int:
@@ -5301,6 +5226,71 @@ def request_detail(request_id: int):
     )
 
 
+@app.route("/pending")
+@app.route("/pending/<int:idx>")
+@login_required
+def pending_review(idx=0):
+    """Card-viewer for requests pending the current user's action."""
+    user = current_user()
+    # Pending approval items (requests awaiting this user's approval step)
+    pending_approval = query_all(
+        "SELECT sr.id, sr.request_no, sr.status, sr.created_at, "
+        "i.name AS instrument_name, u.name AS requester_name, iac.approver_role "
+        "FROM instrument_approval_config iac "
+        "JOIN sample_requests sr ON sr.instrument_id = iac.instrument_id "
+        "JOIN instruments i ON i.id = sr.instrument_id "
+        "JOIN users u ON u.id = sr.requester_id "
+        "WHERE iac.approver_role = ? AND sr.status IN ('submitted','under_review') "
+        "ORDER BY sr.created_at DESC",
+        (user["role"],),
+    )
+    # Own requests that are active
+    own_requests = query_all(
+        "SELECT sr.id, sr.request_no, sr.status, sr.created_at, "
+        "i.name AS instrument_name "
+        "FROM sample_requests sr "
+        "JOIN instruments i ON i.id = sr.instrument_id "
+        "WHERE sr.requester_id = ? AND sr.status NOT IN ('completed','rejected','cancelled') "
+        "ORDER BY sr.created_at DESC",
+        (user["id"],),
+    )
+    all_ids = [r["id"] for r in pending_approval] + [r["id"] for r in own_requests]
+    total = len(all_ids)
+    idx = max(0, min(idx, total - 1)) if total else 0
+    current_request = None
+    if total:
+        rid = all_ids[idx]
+        current_request = query_one(
+            "SELECT sr.*, i.name AS instrument_name, u.name AS requester_name, "
+            "op.name AS operator_name "
+            "FROM sample_requests sr "
+            "JOIN instruments i ON i.id = sr.instrument_id "
+            "JOIN users u ON u.id = sr.requester_id "
+            "LEFT JOIN users op ON op.id = sr.operator_id "
+            "WHERE sr.id = ?",
+            (rid,),
+        )
+    return render_template(
+        "pending.html",
+        current_request=current_request,
+        current_idx=idx,
+        total=total,
+        all_ids=all_ids,
+        pending_approval=pending_approval,
+        own_requests=own_requests,
+    )
+
+
+@app.route("/admin/budgets")
+@login_required
+def admin_budgets():
+    """Budget management page (stub — renders finance template with budget focus)."""
+    user = current_user()
+    if user["role"] not in ("finance_admin", "site_admin", "super_admin"):
+        abort(403)
+    return redirect(url_for("index"))
+
+
 @app.route("/schedule")
 @login_required
 def schedule():
@@ -6901,52 +6891,6 @@ def safe_compile_check(file_path: str | Path | None = None, timeout: int | None 
     except Exception as exc:
         elapsed = (datetime.utcnow() - start).total_seconds()
         return {"ok": False, "elapsed": round(elapsed, 3), "error": str(exc)}
-
-
-def safe_startup_probe(port: int = 5055, timeout: int | None = None) -> dict:
-    """Start a Flask test server and verify it responds within timeout.
-
-    The server subprocess is always killed after the probe, whether it
-    succeeds or not. This is a non-destructive health check.
-
-    Returns {"ok": bool, "elapsed": float, "error": str | None}.
-    """
-    import urllib.request
-    import urllib.error
-    timeout = timeout or STARTUP_TIMEOUT_SECONDS
-    env = os.environ.copy()
-    env["FLASK_RUN_PORT"] = str(port)
-    env["WERKZEUG_RUN_MAIN"] = "true"  # suppress reloader
-    proc = subprocess.Popen(
-        [sys.executable, str(Path(__file__).resolve())],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    start = datetime.utcnow()
-    url = f"http://127.0.0.1:{port}/"
-    last_error = None
-    try:
-        deadline = start + timedelta(seconds=timeout)
-        import time
-        while datetime.utcnow() < deadline:
-            try:
-                resp = urllib.request.urlopen(url, timeout=2)
-                elapsed = (datetime.utcnow() - start).total_seconds()
-                resp.close()
-                return {"ok": True, "elapsed": round(elapsed, 3), "error": None}
-            except (urllib.error.URLError, ConnectionRefusedError, OSError) as exc:
-                last_error = str(exc)
-                time.sleep(0.5)
-        elapsed = (datetime.utcnow() - start).total_seconds()
-        return {
-            "ok": False,
-            "elapsed": round(elapsed, 3),
-            "error": f"STARTUP TIMEOUT: server did not respond within {timeout}s — {last_error}",
-        }
-    finally:
-        proc.kill()
-        proc.wait()
 
 
 @app.route("/api/health-check")

@@ -79,11 +79,9 @@ def test_key_functions_present():
     content = APP_PATH.read_text()
     required = [
         "def safe_compile_check",
-        "def safe_startup_probe",
         "def init_db",
         "class StreamQuery",
         "def request_stream",
-        "def rate_limit",
         "def unread_notification_count",
         "def queue_email_notification",
         "def approval_pill_chain",
@@ -91,6 +89,7 @@ def test_key_functions_present():
         "def instrument_utilization_summary",
         "def turnaround_percentiles",
         "def audit_trail_search",
+        "def pending_review",
         "COMPILE_TIMEOUT_SECONDS",
     ]
     missing = [fn for fn in required if fn not in content]

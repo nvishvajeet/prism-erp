@@ -6,8 +6,11 @@ import math
 import mimetypes
 import os
 import random
+import signal
 import smtplib
 import sqlite3
+import subprocess
+import sys
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
@@ -6825,6 +6828,135 @@ def api_db_backup():
     return {"ok": True, "filename": backup_name}
 
 
+# ---------------------------------------------------------------------------
+#  Compile & Health Safeguards
+# ---------------------------------------------------------------------------
+
+# Threshold: if a syntax check or startup takes longer than this, kill it.
+COMPILE_TIMEOUT_SECONDS = 10
+STARTUP_TIMEOUT_SECONDS = 30
+
+
+def safe_compile_check(file_path: str | Path | None = None, timeout: int | None = None) -> dict:
+    """Run py_compile on the given file with a hard timeout.
+
+    Returns {"ok": bool, "elapsed": float, "error": str | None}.
+    If the compile doesn't finish within `timeout` seconds the subprocess
+    is killed and the result reports a timeout error.
+    """
+    target = str(file_path or Path(__file__).resolve())
+    timeout = timeout or COMPILE_TIMEOUT_SECONDS
+    start = datetime.utcnow()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "py_compile", target],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        if result.returncode == 0:
+            return {"ok": True, "elapsed": round(elapsed, 3), "error": None}
+        return {"ok": False, "elapsed": round(elapsed, 3), "error": result.stderr.strip()}
+    except subprocess.TimeoutExpired:
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        return {
+            "ok": False,
+            "elapsed": round(elapsed, 3),
+            "error": f"COMPILE TIMEOUT: exceeded {timeout}s threshold — killed",
+        }
+    except Exception as exc:
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        return {"ok": False, "elapsed": round(elapsed, 3), "error": str(exc)}
+
+
+def safe_startup_probe(port: int = 5055, timeout: int | None = None) -> dict:
+    """Start a Flask test server and verify it responds within timeout.
+
+    The server subprocess is always killed after the probe, whether it
+    succeeds or not. This is a non-destructive health check.
+
+    Returns {"ok": bool, "elapsed": float, "error": str | None}.
+    """
+    import urllib.request
+    import urllib.error
+    timeout = timeout or STARTUP_TIMEOUT_SECONDS
+    env = os.environ.copy()
+    env["FLASK_RUN_PORT"] = str(port)
+    env["WERKZEUG_RUN_MAIN"] = "true"  # suppress reloader
+    proc = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve())],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    start = datetime.utcnow()
+    url = f"http://127.0.0.1:{port}/"
+    last_error = None
+    try:
+        deadline = start + timedelta(seconds=timeout)
+        import time
+        while datetime.utcnow() < deadline:
+            try:
+                resp = urllib.request.urlopen(url, timeout=2)
+                elapsed = (datetime.utcnow() - start).total_seconds()
+                resp.close()
+                return {"ok": True, "elapsed": round(elapsed, 3), "error": None}
+            except (urllib.error.URLError, ConnectionRefusedError, OSError) as exc:
+                last_error = str(exc)
+                time.sleep(0.5)
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        return {
+            "ok": False,
+            "elapsed": round(elapsed, 3),
+            "error": f"STARTUP TIMEOUT: server did not respond within {timeout}s — {last_error}",
+        }
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+@app.route("/api/health-check")
+def api_health_check():
+    """Quick health endpoint — returns compile check + basic DB probe."""
+    compile_result = safe_compile_check()
+    try:
+        db_row = query_one("SELECT COUNT(*) AS c FROM users")
+        db_ok = db_row is not None
+    except Exception as exc:
+        db_ok = False
+        compile_result["db_error"] = str(exc)
+    return {
+        "status": "healthy" if compile_result["ok"] and db_ok else "degraded",
+        "compile": compile_result,
+        "db_ok": db_ok,
+        "app_lines": sum(1 for _ in open(__file__)),
+        "timestamp": now_iso(),
+    }
+
+
+@app.route("/api/compile-check", methods=["POST"])
+@login_required
+def api_compile_check():
+    """Admin: run compile check with timeout safeguard."""
+    user = current_user()
+    if user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    timeout = min(int(request.form.get("timeout", COMPILE_TIMEOUT_SECONDS)), 30)
+    result = safe_compile_check(timeout=timeout)
+    log_action(user["id"], "system", 0, "compile_check", result)
+    return result
+
+
 if __name__ == "__main__":
+    # Pre-flight compile check with safeguard before accepting traffic
+    print(f"[SAFEGUARD] Running pre-flight compile check (timeout: {COMPILE_TIMEOUT_SECONDS}s)...")
+    check = safe_compile_check()
+    if check["ok"]:
+        print(f"[SAFEGUARD] Compile OK in {check['elapsed']}s — starting server")
+    else:
+        print(f"[SAFEGUARD] COMPILE FAILED in {check['elapsed']}s — {check['error']}")
+        print("[SAFEGUARD] HALTING — refusing to start with broken code")
+        sys.exit(1)
     init_db()
     app.run(debug=False, port=5055)

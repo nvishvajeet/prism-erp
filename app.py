@@ -3511,7 +3511,11 @@ def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "admin@lab.local"
+    # V is the default role-visibility string used by data-vis attributes.
+    # Templates may override this with {% set V = "..." %} for narrower scope.
+    V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     return {
+        "V": V,
         "current_user": user,
         "access_profile_user": access_profile,
         "support_admin_email": support_admin_email,
@@ -5266,7 +5270,7 @@ def pending_review(idx=0):
             "FROM sample_requests sr "
             "JOIN instruments i ON i.id = sr.instrument_id "
             "JOIN users u ON u.id = sr.requester_id "
-            "LEFT JOIN users op ON op.id = sr.operator_id "
+            "LEFT JOIN users op ON op.id = sr.assigned_operator_id "
             "WHERE sr.id = ?",
             (rid,),
         )
@@ -5842,14 +5846,38 @@ def instrument_config(instrument_id: int):
             flash("Approval step removed.", "success")
             return redirect(url_for("instrument_config", instrument_id=instrument_id))
 
-    eligible_approvers = query_all(
-        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('super_admin', 'site_admin', 'operator', 'professor') ORDER BY name",
+    # Compute variables required by instrument_config.html
+    intake_mode = instrument_intake_mode(instrument)
+    can_edit = is_owner(user) or user["role"] in {"super_admin", "site_admin", "instrument_admin"}
+    operator_candidates = query_all(
+        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name",
     )
+    faculty_candidates = query_all(
+        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('faculty_in_charge', 'professor_approver', 'site_admin', 'super_admin') ORDER BY name",
+    )
+    approval_role_candidates = query_all(
+        "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name",
+    )
+    selected_operator_ids = {
+        row["user_id"] for row in query_all(
+            "SELECT user_id FROM instrument_operators WHERE instrument_id = ?", (instrument_id,))
+    }
+    selected_faculty_ids = {
+        row["user_id"] for row in query_all(
+            "SELECT user_id FROM instrument_faculty_admins WHERE instrument_id = ?", (instrument_id,))
+    }
     return render_template(
         "instrument_config.html",
         instrument=instrument,
         approval_chain=approval_chain,
-        eligible_approvers=eligible_approvers,
+        approval_config=approval_chain,  # template uses both names
+        intake_mode=intake_mode,
+        can_edit_assignments=can_edit,
+        operator_candidates=operator_candidates,
+        faculty_candidates=faculty_candidates,
+        approval_role_candidates=approval_role_candidates,
+        selected_operator_ids=selected_operator_ids,
+        selected_faculty_ids=selected_faculty_ids,
     )
 
 

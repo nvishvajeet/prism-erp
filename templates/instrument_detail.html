@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, empty_state with context %}
 {% from "_request_macros.html" import request_identity, requester_block, operator_block, status_block, meta_link with context %}
 {% block hover_back %}<a href="{{ url_for('instruments') }}" class="hover-back-btn" title="Back to Instruments">←</a>{% endblock %}
 {% block content %}
@@ -15,8 +15,7 @@
     </span>
   </div>
   <div class="inst-detail-header-actions" data-vis="{{ V }}">
-    <a class="btn btn-primary" href="{{ url_for('new_request', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Create New Request</a>
-    <a class="btn-open-queue" href="{{ url_for('schedule', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open Queue</a>
+    <a class="btn btn-primary" href="{{ url_for('new_request', instrument_id=instrument['id']) }}" data-vis="{{ V }}">New Request</a>
   </div>
 </div>
 
@@ -114,7 +113,7 @@
               <input type="hidden" name="request_id" value="{{ row['id'] }}">
               <input type="hidden" name="instrument_id" value="{{ instrument['id'] }}">
               <input type="hidden" name="back" value="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">
-              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept</button>
+              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept Sample</button>
             </form>
             {% endif %}
             {% if row["status"] not in ["completed","rejected","submitted"] %}
@@ -129,14 +128,14 @@
                 <option value="{{ op['id'] }}" {% if row['assigned_operator_id'] == op['id'] %}selected{% endif %}>{{ op["name"] }}</option>
                 {% endfor %}
               </select>
-              <button type="submit" class="small-button" data-vis="{{ V }}">OK</button>
+              <button type="submit" class="small-button" data-vis="{{ V }}">Assign</button>
             </form>
             {% endif %}
             </div>
           </td>
         </tr>
         {% else %}
-        <tr data-bucket="all" data-status="" data-vis="{{ V }}"><td colspan="4" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">No jobs.</span></td></tr>
+        <tr data-bucket="all" data-status="" data-vis="{{ V }}"><td colspan="4" data-vis="{{ V }}">{{ empty_state("No jobs in queue", "Create a request to get started.", "New Request", url_for('new_request', instrument_id=instrument['id'])) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

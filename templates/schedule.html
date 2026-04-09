@@ -145,7 +145,7 @@
               <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
               <input type="hidden" name="date_from" value="{{ filters.date_from }}">
               <input type="hidden" name="date_to" value="{{ filters.date_to }}">
-              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept</button>
+              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept Sample</button>
             </form>
             {% endif %}
             {% if row["status"] not in ["completed", "rejected", "submitted"] %}
@@ -173,7 +173,7 @@
           {% endif %}
         </tr>
         {% else %}
-        <tr data-vis="{{ V }}"><td colspan="{{ 7 if can_operate_queue else 6 }}" data-vis="{{ V }}">No jobs found.</td></tr>
+        <tr data-vis="{{ V }}"><td colspan="{{ 7 if can_operate_queue else 6 }}" data-vis="{{ V }}"><div class="empty-state" data-vis="{{ V }}"><p class="empty-state-message" data-vis="{{ V }}">No jobs found</p><p class="empty-state-hint" data-vis="{{ V }}">Try adjusting filters or submit a new request.</p></div></td></tr>
         {% endfor %}
       </tbody>
     </table>

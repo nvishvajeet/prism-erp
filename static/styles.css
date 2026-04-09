@@ -1148,13 +1148,13 @@ a:hover {
 }
 
 .new-request-form {
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .new-request-inline-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.8rem;
+  gap: 1.25rem;
 }
 
 .new-request-submit-row {
@@ -3593,11 +3593,45 @@ code {
 }
 
 .secondary-action-form {
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
 }
 
 .top-gap {
-  margin-top: 0.7rem;
+  margin-top: 1rem;
+}
+
+/* ── Empty state placeholder ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.empty-state-message {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.empty-state-hint {
+  font-size: var(--font-sm);
+  color: var(--muted);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.empty-state-action {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 0.25rem;
 }
 
 :root[data-theme="dark"] .conversation-bubble.from-user {
@@ -3810,8 +3844,8 @@ code {
 
 /* ── Form section (generic) ── */
 .form-section {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -5771,10 +5805,6 @@ img.instrument-photo:not([src]) {
 .compact-admin-tools[open] summary {
   color: var(--ink);
   margin-bottom: 0.5rem;
-}
-
-.top-gap {
-  margin-top: 0.75rem;
 }
 
 /* Danger zone styling */

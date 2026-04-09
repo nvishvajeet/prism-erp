@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
-{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, chart_bar with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, chart_bar, empty_state with context %}
 {% block content %}
 
 {% if dashboard_metrics %}
@@ -85,7 +85,7 @@
               <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
                 <input type="hidden" name="action" value="mark_received">
                 <input type="hidden" name="request_id" value="{{ row['id'] }}">
-                <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept</button>
+                <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept Sample</button>
               </form>
               {% endif %}
             </div>
@@ -105,7 +105,6 @@
       <div class="instrument-card" data-vis="{{ V }}">
         <div class="instrument-card-head" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
-          <a class="btn-open-queue-sm" href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">Open Queue</a>
         </div>
         {% if queue.rows %}
         <table class="instrument-queue-table" data-vis="{{ V }}">
@@ -128,7 +127,7 @@
           </tbody>
         </table>
         {% else %}
-        <p class="muted-note" data-vis="{{ V }}">No jobs queued.</p>
+        {{ empty_state("No jobs queued", "Requests will appear here once submitted.") }}
         {% endif %}
       </div>
       {% endfor %}

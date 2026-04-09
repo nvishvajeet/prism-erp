@@ -113,6 +113,18 @@
 </form>
 {%- endmacro %}
 
+{#
+  empty_state(message, hint='', action_label='', action_href='')
+  Centered empty-state placeholder — use instead of bare "No data" strings.
+#}
+{% macro empty_state(message, hint='', action_label='', action_href='') -%}
+<div class="empty-state" data-vis="{{ V }}">
+  <p class="empty-state-message" data-vis="{{ V }}">{{ message }}</p>
+  {% if hint %}<p class="empty-state-hint" data-vis="{{ V }}">{{ hint }}</p>{% endif %}
+  {% if action_label and action_href %}<a class="empty-state-action" href="{{ action_href }}" data-vis="{{ V }}">{{ action_label }} →</a>{% endif %}
+</div>
+{%- endmacro %}
+
 {% macro card_heading(kicker, title, hint='') -%}
 <div class="section-head" data-vis="{{ V }}">
   <div data-vis="{{ V }}">

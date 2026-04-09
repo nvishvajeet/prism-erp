@@ -82,13 +82,11 @@
           <div class="people-list compact-people-list" data-vis="{{ V }}">
             {% for person in instrument["operators"].split(',') %}
             {% set name = person.strip() %}
-            {% if name %}
-            <div data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
-            {% endif %}
+            {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
             {% endfor %}
           </div>
           {% else %}
-          <span data-vis="{{ V }}">-</span>
+          <span class="hint" data-vis="{{ V }}">—</span>
           {% endif %}
         </td>
         <td data-vis="{{ V }}">
@@ -96,13 +94,11 @@
           <div class="people-list compact-people-list" data-vis="{{ V }}">
             {% for person in instrument["faculty_in_charge"].split(',') %}
             {% set name = person.strip() %}
-            {% if name %}
-            <div data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
-            {% endif %}
+            {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
             {% endfor %}
           </div>
           {% else %}
-          <span data-vis="{{ V }}">-</span>
+          <span class="hint" data-vis="{{ V }}">—</span>
           {% endif %}
         </td>
         <td class="location-stacked" data-vis="{{ V }}">
@@ -110,11 +106,9 @@
         </td>
         <td data-vis="{{ V }}">
           {% if visible_links[instrument['id']] %}
-          <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Queue</a><br>
-          <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a><br>
-          <a class="text-link" href="{{ url_for('instrument_history', instrument_id=instrument['id']) }}" data-vis="{{ V }}">History</a>
+          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
           {% else %}
-          <span class="hint" data-vis="{{ V }}">Restricted</span>
+          <span class="hint" data-vis="{{ V }}">—</span>
           {% endif %}
         </td>
       </tr>
@@ -190,7 +184,7 @@
         </td>
         <td data-vis="{{ V }}">
           {% if visible_links[instrument['id']] %}
-          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open</a>
+          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
           {% else %}
           <span class="hint" data-vis="{{ V }}">Restricted</span>
           {% endif %}

@@ -251,7 +251,7 @@
         <label data-vis="{{ V }}">Dropoff Note
           <textarea name="sample_dropoff_note" rows="3" placeholder="Where was the sample left, any handling note, hazardous note, etc." data-vis="{{ V }}"></textarea>
         </label>
-        <button type="submit" data-vis="{{ V }}">Mark Sample Submitted</button>
+        <button type="submit" data-vis="{{ V }}">Submit Sample</button>
       </form>
       {% elif card_policy.actions.finish_fast %}
       <form method="post" enctype="multipart/form-data" class="action-form fast-finish-form top-gap" data-vis="{{ V }}">
@@ -263,7 +263,7 @@
         <label data-vis="{{ V }}">Attach File
           <input type="file" name="resolution_attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt" data-vis="{{ V }}">
         </label>
-        <button type="submit" class="primary-action" data-vis="{{ V }}">Upload And Mark Done</button>
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Upload Results</button>
       </form>
       {% elif sample_request["status"] == "completed" %}
       <div class="done-box compact-box" data-vis="{{ V }}">
@@ -289,14 +289,14 @@
             <label data-vis="{{ V }}">Routing Note
               <input type="text" name="remarks" placeholder="Optional note if this was routed wrong" data-vis="{{ V }}">
             </label>
-            <button type="submit" data-vis="{{ V }}">Assign Job</button>
+            <button type="submit" data-vis="{{ V }}">Assign to Operator</button>
           </form>
           {% endif %}
           {% if card_policy.actions.mark_received %}
           <form method="post" class="action-form secondary-action-form" data-vis="{{ V }}">
             <input type="hidden" name="action" value="mark_sample_received">
             <input type="hidden" name="remarks" value="">
-            <button type="submit" data-vis="{{ V }}">Mark Sample Received</button>
+            <button type="submit" data-vis="{{ V }}">Confirm Receipt</button>
           </form>
           {% endif %}
           {% if card_policy.actions.update_status %}

@@ -3085,6 +3085,16 @@ def init_db() -> None:
                 FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
                 FOREIGN KEY (approver_user_id) REFERENCES users(id)
             );
+            CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                priority TEXT NOT NULL DEFAULT 'info',
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            );
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3512,6 +3522,18 @@ def index():
         dashboard_metrics=dashboard_metrics,
         upcoming_downtime=upcoming_downtime_all,
     )
+
+
+@app.route("/api/health-check")
+def api_health_check():
+    """Lightweight healthcheck endpoint — no auth required."""
+    db = get_db()
+    try:
+        db.execute("SELECT 1")
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return jsonify({"ok": db_ok, "status": "healthy" if db_ok else "degraded"})
 
 
 @app.route("/sitemap")

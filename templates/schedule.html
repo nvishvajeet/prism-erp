@@ -76,13 +76,13 @@
       <colgroup>
         <col class="col-request"><col class="col-stage"><col class="col-instrument">
         <col class="col-requester"><col class="col-time"><col class="col-operator">
-        <col class="col-files"><col class="col-action">
+        <col class="col-files">{% if can_operate_queue %}<col class="col-action">{% endif %}
       </colgroup>
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Stage</th><th data-vis="{{ V }}">Instrument</th>
           <th data-vis="{{ V }}">Requester</th><th data-vis="{{ V }}">Time</th><th data-vis="{{ V }}">Operator</th>
-          <th data-vis="{{ V }}">Files</th><th data-vis="{{ V }}">Action</th>
+          <th data-vis="{{ V }}">Files</th>{% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}
         </tr>
       </thead>
       <tbody id="centralQueueBody" data-vis="{{ V }}">
@@ -136,6 +136,7 @@
             {% endif %}
           </td>
           <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map) }}</td>
+          {% if can_operate_queue %}
           <td data-vis="{{ V }}">
             <div class="queue-action-stack" data-vis="{{ V }}">
             {% if row["status"] == "sample_submitted" %}
@@ -172,9 +173,10 @@
             {% endif %}
             </div>
           </td>
+          {% endif %}
         </tr>
         {% else %}
-        <tr data-vis="{{ V }}"><td colspan="8" data-vis="{{ V }}">No jobs found.</td></tr>
+        <tr data-vis="{{ V }}"><td colspan="{{ 8 if can_operate_queue else 7 }}" data-vis="{{ V }}">No jobs found.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -4890,6 +4890,10 @@ def schedule():
     operators = query_all("SELECT id, name FROM users WHERE role IN ('operator', 'instrument_admin', 'super_admin') ORDER BY name")
     requesters = query_all("SELECT id, name FROM users WHERE role = 'requester' ORDER BY name")
     attachment_map = attachments_by_request_ids([row["id"] for row in rows_all])
+    profile = user_access_profile(user)
+    can_operate_queue = bool(
+        {"reassign", "mark_received"} & set(profile["card_action_fields"])
+    )
     return render_template(
         "schedule.html",
         queue_rows=rows_all,
@@ -4912,6 +4916,7 @@ def schedule():
         attachment_map=attachment_map,
         queue_back_url=queue_back_url,
         queue_source_label=queue_source_label,
+        can_operate_queue=can_operate_queue,
     )
 
 

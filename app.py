@@ -4481,11 +4481,22 @@ def new_request():
         else:
             flash(f"Request {request_no} submitted for {requester_row['name']}. The lab is not accepting jobs yet, so it has been queued. Sample number {sample_ref} and printable slip generated.", "success")
         return redirect(url_for("request_detail", request_id=request_id))
+    # Support pre-fill from duplicate_request route
+    prefill = {
+        "instrument_id": request.args.get("instrument_id", ""),
+        "title": request.args.get("title", ""),
+        "sample_name": request.args.get("sample_name", ""),
+        "sample_count": request.args.get("sample_count", ""),
+        "description": request.args.get("description", ""),
+        "sample_origin": request.args.get("sample_origin", ""),
+        "priority": request.args.get("priority", ""),
+    }
     return render_template(
         "new_request.html",
         instruments=instruments,
         can_submit_for_others=can_submit_for_others,
         requester_candidates=requester_candidates,
+        prefill=prefill,
     )
 
 
@@ -5171,6 +5182,29 @@ def request_detail(request_id: int):
     )
 
 
+@app.route("/requests/<int:request_id>/duplicate")
+@login_required
+def duplicate_request(request_id: int):
+    """Create a new request pre-filled from an existing one."""
+    user = current_user()
+    sr = query_one("SELECT * FROM sample_requests WHERE id = ?", (request_id,))
+    if sr is None:
+        abort(404)
+    if not can_view_request(user, sr):
+        abort(403)
+    # Redirect to new_request with pre-fill query params
+    params = {
+        "instrument_id": sr["instrument_id"],
+        "title": f"Copy of {sr['title']}",
+        "sample_name": sr["sample_name"],
+        "sample_count": sr["sample_count"],
+        "description": sr.get("description", ""),
+        "sample_origin": sr.get("sample_origin", "internal"),
+        "priority": sr.get("priority", "normal"),
+    }
+    return redirect(url_for("new_request", **params))
+
+
 @app.route("/schedule")
 @login_required
 def schedule():
@@ -5528,6 +5562,33 @@ def my_history():
 @login_required
 def my_profile():
     return redirect(url_for("user_profile", user_id=current_user()["id"]))
+
+
+@app.route("/profile/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    user = current_user()
+    if request.method == "POST":
+        current_pw = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+        if not check_password_hash(user["password_hash"], current_pw):
+            flash("Current password is incorrect.", "error")
+            return redirect(url_for("change_password"))
+        if len(new_pw) < 8:
+            flash("New password must be at least 8 characters.", "error")
+            return redirect(url_for("change_password"))
+        if new_pw != confirm_pw:
+            flash("New passwords do not match.", "error")
+            return redirect(url_for("change_password"))
+        execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (generate_password_hash(new_pw, method="pbkdf2:sha256"), user["id"]),
+        )
+        log_action(user["id"], "user", user["id"], "password_changed", {})
+        flash("Password changed successfully.", "success")
+        return redirect(url_for("my_profile"))
+    return render_template("change_password.html", title="Change Password")
 
 
 @app.route("/history/processed")

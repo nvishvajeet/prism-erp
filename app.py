@@ -3414,6 +3414,9 @@ def index():
             row for row in fifo_rows if row["status"] == "sample_submitted"
         ][:5]
     dashboard_metrics = dashboard_analytics(user) if can_access_stats(user) else None
+    operators = query_all(
+        "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
+    ) if has_instrument_area_access(user) else []
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -3423,6 +3426,7 @@ def index():
         instruments=instruments,
         instrument_fifo_queue=instrument_fifo_queue,
         pending_receipt_lookup_rows=pending_receipt_lookup_rows,
+        operators=operators,
         role_switches=DEMO_ROLE_SWITCHES,
         dashboard_metrics=dashboard_metrics,
     )

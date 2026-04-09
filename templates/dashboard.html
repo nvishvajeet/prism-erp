@@ -69,17 +69,38 @@
     <label class="quick-intake-search" data-vis="{{ V }}">
       <input type="text" id="quickIntakeSearch" placeholder="Type job number or sample number" data-vis="{{ V }}">
     </label>
-    {% call paginated_pane('quickIntake', page_size=8, max_height='20rem') %}
+    {% call paginated_pane('quickIntake', page_size=3, max_height='none') %}
     <table class="quick-intake-table" data-vis="{{ V }}">
       <tbody id="quickIntakeBody" data-vis="{{ V }}">
       {% for row in pending_receipt_lookup_rows %}
       <tr data-pane-item data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}" data-request-id="{{ row['id'] }}" data-vis="{{ V }}">
         <td data-vis="{{ V }}">
-          <button type="button" class="quick-intake-button" data-quick-receive="{{ url_for('quick_receive_request', request_id=row['id']) }}" data-vis="{{ V }}">
-            <strong data-vis="{{ V }}">{{ row["request_no"] }}</strong>
-            <span data-vis="{{ V }}">{{ row["sample_name"] }}</span>
-            <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
-          </button>
+          <div class="quick-intake-block" data-vis="{{ V }}">
+            <div class="quick-intake-content" data-vis="{{ V }}">
+              <strong data-vis="{{ V }}">{{ row["request_no"] }}</strong>
+              <span data-vis="{{ V }}">{{ row["sample_name"] }}</span>
+              <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
+            </div>
+            <div class="quick-intake-actions" data-vis="{{ V }}">
+              <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" style="display: flex; gap: 0.4rem; align-items: center;" data-vis="{{ V }}">
+                <input type="hidden" name="action" value="quick_assign">
+                <input type="hidden" name="request_id" value="{{ row['id'] }}">
+                <select name="assigned_operator_id" data-vis="{{ V }}">
+                  <option value="" data-vis="{{ V }}">Assign</option>
+                  {% for operator in operators %}
+                  <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %} data-vis="{{ V }}">{{ operator["name"] }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+              {% if row["status"] == "sample_submitted" %}
+              <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
+                <input type="hidden" name="action" value="mark_received">
+                <input type="hidden" name="request_id" value="{{ row['id'] }}">
+                <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept</button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -97,35 +118,32 @@
           <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
           <a class="btn-open-queue-sm" href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">Open Queue</a>
         </div>
-        {% call paginated_pane('instCard' ~ queue.instrument_id, page_size=5, max_height='none') %}
-          {% if queue.rows %}
-          <table data-vis="{{ V }}">
-            <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">#</th><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>
-            <tbody id="instCard{{ queue.instrument_id }}Body" data-vis="{{ V }}">
-            {% for row in queue.rows %}
-              <tr data-vis="{{ V }}" data-pane-item>
-                <td data-vis="{{ V }}">{{ loop.index }}</td>
-                <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
-                <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
-                <td data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["sample_received_at"] or row["created_at"]) }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-          {% else %}
-          <p class="muted-note" data-vis="{{ V }}">No jobs queued.</p>
+        {% if queue.rows %}
+        <table class="instrument-queue-table" data-vis="{{ V }}">
+          <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>
+          <tbody data-vis="{{ V }}">
+          {% for row in queue.rows[:5] %}
+            <tr data-vis="{{ V }}">
+              <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
+              <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
+              <td data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["sample_received_at"] or row["created_at"]) }}</td>
+            </tr>
+          {% endfor %}
+          {% if queue.rows|length > 5 %}
+            <tr class="overflow-indicator" data-vis="{{ V }}">
+              <td colspan="3" data-vis="{{ V }}">
+                <a href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">{{ queue.rows|length - 5 }} more →</a>
+              </td>
+            </tr>
           {% endif %}
-        {% endcall %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="muted-note" data-vis="{{ V }}">No jobs queued.</p>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
-    {% if instrument_fifo_queue|length > 3 %}
-    <div class="carousel-controls" data-vis="{{ V }}">
-      <button class="carousel-btn" id="carouselPrev" aria-label="Previous" data-vis="{{ V }}">&#8592;</button>
-      <span class="carousel-page-indicator" id="carouselIndicator" data-vis="{{ V }}"></span>
-      <button class="carousel-btn" id="carouselNext" aria-label="Next" data-vis="{{ V }}">&#8594;</button>
-    </div>
-    {% endif %}
   </div>
 </section>
 {% endif %}
@@ -140,32 +158,6 @@
 </section>
 {% endif %}
 
-{% if has_instrument_area_access_user %}
-<script>
-  (function () {
-    var carousel = document.getElementById("instrumentCarousel");
-    var prevBtn = document.getElementById("carouselPrev");
-    var nextBtn = document.getElementById("carouselNext");
-    var indicator = document.getElementById("carouselIndicator");
-    if (!carousel) return;
-    var cards = Array.from(carousel.querySelectorAll(".instrument-card"));
-    var perPage = 3;
-    var page = 0;
-    var total = Math.ceil(cards.length / perPage);
-    function render() {
-      cards.forEach(function (card, i) {
-        card.style.display = (i >= page * perPage && i < (page + 1) * perPage) ? "" : "none";
-      });
-      if (indicator) indicator.textContent = total > 1 ? (page + 1) + " / " + total : "";
-      if (prevBtn) prevBtn.disabled = page === 0;
-      if (nextBtn) nextBtn.disabled = page >= total - 1;
-    }
-    if (prevBtn) prevBtn.addEventListener("click", function () { if (page > 0) { page--; render(); } });
-    if (nextBtn) nextBtn.addEventListener("click", function () { if (page < total - 1) { page++; render(); } });
-    render();
-  })();
-</script>
-{% endif %}
 
 {% if has_instrument_area_access_user and pending_receipt_lookup_rows %}
 <script>

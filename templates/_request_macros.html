@@ -67,11 +67,16 @@
 <a class="job-meta-link" href="{{ url_for('request_detail', request_id=row['id']) }}" data-vis="{{ V }}">{{ value if value else fallback }}</a>
 {%- endmacro %}
 
-{% macro attachment_list(row, attachment_map, count_first=False) -%}
+{% macro attachment_list(row, attachment_map, count_first=False, limit=None) -%}
 {% if count_first %}<span data-vis="{{ V }}">{{ row["attachment_count"] }}</span>{% endif %}
 {% if attachment_map.get(row["id"]) %}
-  {% for attachment in attachment_map[row["id"]] %}
+  {% set attachments = attachment_map[row["id"]] %}
+  {% set display_count = limit if limit else attachments|length %}
+  {% for attachment in attachments[-display_count:] %}
   <div data-vis="{{ V }}"><a href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}"><small data-vis="{{ V }}">{{ attachment["original_filename"] }}</small></a></div>
   {% endfor %}
+  {% if limit and attachments|length > limit %}
+  <div data-vis="{{ V }}"><a class="job-meta-link" href="{{ url_for('request_detail', request_id=row['id']) }}" data-vis="{{ V }}"><small data-vis="{{ V }}">+{{ attachments|length - limit }} more</small></a></div>
+  {% endif %}
 {% endif %}
 {%- endmacro %}

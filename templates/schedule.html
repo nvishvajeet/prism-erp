@@ -74,15 +74,15 @@
   {% call paginated_pane('centralQueue', page_size=25, max_height='none', css_class='queue-table-shell') %}
     <table id="centralQueueTable" data-vis="{{ V }}">
       <colgroup>
-        <col class="col-request"><col class="col-stage"><col class="col-instrument">
-        <col class="col-requester"><col class="col-time"><col class="col-operator">
+        <col class="col-request"><col class="col-instrument"><col class="col-status">
+        <col class="col-requester"><col class="col-time">
         <col class="col-files">{% if can_operate_queue %}<col class="col-action">{% endif %}
       </colgroup>
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Stage</th><th data-vis="{{ V }}">Instrument</th>
-          <th data-vis="{{ V }}">Requester</th><th data-vis="{{ V }}">Time</th><th data-vis="{{ V }}">Operator</th>
-          <th data-vis="{{ V }}">Files</th>{% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}
+          <th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Requester</th><th data-vis="{{ V }}">Time</th>
+          <th data-vis="{{ V }}">File</th>{% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}
         </tr>
       </thead>
       <tbody id="centralQueueBody" data-vis="{{ V }}">
@@ -112,8 +112,8 @@
             data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}"
             data-vis="{{ V }}">
           <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
-          <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
           <td data-vis="{{ V }}">{{ instrument_name_link(row) }}</td>
+          <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
           <td data-vis="{{ V }}">{{ requester_block(row, show_originator=False, show_email=False) }}</td>
           <td data-vis="{{ V }}">
             {% if row["status"] == "sample_submitted" %}
@@ -128,14 +128,7 @@
               {{ meta_link(row, format_dt(row["created_at"])) if row["created_at"] else meta_link(row, '-') }}
             {% endif %}
           </td>
-          <td data-vis="{{ V }}">
-            {% if row["status"] == "sample_received" and row["received_by_name"] %}
-              {{ row["received_by_name"] }}
-            {% else %}
-              {{ operator_block(row) }}
-            {% endif %}
-          </td>
-          <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map) }}</td>
+          <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map, limit=3) }}</td>
           {% if can_operate_queue %}
           <td data-vis="{{ V }}">
             <div class="queue-action-stack" data-vis="{{ V }}">
@@ -176,7 +169,7 @@
           {% endif %}
         </tr>
         {% else %}
-        <tr data-vis="{{ V }}"><td colspan="{{ 8 if can_operate_queue else 7 }}" data-vis="{{ V }}">No jobs found.</td></tr>
+        <tr data-vis="{{ V }}"><td colspan="{{ 7 if can_operate_queue else 6 }}" data-vis="{{ V }}">No jobs found.</td></tr>
         {% endfor %}
       </tbody>
     </table>

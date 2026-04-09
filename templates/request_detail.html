@@ -4,6 +4,16 @@
 {% block hover_back %}<a href="{{ url_for('schedule') }}" class="hover-back-btn" title="Back to Queue">←</a>{% endblock %}
 {% block content %}
 <section data-vis="{{ V }}">
+  <div class="breadcrumb-trail" data-vis="{{ V }}">
+    <a class="breadcrumb-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
+    <a class="breadcrumb-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
+    <span class="breadcrumb-current" data-vis="{{ V }}">{{ sample_request["request_id"] }}</span>
+  </div>
+</section>
+
+<section data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
     <div data-vis="{{ V }}"></div>
   {% if back_url %}

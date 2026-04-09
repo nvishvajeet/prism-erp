@@ -20,6 +20,7 @@
         <dl class="detail-grid" data-vis="{{ V }}">
           <dt data-vis="{{ V }}">Name</dt><dd data-vis="{{ V }}">{{ target_user["name"] }}</dd>
           <dt data-vis="{{ V }}">Email</dt><dd data-vis="{{ V }}">{{ target_user["email"] }}</dd>
+          <dt data-vis="{{ V }}">Member Code</dt><dd data-vis="{{ V }}">{{ target_user["member_code"] or "-" }}</dd>
           <dt data-vis="{{ V }}">Role</dt><dd data-vis="{{ V }}">{{ target_user["role"].replace("_", " ").title() }}</dd>
         </dl>
       </section>

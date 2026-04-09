@@ -35,6 +35,36 @@
 </section>
 {%- endmacro %}
 
+{#
+  stat_blob(value, label, href='', tone='', dark=False, sub='')
+  Renders a clickable stat counter blob used across dashboard, stats, and instrument_detail.
+  Tones: wait, active, open, week-jobs, week-samples, month-jobs, month-samples, completed, samples
+  dark=True adds the .dark-stat class for filled counters.
+  sub (optional) renders a sub-note span inside the blob.
+#}
+{% macro stat_blob(value, label, href='#', tone='', dark=False, sub='') -%}
+<a class="stat{% if dark %} dark-stat{% endif %} stat-link{% if tone %} stat-tone-{{ tone }}{% endif %}" href="{{ href }}" data-vis="{{ V }}">
+  <span data-vis="{{ V }}">{{ value }}</span><small data-vis="{{ V }}">{{ label }}</small>
+  {% if sub %}<span class="muted-note" data-vis="{{ V }}">{{ sub }}</span>{% endif %}
+</a>
+{%- endmacro %}
+
+{#
+  chart_bar(label, value, width_pct, dark=False)
+  Renders a horizontal bar row used in dashboard weekly/monthly charts.
+#}
+{% macro chart_bar(label, value, width_pct, dark=False) -%}
+<div class="chart-row" data-vis="{{ V }}">
+  <div class="chart-meta" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ label }}</span>
+    <strong data-vis="{{ V }}">{{ value }}</strong>
+  </div>
+  <div class="chart-track" data-vis="{{ V }}">
+    <div class="chart-fill{% if dark %} dark{% endif %}" style="width: {{ width_pct }}%;" data-vis="{{ V }}"></div>
+  </div>
+</div>
+{%- endmacro %}
+
 {% macro card_heading(kicker, title, hint='') -%}
 <div class="section-head" data-vis="{{ V }}">
   <div data-vis="{{ V }}">

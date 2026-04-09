@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
-{% from "_page_macros.html" import card_heading, paginated_pane with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, chart_bar with context %}
 {% block content %}
 
 {% if dashboard_metrics %}
@@ -8,50 +8,30 @@
   <div class="card" data-vis="{{ V }}">
     {{ card_heading("", "This Week") }}
     <section class="stats compact-stats" data-vis="{{ V }}">
-      <a class="stat dark-stat stat-link stat-tone-week-jobs" href="{{ url_for('stats', horizon='weekly') }}" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ dashboard_metrics.this_week_jobs }}</span><small data-vis="{{ V }}">Jobs Done</small></a>
-      <a class="stat dark-stat stat-link stat-tone-week-samples" href="{{ url_for('stats', horizon='weekly') }}" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ dashboard_metrics.this_week_samples }}</span><small data-vis="{{ V }}">Samples Done</small></a>
-      <a class="stat stat-link stat-tone-wait" href="{{ url_for('schedule', bucket='pending') }}" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ dashboard_metrics.pending_this_week }}</span><small data-vis="{{ V }}">Pending</small></a>
+      {{ stat_blob(dashboard_metrics.this_week_jobs, "Jobs Done", url_for('stats', horizon='weekly'), tone='week-jobs', dark=True) }}
+      {{ stat_blob(dashboard_metrics.this_week_samples, "Samples Done", url_for('stats', horizon='weekly'), tone='week-samples', dark=True) }}
+      {{ stat_blob(dashboard_metrics.pending_this_week, "Pending", url_for('schedule', bucket='pending'), tone='wait') }}
       {% if dashboard_metrics.avg_return_hours is not none %}
-      <a class="stat stat-link stat-tone-active" href="{{ url_for('stats') }}" data-vis="{{ V }}">
-        <span data-vis="{{ V }}">
-          {% set h = dashboard_metrics.avg_return_hours %}
-          {% if h < 24 %}{{ "%.1f"|format(h) }}h{% else %}{{ "%.1f"|format(h / 24) }}d{% endif %}
-        </span>
-        <small data-vis="{{ V }}">Avg Return</small>
-      </a>
+      {% set h = dashboard_metrics.avg_return_hours %}
+      {% set avg_display = "%.1f"|format(h) ~ "h" if h < 24 else "%.1f"|format(h / 24) ~ "d" %}
+      {{ stat_blob(avg_display, "Avg Return", url_for('stats'), tone='active') }}
       {% endif %}
     </section>
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in dashboard_metrics.weekly_chart %}
-      <div class="chart-row" data-vis="{{ V }}">
-        <div class="chart-meta" data-vis="{{ V }}">
-          <span data-vis="{{ V }}">{{ format_date(row.label) }}</span>
-          <strong data-vis="{{ V }}">{{ row.value }}</strong>
-        </div>
-        <div class="chart-track" data-vis="{{ V }}">
-          <div class="chart-fill dark" style="width: {{ row.width }}%;" data-vis="{{ V }}"></div>
-        </div>
-      </div>
+      {{ chart_bar(format_date(row.label), row.value, row.width, dark=True) }}
       {% endfor %}
     </div>
   </div>
   <div class="card" data-vis="{{ V }}">
     {{ card_heading("", "This Month") }}
     <section class="stats compact-stats" data-vis="{{ V }}">
-      <a class="stat dark-stat stat-link stat-tone-month-jobs" href="{{ url_for('stats', horizon='monthly') }}" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ dashboard_metrics.this_month_jobs }}</span><small data-vis="{{ V }}">Jobs Done</small></a>
-      <a class="stat dark-stat stat-link stat-tone-month-samples" href="{{ url_for('stats', horizon='monthly') }}" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ dashboard_metrics.this_month_samples }}</span><small data-vis="{{ V }}">Samples Done</small></a>
+      {{ stat_blob(dashboard_metrics.this_month_jobs, "Jobs Done", url_for('stats', horizon='monthly'), tone='month-jobs', dark=True) }}
+      {{ stat_blob(dashboard_metrics.this_month_samples, "Samples Done", url_for('stats', horizon='monthly'), tone='month-samples', dark=True) }}
     </section>
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in dashboard_metrics.monthly_chart %}
-      <div class="chart-row" data-vis="{{ V }}">
-        <div class="chart-meta" data-vis="{{ V }}">
-          <span data-vis="{{ V }}">{{ row.label }}</span>
-          <strong data-vis="{{ V }}">{{ row.value }}</strong>
-        </div>
-        <div class="chart-track" data-vis="{{ V }}">
-          <div class="chart-fill dark" style="width: {{ row.width }}%;" data-vis="{{ V }}"></div>
-        </div>
-      </div>
+      {{ chart_bar(row.label, row.value, row.width, dark=True) }}
       {% endfor %}
     </div>
   </div>

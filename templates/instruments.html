@@ -106,12 +106,7 @@
           {% endif %}
         </td>
         <td class="location-stacked" data-vis="{{ V }}">
-          {% if instrument.get("address_line_1") or instrument.get("address_line_2") %}
-          <div class="location-line" data-vis="{{ V }}">{{ instrument.get("address_line_1", "") }}</div>
-          <div class="location-line" data-vis="{{ V }}">{{ instrument.get("address_line_2", "") }}</div>
-          {% else %}
-          {{ instrument["location"] }}
-          {% endif %}
+          <div class="location-line" data-vis="{{ V }}">{{ instrument["location"] }}</div>
         </td>
         <td data-vis="{{ V }}">
           {% if visible_links[instrument['id']] %}
@@ -191,12 +186,7 @@
           {% endif %}
         </td>
         <td class="location-stacked" data-vis="{{ V }}">
-          {% if instrument.get("address_line_1") or instrument.get("address_line_2") %}
-          <div class="location-line" data-vis="{{ V }}">{{ instrument.get("address_line_1", "") }}</div>
-          <div class="location-line" data-vis="{{ V }}">{{ instrument.get("address_line_2", "") }}</div>
-          {% else %}
-          {{ instrument["location"] }}
-          {% endif %}
+          <div class="location-line" data-vis="{{ V }}">{{ instrument["location"] }}</div>
         </td>
         <td data-vis="{{ V }}">
           {% if visible_links[instrument['id']] %}

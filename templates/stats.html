@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_stream_macros.html" import stream_header with context %}
-{% from "_page_macros.html" import card_heading, paginated_pane with context %}
-{% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
+{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob with context %}
+{# V is injected globally by inject_globals(); no need to redefine #}
 {% set VA = "super_admin site_admin instrument_admin" %}
 {% block content %}
 
@@ -37,18 +37,11 @@
 
 {# ── Live Ops Counters — same .stat blob pattern as dashboard/instrument_detail ── #}
 <section class="grid-auto-stats card" data-vis="{{ V }}">
-  <a class="stat stat-tone-active stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ live_totals.active }}</span><small data-vis="{{ V }}">Active Now</small>
-  </a>
-  <a class="stat stat-tone-wait stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ live_totals.queued }}</span><small data-vis="{{ V }}">In Queue</small>
-  </a>
-  <a class="stat stat-tone-open stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ live_totals.pending }}</span><small data-vis="{{ V }}">Pending</small>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ live_totals.total_open }}</span><small data-vis="{{ V }}">Total Open</small>
-  </a>
+  {{ stat_blob(live_totals.active, "Active Now", url_for('schedule'), tone='active') }}
+  {{ stat_blob(live_totals.queued, "In Queue", url_for('schedule'), tone='wait') }}
+  {{ stat_blob(live_totals.pending, "Pending", url_for('schedule'), tone='open') }}
+  {{ stat_blob(live_totals.total_open, "Total Open", url_for('schedule')) }}
+  {# Week done with comparison sub-note — kept inline for conditional sub markup #}
   <a class="stat dark-stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ stats.summary.this_week_jobs }}</span><small data-vis="{{ V }}">This Week Done</small>
     {% if stats.summary.last_week_jobs is defined %}
@@ -58,15 +51,9 @@
     </span>
     {% endif %}
   </a>
-  <a class="stat dark-stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ stats.summary.this_week_samples }}</span><small data-vis="{{ V }}">Samples Done</small>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ stats.summary.month_to_date_jobs }}</span><small data-vis="{{ V }}">MTD Jobs</small>
-  </a>
-  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
-    <span data-vis="{{ V }}">{{ stats.summary.avg_jobs_per_week }}</span><small data-vis="{{ V }}">Avg/Week</small>
-  </a>
+  {{ stat_blob(stats.summary.this_week_samples, "Samples Done", url_for('schedule'), dark=True) }}
+  {{ stat_blob(stats.summary.month_to_date_jobs, "MTD Jobs", url_for('schedule')) }}
+  {{ stat_blob(stats.summary.avg_jobs_per_week, "Avg/Week", url_for('schedule')) }}
 </section>
 
 {# ── Instrument Status Board ── #}

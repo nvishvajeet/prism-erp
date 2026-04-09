@@ -217,6 +217,35 @@ def execute(sql: str, params: tuple = ()) -> int:
     return cur.lastrowid
 
 
+def generate_member_code(name: str, role: str) -> str:
+    """Generate a member code from name and role.
+    Format: First 2 letters of name (uppercase) + role abbreviation (2 chars) + zero-padded sequential number
+    Role abbreviations: RQ=requester, FA=finance_admin, PA=professor_approver, IA=instrument_admin, OP=operator, SA=site_admin, SU=super_admin
+    Example: "Dr. Shah" as requester -> "SHRQ001"
+    """
+    role_abbreviations = {
+        "requester": "RQ",
+        "finance_admin": "FA",
+        "professor_approver": "PA",
+        "instrument_admin": "IA",
+        "operator": "OP",
+        "site_admin": "SA",
+        "super_admin": "SU",
+    }
+    # Get first 2 letters of name (uppercase)
+    name_prefix = (name.strip()[:2] or "XX").upper()
+    # Get role abbreviation
+    role_abbr = role_abbreviations.get(role, "XX")
+    # Count existing users with same role
+    count = query_one(
+        "SELECT COUNT(*) as cnt FROM users WHERE role = ?",
+        (role,)
+    )
+    seq_num = (count["cnt"] if count else 0) + 1
+    # Format: SHRQ001
+    return f"{name_prefix}{role_abbr}{seq_num:03d}"
+
+
 def log_action(actor_id: int | None, entity_type: str, entity_id: int, action: str, payload: dict) -> None:
     log_action_at(actor_id, entity_type, entity_id, action, payload, now_iso())
 
@@ -2507,6 +2536,21 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment"},
     },
+    "faculty_in_charge": {
+        "can_access_instruments": True,
+        "can_access_schedule": True,
+        "can_access_calendar": True,
+        "can_access_stats": True,
+        "can_manage_members": False,
+        "can_use_role_switcher": False,
+        "can_view_all_requests": False,
+        "can_view_all_instruments": False,
+        "can_view_user_profiles": True,
+        "can_view_finance_stage": False,
+        "can_view_professor_stage": False,
+        "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
+        "card_action_fields": {"reply", "upload_attachment"},
+    },
     "instrument_admin": {
         "can_access_instruments": True,
         "can_access_schedule": True,
@@ -2839,7 +2883,8 @@ def init_db() -> None:
                 role TEXT NOT NULL,
                 invited_by INTEGER,
                 invite_status TEXT NOT NULL DEFAULT 'active',
-                active INTEGER NOT NULL DEFAULT 1
+                active INTEGER NOT NULL DEFAULT 1,
+                member_code TEXT DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS instruments (
@@ -3089,6 +3134,15 @@ def init_db() -> None:
             cur.execute("ALTER TABLE instruments ADD COLUMN accepting_requests INTEGER NOT NULL DEFAULT 1")
         if "soft_accept_enabled" not in instrument_columns:
             cur.execute("ALTER TABLE instruments ADD COLUMN soft_accept_enabled INTEGER NOT NULL DEFAULT 0")
+
+        # Migrate: add member_code column to users if it doesn't exist
+        user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
+        if "member_code" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN member_code TEXT DEFAULT NULL")
+            except:
+                pass  # Column already exists or other issue, skip
+
         db.commit()
     db.close()
     seed_data()
@@ -3252,11 +3306,18 @@ def inject_globals():
     access_profile = user_access_profile(user)
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "admin@lab.local"
     V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
+    # Instruments for nav hover dropdown (only if user has instrument area access)
+    nav_instruments = []
+    if user and access_profile["can_access_instruments"]:
+        nav_instruments = query_all(
+            "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' ORDER BY name"
+        )
     return {
         "V": V,
         "current_user": user,
         "access_profile_user": access_profile,
         "support_admin_email": support_admin_email,
+        "nav_instruments": nav_instruments,
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
@@ -3415,9 +3476,13 @@ def index():
             row for row in fifo_rows if row["status"] == "sample_submitted"
         ][:5]
     dashboard_metrics = dashboard_analytics(user) if can_access_stats(user) else None
+    profile = user_access_profile(user)
+    can_operate_queue = bool(
+        {"reassign", "mark_received"} & set(profile["card_action_fields"])
+    )
     operators = query_all(
         "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
-    ) if has_instrument_area_access(user) else []
+    ) if has_instrument_area_access(user) and can_operate_queue else []
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -3426,8 +3491,9 @@ def index():
         recent_total_pages=recent_total_pages,
         instruments=instruments,
         instrument_fifo_queue=instrument_fifo_queue,
-        pending_receipt_lookup_rows=pending_receipt_lookup_rows,
+        pending_receipt_lookup_rows=pending_receipt_lookup_rows if can_operate_queue else [],
         operators=operators,
+        can_operate_queue=can_operate_queue,
         role_switches=DEMO_ROLE_SWITCHES,
         dashboard_metrics=dashboard_metrics,
     )
@@ -3438,36 +3504,86 @@ def index():
 def sitemap():
     user = current_user()
     access_profile = user_access_profile(user)
-    sections = [
-        {
-            "title": "Core",
-            "links": [
-                {"label": "Home", "href": url_for("index")},
-                {"label": "New Request", "href": url_for("new_request")},
-                {"label": "My History", "href": url_for("schedule")},
-                {"label": "My Profile", "href": url_for("user_profile", user_id=user["id"])},
-            ],
-        }
+    db = get_db()
+
+    # --- Build Apple Settings-style sections ---
+    sections = []
+
+    # Core section — always visible
+    core_items = [
+        {"label": "Home", "hint": "Dashboard and overview", "type": "link", "href": url_for("index")},
+        {"label": "New Request", "hint": "Submit a new sample request", "type": "link", "href": url_for("new_request")},
+        {"label": "My Profile", "hint": "View and manage your account", "type": "link", "href": url_for("user_profile", user_id=user["id"])},
     ]
+    core_info = [
+        {"label": "Logged in as", "type": "text", "value": user["name"]},
+        {"label": "Role", "type": "badge", "value": user["role"].replace("_", " ").title(), "status": "submitted"},
+        {"label": "Email", "type": "text", "value": user["email"]},
+    ]
+    sections.append({
+        "key": "core",
+        "title": "General",
+        "icon": "⚙",
+        "groups": [
+            {"title": "Navigation", "items": core_items},
+            {"title": "Account", "items": core_info},
+        ],
+    })
+
+    # Operations section — if user has instrument/schedule access
     if access_profile["can_access_instruments"] or access_profile["can_access_schedule"]:
-        ops_links = []
+        ops_items = []
         if access_profile["can_access_instruments"]:
-            ops_links.append({"label": "Instruments", "href": url_for("instruments")})
+            instrument_count = db.execute("SELECT COUNT(*) FROM instruments WHERE status = 'active'").fetchone()[0]
+            ops_items.append({"label": "Instruments", "hint": f"{instrument_count} active instruments", "type": "link", "href": url_for("instruments")})
         if access_profile["can_access_schedule"]:
-            ops_links.append({"label": "Queue", "href": url_for("schedule")})
-            ops_links.append({"label": "Processed History", "href": url_for("schedule", bucket="completed")})
-        sections.append({"title": "Operations", "links": ops_links})
+            open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
+            ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
+            ops_items.append({"label": "Completed Jobs", "hint": "View processed history", "type": "link", "href": url_for("schedule", bucket="completed")})
+        sections.append({
+            "key": "operations",
+            "title": "Operations",
+            "icon": "⚡",
+            "groups": [{"title": "Workspace", "items": ops_items}],
+        })
+
+    # Reporting section
     if access_profile["can_access_calendar"] or access_profile["can_access_stats"]:
-        report_links = []
+        report_items = []
         if access_profile["can_access_calendar"]:
-            report_links.append({"label": "Calendar", "href": url_for("calendar")})
+            report_items.append({"label": "Calendar", "hint": "Weekly schedule and downtime", "type": "link", "href": url_for("calendar")})
         if access_profile["can_access_stats"]:
-            report_links.append({"label": "Statistics", "href": url_for("stats")})
-            report_links.append({"label": "Data View", "href": url_for("visualizations")})
-        sections.append({"title": "Reporting", "links": report_links})
+            report_items.append({"label": "Statistics", "hint": "Operations control dashboard", "type": "link", "href": url_for("stats")})
+            report_items.append({"label": "Data Export", "hint": "Generate Excel reports", "type": "link", "href": url_for("visualizations")})
+        sections.append({
+            "key": "reporting",
+            "title": "Reporting",
+            "icon": "📊",
+            "groups": [{"title": "Views", "items": report_items}],
+        })
+
+    # Administration section — admins only
     if access_profile["can_manage_members"]:
-        sections.append({"title": "Administration", "links": [{"label": "Users", "href": url_for("admin_users")}]})
-    return render_template("sitemap.html", sections=sections, title="Site Map")
+        user_count = db.execute("SELECT COUNT(*) FROM users WHERE active = 1").fetchone()[0]
+        invited_count = db.execute("SELECT COUNT(*) FROM users WHERE invite_status = 'invited'").fetchone()[0]
+        admin_items = [
+            {"label": "User Management", "hint": f"{user_count} active, {invited_count} pending invites", "type": "link", "href": url_for("admin_users")},
+        ]
+        system_items = [
+            {"label": "Server Port", "type": "text", "value": "5055"},
+            {"label": "Database", "type": "text", "value": "SQLite (local)"},
+        ]
+        sections.append({
+            "key": "admin",
+            "title": "Administration",
+            "icon": "🔧",
+            "groups": [
+                {"title": "Manage", "items": admin_items},
+                {"title": "System", "items": system_items},
+            ],
+        })
+
+    return render_template("sitemap.html", sections=sections, title="Settings")
 
 
 @app.route("/requests/<int:request_id>/quick-receive", methods=["POST"])
@@ -4036,26 +4152,49 @@ def new_request():
         """
     ) if can_submit_for_others else []
     if request.method == "POST":
-        instrument_id = int(request.form["instrument_id"])
+        # --- Validate required fields gracefully (return 400, not 500) ---
+        instrument_id_raw = request.form.get("instrument_id")
+        if not instrument_id_raw:
+            flash("Please select an instrument.", "error")
+            return redirect(url_for("new_request"))
+        try:
+            instrument_id = int(instrument_id_raw)
+        except (ValueError, TypeError):
+            flash("Invalid instrument selection.", "error")
+            return redirect(url_for("new_request"))
         instrument = query_one("SELECT * FROM instruments WHERE id = ? AND status = 'active'", (instrument_id,))
         if instrument is None:
             flash("Selected instrument is not available.", "error")
             return redirect(url_for("new_request"))
-        title = request.form["title"].strip()
-        sample_name = request.form["sample_name"].strip()
-        sample_count = int(request.form["sample_count"])
+        title = request.form.get("title", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(url_for("new_request"))
+        sample_name = request.form.get("sample_name", "").strip()
+        if not sample_name:
+            flash("Sample name is required.", "error")
+            return redirect(url_for("new_request"))
+        sample_count_raw = request.form.get("sample_count")
+        if not sample_count_raw:
+            flash("Sample count is required.", "error")
+            return redirect(url_for("new_request"))
+        try:
+            sample_count = int(sample_count_raw)
+        except (ValueError, TypeError):
+            flash("Sample count must be a number.", "error")
+            return redirect(url_for("new_request"))
         if sample_count < 0 or sample_count > 99:
             flash("Sample count must be between 0 and 99.", "error")
             return redirect(url_for("new_request"))
-        description = request.form["description"].strip()
-        sample_origin = request.form["sample_origin"]
+        description = request.form.get("description", "").strip()
+        sample_origin = request.form.get("sample_origin", "internal")
         receipt_number = request.form.get("receipt_number", "").strip()
         if not receipt_number:
             receipt_number = generate_receipt_reference(sample_origin)
         amount_due = float(request.form.get("amount_due") or 0)
         amount_paid = float(request.form.get("amount_paid") or 0)
         finance_status = request.form.get("finance_status", "n/a")
-        priority = request.form["priority"]
+        priority = request.form.get("priority", "normal")
         requester_id = user["id"]
         if can_submit_for_others and request.form.get("requester_id"):
             requester_id = int(request.form["requester_id"])
@@ -5227,7 +5366,7 @@ def processed_history():
 @login_required
 def user_profile(user_id: int):
     viewer = current_user()
-    target_user = query_one("SELECT id, name, email, role, invite_status, active FROM users WHERE id = ?", (user_id,))
+    target_user = query_one("SELECT id, name, email, role, invite_status, active, member_code FROM users WHERE id = ?", (user_id,))
     if target_user is None:
         abort(404)
     if not can_view_user_profile(viewer, target_user):
@@ -5918,15 +6057,16 @@ def admin_users():
             if existing_user is not None:
                 flash(f"User {email} already exists.", "error")
             else:
+                member_code = generate_member_code(name, role)
                 execute(
                     """
-                    INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                    INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active, member_code)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
                     """,
-                    (name, email, generate_password_hash(password, method="pbkdf2:sha256"), role, user["id"], invite_status),
+                    (name, email, generate_password_hash(password, method="pbkdf2:sha256"), role, user["id"], invite_status, member_code),
                 )
-                log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role})
-                flash(f"User {email} created.", "success")
+                log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
+                flash(f"User {email} created (Code: {member_code}).", "success")
         elif action == "delete_member":
             member_id = int(request.form["user_id"])
             member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
@@ -5953,7 +6093,7 @@ def admin_users():
             log_action(user["id"], "user", member_id, "member_elevated", {"email": member["email"], "new_role": new_role})
             flash(f"{member['email']} elevated to {new_role.replace('_', ' ')}.", "success")
         return redirect(url_for("admin_users"))
-    rows = query_all("SELECT id, name, email, role, invite_status, active FROM users ORDER BY role, name")
+    rows = query_all("SELECT id, name, email, role, invite_status, active, member_code FROM users ORDER BY role, name")
     owners = [row for row in rows if row["email"].strip().lower() in OWNER_EMAILS]
     members = [row for row in rows if row["role"] == "requester"]
     admins = [row for row in rows if row["role"] != "requester" and row["email"].strip().lower() not in OWNER_EMAILS]

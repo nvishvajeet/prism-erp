@@ -25,7 +25,7 @@
       <div class="userbox" data-vis="{{ V }}">
         <div class="user-meta" data-vis="{{ V }}">
           <strong data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}" data-vis="{{ V }}">{{ current_user["name"] }}</a></strong>
-          <span data-vis="{{ V }}">{{ current_user["role"].replace("_", " ").title() }}</span>
+          <span class="badge badge-role" data-vis="{{ V }}">{{ current_user["role"].replace("_", " ").title() }}</span>
         </div>
         <div class="user-controls" data-vis="{{ V }}">
           <button type="button" id="themeToggle" class="theme-toggle" data-vis="{{ V }}" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle light and dark mode">
@@ -46,12 +46,26 @@
     {% if not access_profile_user.can_access_instruments %}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
-    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Map</a>
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
+    <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% else %}
 
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     {% if access_profile_user.can_access_instruments %}
-    <a class="{% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
+    <div class="nav-dropdown" data-vis="{{ V }}">
+      <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
+      {% if nav_instruments %}
+      <div class="nav-menu" data-vis="{{ V }}">
+        {% for inst in nav_instruments %}
+        <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" data-vis="{{ V }}">
+          <span class="nav-inst-code" data-vis="{{ V }}">{{ inst['code'] }}</span>
+          <span class="nav-inst-name" data-vis="{{ V }}">{{ inst['name'] }}</span>
+          <span class="nav-inst-dot {% if inst['accepting_requests'] %}dot-accepting{% elif inst['soft_accept_enabled'] %}dot-soft{% else %}dot-maintenance{% endif %}" data-vis="{{ V }}"></span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
     {% endif %}
     {% if can_access_schedule_user %}
     <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
@@ -62,7 +76,8 @@
     {% if can_access_stats_user %}
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
-    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Map</a>
+    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
+    <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% endif %}
   </nav>
   {% endif %}
@@ -233,5 +248,37 @@
     })();
   </script>
   <script src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
+  <script>
+    /* ── Keyboard shortcuts ── */
+    document.addEventListener('keydown', function (e) {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      var handled = false;
+      switch (e.key.toUpperCase()) {
+        case 'H':
+          window.location.href = '{{ url_for("index") }}';
+          handled = true;
+          break;
+        case 'Q':
+          var queueLink = document.querySelector('a[href="{{ url_for("schedule") }}"]');
+          if (queueLink) {
+            window.location.href = '{{ url_for("schedule") }}';
+            handled = true;
+          }
+          break;
+        case 'N':
+          var newReqLink = document.querySelector('a[href="{{ url_for("new_request") }}"]');
+          if (newReqLink) {
+            window.location.href = '{{ url_for("new_request") }}';
+            handled = true;
+          }
+          break;
+      }
+
+      if (handled) {
+        e.preventDefault();
+      }
+    });
+  </script>
 </body>
 </html>

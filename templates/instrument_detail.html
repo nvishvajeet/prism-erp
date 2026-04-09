@@ -118,7 +118,7 @@
         <button class="stream-pill stream-pill-done" data-bucket="completed" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Done</button>
       </div>
 
-      {% call paginated_pane('instQueue', page_size=12, max_height='28rem') %}
+      {% call paginated_pane('instQueue', page_size=5, max_height='none') %}
       <table id="instQueueTable" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
         <colgroup>
           <col style="width:30%"><col style="width:22%"><col style="width:20%"><col style="width:28%">

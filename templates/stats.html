@@ -203,7 +203,7 @@
 <div class="grid-two" data-vis="{{ V }}">
   <section class="card" data-vis="{{ V }}">
     {{ card_heading("", "Instrument Performance") }}
-    {% call paginated_pane('statsInstrument', max_height='22rem', page_size=10) %}
+    {% call paginated_pane('statsInstrument', max_height='none', page_size=10) %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Total</th><th data-vis="{{ V }}">Completed</th><th data-vis="{{ V }}">Samples</th></tr></thead>
       <tbody id="statsInstrumentBody" data-vis="{{ V }}">
@@ -223,7 +223,7 @@
   </section>
   <section class="card" data-vis="{{ V }}">
     {{ card_heading("", "Weekly Throughput") }}
-    {% call paginated_pane('statsWeekly', max_height='22rem', page_size=10) %}
+    {% call paginated_pane('statsWeekly', max_height='none', page_size=10) %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Week</th><th data-vis="{{ V }}">Jobs</th><th data-vis="{{ V }}">Samples</th></tr></thead>
       <tbody id="statsWeeklyBody" data-vis="{{ V }}">

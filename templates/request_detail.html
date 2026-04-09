@@ -77,7 +77,7 @@
       {% if card_policy.fields.submitted_documents and submitted_documents %}
       <div class="locked-box" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">Files</strong>
-        {% call paginated_pane('reqFiles', page_size=6, max_height='14rem') %}
+        {% call paginated_pane('reqFiles', page_size=6, max_height='none') %}
         <table class="file-link-table" data-vis="{{ V }}">
           <tbody id="reqFilesBody" data-vis="{{ V }}">
           {% for attachment in submitted_documents %}
@@ -95,7 +95,7 @@
     <div class="card" data-vis="{{ V }}">
       {{ card_heading("", "Events") }}
       {% if card_policy.fields.events %}
-      {% call paginated_pane('reqEvents', page_size=10, max_height='24rem') %}
+      {% call paginated_pane('reqEvents', page_size=10, max_height='none') %}
       <table class="event-stream-table" data-vis="{{ V }}">
         <tbody id="reqEventsBody" data-vis="{{ V }}">
         {% for entry in timeline_entries %}

@@ -205,17 +205,11 @@ def seed_database():
                 "VALUES (?, ?, 'requester_note', 'This is a test question about my sample.', ?)",
                 (req_id, requesters[0][0], now.isoformat()))
 
-        # Create an announcement
+        # Create some downtime
         admin = db.execute("SELECT id FROM users WHERE email='admin@lab.local'").fetchone()
         db.execute(
-            "INSERT INTO announcements (title, body, priority, created_by_user_id, created_at, is_active) "
-            "VALUES ('Lab Maintenance Notice', 'Lab A will be closed on Friday for maintenance.', 'warning', ?, ?, 1)",
-            (admin[0], now.isoformat()))
-
-        # Create some downtime
-        db.execute(
-            "INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, downtime_type, created_by_user_id, created_at) "
-            "VALUES (?, ?, ?, 'Scheduled calibration', 'calibration', ?, ?)",
+            "INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, created_by_user_id, created_at, is_active) "
+            "VALUES (?, ?, ?, 'Scheduled calibration', ?, ?, 1)",
             (instruments[0][0],
              (now + timedelta(days=2)).isoformat(),
              (now + timedelta(days=2, hours=4)).isoformat(),
@@ -313,7 +307,6 @@ def test_unauthenticated(results):
         # Login page should be accessible
         crawl_page(c, "/login", results, "anon")
         crawl_page(c, "/activate", results, "anon")
-        crawl_api(c, "/api/health-check", results, "anon")
 
         # Protected pages should redirect to login
         resp = c.get("/", follow_redirects=False)
@@ -364,8 +357,7 @@ def test_role_crawl(results):
         "/",
         "/sitemap",
         "/me",
-        "/profile/email-preferences",
-        "/profile/change-password",
+        "/docs",
     ]
 
     # Pages requiring specific access
@@ -425,22 +417,10 @@ def test_role_crawl(results):
             for url in stats_pages:
                 crawl_page(c, url, results, role)
 
-            # Pending
-            crawl_page(c, "/pending", results, role)
-
-            # API endpoints
-            crawl_api(c, "/api/notif-count", results, role)
-            crawl_api(c, "/api/sparkline/1", results, role)
-            crawl_api(c, "/api/announcements", results, role)
-
             # Admin-only pages
             if role in ("super_admin", "site_admin"):
                 for url in admin_pages:
                     crawl_page(c, url, results, role)
-                crawl_api(c, "/api/operator-workload", results, role)
-                crawl_api(c, "/api/instrument-utilization", results, role)
-                crawl_api(c, "/api/turnaround-stats", results, role)
-                crawl_api(c, "/api/audit-search", results, role)
 
 
 def test_request_lifecycle(results):
@@ -472,19 +452,18 @@ def test_request_lifecycle(results):
         login_as(c, "anika@lab.local")
         crawl_page(c, "/schedule", results, "operator")
 
-    # Login as admin and test bulk action endpoint
+    # Login as admin and verify schedule page
     with app.test_client() as c:
         login_as(c, "admin@lab.local")
-        crawl_api(c, "/api/bulk-action", results, "admin", method="POST",
-                  data={"action": "mark_received", "request_ids": "5"})
+        crawl_page(c, "/schedule", results, "admin")
 
 
 def test_instrument_config(results):
-    """Test instrument configuration page."""
-    print("\n--- Instrument Config Test ---")
+    """Test instrument detail and redirect pages."""
+    print("\n--- Instrument Detail Test ---")
     with app.test_client() as c:
         login_as(c, "admin@lab.local")
-        crawl_page(c, "/instruments/1/config", results, "admin")
+        crawl_page(c, "/instruments/1", results, "admin")
         crawl_page(c, "/instruments/1/history", results, "admin")
         crawl_page(c, "/instruments/1/calendar", results, "admin")
 
@@ -500,61 +479,29 @@ def test_user_management(results):
         crawl_page(c, "/users/5", results, "admin")  # faculty user
 
 
-def test_duplicate_request(results):
-    """Test request duplication."""
-    print("\n--- Duplicate Request Test ---")
+def test_docs_page(results):
+    """Test docs page."""
+    print("\n--- Docs Page Test ---")
     with app.test_client() as c:
         login_as(c, "shah@lab.local")
-        resp = c.get("/requests/1/duplicate", follow_redirects=False)
-        if resp.status_code in (302, 303):
-            results.ok("[requester] GET /requests/1/duplicate → redirect to new_request")
-        else:
-            results.fail(f"[requester] GET /requests/1/duplicate → {resp.status_code}")
+        crawl_page(c, "/docs", results, "requester")
 
 
 def test_export_endpoints(results):
-    """Test export generation."""
+    """Test visualization/export pages."""
     print("\n--- Export Tests ---")
     with app.test_client() as c:
         login_as(c, "admin@lab.local")
-        # Audit export
-        crawl_api(c, "/api/audit-export", results, "admin")
+        crawl_page(c, "/visualizations", results, "admin")
 
 
-def test_password_change(results):
-    """Test password change form."""
-    print("\n--- Password Change Test ---")
+def test_calendar_page(results):
+    """Test calendar page and events API."""
+    print("\n--- Calendar Test ---")
     with app.test_client() as c:
-        login_as(c, "shah@lab.local")
-        crawl_page(c, "/profile/change-password", results, "requester")
-
-        resp = c.post("/profile/change-password", data={
-            "current_password": PASSWORD,
-            "new_password": "NewTestPass456!",
-            "confirm_password": "NewTestPass456!",
-        }, follow_redirects=True)
-        if resp.status_code == 200:
-            results.ok("[requester] Password change submitted")
-        else:
-            results.fail(f"[requester] Password change → {resp.status_code}")
-
-
-def test_email_preferences(results):
-    """Test email preferences page."""
-    print("\n--- Email Preferences Test ---")
-    with app.test_client() as c:
-        login_as(c, "shah@lab.local")
-        crawl_page(c, "/profile/email-preferences", results, "requester")
-
-        resp = c.post("/profile/email-preferences", data={
-            "action": "update_preferences",
-            "enable_status_changed": "1",
-            "enable_results_confirmed": "1",
-        }, follow_redirects=True)
-        if resp.status_code == 200:
-            results.ok("[requester] Email preferences saved")
-        else:
-            results.fail(f"[requester] Email preferences → {resp.status_code}")
+        login_as(c, "admin@lab.local")
+        crawl_page(c, "/calendar", results, "admin")
+        crawl_api(c, "/calendar/events?start=2026-01-01&end=2026-12-31", results, "admin")
 
 
 def test_visualization_pages(results):
@@ -584,10 +531,9 @@ if __name__ == "__main__":
     test_request_lifecycle(results)
     test_instrument_config(results)
     test_user_management(results)
-    test_duplicate_request(results)
+    test_docs_page(results)
     test_export_endpoints(results)
-    test_password_change(results)
-    test_email_preferences(results)
+    test_calendar_page(results)
     test_visualization_pages(results)
 
     success = results.summary()

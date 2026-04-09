@@ -1,44 +1,41 @@
 ======================================================================
 PRISM 500-ACTION POPULATE CRAWL REPORT
-Generated: 2026-04-09T23:39:58.636892
+Generated: 2026-04-09T23:49:29.641326
 ======================================================================
 Total actions:      500
-  OK (2xx/3xx):     442
-  Client err (4xx): 58
+  OK (2xx/3xx):     437
+  Client err (4xx): 63
   Server err (5xx): 0
   Exceptions:       0
 Unique routes:      22
-Action types:       75
+Action types:       72
 
 FINAL DATABASE STATE:
   users: 27
   instruments: 14
-  requests: 20
-  messages: 39
-  request_statuses: {'awaiting_sample_submission': 1, 'completed': 1, 'in_progress': 1, 'under_review': 17}
+  requests: 19
+  messages: 51
+  request_statuses: {'awaiting_sample_submission': 1, 'completed': 1, 'under_review': 17}
 
 STATUS DISTRIBUTION:
-  200:   442 ( 88.4%) ████████████████████████████████████████████
-  403:    58 ( 11.6%) █████
+  200:   437 ( 87.4%) ███████████████████████████████████████████
+  403:    63 ( 12.6%) ██████
 
 TOP ACTIONS:
-  random_browse                                   123
-  create_request                                  113
-  post_message                                     84
-  random_request_detail                            69
+  random_browse                                   124
+  create_request                                  119
+  post_message                                     96
+  random_request_detail                            59
   create_user_requester                             8
-  mark_sample_submitted                             7
-  mark_sample_received                              7
+  mark_sample_submitted                             6
+  mark_sample_received                              6
   browse_request_detail                             5
   create_user_operator                              4
   duplicate_request                                 4
   create_user_instrument_admin                      3
   create_user_faculty_in_charge                     3
-  schedule_request                                  3
   health_check                                      2
   create_user_professor_approver                    2
-  start_request                                     2
-  complete_request                                  2
   change_password                                   2
   browse_empty_dashboard                            1
   browse_empty_instruments                          1
@@ -47,17 +44,20 @@ TOP ACTIONS:
   create_user_site_admin                            1
   create_user_finance_admin                         1
   create_instrument_FESEM-01                        1
+  create_instrument_XRD-01                          1
+  create_instrument_NMR-01                          1
+  create_instrument_FTIR-01                         1
 
 ACTIONS BY ROLE:
   anonymous                     2 actions
-  faculty_in_charge            24 actions
-  finance_admin                34 actions
-  instrument_admin             28 actions
-  operator                     64 actions
-  professor_approver           41 actions
-  requester                   167 actions
-  site_admin                   39 actions
-  super_admin                 101 actions
+  faculty_in_charge            37 actions
+  finance_admin                36 actions
+  instrument_admin             32 actions
+  operator                     49 actions
+  professor_approver           23 actions
+  requester                   176 actions
+  site_admin                   38 actions
+  super_admin                 107 actions
 
 ROUTE COVERAGE (22 unique):
   /
@@ -84,9 +84,9 @@ ROUTE COVERAGE (22 unique):
   /visualizations/instrument/<id>
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-ALL ERRORS (58):
+ALL ERRORS (63):
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  [119] [operator] POST /requests/6 -> 403
+  [119] [operator] POST /requests/4 -> 403
     Action: post_message
     Detail: <!doctype html>
 <html lang="en">
@@ -95,9 +95,9 @@ ALL ERRORS (58):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Access Restricted</title>
   <link rel="stylesheet" href
-    POST Data: {"action": "post_message", "message_body": "Faculty reviewed \u2014 no issues found."}
+    POST Data: {"action": "post_message", "message_body": "Finance clearance obtained for external sample."}
 
-  [146] [operator] POST /requests/5 -> 403
+  [145] [operator] POST /requests/8 -> 403
     Action: mark_sample_received
     Detail: <!doctype html>
 <html lang="en">
@@ -108,69 +108,7 @@ ALL ERRORS (58):
   <link rel="stylesheet" href
     POST Data: {"action": "mark_sample_received"}
 
-  [154] [operator] POST /requests/4 -> 403
-    Action: schedule_request
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-    POST Data: {"action": "schedule", "scheduled_for": "2026-04-13T23:39"}
-
-  [159] [operator] POST /requests/8 -> 403
-    Action: complete_request
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-    POST Data: {"action": "complete", "results_summary": "Analysis complete. Characterize surface morphology and particle size distribution."}
-
-  [205] [operator] GET /requests/9 -> 403
-    Action: random_request_detail
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-
-  [215] [faculty_in_charge] GET /requests/8 -> 403
-    Action: random_request_detail
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-
-  [230] [requester] GET /admin/users -> 403
-    Action: random_browse
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-
-  [234] [finance_admin] GET /admin/users -> 403
-    Action: random_browse
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-
-  [245] [faculty_in_charge] POST /requests/9 -> 403
+  [179] [faculty_in_charge] POST /requests/7 -> 403
     Action: post_message
     Detail: <!doctype html>
 <html lang="en">
@@ -179,20 +117,9 @@ ALL ERRORS (58):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Access Restricted</title>
   <link rel="stylesheet" href
-    POST Data: {"action": "post_message", "message_body": "Please ensure the sample is labeled correctly."}
+    POST Data: {"action": "post_message", "message_body": "Cross-referencing with previous batch results."}
 
-  [266] [instrument_admin] POST /requests/10 -> 403
-    Action: post_message
-    Detail: <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Access Restricted</title>
-  <link rel="stylesheet" href
-    POST Data: {"action": "post_message", "message_body": "Sample has been prepared according to protocol SOP-42."}
-
-  [275] [professor_approver] GET /admin/users -> 403
+  [180] [requester] GET /admin/users -> 403
     Action: random_browse
     Detail: <!doctype html>
 <html lang="en">
@@ -202,7 +129,7 @@ ALL ERRORS (58):
   <title>Access Restricted</title>
   <link rel="stylesheet" href
 
-  [310] [instrument_admin] GET /requests/8 -> 403
+  [189] [instrument_admin] GET /requests/5 -> 403
     Action: random_request_detail
     Detail: <!doctype html>
 <html lang="en">
@@ -212,7 +139,7 @@ ALL ERRORS (58):
   <title>Access Restricted</title>
   <link rel="stylesheet" href
 
-  [418] [faculty_in_charge] GET /admin/users -> 403
+  [212] [faculty_in_charge] GET /admin/users -> 403
     Action: random_browse
     Detail: <!doctype html>
 <html lang="en">
@@ -222,4 +149,55 @@ ALL ERRORS (58):
   <title>Access Restricted</title>
   <link rel="stylesheet" href
 
-  (45 duplicate errors suppressed)
+  [228] [instrument_admin] POST /requests/7 -> 403
+    Action: post_message
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "post_message", "message_body": "Faculty reviewed \u2014 no issues found."}
+
+  [245] [instrument_admin] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [246] [faculty_in_charge] GET /requests/7 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [299] [operator] GET /requests/4 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [321] [finance_admin] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  (52 duplicate errors suppressed)

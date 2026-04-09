@@ -3323,16 +3323,20 @@ def inject_globals():
     V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
+    nav_instruments_truncated = False
     if user and access_profile["can_access_instruments"]:
-        nav_instruments = query_all(
+        _all_nav = query_all(
             "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' ORDER BY name"
         )
+        nav_instruments = _all_nav[:15]
+        nav_instruments_truncated = len(_all_nav) > 15
     return {
         "V": V,
         "current_user": user,
         "access_profile_user": access_profile,
         "support_admin_email": support_admin_email,
         "nav_instruments": nav_instruments,
+        "nav_instruments_truncated": nav_instruments_truncated,
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
@@ -3456,6 +3460,7 @@ def index():
     if user["role"] == "requester" and not has_instrument_area_access(user):
         instruments = []
     instrument_fifo_queue: list[dict] = []
+    instrument_fifo_total: int = 0
     pending_receipt_lookup_rows: list[sqlite3.Row] = []
     if has_instrument_area_access(user):
         fifo_rows = query_all(
@@ -3479,7 +3484,7 @@ def index():
         for row in fifo_rows:
             key = (row["instrument_id"], row["instrument_name"])
             grouped_fifo.setdefault(key, []).append(row)
-        instrument_fifo_queue = [
+        _all_fifo = [
             {
                 "instrument_id": instrument_id,
                 "instrument_name": instrument_name,
@@ -3487,6 +3492,8 @@ def index():
             }
             for (instrument_id, instrument_name), rows in grouped_fifo.items()
         ]
+        instrument_fifo_queue = _all_fifo[:9]  # Dashboard shows max 9 cards
+        instrument_fifo_total = len(_all_fifo)
         pending_receipt_lookup_rows = [
             row for row in fifo_rows if row["status"] == "sample_submitted"
         ][:5]
@@ -3520,6 +3527,7 @@ def index():
         recent_total_pages=recent_total_pages,
         instruments=instruments,
         instrument_fifo_queue=instrument_fifo_queue,
+        instrument_fifo_total=instrument_fifo_total if has_instrument_area_access(user) else 0,
         pending_receipt_lookup_rows=pending_receipt_lookup_rows if can_operate_queue else [],
         operators=operators,
         can_operate_queue=can_operate_queue,

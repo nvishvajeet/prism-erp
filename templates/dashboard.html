@@ -132,6 +132,11 @@
       </div>
       {% endfor %}
     </div>
+    {% if instrument_fifo_total > 9 %}
+    <div class="carousel-overflow" data-vis="{{ V }}">
+      <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ instrument_fifo_total - 9 }} more instruments with active jobs →</a>
+    </div>
+    {% endif %}
   </div>
 </section>
 {% endif %}

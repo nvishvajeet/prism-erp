@@ -64,6 +64,9 @@
           <span class="nav-inst-dot {% if inst['accepting_requests'] %}dot-accepting{% elif inst['soft_accept_enabled'] %}dot-soft{% else %}dot-maintenance{% endif %}" data-vis="{{ V }}"></span>
         </a>
         {% endfor %}
+        {% if nav_instruments_truncated %}
+        <a href="{{ url_for('instruments') }}" class="nav-menu-footer" data-vis="{{ V }}">All instruments →</a>
+        {% endif %}
       </div>
       {% endif %}
     </div>

@@ -5983,10 +5983,44 @@ def activate():
     return render_template("activate.html")
 
 
+# ── PRISM feedback log persistence ──────────────────────────
+PRISM_LOG = Path(__file__).resolve().parent / "prism_log.json"
+
+@app.route("/prism/save", methods=["POST"])
+def prism_save():
+    """Persist the full prism dump to disk. Called by overlay JS on every entry."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify(ok=False, error="no data"), 400
+    PRISM_LOG.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    return jsonify(ok=True)
+
+@app.route("/prism/log", methods=["GET"])
+def prism_log():
+    """Return the current persisted prism log."""
+    if PRISM_LOG.exists():
+        return app.response_class(PRISM_LOG.read_text(), mimetype="application/json")
+    return jsonify(feedLog=[], errorLog=[], paths=[])
+
+@app.route("/prism/clear", methods=["POST"])
+def prism_clear():
+    """Clear the persisted prism log."""
+    if PRISM_LOG.exists():
+        PRISM_LOG.write_text("{}")
+    return jsonify(ok=True)
+
+
 if __name__ == "__main__":
     init_db()
+    # Always auto-reload templates so changes appear without server restart
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.auto_reload = True
+    # Static files are served fresh by Flask dev server (no caching)
+    # use_reloader watches .py files and auto-restarts on code changes
+    # Set LAB_SCHEDULER_DEBUG=1 for verbose Flask debug toolbar
     is_debug = os.environ.get("LAB_SCHEDULER_DEBUG", "0") == "1"
-    if is_debug:
-        app.config["TEMPLATES_AUTO_RELOAD"] = True
-        app.jinja_env.auto_reload = True
-    app.run(debug=is_debug, port=5055)
+    app.run(debug=True, use_reloader=True, port=5055,
+            extra_files=[
+                str(Path(__file__).resolve().parent / "static" / "styles.css"),
+                str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),
+            ])

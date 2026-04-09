@@ -1696,11 +1696,11 @@ table td {
 /* Queue table column widths */
 #centralQueueTable col.col-request  { width: 14%; }
 #centralQueueTable col.col-stage    { width: 12%; }
-#centralQueueTable col.col-instrument { width: 13%; }
+#centralQueueTable col.col-instrument { width: 12%; }
 #centralQueueTable col.col-requester { width: 11%; }
-#centralQueueTable col.col-time     { width: 11%; }
+#centralQueueTable col.col-time     { width: 14%; }
 #centralQueueTable col.col-operator { width: 10%; }
-#centralQueueTable col.col-files    { width: 10%; }
+#centralQueueTable col.col-files    { width: 8%; }
 #centralQueueTable col.col-action   { width: 19%; }
 
 /* Instrument card tables inside carousel */
@@ -3904,12 +3904,13 @@ img.instrument-photo:not([src]) {
 .wr-inst-idle .wr-inst-status-dot { background: #bbb; }
 .wr-inst-metrics {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.7rem;
 }
 .wr-inst-metrics > div {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 3rem;
 }
 .wr-inst-num {
   font-size: 1.1rem;
@@ -4137,6 +4138,27 @@ img.instrument-photo:not([src]) {
   transition: none !important;
 }
 
+/* Pane ID badges — shown when PRISM grid is active */
+.prism-pane-id-badge {
+  position: absolute;
+  z-index: 10001;
+  padding: 2px 7px;
+  font-size: 0.6rem;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: rgba(56, 78, 135, 0.85);
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+[data-theme="dark"] .prism-pane-id-badge {
+  background: rgba(99, 140, 220, 0.85);
+  color: #1a202c;
+}
+
 /* Outline on annotated elements */
 .prism-grid-outline {
   outline: 1.5px dashed rgba(0, 100, 220, 0.25) !important;
@@ -4222,6 +4244,50 @@ img.instrument-photo:not([src]) {
 [data-theme="dark"] .prism-fb-count {
   background: rgba(99, 179, 237, 0.15);
   color: #63b3ed;
+}
+
+/* Error count badge in header */
+.prism-fb-err-count {
+  display: none;
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(229, 62, 62, 0.12);
+  color: #e53e3e;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+[data-theme="dark"] .prism-fb-err-count {
+  background: rgba(252, 129, 129, 0.15);
+  color: #fc8181;
+}
+
+/* Error code chip (red variant) */
+.prism-fb-err-code {
+  background: rgba(229, 62, 62, 0.15) !important;
+  color: #c53030 !important;
+  border-color: rgba(229, 62, 62, 0.3) !important;
+}
+[data-theme="dark"] .prism-fb-err-code {
+  background: rgba(252, 129, 129, 0.18) !important;
+  color: #fc8181 !important;
+  border-color: rgba(252, 129, 129, 0.3) !important;
+}
+
+/* Error entry row highlight */
+.prism-fb-error-entry {
+  background: rgba(229, 62, 62, 0.05);
+  border-left: 2px solid #e53e3e;
+}
+.prism-fb-error-entry:hover {
+  background: rgba(229, 62, 62, 0.1) !important;
+}
+[data-theme="dark"] .prism-fb-error-entry {
+  background: rgba(252, 129, 129, 0.06);
+  border-left: 2px solid #fc8181;
+}
+[data-theme="dark"] .prism-fb-error-entry:hover {
+  background: rgba(252, 129, 129, 0.12) !important;
 }
 
 .prism-fb-actions {

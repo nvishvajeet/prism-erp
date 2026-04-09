@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_stream_macros.html" import stream_header %}
+{% from "_stream_macros.html" import stream_header with context %}
 {% block content %}
 {{ stream_header("Calendar") }}
 <section class="card compact queue-controls-card" data-vis="{{ V }}">

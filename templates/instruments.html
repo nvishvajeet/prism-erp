@@ -129,28 +129,36 @@
   </div>
   {% call paginated_pane('archivedInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
   <table class="instruments-table archived-instruments-table" data-vis="{{ V }}">
+    <colgroup>
+      <col class="col-name">
+      <col class="col-return">
+      <col class="col-operators">
+      <col class="col-faculty">
+      <col class="col-location">
+      <col class="col-office">
+      <col class="col-links">
+    </colgroup>
     <thead data-vis="{{ V }}">
-      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Links</th><th data-vis="{{ V }}">Operation</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Operators</th><th data-vis="{{ V }}">Faculty In-Charge</th></tr>
+      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Office</th><th data-vis="{{ V }}">Links</th></tr>
     </thead>
     <tbody id="archivedInstrumentsBody" data-vis="{{ V }}">
       {% for instrument in archived_instruments %}
       <tr data-pane-item data-vis="{{ V }}">
-        <td data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}</td>
-        <td data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open</a>{% else %}<span class="hint" data-vis="{{ V }}">Restricted</span>{% endif %}</td>
         <td data-vis="{{ V }}">
+          {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
           <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table" data-vis="{{ V }}">
             <span class="operation-dot" aria-hidden="true" data-vis="{{ V }}"></span>
             <strong data-vis="{{ V }}">{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
           </span>
         </td>
-        <td data-vis="{{ V }}">{{ instrument["location"] }}</td>
+        <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">—</span></td>
         <td data-vis="{{ V }}">
           {% if instrument["operators"] %}
           <div class="people-list compact-people-list" data-vis="{{ V }}">
             {% for person in instrument["operators"].split(',') %}
             {% set name = person.strip() %}
             {% if name %}
-            <div data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            <div data-vis="{{ V }}">{{ name }}</div>
             {% endif %}
             {% endfor %}
           </div>
@@ -164,12 +172,21 @@
             {% for person in instrument["faculty_in_charge"].split(',') %}
             {% set name = person.strip() %}
             {% if name %}
-            <div data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ name }}</a>{% else %}{{ name }}{% endif %}</div>
+            <div data-vis="{{ V }}">{{ name }}</div>
             {% endif %}
             {% endfor %}
           </div>
           {% else %}
           <span data-vis="{{ V }}">-</span>
+          {% endif %}
+        </td>
+        <td class="location-stacked" data-vis="{{ V }}">{{ instrument["location"] }}</td>
+        <td data-vis="{{ V }}">{{ instrument["office_info"] or "-" }}</td>
+        <td data-vis="{{ V }}">
+          {% if visible_links[instrument['id']] %}
+          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open</a>
+          {% else %}
+          <span class="hint" data-vis="{{ V }}">Restricted</span>
           {% endif %}
         </td>
       </tr>

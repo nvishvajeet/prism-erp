@@ -38,6 +38,8 @@ case "$1" in
   *)
     echo "=== DEVELOPMENT MODE ==="
     export LAB_SCHEDULER_DEBUG=1
+    # Open in Chrome (not Safari) after a short delay for the server to start
+    ( sleep 2 && open -a "Google Chrome" http://127.0.0.1:5055 2>/dev/null || open http://127.0.0.1:5055 ) &
     python app.py
     ;;
 esac

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_stream_macros.html" import stream_header %}
+{% from "_stream_macros.html" import stream_header with context %}
 {% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% set V = "super_admin site_admin instrument_admin operator professor_approver" %}
 {% set VA = "super_admin site_admin instrument_admin" %}

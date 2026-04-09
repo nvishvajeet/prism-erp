@@ -1014,9 +1014,15 @@ a:hover {
 .card > * + * {
   margin-top: 0.6rem;
 }
+.card > h2:first-child,
+.card > .section-head:first-child { margin-top: 0; }
+
+/* Sections that are direct children of .page get no extra margin */
+.page > section,
+.page > div { margin-top: 0; margin-bottom: 0; }
 
 .card.compact {
-  padding: 0.74rem 0.88rem;
+  padding: 0.75rem 0.9rem;
 }
 
 .stat span {
@@ -3644,4 +3650,361 @@ img.instrument-photo:not([src]) {
 /* ── Quick intake table (no outer borders) ── */
 .quick-intake-table { border-collapse: collapse; width: 100%; }
 .quick-intake-table td { padding: 0; border: none; }
+
+/* ══════════════════════════════════════════
+   War Room — Operations Control Center
+   ══════════════════════════════════════════ */
+
+/* ── Header ── */
+.warroom-header {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+.warroom-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.warroom-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.warroom-title h1 {
+  font-size: 1.3rem;
+  margin: 0;
+  font-weight: 700;
+}
+.warroom-subtitle {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.warroom-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2d8659;
+  display: inline-block;
+  animation: wr-pulse 2s ease-in-out infinite;
+}
+@keyframes wr-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Filter pills ── */
+.warroom-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.warroom-pill-strip {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--surface, rgba(0,0,0,0.03));
+  border-radius: 10px;
+  padding: 0.2rem;
+}
+.warroom-pill {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+.warroom-pill:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.warroom-pill-active {
+  background: var(--accent);
+  color: #fff;
+}
+.warroom-pill-active:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Live ops strip ── */
+.warroom-live-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--page-gap, 0.85rem);
+}
+.warroom-live-card {
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 0.85rem 0.7rem;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.15rem;
+}
+.warroom-live-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.warroom-live-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.warroom-live-active .warroom-live-value { color: #2d8659; }
+.warroom-live-queued .warroom-live-value { color: #c08b30; }
+.warroom-live-pending .warroom-live-value { color: var(--accent); }
+
+.warroom-live-delta {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--accent-soft, rgba(0,0,0,0.04));
+}
+.warroom-live-delta.wr-up { color: #2d8659; background: rgba(45,134,89,0.1); }
+.warroom-live-delta.wr-down { color: var(--danger); background: rgba(184,74,74,0.1); }
+
+/* ── Panel (shared card style for warroom sections) ── */
+.warroom-panel {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+.warroom-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.warroom-panel-head h2 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0;
+}
+.warroom-panel-alert {
+  border-left: 3px solid #c08b30;
+}
+
+/* ── Select dropdown ── */
+.warroom-select {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--button-bg, var(--panel));
+  color: var(--ink);
+  cursor: pointer;
+}
+.warroom-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
+  outline-offset: 1px;
+}
+
+/* ── Instrument status grid ── */
+.warroom-instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+.warroom-inst-tile {
+  border-radius: 12px;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition: box-shadow 0.15s;
+}
+.warroom-inst-tile:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.wr-inst-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+.wr-inst-head strong { font-size: 0.82rem; }
+.wr-inst-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #aaa;
+}
+.wr-inst-active .wr-inst-status-dot { background: #2d8659; }
+.wr-inst-queued .wr-inst-status-dot { background: #c08b30; }
+.wr-inst-idle .wr-inst-status-dot { background: #bbb; }
+.wr-inst-metrics {
+  display: flex;
+  gap: 0.6rem;
+}
+.wr-inst-metrics > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wr-inst-num {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.wr-inst-metrics small {
+  font-size: 0.62rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── 2-column war room grid ── */
+.warroom-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--page-gap, 0.85rem);
+}
+.warroom-main-col,
+.warroom-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap, 0.85rem);
+}
+
+/* ── Chart containers ── */
+.warroom-chart-lg {
+  position: relative;
+  width: 100%;
+  height: 280px;
+}
+.warroom-chart-sm {
+  position: relative;
+  width: 100%;
+  height: 220px;
+}
+
+/* ── Bottleneck alert list ── */
+.warroom-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.warroom-alert-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.warroom-alert-row:last-child { border-bottom: none; }
+.warroom-alert-row strong { font-size: 0.82rem; }
+.warroom-alert-metric {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+/* ── Activity feed ── */
+.warroom-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.warroom-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.warroom-feed-item:last-child { border-bottom: none; }
+.warroom-feed-badge {
+  font-size: 0.62rem;
+  flex-shrink: 0;
+}
+.warroom-feed-detail {
+  flex: 1;
+  min-width: 0;
+}
+.warroom-feed-detail strong {
+  font-size: 0.8rem;
+  display: block;
+}
+.warroom-feed-detail small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.warroom-feed-time {
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── Export section ── */
+.warroom-export {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+.warroom-export h2 { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.6rem; }
+.warroom-export-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.warroom-export-btn {
+  font-size: 0.8rem;
+}
+.warroom-export-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+.warroom-export-links a {
+  font-size: 0.78rem;
+}
+
+/* ── Data tables section ── */
+.warroom-tables {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap, 0.85rem);
+}
+
+/* ── Dark mode adjustments ── */
+:root[data-theme="dark"] .warroom-live-active .warroom-live-value { color: #6bc5a0; }
+:root[data-theme="dark"] .warroom-live-queued .warroom-live-value { color: #e0b860; }
+:root[data-theme="dark"] .warroom-live-delta.wr-up { color: #6bc5a0; background: rgba(107,197,160,0.12); }
+:root[data-theme="dark"] .warroom-live-delta.wr-down { color: #e07070; background: rgba(224,112,112,0.12); }
+:root[data-theme="dark"] .wr-inst-active .wr-inst-status-dot { background: #6bc5a0; }
+:root[data-theme="dark"] .wr-inst-queued .wr-inst-status-dot { background: #e0b860; }
+:root[data-theme="dark"] .warroom-pill-strip { background: rgba(255,255,255,0.05); }
+:root[data-theme="dark"] .warroom-panel-alert { border-left-color: #e0b860; }
+
+/* ── Responsive ── */
+@media (max-width: 800px) {
+  .warroom-grid {
+    grid-template-columns: 1fr;
+  }
+  .warroom-live-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .warroom-chart-lg,
+  .warroom-chart-sm {
+    height: 200px;
+  }
+}
 

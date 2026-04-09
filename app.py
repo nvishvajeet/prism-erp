@@ -5563,6 +5563,89 @@ def stats():
     stats = stats_payload(user, report_filters)
     admin_graphs = can_access_stats(user)
     stats_visible_links = {i["id"]: can_open_instrument_detail(user, i["id"]) for i in visible_instruments}
+
+    # Trend data (chronological order)
+    monthly_trend = list(reversed(stats["monthly"][:12]))
+    daily_trend = list(reversed(stats["daily"][:30]))
+    weekly_trend = list(reversed(stats["weekly"][:12]))
+
+    # ── War-room: live operational data ──
+    live_by_instrument = query_all(
+        """SELECT i.id, i.name AS instrument_name, i.code,
+               SUM(CASE WHEN sr.status IN ('scheduled','in_progress') THEN 1 ELSE 0 END) AS active_jobs,
+               SUM(CASE WHEN sr.status IN ('sample_submitted','sample_received') THEN 1 ELSE 0 END) AS queued_jobs,
+               SUM(CASE WHEN sr.status IN ('submitted','under_review','awaiting_sample_submission') THEN 1 ELSE 0 END) AS pending_jobs,
+               COUNT(sr.id) AS total_open
+        FROM instruments i
+        LEFT JOIN sample_requests sr ON sr.instrument_id = i.id AND sr.status NOT IN ('completed','rejected')
+        WHERE i.active = 1
+        GROUP BY i.id ORDER BY active_jobs DESC, queued_jobs DESC""",
+        (),
+    )
+
+    live_totals = {
+        "active": sum(r["active_jobs"] for r in live_by_instrument),
+        "queued": sum(r["queued_jobs"] for r in live_by_instrument),
+        "pending": sum(r["pending_jobs"] for r in live_by_instrument),
+        "total_open": sum(r["total_open"] for r in live_by_instrument),
+    }
+
+    recent_activity = query_all(
+        """SELECT sr.request_no, sr.sample_name, sr.status, sr.updated_at,
+               i.name AS instrument_name, u.name AS requester_name
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        JOIN users u ON u.id = sr.requester_id
+        WHERE sr.updated_at IS NOT NULL
+        ORDER BY sr.updated_at DESC LIMIT 8""",
+        (),
+    )
+
+    # Bottleneck: instruments with oldest waiting jobs
+    bottlenecks = query_all(
+        """SELECT i.name AS instrument_name,
+               MIN(COALESCE(sr.sample_submitted_at, sr.created_at)) AS oldest_waiting,
+               ROUND((julianday('now') - julianday(MIN(COALESCE(sr.sample_submitted_at, sr.created_at)))) * 24.0, 1) AS wait_hours,
+               COUNT(*) AS waiting_count
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        WHERE sr.status IN ('sample_submitted','sample_received','scheduled')
+        GROUP BY i.id
+        HAVING wait_hours > 0
+        ORDER BY wait_hours DESC LIMIT 5""",
+        (),
+    )
+
+    # Status breakdown for doughnut chart
+    status_breakdown = query_all(
+        """SELECT status, COUNT(*) AS cnt
+        FROM sample_requests
+        WHERE status NOT IN ('completed','rejected')
+        GROUP BY status ORDER BY cnt DESC""",
+        (),
+    )
+
+    # Turnaround time by instrument
+    turnaround_data = query_all(
+        """SELECT i.name AS instrument_name,
+               ROUND(AVG(julianday(sr.completed_at) - julianday(sr.created_at)), 1) AS avg_days
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL
+        GROUP BY i.id ORDER BY avg_days DESC LIMIT 10""",
+        (),
+    )
+
+    # Top requesters
+    top_requesters = query_all(
+        """SELECT u.name AS requester_name, COUNT(*) AS total_requests,
+               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed
+        FROM sample_requests sr
+        JOIN users u ON u.id = sr.requester_id
+        GROUP BY sr.requester_id ORDER BY total_requests DESC LIMIT 8""",
+        (),
+    )
+
     return render_template(
         "stats.html",
         stats=stats,
@@ -5575,6 +5658,16 @@ def stats():
         weekly_chart=chart_rows(stats["weekly"], "bucket", "jobs", 10),
         instrument_chart=chart_rows(stats["by_instrument"], "instrument_name", "completed_samples", 10),
         visible_links=stats_visible_links,
+        daily_trend=daily_trend,
+        weekly_trend=weekly_trend,
+        monthly_trend=monthly_trend,
+        live_by_instrument=live_by_instrument,
+        live_totals=live_totals,
+        recent_activity=recent_activity,
+        bottlenecks=bottlenecks,
+        status_breakdown=status_breakdown,
+        turnaround_data=turnaround_data,
+        top_requesters=top_requesters,
     )
 
 

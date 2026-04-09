@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card narrow">
-  <h2>Activate Invited Account</h2>
-  <form method="post" class="form-grid">
-    <label>Email
-      <input type="email" name="email" required>
+<section class="card narrow" data-vis="requester">
+  <h2 data-vis="requester">Activate Invited Account</h2>
+  <form method="post" class="form-grid" data-vis="requester">
+    <label data-vis="requester">Email
+      <input type="email" name="email" required data-vis="requester">
     </label>
-    <label>Name
-      <input type="text" name="name" placeholder="Optional display name update">
+    <label data-vis="requester">Name
+      <input type="text" name="name" placeholder="Optional display name update" data-vis="requester">
     </label>
-    <label>New Password
-      <input type="password" name="password" minlength="8" required>
+    <label data-vis="requester">New Password
+      <input type="password" name="password" minlength="8" required data-vis="requester">
     </label>
-    <button type="submit">Activate Account</button>
+    <button type="submit" data-vis="requester">Activate Account</button>
   </form>
 </section>
 {% endblock %}

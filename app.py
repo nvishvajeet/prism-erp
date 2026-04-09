@@ -3251,7 +3251,9 @@ def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "admin@lab.local"
+    V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     return {
+        "V": V,
         "current_user": user,
         "access_profile_user": access_profile,
         "support_admin_email": support_admin_email,

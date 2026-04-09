@@ -5597,7 +5597,7 @@ def stats():
         JOIN instruments i ON i.id = sr.instrument_id
         JOIN users u ON u.id = sr.requester_id
         WHERE sr.updated_at IS NOT NULL
-        ORDER BY sr.updated_at DESC LIMIT 8""",
+        ORDER BY sr.updated_at DESC LIMIT 25""",
         (),
     )
 
@@ -5625,14 +5625,16 @@ def stats():
         (),
     )
 
-    # Turnaround time by instrument
+    # Turnaround time by instrument (hours)
     turnaround_data = query_all(
         """SELECT i.name AS instrument_name,
-               ROUND(AVG(julianday(sr.completed_at) - julianday(sr.created_at)), 1) AS avg_days
+               ROUND(AVG((julianday(sr.completed_at) - julianday(sr.created_at)) * 24.0), 1) AS avg_hours,
+               ROUND(MIN((julianday(sr.completed_at) - julianday(sr.created_at)) * 24.0), 1) AS min_hours,
+               ROUND(MAX((julianday(sr.completed_at) - julianday(sr.created_at)) * 24.0), 1) AS max_hours
         FROM sample_requests sr
         JOIN instruments i ON i.id = sr.instrument_id
         WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL
-        GROUP BY i.id ORDER BY avg_days DESC LIMIT 10""",
+        GROUP BY i.id ORDER BY avg_hours DESC LIMIT 10""",
         (),
     )
 

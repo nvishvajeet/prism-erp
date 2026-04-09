@@ -15,7 +15,7 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body{% if current_user %} data-user-role="{{ current_user.role }}"{% endif %}>
   <header class="topbar" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
       <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Lab Scheduler MVP</a></h1>
@@ -180,7 +180,20 @@
       return { init: init, initAll: initAll, refresh: function (id) { if (registry[id]) registry[id].refresh(); }, get: function(id) { return registry[id]; } };
     })();
 
-    document.addEventListener('DOMContentLoaded', function () { window.PaginatedPane.initAll(); });
+    document.addEventListener('DOMContentLoaded', function () {
+      window.PaginatedPane.initAll();
+
+      /* ── Role-visibility filter ── */
+      var role = (document.body.getAttribute('data-user-role') || '').trim();
+      if (role) {
+        document.querySelectorAll('[data-vis]').forEach(function (el) {
+          var allowed = el.getAttribute('data-vis').split(/\s+/);
+          if (allowed.indexOf('all') === -1 && allowed.indexOf(role) === -1) {
+            el.style.display = 'none';
+          }
+        });
+      }
+    });
   </script>
   <script>
     (function () {

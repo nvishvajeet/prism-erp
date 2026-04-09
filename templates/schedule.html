@@ -7,6 +7,10 @@
   <h2 class="stream-title" data-vis="{{ V }}">
     Jobs
   </h2>
+  <div class="view-toggle-group" data-vis="{{ V }}">
+    <button class="view-toggle view-toggle-active" id="viewDetailed" data-view="detailed" data-vis="{{ V }}">Detailed</button>
+    <button class="view-toggle" id="viewCompact" data-view="compact" data-vis="{{ V }}">Compact</button>
+  </div>
 </div>
 
 {# ── Controls blob ── #}
@@ -299,6 +303,25 @@
     syncPills();
     sortRows();
     applyFilters();
+  })();
+
+  /* ── View toggle (compact / detailed) ── */
+  (function () {
+    var table = document.getElementById('centralQueueTable');
+    if (!table) return;
+    var btns = document.querySelectorAll('.view-toggle');
+    var saved = localStorage.getItem('labQueueView') || 'detailed';
+
+    function applyView(mode) {
+      table.classList.toggle('queue-compact', mode === 'compact');
+      btns.forEach(function (b) { b.classList.toggle('view-toggle-active', b.dataset.view === mode); });
+      localStorage.setItem('labQueueView', mode);
+    }
+
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () { applyView(b.dataset.view); });
+    });
+    applyView(saved);
   })();
 </script>
 {% endblock %}

@@ -6,7 +6,10 @@
 {% if dashboard_metrics %}
 <section class="grid-two" data-vis="{{ V }}">
   <div class="card" data-vis="{{ V }}">
-    {{ card_heading("", "This Week") }}
+    {% call card_heading("", "This Week") %}
+      <button class="section-collapse-btn" data-collapse-id="dash-week" data-vis="{{ V }}">Hide</button>
+    {% endcall %}
+    <div class="collapsible-body" data-vis="{{ V }}">
     <section class="stats compact-stats" data-vis="{{ V }}">
       {{ stat_blob(dashboard_metrics.this_week_jobs, "Jobs Done", url_for('stats', horizon='weekly'), tone='week-jobs', dark=True) }}
       {{ stat_blob(dashboard_metrics.this_week_samples, "Samples Done", url_for('stats', horizon='weekly'), tone='week-samples', dark=True) }}
@@ -22,9 +25,13 @@
       {{ chart_bar(format_date(row.label), row.value, row.width, dark=True) }}
       {% endfor %}
     </div>
+    </div>{# /collapsible-body #}
   </div>
   <div class="card" data-vis="{{ V }}">
-    {{ card_heading("", "This Month") }}
+    {% call card_heading("", "This Month") %}
+      <button class="section-collapse-btn" data-collapse-id="dash-month" data-vis="{{ V }}">Hide</button>
+    {% endcall %}
+    <div class="collapsible-body" data-vis="{{ V }}">
     <section class="stats compact-stats" data-vis="{{ V }}">
       {{ stat_blob(dashboard_metrics.this_month_jobs, "Jobs Done", url_for('stats', horizon='monthly'), tone='month-jobs', dark=True) }}
       {{ stat_blob(dashboard_metrics.this_month_samples, "Samples Done", url_for('stats', horizon='monthly'), tone='month-samples', dark=True) }}
@@ -34,6 +41,7 @@
       {{ chart_bar(row.label, row.value, row.width, dark=True) }}
       {% endfor %}
     </div>
+    </div>{# /collapsible-body #}
   </div>
 </section>
 {% endif %}
@@ -191,4 +199,35 @@
   })();
 </script>
 {% endif %}
+
+{# ── Dashboard section collapse persistence ── #}
+<script>
+  (function () {
+    var key = 'labDashCollapsed';
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+
+    document.querySelectorAll('.section-collapse-btn').forEach(function (btn) {
+      var section = btn.closest('.card');
+      var id = btn.dataset.collapseId;
+      if (!section || !id) return;
+      var body = section.querySelector('.collapsible-body');
+      if (!body) return;
+
+      function apply(collapsed) {
+        body.style.display = collapsed ? 'none' : '';
+        btn.textContent = collapsed ? 'Show' : 'Hide';
+      }
+
+      if (saved[id]) apply(true);
+
+      btn.addEventListener('click', function () {
+        var isNowCollapsed = body.style.display !== 'none';
+        saved[id] = isNowCollapsed;
+        localStorage.setItem(key, JSON.stringify(saved));
+        apply(isNowCollapsed);
+      });
+    });
+  })();
+</script>
 {% endblock %}

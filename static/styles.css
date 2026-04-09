@@ -956,6 +956,25 @@ a:hover {
 .downtime-item:last-child { border-bottom: none; }
 .downtime-dates { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; flex-wrap: wrap; }
 
+/* ── View toggle (compact/detailed) ── */
+.view-toggle-group { display: flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.view-toggle { padding: 0.25rem 0.6rem; font-size: 0.78rem; border: none; background: var(--panel); color: var(--muted); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.view-toggle + .view-toggle { border-left: 1px solid var(--line); }
+.view-toggle-active { background: var(--accent); color: #fff; }
+
+/* Compact queue mode: hide File and Requester columns */
+.queue-compact .col-files,
+.queue-compact th:nth-child(6),
+.queue-compact td:nth-child(6),
+.queue-compact .col-requester,
+.queue-compact th:nth-child(4),
+.queue-compact td:nth-child(4) { display: none; }
+.queue-compact td { padding-top: 0.2rem; padding-bottom: 0.2rem; font-size: 0.82rem; }
+
+/* ── Dashboard section collapse ── */
+.section-collapse-btn { background: none; border: none; font-size: 0.78rem; color: var(--muted); cursor: pointer; padding: 0.2rem 0.4rem; }
+.section-collapse-btn:hover { color: var(--ink); }
+
 .section-head {
   display: flex;
   justify-content: space-between;

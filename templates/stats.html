@@ -37,19 +37,19 @@
 
 {# ── Live Ops Counters — same .stat blob pattern as dashboard/instrument_detail ── #}
 <section class="grid-auto-stats card" data-vis="{{ V }}">
-  <div class="stat stat-tone-active" data-vis="{{ V }}">
+  <a class="stat stat-tone-active stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ live_totals.active }}</span><small data-vis="{{ V }}">Active Now</small>
-  </div>
-  <div class="stat stat-tone-wait" data-vis="{{ V }}">
+  </a>
+  <a class="stat stat-tone-wait stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ live_totals.queued }}</span><small data-vis="{{ V }}">In Queue</small>
-  </div>
-  <div class="stat stat-tone-open" data-vis="{{ V }}">
+  </a>
+  <a class="stat stat-tone-open stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ live_totals.pending }}</span><small data-vis="{{ V }}">Pending</small>
-  </div>
-  <div class="stat" data-vis="{{ V }}">
+  </a>
+  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ live_totals.total_open }}</span><small data-vis="{{ V }}">Total Open</small>
-  </div>
-  <div class="stat dark-stat" data-vis="{{ V }}">
+  </a>
+  <a class="stat dark-stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ stats.summary.this_week_jobs }}</span><small data-vis="{{ V }}">This Week Done</small>
     {% if stats.summary.last_week_jobs is defined %}
     <span class="muted-note {% if stats.summary.this_week_jobs > stats.summary.last_week_jobs %}tone-up{% elif stats.summary.this_week_jobs < stats.summary.last_week_jobs %}tone-down{% endif %}" data-vis="{{ V }}">
@@ -57,16 +57,16 @@
       vs {{ stats.summary.last_week_jobs }} last week
     </span>
     {% endif %}
-  </div>
-  <div class="stat dark-stat" data-vis="{{ V }}">
+  </a>
+  <a class="stat dark-stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ stats.summary.this_week_samples }}</span><small data-vis="{{ V }}">Samples Done</small>
-  </div>
-  <div class="stat" data-vis="{{ V }}">
+  </a>
+  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ stats.summary.month_to_date_jobs }}</span><small data-vis="{{ V }}">MTD Jobs</small>
-  </div>
-  <div class="stat" data-vis="{{ V }}">
+  </a>
+  <a class="stat stat-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">
     <span data-vis="{{ V }}">{{ stats.summary.avg_jobs_per_week }}</span><small data-vis="{{ V }}">Avg/Week</small>
-  </div>
+  </a>
 </section>
 
 {# ── Instrument Status Board ── #}
@@ -75,9 +75,9 @@
   {{ card_heading("", "Instrument Status Board") }}
   <div class="warroom-instrument-grid" data-vis="{{ V }}">
     {% for inst in live_by_instrument %}
-    <div class="warroom-inst-tile {% if inst.active_jobs > 0 %}wr-inst-active{% elif inst.queued_jobs > 0 %}wr-inst-queued{% else %}wr-inst-idle{% endif %}" data-vis="{{ V }}">
+    <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" class="warroom-inst-tile {% if inst.active_jobs > 0 %}wr-inst-active{% elif inst.queued_jobs > 0 %}wr-inst-queued{% else %}wr-inst-idle{% endif %}" style="text-decoration: none; color: inherit;" title="{{ inst.instrument_name }}" data-vis="{{ V }}">
       <div class="wr-inst-head" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">{{ inst.code or inst.instrument_name[:10] }}</strong>
+        <strong data-vis="{{ V }}">{{ inst.code or inst.instrument_name[:12] }}</strong>
         <span class="wr-inst-status-dot" data-vis="{{ V }}"></span>
       </div>
       <div class="wr-inst-metrics" data-vis="{{ V }}">
@@ -85,7 +85,7 @@
         <div data-vis="{{ V }}"><span class="wr-inst-num" data-vis="{{ V }}">{{ inst.queued_jobs }}</span><small data-vis="{{ V }}">queued</small></div>
         <div data-vis="{{ V }}"><span class="wr-inst-num" data-vis="{{ V }}">{{ inst.pending_jobs }}</span><small data-vis="{{ V }}">pending</small></div>
       </div>
-    </div>
+    </a>
     {% endfor %}
   </div>
 </section>

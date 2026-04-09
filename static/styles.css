@@ -748,16 +748,16 @@ a:hover {
 /* New instrument dashboard layout */
 .instrument-dashboard-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
   gap: var(--page-gap);
   align-items: start;
 }
 
-.instrument-queue-col {
+.instrument-machine-col {
   min-width: 0;
 }
 
-.instrument-side-col {
+.instrument-right-col {
   display: grid;
   gap: 0.95rem;
   align-self: start;
@@ -781,7 +781,7 @@ a:hover {
   .instrument-dashboard-layout {
     grid-template-columns: 1fr;
   }
-  .instrument-side-col {
+  .instrument-right-col {
     position: static;
   }
 }
@@ -1306,6 +1306,11 @@ input[type="file"] {
   text-decoration: none;
   color: inherit;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
 }
 
 .stat-link:hover {
@@ -1323,6 +1328,20 @@ input[type="file"] {
 :root[data-theme="dark"] .dark-stat.stat-link:hover {
   background: #1f2730;
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+.stat-tone-active,
+.dark-stat.stat-tone-active {
+  background: var(--tone-active-bg);
+  border-color: var(--tone-active-border);
+  color: var(--tone-active-ink);
+}
+
+.stat-tone-wait,
+.dark-stat.stat-tone-wait {
+  background: var(--tone-wait-bg);
+  border-color: var(--tone-wait-border);
+  color: var(--tone-wait-ink);
 }
 
 .stat-tone-open,
@@ -1381,6 +1400,8 @@ input[type="file"] {
   color: var(--tone-month-samples-ink);
 }
 
+.stat-tone-active small,
+.stat-tone-wait small,
 .stat-tone-open small,
 .stat-tone-neutral small,
 .stat-tone-completed small,
@@ -1389,6 +1410,8 @@ input[type="file"] {
 .stat-tone-week-samples small,
 .stat-tone-month-jobs small,
 .stat-tone-month-samples small,
+.stat-tone-active span,
+.stat-tone-wait span,
 .stat-tone-open span,
 .stat-tone-neutral span,
 .stat-tone-completed span,
@@ -3704,7 +3727,7 @@ img.instrument-photo:not([src]) {
 }
 
 /* ── Instrument detail: machine info card ── */
-.instrument-side-col .card {
+.instrument-right-col .card {
   overflow: hidden;
 }
 
@@ -3981,9 +4004,16 @@ img.instrument-photo:not([src]) {
   padding: 0.7rem;
   border: 1px solid var(--line);
   background: var(--panel);
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
+  display: block;
+  text-decoration: none;
+  color: inherit;
 }
-.warroom-inst-tile:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.warroom-inst-tile:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line) 65%);
+  background: color-mix(in srgb, var(--panel-strong) 88%, var(--accent-soft) 12%);
+}
 .wr-inst-head {
   display: flex;
   align-items: center;
@@ -4583,6 +4613,12 @@ img.instrument-photo:not([src]) {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.inst-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .inst-detail-stats-section {

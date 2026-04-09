@@ -950,6 +950,12 @@ a:hover {
 .doc-table th, .doc-table td { padding: 0.35rem 0.6rem; border: 1px solid var(--line); text-align: left; }
 .doc-table th { background: var(--panel); font-weight: 600; }
 
+/* ── Downtime list items ── */
+.downtime-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.downtime-item { padding: 0.4rem 0; border-bottom: 1px solid var(--line); }
+.downtime-item:last-child { border-bottom: none; }
+.downtime-dates { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; flex-wrap: wrap; }
+
 .section-head {
   display: flex;
   justify-content: space-between;

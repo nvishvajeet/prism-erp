@@ -129,6 +129,27 @@
 </section>
 {% endif %}
 
+{% if upcoming_downtime %}
+<section class="card" data-vis="{{ V }}">
+  {% call card_heading("", "Upcoming Downtime") %}
+    <a class="text-link" href="{{ url_for('calendar', show_maintenance='1') }}" data-vis="{{ V }}">Calendar</a>
+  {% endcall %}
+  <div class="downtime-list" data-vis="{{ V }}">
+    {% for dt in upcoming_downtime %}
+    <div class="downtime-item" data-vis="{{ V }}">
+      <div class="downtime-dates" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ dt['instrument_code'] }}</strong>
+        <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
+        <span class="hint" data-vis="{{ V }}">→</span>
+        <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
+      </div>
+      {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 {% if not has_instrument_area_access_user %}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Your Jobs") }}

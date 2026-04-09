@@ -3483,6 +3483,20 @@ def index():
     operators = query_all(
         "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
     ) if has_instrument_area_access(user) and can_operate_queue else []
+    # Upcoming downtime across all instruments (for dashboard)
+    upcoming_downtime_all = []
+    if has_instrument_area_access(user):
+        upcoming_downtime_all = query_all(
+            """
+            SELECT idt.*, i.name AS instrument_name, i.code AS instrument_code
+            FROM instrument_downtime idt
+            JOIN instruments i ON i.id = idt.instrument_id
+            WHERE idt.is_active = 1 AND idt.end_time >= datetime('now')
+            ORDER BY idt.start_time ASC
+            LIMIT 5
+            """,
+        )
+
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -3496,6 +3510,7 @@ def index():
         can_operate_queue=can_operate_queue,
         role_switches=DEMO_ROLE_SWITCHES,
         dashboard_metrics=dashboard_metrics,
+        upcoming_downtime=upcoming_downtime_all,
     )
 
 
@@ -4230,6 +4245,20 @@ def instrument_detail(instrument_id: int):
     approval_role_candidates = query_all(
         "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
     )
+    # Upcoming downtime for this instrument
+    upcoming_downtime = query_all(
+        """
+        SELECT idt.*, u.name AS creator_name
+        FROM instrument_downtime idt
+        LEFT JOIN users u ON u.id = idt.created_by_user_id
+        WHERE idt.instrument_id = ? AND idt.is_active = 1
+          AND idt.end_time >= datetime('now')
+        ORDER BY idt.start_time ASC
+        LIMIT 10
+        """,
+        (instrument_id,),
+    )
+
     return render_template(
         "instrument_detail.html",
         instrument=instrument,
@@ -4258,6 +4287,7 @@ def instrument_detail(instrument_id: int):
         operators=query_all(
             "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
         ),
+        upcoming_downtime=upcoming_downtime,
     )
 
 

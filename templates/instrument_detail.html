@@ -189,19 +189,40 @@
     </section>
     {% endif %}
 
-    {# ── Control Panel: Scheduling ── #}
-    {% if can_add_downtime_here %}
+    {# ── Control Panel: Scheduling & Downtime ── #}
     <section class="card" data-vis="{{ V }}">
-      {{ card_heading("", "Scheduling") }}
-      <form method="post" class="form-grid compact-admin-form" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="add_downtime">
-        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
-        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
-        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
-        <button type="submit" class="small-button" data-vis="{{ V }}">Add Downtime</button>
-      </form>
+      {% call card_heading("", "Scheduling") %}
+        <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
+      {% endcall %}
+      {% if upcoming_downtime %}
+      <div class="downtime-list" data-vis="{{ V }}">
+        {% for dt in upcoming_downtime %}
+        <div class="downtime-item" data-vis="{{ V }}">
+          <div class="downtime-dates" data-vis="{{ V }}">
+            <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
+            <span class="hint" data-vis="{{ V }}">→</span>
+            <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
+          </div>
+          {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="hint" data-vis="{{ V }}">No upcoming downtime scheduled.</p>
+      {% endif %}
+      {% if can_add_downtime_here %}
+      <details class="compact-admin-tools" data-vis="{{ V }}">
+        <summary data-vis="{{ V }}">Add Downtime</summary>
+        <form method="post" class="form-grid compact-admin-form top-gap" data-vis="{{ V }}">
+          <input type="hidden" name="action" value="add_downtime">
+          <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
+          <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
+          <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
+          <button type="submit" class="small-button" data-vis="{{ V }}">Add Downtime</button>
+        </form>
+      </details>
+      {% endif %}
     </section>
-    {% endif %}
 
     {# ── Control Panel: Approval Chain ── #}
     {% if can_edit_approval_config %}

@@ -4063,3 +4063,81 @@ img.instrument-photo:not([src]) {
   }
 }
 
+/* ════════════════════════════════════════════════════════
+   PRISM Grid Overlay — dev annotation system
+   Toggle: Ctrl+G or floating ▦ button
+   ════════════════════════════════════════════════════════ */
+
+/* Floating toggle button — bottom-right corner */
+.prism-grid-btn {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 100000;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(100, 120, 150, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  color: #4a5568;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.prism-grid-btn:hover {
+  background: rgba(0, 100, 220, 0.1);
+  border-color: rgba(0, 100, 220, 0.4);
+  color: #0064dc;
+}
+.prism-grid-btn-active {
+  background: rgba(0, 100, 220, 0.15) !important;
+  border-color: rgba(0, 100, 220, 0.5) !important;
+  color: #0064dc !important;
+}
+
+/* Dark theme */
+[data-theme="dark"] .prism-grid-btn {
+  background: rgba(30, 35, 50, 0.85);
+  border-color: rgba(140, 160, 190, 0.3);
+  color: #a0aec0;
+}
+[data-theme="dark"] .prism-grid-btn:hover,
+[data-theme="dark"] .prism-grid-btn-active {
+  background: rgba(0, 100, 220, 0.2) !important;
+  color: #63b3ed !important;
+}
+
+/* Badge — semi-transparent, see-through */
+.prism-grid-badge {
+  position: absolute;
+  z-index: 99999;
+  pointer-events: none;
+  background: rgba(0, 100, 220, 0.28);
+  color: #fff;
+  font: bold 11px/1.4 "SF Mono", "Fira Code", Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Outline on annotated elements */
+.prism-grid-outline {
+  outline: 1.5px dashed rgba(0, 100, 220, 0.25) !important;
+  outline-offset: 1px;
+}
+
+/* Dark theme badges */
+[data-theme="dark"] .prism-grid-badge {
+  background: rgba(99, 179, 237, 0.25);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+[data-theme="dark"] .prism-grid-outline {
+  outline-color: rgba(99, 179, 237, 0.2) !important;
+}
+

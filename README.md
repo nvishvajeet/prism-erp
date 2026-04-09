@@ -59,6 +59,7 @@ Password: `SimplePass123`
 - **CSS_COMPONENT_MAP.md** — All CSS classes and component patterns used across templates.
 - **SECURITY_TODO.md** — Security hardening checklist and HTTPS migration tracker.
 - **ROLE_VISIBILITY_MATRIX.md** — Every page and UI element mapped to the roles that can access it.
+- **TODO_AI.txt** — Active task list and execution roadmap (also embedded in PROJECT.md § Roadmap).
 
 ## Development Mode
 

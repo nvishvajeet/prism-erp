@@ -51,6 +51,35 @@
   --tone-rejected-bg: #fbf1f1;
   --tone-rejected-border: #efd9d9;
   --tone-rejected-ink: #9a5c5c;
+
+  /* Spacing Scale */
+  --spacing-xs: 0.3rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.25rem;
+
+  /* Border Radius Scale */
+  --radius-full: 999px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+
+  /* Font Size Scale */
+  --font-xs: 0.7rem;
+  --font-sm: 0.78rem;
+  --font-md: 0.88rem;
+  --font-lg: 1.1rem;
+  --font-xl: 1.48rem;
+
+  /* Operation Status Colors */
+  --op-accepting: #5a9b68;
+  --op-hold: #d1a64b;
+  --op-maintenance: #c06565;
+
+  /* Lifecycle Colors */
+  --lifecycle-done: #5d9b6a;
+  --lifecycle-current: #3b6fc7;
 }
 
 :root[data-theme="dark"] {
@@ -1033,7 +1062,7 @@ a:hover {
 }
 
 .stat {
-  padding: 0.82rem 0.92rem;
+  padding: 0.75rem 0.9rem;
   margin: 0.2rem;
 }
 
@@ -1107,11 +1136,11 @@ a:hover {
 }
 
 .instrument-photo-shell {
-  margin: 0 0 1rem;
+  margin-bottom: 1rem;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel-strong) 88%, var(--accent-soft) 12%);
+  background: color-mix(in srgb, var(--panel-strong) 92%, var(--accent-soft) 8%);
 }
 
 .instrument-page-head {
@@ -1726,12 +1755,18 @@ table td {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-/* Action column: tight inline buttons */
+/* Action column: tight inline buttons / table wrapper */
 .queue-action-stack {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+}
+
+.queue-action-stack .inline-action-stack {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .queue-action-stack .small-button,
@@ -2635,6 +2670,21 @@ code {
   flex-direction: column;
   gap: 0.65rem;
   min-width: 0;
+  min-height: 14rem;
+}
+
+.instrument-card .paginated-pane {
+  flex: 1;
+}
+
+.instrument-card table {
+  table-layout: fixed;
+}
+
+.instrument-card tbody td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .instrument-card-head {
@@ -3258,21 +3308,6 @@ code {
   font-size: 0.95rem;
 }
 
-.instrument-photo-shell {
-  margin-bottom: 1rem;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel-strong) 92%, var(--accent-soft) 8%);
-}
-
-.instrument-photo {
-  display: block;
-  width: 100%;
-  max-height: 220px;
-  object-fit: cover;
-}
-
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(180px, 1fr));
@@ -3564,19 +3599,6 @@ img.instrument-photo:not([src]) {
   display: none;
 }
 
-/* ── Queue table: let action column wrap so buttons don't clip ── */
-.queue-action-stack {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  align-items: center;
-}
-.queue-action-stack .inline-action-stack {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
 /* ── Text overflow: allow wrapping in key columns ── */
 #centralQueueTable td:first-child,
 #centralQueueTable td:nth-child(2) {
@@ -3587,11 +3609,6 @@ img.instrument-photo:not([src]) {
 /* ── Consistent scroll-pane sizing ── */
 .paginated-pane-scroll {
   min-height: 12rem;
-}
-
-/* ── Card sizing consistency ── */
-.stat {
-  padding: 0.75rem 0.9rem;
 }
 
 /* ── Instrument detail: machine info card ── */
@@ -3643,24 +3660,6 @@ img.instrument-photo:not([src]) {
   white-space: normal !important;
   line-height: 1.4;
   max-width: 180px !important;
-}
-
-/* ── Uniform instrument card blobs on dashboard ── */
-.instrument-card {
-  min-height: 14rem;
-  display: flex;
-  flex-direction: column;
-}
-.instrument-card .paginated-pane {
-  flex: 1;
-}
-.instrument-card table {
-  table-layout: fixed;
-}
-.instrument-card tbody td {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ── Paginated pane with max_height=none: no scrolling, paginate only ── */
@@ -4475,5 +4474,96 @@ img.instrument-photo:not([src]) {
 }
 [data-theme="dark"] .prism-fb-btn-active {
   color: #63b3ed !important;
+}
+
+/* ── Extracted inline styles from templates ── */
+
+/* instrument_detail.html styles */
+.inst-detail-header-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.inst-detail-stats-section {
+  margin-bottom: 1rem;
+}
+
+.inst-detail-queue-card {
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.inst-detail-card-nav-wrap {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.inst-detail-pill-row {
+  margin-bottom: 0.5rem;
+}
+
+.inst-detail-empty-msg {
+  padding: 0.75rem;
+}
+
+.inst-detail-photo-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.inst-detail-op-mode-section {
+  margin-bottom: 0.9rem;
+}
+
+.inst-detail-section-kicker {
+  margin-bottom: 0.4rem;
+}
+
+.inst-detail-op-status-box {
+  margin-bottom: 0.5rem;
+}
+
+.inst-detail-downtime-details {
+  margin-bottom: 0.9rem;
+}
+
+.inst-detail-approval-section {
+  margin-bottom: 0.9rem;
+}
+
+.inst-detail-approval-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+
+/* stats.html styles */
+.stats-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+}
+
+.stats-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+}
+
+.stats-export-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.stats-export-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
 }
 

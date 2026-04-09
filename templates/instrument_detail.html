@@ -5,7 +5,7 @@
 
 {# ── Page header ── #}
 <div class="stream-page-header" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
-  <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+  <div class="inst-detail-header-wrap" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
     <a class="text-link back-link" href="{{ url_for('instruments') }}" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">← Instruments</a>
     <h2 class="stream-title" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">{{ instrument["name"] }}</h2>
     <span class="operation-status operation-{{ intake_mode }} operation-status-compact" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
@@ -17,7 +17,7 @@
 </div>
 
 {# ── Snapshot stats ── #}
-<section class="grid-auto-stats card" style="margin-bottom:1rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+<section class="grid-auto-stats card inst-detail-stats-section" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
   <a class="stat stat-link stat-tone-wait" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='pending') }}" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
     <span data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">{{ queue_metrics.pending }}</span><small data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Pending</small>
   </a>
@@ -44,9 +44,9 @@
   <div class="instrument-queue-col" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
 
     {# Queue pane #}
-    <section class="card" style="padding-bottom:0.5rem;margin-bottom:1rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+    <section class="card inst-detail-queue-card" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
       {% call card_heading("", "Queue") %}
-        <div style="display:flex;gap:0.6rem;align-items:center;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+        <div class="inst-detail-card-nav-wrap" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
           <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Calendar</a>
           {% if can_view_history %}
           <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='completed') }}" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">History</a>
@@ -54,7 +54,7 @@
         </div>
       {% endcall %}
 
-      <div class="stream-pill-row" id="instPills" style="margin-bottom:0.5rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+      <div class="stream-pill-row inst-detail-pill-row" id="instPills" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
         <button class="stream-pill" data-bucket="" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">All</button>
         <button class="stream-pill stream-pill-pending" data-bucket="pending" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Pending</button>
         <button class="stream-pill" data-bucket="approvals" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Approvals</button>
@@ -140,7 +140,7 @@
           </div>
         </article>
         {% else %}
-        <p class="hint" style="padding:0.75rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">No events yet.</p>
+        <p class="hint inst-detail-empty-msg" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">No events yet.</p>
         {% endfor %}
       </div>
       {% endcall %}
@@ -157,7 +157,7 @@
         <button type="button" class="link-button" id="toggleInstrumentEdit" aria-expanded="false" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Edit</button>
         {% endif %}
       {% endcall %}
-      <div class="instrument-photo-shell" style="margin-bottom:0.75rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+      <div class="instrument-photo-shell inst-detail-photo-wrap" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
         <img class="instrument-photo" src="{{ instrument_photo_src(instrument['machine_photo_url']) }}" alt="{{ instrument['name'] }}" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
       </div>
       <dl class="detail-grid compact-detail-grid" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
@@ -205,9 +205,9 @@
       {% endcall %}
       <div id="controlPanelBody" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
 
-        <div style="margin-bottom:0.9rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
-          <p class="section-kicker" style="margin-bottom:0.4rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Operation Mode</p>
-          <div class="operation-status operation-{{ intake_mode }}" style="margin-bottom:0.5rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+        <div class="inst-detail-op-mode-section" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+          <p class="section-kicker inst-detail-section-kicker" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Operation Mode</p>
+          <div class="operation-status operation-{{ intake_mode }} inst-detail-op-status-box" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
             <span class="operation-dot" aria-hidden="true"></span>
             <strong data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">{{ intake_mode_label(intake_mode) }}</strong>
           </div>
@@ -227,7 +227,7 @@
         </div>
 
         {% if can_add_downtime_here %}
-        <details class="compact-admin-tools" style="margin-bottom:0.9rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+        <details class="compact-admin-tools inst-detail-downtime-details" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
           <summary data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Add Downtime</summary>
           <form method="post" class="form-grid compact-admin-form top-gap" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
             <input type="hidden" name="action" value="add_downtime">
@@ -240,8 +240,8 @@
         {% endif %}
 
         {% if can_edit_approval_config %}
-        <div style="margin-bottom:0.9rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+        <div class="inst-detail-approval-section" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
+          <div class="inst-detail-approval-header" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
             <p class="section-kicker" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Approval Sequence</p>
             <button type="button" class="link-button" id="toggleApprovalConfig" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">Edit</button>
           </div>

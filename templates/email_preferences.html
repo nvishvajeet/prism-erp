@@ -1,8 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro, card_heading, bounded_pane %}
+{% from "_page_macros.html" import page_intro, card_heading, paginated_pane %}
 {% block content %}
-
-{% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
 
 {% call page_intro("", "Email Preferences", back_url=url_for('user_profile', user_id=current_user['id']), back_label='Profile') %}
   <a class="text-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>

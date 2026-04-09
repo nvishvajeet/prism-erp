@@ -1,75 +1,75 @@
 {% extends "base.html" %}
 {% block content %}
-<a class="page-back" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="all">Back to Instrument</a>
-<div class="page-title-bar" data-vis="all">
-  <h1 class="page-title" data-vis="all">Configure {{ instrument["name"] }}</h1>
+<a class="page-back" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Back to Instrument</a>
+<div class="page-title-bar" data-vis="{{ V }}">
+  <h1 class="page-title" data-vis="{{ V }}">Configure {{ instrument["name"] }}</h1>
 </div>
 
 <section class="config-grid" data-vis="super_admin site_admin instrument_admin operator">
-  <div class="card" data-vis="all">
+  <div class="card" data-vis="{{ V }}">
     <h2>General Settings</h2>
-    <form method="post" class="form-grid top-gap" data-vis="all">
-      <input type="hidden" name="action" value="update_metadata" data-vis="all">
-      <div class="new-request-row-2" data-vis="all">
-        <label data-vis="all">Code <input type="text" name="code" value="{{ instrument['code'] }}" required data-vis="all"></label>
-        <label data-vis="all">Category <input type="text" name="category" value="{{ instrument['category'] }}" data-vis="all"></label>
+    <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="update_metadata" data-vis="{{ V }}">
+      <div class="new-request-row-2" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Code <input type="text" name="code" value="{{ instrument['code'] }}" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Category <input type="text" name="category" value="{{ instrument['category'] }}" data-vis="{{ V }}"></label>
       </div>
-      <label data-vis="all">Location <input type="text" name="location" value="{{ instrument['location'] }}" required data-vis="all"></label>
-      <div class="new-request-row-2" data-vis="all">
-        <label data-vis="all">Manufacturer <input type="text" name="manufacturer" value="{{ instrument['manufacturer'] }}" data-vis="all"></label>
-        <label data-vis="all">Model <input type="text" name="model_number" value="{{ instrument['model_number'] }}" data-vis="all"></label>
+      <label data-vis="{{ V }}">Location <input type="text" name="location" value="{{ instrument['location'] }}" required data-vis="{{ V }}"></label>
+      <div class="new-request-row-2" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Manufacturer <input type="text" name="manufacturer" value="{{ instrument['manufacturer'] }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Model <input type="text" name="model_number" value="{{ instrument['model_number'] }}" data-vis="{{ V }}"></label>
       </div>
-      <label data-vis="all">Intake Mode
-        <select name="intake_mode" data-vis="all">
-          <option value="accepting" {% if intake_mode == 'accepting' %}selected{% endif %} data-vis="all">Accepting Requests</option>
-          <option value="on_hold" {% if intake_mode == 'on_hold' %}selected{% endif %} data-vis="all">On Hold (Queue Only)</option>
-          <option value="maintenance" {% if intake_mode == 'maintenance' %}selected{% endif %} data-vis="all">Maintenance (Shutdown)</option>
+      <label data-vis="{{ V }}">Intake Mode
+        <select name="intake_mode" data-vis="{{ V }}">
+          <option value="accepting" {% if intake_mode == 'accepting' %}selected{% endif %} data-vis="{{ V }}">Accepting Requests</option>
+          <option value="on_hold" {% if intake_mode == 'on_hold' %}selected{% endif %} data-vis="{{ V }}">On Hold (Queue Only)</option>
+          <option value="maintenance" {% if intake_mode == 'maintenance' %}selected{% endif %} data-vis="{{ V }}">Maintenance (Shutdown)</option>
         </select>
       </label>
       {% if can_edit_assignments %}
-      <label data-vis="all">Assigned Operators
-        <select name="operator_ids" multiple class="multi-select" data-vis="all">
+      <label data-vis="{{ V }}">Assigned Operators
+        <select name="operator_ids" multiple class="multi-select" data-vis="{{ V }}">
           {% for u in operator_candidates %}
-          <option value="{{ u.id }}" {% if u.id in selected_operator_ids %}selected{% endif %} data-vis="all">{{ u.name }}</option>
+          <option value="{{ u.id }}" {% if u.id in selected_operator_ids %}selected{% endif %} data-vis="{{ V }}">{{ u.name }}</option>
           {% endfor %}
         </select>
       </label>
-      <label data-vis="all">Faculty In-Charge
-        <select name="faculty_admin_ids" multiple class="multi-select" data-vis="all">
+      <label data-vis="{{ V }}">Faculty In-Charge
+        <select name="faculty_admin_ids" multiple class="multi-select" data-vis="{{ V }}">
           {% for u in faculty_candidates %}
-          <option value="{{ u.id }}" {% if u.id in selected_faculty_ids %}selected{% endif %} data-vis="all">{{ u.name }}</option>
+          <option value="{{ u.id }}" {% if u.id in selected_faculty_ids %}selected{% endif %} data-vis="{{ V }}">{{ u.name }}</option>
           {% endfor %}
         </select>
       </label>
       {% endif %}
-      <button type="submit" class="primary-action" data-vis="all">Save General Settings</button>
+      <button type="submit" class="primary-action" data-vis="{{ V }}">Save General Settings</button>
     </form>
   </div>
 
-  <div class="card" data-vis="all">
+  <div class="card" data-vis="{{ V }}">
     <h2>Approval Chain</h2>
-    <p class="hint" data-vis="all">Define the sequence of approvals required for new requests.</p>
-    <form method="post" class="form-grid top-gap" data-vis="all">
-      <input type="hidden" name="action" value="save_approval_config" data-vis="all">
+    <p class="hint" data-vis="{{ V }}">Define the sequence of approvals required for new requests.</p>
+    <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_approval_config" data-vis="{{ V }}">
       {% for idx in range(1, 7) %}
       {% set step = approval_config[idx-1] if (approval_config|length >= idx) else None %}
-      <div class="approval-config-row" data-vis="all">
-        <span class="step-num" data-vis="all">{{ idx }}</span>
-        <select name="step_role_{{ idx }}" data-vis="all">
-          <option value="" data-vis="all">No Step</option>
-          <option value="finance" {% if step and step.approver_role == 'finance' %}selected{% endif %} data-vis="all">Finance</option>
-          <option value="professor" {% if step and step.approver_role == 'professor' %}selected{% endif %} data-vis="all">Professor</option>
-          <option value="operator" {% if step and step.approver_role == 'operator' %}selected{% endif %} data-vis="all">Operator</option>
+      <div class="approval-config-row" data-vis="{{ V }}">
+        <span class="step-num" data-vis="{{ V }}">{{ idx }}</span>
+        <select name="step_role_{{ idx }}" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">No Step</option>
+          <option value="finance" {% if step and step.approver_role == 'finance' %}selected{% endif %} data-vis="{{ V }}">Finance</option>
+          <option value="professor" {% if step and step.approver_role == 'professor' %}selected{% endif %} data-vis="{{ V }}">Professor</option>
+          <option value="operator" {% if step and step.approver_role == 'operator' %}selected{% endif %} data-vis="{{ V }}">Operator</option>
         </select>
-        <select name="step_user_{{ idx }}" data-vis="all">
-          <option value="" data-vis="all">Default for role</option>
+        <select name="step_user_{{ idx }}" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Default for role</option>
           {% for u in approval_role_candidates %}
-          <option value="{{ u.id }}" {% if step and step.approver_user_id == u.id %}selected{% endif %} data-vis="all">{{ u.name }} ({{ u.role[:1]|upper }})</option>
+          <option value="{{ u.id }}" {% if step and step.approver_user_id == u.id %}selected{% endif %} data-vis="{{ V }}">{{ u.name }} ({{ u.role[:1]|upper }})</option>
           {% endfor %}
         </select>
       </div>
       {% endfor %}
-      <button type="submit" class="primary-action" data-vis="all">Update Approval Chain</button>
+      <button type="submit" class="primary-action" data-vis="{{ V }}">Update Approval Chain</button>
     </form>
   </div>
 </section>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
-{% from "_page_macros.html" import card_heading, paginated_pane %}
+{% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% block content %}
 <section data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">

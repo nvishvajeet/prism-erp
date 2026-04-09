@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, requester_block, operator_block, status_block, meta_link, attachment_list with context %}
-{% from "_page_macros.html" import paginated_pane %}
+{% from "_page_macros.html" import paginated_pane with context %}
 {% block content %}
 
 <div class="stream-page-header" data-vis="{{ V }}">
   <h2 class="stream-title" data-vis="{{ V }}">
-    {% if selected_instrument %}{{ selected_instrument["name"] }} — {% endif %}Jobs
+    Jobs
   </h2>
 </div>
 
@@ -71,7 +71,7 @@
 
 {# ── Stream table ── #}
 <section class="card queue-table-card" data-vis="{{ V }}">
-  {% call paginated_pane('centralQueue', page_size=15, max_height='36rem', css_class='queue-table-shell') %}
+  {% call paginated_pane('centralQueue', page_size=25, max_height='none', css_class='queue-table-shell') %}
     <table id="centralQueueTable" data-vis="{{ V }}">
       <colgroup>
         <col class="col-request"><col class="col-stage"><col class="col-instrument">

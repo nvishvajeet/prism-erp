@@ -5564,10 +5564,10 @@ def stats():
     admin_graphs = can_access_stats(user)
     stats_visible_links = {i["id"]: can_open_instrument_detail(user, i["id"]) for i in visible_instruments}
 
-    # Trend data (chronological order)
-    monthly_trend = list(reversed(stats["monthly"][:12]))
-    daily_trend = list(reversed(stats["daily"][:30]))
-    weekly_trend = list(reversed(stats["weekly"][:12]))
+    # Trend data (chronological order) — convert Rows to dicts for tojson
+    monthly_trend = [dict(r) for r in reversed(stats["monthly"][:12])]
+    daily_trend = [dict(r) for r in reversed(stats["daily"][:30])]
+    weekly_trend = [dict(r) for r in reversed(stats["weekly"][:12])]
 
     # ── War-room: live operational data ──
     live_by_instrument = query_all(
@@ -5578,7 +5578,7 @@ def stats():
                COUNT(sr.id) AS total_open
         FROM instruments i
         LEFT JOIN sample_requests sr ON sr.instrument_id = i.id AND sr.status NOT IN ('completed','rejected')
-        WHERE i.active = 1
+        WHERE i.status = 'active'
         GROUP BY i.id ORDER BY active_jobs DESC, queued_jobs DESC""",
         (),
     )
@@ -5663,13 +5663,15 @@ def stats():
         daily_trend=daily_trend,
         weekly_trend=weekly_trend,
         monthly_trend=monthly_trend,
+        by_instrument_json=[dict(r) for r in stats["by_instrument"]],
+        weekly_json=[dict(r) for r in stats["weekly"]],
         live_by_instrument=live_by_instrument,
         live_totals=live_totals,
         recent_activity=recent_activity,
         bottlenecks=bottlenecks,
-        status_breakdown=status_breakdown,
-        turnaround_data=turnaround_data,
-        top_requesters=top_requesters,
+        status_breakdown=[dict(r) for r in status_breakdown],
+        turnaround_data=[dict(r) for r in turnaround_data],
+        top_requesters=[dict(r) for r in top_requesters],
     )
 
 
@@ -5983,4 +5985,8 @@ def activate():
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=False, port=5055)
+    is_debug = os.environ.get("LAB_SCHEDULER_DEBUG", "0") == "1"
+    if is_debug:
+        app.config["TEMPLATES_AUTO_RELOAD"] = True
+        app.jinja_env.auto_reload = True
+    app.run(debug=is_debug, port=5055)

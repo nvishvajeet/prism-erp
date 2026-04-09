@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
-{% from "_page_macros.html" import card_heading, paginated_pane %}
+{% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% block content %}
 
 {% if dashboard_metrics %}
@@ -97,7 +97,7 @@
           <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
           <a class="btn-open-queue-sm" href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">Open Queue</a>
         </div>
-        {% call paginated_pane('instCard' ~ queue.instrument_id, page_size=5, max_height='18rem') %}
+        {% call paginated_pane('instCard' ~ queue.instrument_id, page_size=5, max_height='none') %}
           {% if queue.rows %}
           <table data-vis="{{ V }}">
             <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">#</th><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>

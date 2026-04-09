@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro, card_heading %}
+{% from "_page_macros.html" import page_intro, card_heading with context %}
 {% block content %}
 {% call page_intro("", page_title) %}
   {% if scope_kind == 'instrument' and current_instrument %}

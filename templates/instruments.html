@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import paginated_pane %}
+{% from "_page_macros.html" import paginated_pane with context %}
 {% block content %}
 <section data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
@@ -45,40 +45,30 @@
 </section>
 {% endif %}
 <section class="card" data-vis="{{ V }}">
-  {% call paginated_pane('mainInstruments', page_size=20, max_height='36rem', css_class='instruments-table-shell') %}
+  {% call paginated_pane('mainInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
   <table class="instruments-table" data-vis="{{ V }}">
     <colgroup>
       <col class="col-name">
-      <col class="col-links">
-      <col class="col-operation">
       <col class="col-return">
       <col class="col-operators">
       <col class="col-faculty">
       <col class="col-location">
       <col class="col-office">
+      <col class="col-links">
     </colgroup>
     <thead data-vis="{{ V }}">
-      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Links</th><th data-vis="{{ V }}">Operation</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operators</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Office</th></tr>
+      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Office</th><th data-vis="{{ V }}">Links</th></tr>
     </thead>
     <tbody id="mainInstrumentsBody" data-vis="{{ V }}">
       {% for instrument in instruments %}
       {% if loop.first or instrument["category"] != instruments[loop.index0 - 1]["category"] %}
       <tr class="category-header-row" data-vis="{{ V }}">
-        <td colspan="8" data-vis="{{ V }}">{{ instrument["category"] or "Uncategorised" }}</td>
+        <td colspan="7" data-vis="{{ V }}">{{ instrument["category"] or "Uncategorised" }}</td>
       </tr>
       {% endif %}
       <tr data-pane-item data-vis="{{ V }}">
-        <td data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}</td>
         <td data-vis="{{ V }}">
-          {% if visible_links[instrument['id']] %}
-          <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], back=url_for('instruments'), source_label='Instruments') }}" data-vis="{{ V }}">Queue</a><br>
-          <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a><br>
-          <a class="text-link" href="{{ url_for('instrument_history', instrument_id=instrument['id']) }}" data-vis="{{ V }}">History</a>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">Restricted</span>
-          {% endif %}
-        </td>
-        <td data-vis="{{ V }}">
+          {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
           <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table" data-vis="{{ V }}">
             <span class="operation-dot" aria-hidden="true" data-vis="{{ V }}"></span>
             <strong data-vis="{{ V }}">{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
@@ -113,8 +103,17 @@
           <span data-vis="{{ V }}">-</span>
           {% endif %}
         </td>
-        <td data-vis="{{ V }}">{{ instrument["location"] }}</td>
+        <td class="location-stacked" data-vis="{{ V }}">{{ instrument["location"] }}</td>
         <td data-vis="{{ V }}">{{ instrument["office_info"] or "-" }}</td>
+        <td data-vis="{{ V }}">
+          {% if visible_links[instrument['id']] %}
+          <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open Queue</a><br>
+          <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a><br>
+          <a class="text-link" href="{{ url_for('instrument_history', instrument_id=instrument['id']) }}" data-vis="{{ V }}">History</a>
+          {% else %}
+          <span class="hint" data-vis="{{ V }}">Restricted</span>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -128,7 +127,7 @@
       <h2 data-vis="{{ V }}">Archived Instruments</h2>
     </div>
   </div>
-  {% call paginated_pane('archivedInstruments', page_size=15, max_height='28rem', css_class='instruments-table-shell') %}
+  {% call paginated_pane('archivedInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
   <table class="instruments-table archived-instruments-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Links</th><th data-vis="{{ V }}">Operation</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Operators</th><th data-vis="{{ V }}">Faculty In-Charge</th></tr>

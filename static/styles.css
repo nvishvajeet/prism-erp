@@ -3638,6 +3638,37 @@ img.instrument-photo:not([src]) {
   border-bottom: 1px dashed rgba(227, 234, 241, 0.35);
 }
 
+/* ── Location stacked: address lines wrap naturally ── */
+.location-stacked {
+  white-space: normal !important;
+  line-height: 1.4;
+  max-width: 180px !important;
+}
+
+/* ── Uniform instrument card blobs on dashboard ── */
+.instrument-card {
+  min-height: 14rem;
+  display: flex;
+  flex-direction: column;
+}
+.instrument-card .paginated-pane {
+  flex: 1;
+}
+.instrument-card table {
+  table-layout: fixed;
+}
+.instrument-card tbody td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Paginated pane with max_height=none: no scrolling, paginate only ── */
+.paginated-pane-scroll[style*="--pane-max-height: none"] {
+  overflow: visible;
+  min-height: auto;
+}
+
 /* ── File link table (no outer borders) ── */
 .file-link-table { border-collapse: collapse; width: 100%; }
 .file-link-table td { padding: 0.35rem 0; border: none; }

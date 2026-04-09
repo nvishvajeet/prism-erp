@@ -104,6 +104,16 @@ Members can then activate their invited account at:
 - queue board remains the main screen; calendar is secondary for planning
 - super admins and instrument admins can add downtime blocks
 
+## Development Mode
+
+Set `LAB_SCHEDULER_DEBUG=1` to enable template auto-reload and Flask debug mode:
+
+```bash
+LAB_SCHEDULER_DEBUG=1 python3 app.py
+```
+
+Without this, Flask caches compiled templates in memory and changes require a server restart.
+
 ## Smoke Test
 
 To run a lightweight regression pass:
@@ -111,3 +121,12 @@ To run a lightweight regression pass:
 ```bash
 .venv/bin/python smoke_test.py
 ```
+
+## Known Bugs / TODO
+
+- **Archived instruments table** on `/instruments` still uses the old 6-column layout (Name, Links, Operation, Location, Operators, Faculty). Should be updated to match the new 7-column active instruments layout.
+- **Dashboard instrument card CSS** (`.instrument-card`) targets a class that may not be present in `dashboard.html` — verify the card wrapper has this class or the uniform-height styles won't apply.
+- **Queue page title** now always says "Jobs" — consider showing the instrument name in a subtitle or breadcrumb when pre-filtered via `?instrument_id=`.
+- **Template caching pitfall**: production deploys (`debug=False`, no `LAB_SCHEDULER_DEBUG`) cache templates. Any template-only change requires a process restart to take effect.
+- **stats page `i.status = 'active'` fix**: the previous `i.active = 1` column reference was wrong (column doesn't exist). Fixed to `i.status = 'active'`. Verify no other queries reference `i.active`.
+- **Row serialization**: stats route converts SQLite Row objects to dicts before passing to `tojson`. If new stats queries are added, they must also use `dict(r)` conversion.

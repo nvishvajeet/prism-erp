@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_stream_macros.html" import stream_header %}
-{% from "_page_macros.html" import card_heading, paginated_pane %}
+{% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% set V = "super_admin site_admin instrument_admin operator professor_approver" %}
 {% set VA = "super_admin site_admin instrument_admin" %}
 {% block content %}
@@ -278,10 +278,10 @@
   var weeklyTrend = {{ weekly_trend | tojson }};
   var monthlyTrend = {{ monthly_trend | tojson }};
   var statusBreakdown = {{ status_breakdown | tojson }};
-  var instrumentData = {{ stats.by_instrument | tojson }};
+  var instrumentData = {{ by_instrument_json | tojson }};
   var turnaroundData = {{ turnaround_data | tojson }};
   var topRequesters = {{ top_requesters | tojson }};
-  var weeklyRows = {{ stats.weekly | tojson }};
+  var weeklyRows = {{ weekly_json | tojson }};
 
   /* Trend Chart */
   var trendCtx = document.getElementById('trendChart');

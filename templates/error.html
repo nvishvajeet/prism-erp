@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro %}
+{% from "_page_macros.html" import page_intro with context %}
 {% block content %}
 {% call page_intro("", heading) %}
   {% if current_user %}

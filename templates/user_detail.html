@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, operator_block, status_block, meta_link with context %}
-{% from "_page_macros.html" import page_intro %}
+{% from "_page_macros.html" import page_intro with context %}
 {% block content %}
 {% call page_intro("", target_user["name"]) %}
   {% if is_self %}

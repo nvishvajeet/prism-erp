@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, paginated_pane with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane, input_dialog with context %}
 {% block hover_back %}<a href="{{ url_for('schedule') }}" class="hover-back-btn" title="Back to Queue">←</a>{% endblock %}
 {% block content %}
 <section data-vis="{{ V }}">
@@ -149,22 +149,16 @@
       <p class="hint" data-vis="{{ V }}">Restricted.</p>
       {% endif %}
       {% if card_policy.fields.conversation and card_policy.actions.reply %}
-      <form method="post" enctype="multipart/form-data" class="form-grid compact-form top-gap" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="post_message">
-        {% if conversation_note_types %}
-        <label data-vis="{{ V }}">Comment Type
-          <select name="note_kind" data-vis="{{ V }}">
-            <option value="">Comment</option>
-            {% for note_kind, note_label, _note_hint in conversation_note_types %}
-            <option value="{{ note_kind }}">{{ note_label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        {% endif %}
-        <textarea name="message_body" rows="3" placeholder="Write a reply or update" data-vis="{{ V }}"></textarea>
-        <input type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt" data-vis="{{ V }}">
-        <button type="submit" data-vis="{{ V }}">Add Comment</button>
-      </form>
+      <div class="top-gap" data-vis="{{ V }}">
+        {{ input_dialog(
+            form_action=url_for('request_detail', request_id=sample_request['id']),
+            action_name='post_message',
+            placeholder='Write a reply or update',
+            submit_label='Add Comment',
+            note_types=[('', 'Comment')] + [(nk, nl) for nk, nl, _nh in conversation_note_types] if conversation_note_types else [],
+            allow_file=True
+        ) }}
+      </div>
       {% endif %}
     </div>
 

@@ -2625,8 +2625,8 @@ th {
   min-width: 0;
 }
 
-.queue-action-stack {
-  display: flex;
+/* Instrument detail queue uses vertical action layout */
+.inst-detail-queue-card .queue-action-stack {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.42rem;

@@ -1,71 +1,73 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro with context %}
 {% block content %}
 
 <div class="settings-layout" data-vis="{{ V }}">
-
-  {# ── Left sidebar: section selectors ── #}
-  <div class="card settings-sidebar" id="settingsSidebar" data-vis="{{ V }}">
+  {# Left sidebar with section buttons #}
+  <div class="settings-sidebar" data-vis="{{ V }}">
     {% for section in sections %}
-    <button type="button" class="settings-sidebar-btn{% if loop.first %} settings-active{% endif %}" data-settings-panel="{{ section.key }}" data-vis="{{ V }}">
-      <span class="settings-sidebar-icon" data-vis="{{ V }}">{{ section.icon }}</span>
-      {{ section.title }}
+    <button class="settings-section-btn{% if loop.first %} active{% endif %}" data-panel="{{ section.key }}" data-vis="{{ V }}">
+      <span class="icon" data-vis="{{ V }}">{{ section.icon }}</span>
+      <span class="label" data-vis="{{ V }}">{{ section.title }}</span>
     </button>
     {% endfor %}
   </div>
 
-  {# ── Right panel: content for each section ── #}
-  <div class="settings-panels" data-vis="{{ V }}">
+  {# Right panel with dynamic content #}
+  <div class="settings-content" data-vis="{{ V }}">
     {% for section in sections %}
-    <div class="card settings-panel{% if loop.first %} settings-panel-active{% endif %}" id="panel-{{ section.key }}" data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">{{ section.title }}</h2>
+    <div class="settings-section{% if loop.first %} active{% endif %}" id="panel-{{ section.key }}" data-vis="{{ V }}">
+      <h1 class="section-title" data-vis="{{ V }}">{{ section.title }}</h1>
 
       {% for group in section.groups %}
       <div class="settings-group" data-vis="{{ V }}">
         {% if group.title %}
-        <div class="settings-group-title" data-vis="{{ V }}">{{ group.title }}</div>
+        <h3 class="group-title" data-vis="{{ V }}">{{ group.title }}</h3>
         {% endif %}
-        {% for item in group['items'] %}
-        <div class="settings-row" data-vis="{{ V }}">
-          <div class="settings-row-label" data-vis="{{ V }}">
-            {{ item.label }}
-            {% if item.hint %}<small data-vis="{{ V }}">{{ item.hint }}</small>{% endif %}
+
+        {% for item in group.items %}
+        <div class="settings-item" data-vis="{{ V }}">
+          <div class="item-label" data-vis="{{ V }}">
+            <span class="item-title" data-vis="{{ V }}">{{ item.label }}</span>
+            {% if item.hint %}<span class="item-hint" data-vis="{{ V }}">{{ item.hint }}</span>{% endif %}
           </div>
-          <div class="settings-row-value" data-vis="{{ V }}">
+
+          <div class="item-value" data-vis="{{ V }}">
             {% if item.type == 'link' %}
-              <a href="{{ item.href }}" data-vis="{{ V }}">{{ item.value or 'Open' }} →</a>
+              <a href="{{ item.href }}" class="link-item" data-vis="{{ V }}">{{ item.value or 'Open' }} →</a>
             {% elif item.type == 'toggle' %}
-              <label class="toggle-switch" data-vis="{{ V }}">
-                <input type="checkbox" {% if item.checked %}checked{% endif %} data-toggle-action="{{ item.action or '' }}" data-vis="{{ V }}">
-                <span class="toggle-track" data-vis="{{ V }}"></span>
+              <label class="toggle" data-vis="{{ V }}">
+                <input type="checkbox" {% if item.checked %}checked{% endif %} data-action="{{ item.action or '' }}" data-vis="{{ V }}">
+                <span class="toggle-rail" data-vis="{{ V }}"></span>
               </label>
             {% elif item.type == 'badge' %}
-              <span class="badge status-{{ item.status or 'submitted' }}" data-vis="{{ V }}">{{ item.value }}</span>
+              <span class="badge status-{{ item.status or 'default' }}" data-vis="{{ V }}">{{ item.value }}</span>
             {% else %}
-              <span data-vis="{{ V }}">{{ item.value }}</span>
+              <span class="text-value" data-vis="{{ V }}">{{ item.value }}</span>
             {% endif %}
           </div>
         </div>
         {% endfor %}
       </div>
       {% endfor %}
-
     </div>
     {% endfor %}
   </div>
 </div>
 
 <script>
-(function () {
-  var buttons = Array.from(document.querySelectorAll('[data-settings-panel]'));
-  var panels = Array.from(document.querySelectorAll('.settings-panel'));
-  buttons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var target = btn.dataset.settingsPanel;
-      buttons.forEach(function (b) { b.classList.toggle('settings-active', b === btn); });
-      panels.forEach(function (p) { p.classList.toggle('settings-panel-active', p.id === 'panel-' + target); });
+(function() {
+  const buttons = document.querySelectorAll('[data-panel]');
+  const sections = document.querySelectorAll('.settings-section');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.panel;
+
+      buttons.forEach(b => b.classList.toggle('active', b === btn));
+      sections.forEach(s => s.classList.toggle('active', s.id === 'panel-' + target));
     });
   });
 })();
 </script>
+
 {% endblock %}

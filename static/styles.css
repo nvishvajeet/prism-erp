@@ -753,160 +753,218 @@ a:hover {
 }
 
 /* ── Settings page (Apple-style sidebar + panel) ── */
+/* Apple Settings-style layout */
 .settings-layout {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: var(--spacing-lg);
+  grid-template-columns: 200px 1fr;
+  gap: 2rem;
   align-items: start;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .settings-layout {
     grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
 }
 
+/* Left sidebar section buttons */
 .settings-sidebar {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: sticky;
+  top: 80px;
 }
 
-.settings-sidebar-btn {
+.settings-section-btn {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.85rem;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--ink);
+  color: var(--muted);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s;
+  transition: all 0.15s ease;
 }
 
-.settings-sidebar-btn:hover {
+.settings-section-btn:hover {
   background: var(--hover-soft);
+  color: var(--ink);
 }
 
-.settings-sidebar-btn.settings-active {
+.settings-section-btn.active {
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
-.settings-sidebar-icon {
-  width: 20px;
-  height: 20px;
-  display: flex;
+.settings-section-btn .icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
-  opacity: 0.7;
+  font-size: 0.9rem;
 }
 
-.settings-panel {
+/* Right panel content area */
+.settings-content {
+  min-height: 400px;
+}
+
+.settings-section {
   display: none;
+  animation: fadeIn 0.12s ease;
 }
 
-.settings-panel.settings-panel-active {
+.settings-section.active {
   display: block;
 }
 
-.settings-group {
-  margin-bottom: var(--spacing-xl);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.settings-group-title {
-  font-size: 0.75rem;
+.section-title {
+  font-size: 1.8rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin-bottom: var(--spacing-sm);
+  color: var(--ink);
+  margin: 0 0 2rem 0;
 }
 
-.settings-row {
+/* Settings groups */
+.settings-group {
+  margin-bottom: 2rem;
+}
+
+.settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.group-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.75rem 0;
+}
+
+/* Individual settings items */
+.settings-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 0;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--line);
-  gap: 1rem;
+  gap: 2rem;
 }
 
-.settings-row:last-child {
+.settings-item:last-child {
   border-bottom: none;
 }
 
-.settings-row-label {
-  font-size: 0.88rem;
+.item-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 400;
   color: var(--ink);
 }
 
-.settings-row-label small {
+.item-hint {
   display: block;
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: normal;
+  line-height: 1.3;
 }
 
-.settings-row-value {
-  font-size: 0.85rem;
-  color: var(--muted);
+.item-value {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
 }
 
-.settings-row-value a {
+.link-item {
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: opacity 0.15s;
 }
 
-/* Simple toggle switch */
-.toggle-switch {
+.link-item:hover {
+  opacity: 0.7;
+}
+
+.text-value {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Toggle switch */
+.toggle {
   position: relative;
   display: inline-flex;
-  width: 42px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
 }
 
-.toggle-switch input {
+.toggle input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.toggle-track {
+.toggle-rail {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--line);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.25s ease;
 }
 
-.toggle-track::after {
+.toggle-rail::after {
   content: "";
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s;
+  background: var(--panel);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.toggle-switch input:checked + .toggle-track {
+.toggle input:checked + .toggle-rail {
   background: var(--accent);
 }
 
-.toggle-switch input:checked + .toggle-track::after {
-  transform: translateX(18px);
+.toggle input:checked + .toggle-rail::after {
+  transform: translateX(20px);
 }
 
 /* ── Input dialog (universal message/search widget) ── */
@@ -5347,5 +5405,12 @@ img.instrument-photo:not([src]) {
 }
 .error-nav a:hover {
   opacity: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INSTRUMENT DROPDOWN MOBILE SUPPORT
+   ───────────────────────────────────────────────────────────── */
+.nav-dropdown-open .nav-menu {
+  display: grid;
 }
 

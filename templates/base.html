@@ -251,6 +251,32 @@
   </script>
   <script src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
   <script>
+    /* ── Instrument dropdown mobile support ── */
+    (function () {
+      var dropdowns = document.querySelectorAll('.nav-dropdown');
+      dropdowns.forEach(function (dropdown) {
+        var trigger = dropdown.querySelector('.nav-trigger');
+        if (!trigger) return;
+
+        trigger.addEventListener('click', function (e) {
+          var isTouch = e.pointerType === 'touch' || e.pointerType === '';
+          if (!isTouch) return; // Let hover handle desktop
+          e.preventDefault();
+          dropdown.classList.toggle('nav-dropdown-open');
+        });
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('.nav-dropdown')) {
+          dropdowns.forEach(function (d) {
+            d.classList.remove('nav-dropdown-open');
+          });
+        }
+      });
+    })();
+  </script>
+  <script>
     /* ── Keyboard shortcuts ── */
     document.addEventListener('keydown', function (e) {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;

@@ -3651,8 +3651,32 @@ img.instrument-photo:not([src]) {
 .quick-intake-table { border-collapse: collapse; width: 100%; }
 .quick-intake-table td { padding: 0; border: none; }
 
+/* ── Chart containers (used by Chart.js in stats/visualization) ── */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 260px;
+}
+.chart-container-doughnut {
+  position: relative;
+  width: 100%;
+  height: 260px;
+}
+@media (max-width: 700px) {
+  .chart-container,
+  .chart-container-doughnut {
+    height: 200px;
+  }
+}
+
+/* ── Delta tone indicators ── */
+.tone-up { color: #2d8659; }
+.tone-down { color: var(--danger, #b84a4a); }
+:root[data-theme="dark"] .tone-up { color: #6bc5a0; }
+:root[data-theme="dark"] .tone-down { color: #e07070; }
+
 /* ══════════════════════════════════════════
-   War Room — Operations Control Center
+   Stats page — unique components
    ══════════════════════════════════════════ */
 
 /* ── Header ── */

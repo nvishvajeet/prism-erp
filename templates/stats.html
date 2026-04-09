@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% from "_stream_macros.html" import stream_header %}
-{% from "_page_macros.html" import paginated_pane %}
+{% from "_page_macros.html" import card_heading, paginated_pane %}
 {% set V = "super_admin site_admin instrument_admin operator professor_approver" %}
 {% set VA = "super_admin site_admin instrument_admin" %}
 {% block content %}
 
 {# ══════════════════════════════════════════════════════
-   WAR ROOM — Operations Control Center
+   Operations Control — same queue, filtered slice
    ══════════════════════════════════════════════════════ #}
 
-{# ── Title Bar with pulse indicator ── #}
-<section class="warroom-header" data-vis="{{ V }}">
+{# ── Title Bar ── #}
+<section class="card compact" data-vis="{{ V }}">
   <div class="warroom-title-row" data-vis="{{ V }}">
     <div class="warroom-title" data-vis="{{ V }}">
       <span class="warroom-pulse" data-vis="{{ V }}"></span>
@@ -35,54 +35,44 @@
   </div>
 </section>
 
-{# ── LIVE OPS STRIP — the heartbeat ── #}
-<section class="warroom-live-strip" data-vis="{{ V }}">
-  <div class="warroom-live-card warroom-live-active" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ live_totals.active }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">Active Now</small>
+{# ── Live Ops Counters — same .stat blob pattern as dashboard/instrument_detail ── #}
+<section class="grid-auto-stats card" data-vis="{{ V }}">
+  <div class="stat stat-tone-active" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ live_totals.active }}</span><small data-vis="{{ V }}">Active Now</small>
   </div>
-  <div class="warroom-live-card warroom-live-queued" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ live_totals.queued }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">In Queue</small>
+  <div class="stat stat-tone-wait" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ live_totals.queued }}</span><small data-vis="{{ V }}">In Queue</small>
   </div>
-  <div class="warroom-live-card warroom-live-pending" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ live_totals.pending }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">Pending</small>
+  <div class="stat stat-tone-open" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ live_totals.pending }}</span><small data-vis="{{ V }}">Pending</small>
   </div>
-  <div class="warroom-live-card" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ live_totals.total_open }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">Total Open</small>
+  <div class="stat" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ live_totals.total_open }}</span><small data-vis="{{ V }}">Total Open</small>
   </div>
-  <div class="warroom-live-card" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ stats.summary.this_week_jobs }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">This Week Done</small>
+  <div class="stat dark-stat" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ stats.summary.this_week_jobs }}</span><small data-vis="{{ V }}">This Week Done</small>
     {% if stats.summary.last_week_jobs is defined %}
-    <span class="warroom-live-delta {% if stats.summary.this_week_jobs > stats.summary.last_week_jobs %}wr-up{% elif stats.summary.this_week_jobs < stats.summary.last_week_jobs %}wr-down{% endif %}" data-vis="{{ V }}">
+    <span class="muted-note {% if stats.summary.this_week_jobs > stats.summary.last_week_jobs %}tone-up{% elif stats.summary.this_week_jobs < stats.summary.last_week_jobs %}tone-down{% endif %}" data-vis="{{ V }}">
       {% if stats.summary.this_week_jobs > stats.summary.last_week_jobs %}&#9650;{% elif stats.summary.this_week_jobs < stats.summary.last_week_jobs %}&#9660;{% else %}={% endif %}
-      {{ stats.summary.last_week_jobs }}
+      vs {{ stats.summary.last_week_jobs }} last week
     </span>
     {% endif %}
   </div>
-  <div class="warroom-live-card" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ stats.summary.this_week_samples }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">Samples Done</small>
+  <div class="stat dark-stat" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ stats.summary.this_week_samples }}</span><small data-vis="{{ V }}">Samples Done</small>
   </div>
-  <div class="warroom-live-card" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ stats.summary.month_to_date_jobs }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">MTD Jobs</small>
+  <div class="stat" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ stats.summary.month_to_date_jobs }}</span><small data-vis="{{ V }}">MTD Jobs</small>
   </div>
-  <div class="warroom-live-card" data-vis="{{ V }}">
-    <span class="warroom-live-value" data-vis="{{ V }}">{{ stats.summary.avg_jobs_per_week }}</span>
-    <small class="warroom-live-label" data-vis="{{ V }}">Avg/Week</small>
+  <div class="stat" data-vis="{{ V }}">
+    <span data-vis="{{ V }}">{{ stats.summary.avg_jobs_per_week }}</span><small data-vis="{{ V }}">Avg/Week</small>
   </div>
 </section>
 
-{# ── INSTRUMENT STATUS BOARD ── #}
+{# ── Instrument Status Board ── #}
 {% if live_by_instrument %}
-<section class="warroom-panel" data-vis="{{ V }}">
-  <div class="warroom-panel-head" data-vis="{{ V }}">
-    <h2 data-vis="{{ V }}">Instrument Status Board</h2>
-  </div>
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("", "Instrument Status Board") }}
   <div class="warroom-instrument-grid" data-vis="{{ V }}">
     {% for inst in live_by_instrument %}
     <div class="warroom-inst-tile {% if inst.active_jobs > 0 %}wr-inst-active{% elif inst.queued_jobs > 0 %}wr-inst-queued{% else %}wr-inst-idle{% endif %}" data-vis="{{ V }}">
@@ -101,71 +91,62 @@
 </section>
 {% endif %}
 
-{# ── Main Chart Grid: 2-col war room layout ── #}
-<div class="warroom-grid" data-vis="{{ V }}">
+{# ── Main Chart Grid: 2-col layout ── #}
+<div class="grid-two" data-vis="{{ V }}">
 
   {# LEFT COLUMN: Big charts #}
-  <div class="warroom-main-col" data-vis="{{ V }}">
+  <div style="display:flex;flex-direction:column;gap:var(--page-gap);" data-vis="{{ V }}">
 
-    {# Trend Chart — the big picture #}
-    <div class="warroom-panel" data-vis="{{ V }}">
-      <div class="warroom-panel-head" data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">Throughput Trend</h2>
+    {# Trend Chart #}
+    <section class="card" data-vis="{{ V }}">
+      {% call card_heading("", "Throughput Trend") %}
         <select id="trendGranularity" class="warroom-select" data-vis="{{ V }}">
           <option value="daily" data-vis="{{ V }}">Daily</option>
           <option value="weekly" selected data-vis="{{ V }}">Weekly</option>
           <option value="monthly" data-vis="{{ V }}">Monthly</option>
         </select>
-      </div>
-      <div class="warroom-chart-lg" data-vis="{{ V }}">
+      {% endcall %}
+      <div class="chart-container" data-vis="{{ V }}">
         <canvas id="trendChart"></canvas>
       </div>
-    </div>
+    </section>
 
-    {# Instrument Throughput Comparison #}
+    {# Instrument Throughput #}
     {% if admin_graphs %}
-    <div class="warroom-panel" data-vis="{{ VA }}">
-      <div class="warroom-panel-head" data-vis="{{ VA }}">
-        <h2 data-vis="{{ VA }}">Instrument Throughput</h2>
-      </div>
-      <div class="warroom-chart-lg" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ VA }}">
+      {{ card_heading("", "Instrument Throughput") }}
+      <div class="chart-container" data-vis="{{ VA }}">
         <canvas id="instrumentChart"></canvas>
       </div>
-    </div>
+    </section>
     {% endif %}
 
     {# Turnaround Time #}
     {% if admin_graphs %}
-    <div class="warroom-panel" data-vis="{{ VA }}">
-      <div class="warroom-panel-head" data-vis="{{ VA }}">
-        <h2 data-vis="{{ VA }}">Turnaround Time (hours)</h2>
-      </div>
-      <div class="warroom-chart-lg" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ VA }}">
+      {{ card_heading("", "Turnaround Time (hours)") }}
+      <div class="chart-container" data-vis="{{ VA }}">
         <canvas id="turnaroundChart"></canvas>
       </div>
-    </div>
+    </section>
     {% endif %}
   </div>
 
   {# RIGHT COLUMN: Status, activity feed, bottlenecks, top requesters #}
-  <div class="warroom-side-col" data-vis="{{ V }}">
+  <div style="display:flex;flex-direction:column;gap:var(--page-gap);" data-vis="{{ V }}">
 
     {# Status Breakdown #}
-    <div class="warroom-panel" data-vis="{{ V }}">
-      <div class="warroom-panel-head" data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">Status Breakdown</h2>
-      </div>
-      <div class="warroom-chart-sm" data-vis="{{ V }}">
+    <section class="card" data-vis="{{ V }}">
+      {{ card_heading("", "Status Breakdown") }}
+      <div class="chart-container-doughnut" data-vis="{{ V }}">
         <canvas id="statusChart"></canvas>
       </div>
-    </div>
+    </section>
 
     {# Bottleneck Alert #}
     {% if bottlenecks %}
-    <div class="warroom-panel warroom-panel-alert" data-vis="{{ V }}">
-      <div class="warroom-panel-head" data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">Bottleneck Alert</h2>
-      </div>
+    <section class="card warroom-panel-alert" data-vis="{{ V }}">
+      {{ card_heading("", "Bottleneck Alert") }}
       <div class="warroom-alert-list" data-vis="{{ V }}">
         {% for b in bottlenecks %}
         <div class="warroom-alert-row" data-vis="{{ V }}">
@@ -174,15 +155,13 @@
         </div>
         {% endfor %}
       </div>
-    </div>
+    </section>
     {% endif %}
 
     {# Recent Activity Feed #}
     {% if recent_activity %}
-    <div class="warroom-panel" data-vis="{{ V }}">
-      <div class="warroom-panel-head" data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">Recent Activity</h2>
-      </div>
+    <section class="card" data-vis="{{ V }}">
+      {{ card_heading("", "Recent Activity") }}
       <div class="warroom-feed" data-vis="{{ V }}">
         {% for act in recent_activity %}
         <div class="warroom-feed-item" data-vis="{{ V }}">
@@ -195,41 +174,35 @@
         </div>
         {% endfor %}
       </div>
-    </div>
+    </section>
     {% endif %}
 
     {# Top Requesters #}
     {% if admin_graphs and top_requesters %}
-    <div class="warroom-panel" data-vis="{{ VA }}">
-      <div class="warroom-panel-head" data-vis="{{ VA }}">
-        <h2 data-vis="{{ VA }}">Top Requesters</h2>
-      </div>
-      <div class="warroom-chart-sm" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ VA }}">
+      {{ card_heading("", "Top Requesters") }}
+      <div class="chart-container" data-vis="{{ VA }}">
         <canvas id="requesterChart"></canvas>
       </div>
-    </div>
+    </section>
     {% endif %}
 
     {# Weekly Bar #}
     {% if admin_graphs %}
-    <div class="warroom-panel" data-vis="{{ VA }}">
-      <div class="warroom-panel-head" data-vis="{{ VA }}">
-        <h2 data-vis="{{ VA }}">Weekly Overview</h2>
-      </div>
-      <div class="warroom-chart-sm" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ VA }}">
+      {{ card_heading("", "Weekly Overview") }}
+      <div class="chart-container" data-vis="{{ VA }}">
         <canvas id="weeklyBarChart"></canvas>
       </div>
-    </div>
+    </section>
     {% endif %}
   </div>
 </div>
 
 {# ── Data Tables ── #}
-<section class="warroom-tables" data-vis="{{ V }}">
-  <div class="warroom-panel" data-vis="{{ V }}">
-    <div class="warroom-panel-head" data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Instrument Performance</h2>
-    </div>
+<div class="grid-two" data-vis="{{ V }}">
+  <section class="card" data-vis="{{ V }}">
+    {{ card_heading("", "Instrument Performance") }}
     {% call paginated_pane('statsInstrument', max_height='22rem', page_size=10) %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Total</th><th data-vis="{{ V }}">Completed</th><th data-vis="{{ V }}">Samples</th></tr></thead>
@@ -247,11 +220,9 @@
       </tbody>
     </table>
     {% endcall %}
-  </div>
-  <div class="warroom-panel" data-vis="{{ V }}">
-    <div class="warroom-panel-head" data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Weekly Throughput</h2>
-    </div>
+  </section>
+  <section class="card" data-vis="{{ V }}">
+    {{ card_heading("", "Weekly Throughput") }}
     {% call paginated_pane('statsWeekly', max_height='22rem', page_size=10) %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Week</th><th data-vis="{{ V }}">Jobs</th><th data-vis="{{ V }}">Samples</th></tr></thead>
@@ -264,22 +235,23 @@
       </tbody>
     </table>
     {% endcall %}
-  </div>
-</section>
+  </section>
+</div>
 
 {# ── Export ── #}
-<section class="warroom-panel warroom-export" data-vis="super_admin site_admin instrument_admin operator">
-  <form method="post" action="{{ url_for('generate_export') }}" class="warroom-export-form" data-vis="super_admin site_admin instrument_admin operator">
-    <input type="hidden" name="horizon" value="{{ report_filters.horizon }}" data-vis="super_admin site_admin instrument_admin operator">
-    <input type="hidden" name="date_from" value="{{ report_filters.date_from }}" data-vis="super_admin site_admin instrument_admin operator">
-    <input type="hidden" name="date_to" value="{{ report_filters.date_to }}" data-vis="super_admin site_admin instrument_admin operator">
-    <input type="hidden" name="instrument_id" value="{{ report_filters.instrument_id }}" data-vis="super_admin site_admin instrument_admin operator">
-    <button type="submit" class="warroom-export-btn" data-vis="super_admin site_admin instrument_admin operator">Generate Excel Export</button>
+<section class="card compact" data-vis="super_admin site_admin instrument_admin operator">
+  {{ card_heading("", "Export") }}
+  <form method="post" action="{{ url_for('generate_export') }}" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;" data-vis="super_admin site_admin instrument_admin operator">
+    <input type="hidden" name="horizon" value="{{ report_filters.horizon }}">
+    <input type="hidden" name="date_from" value="{{ report_filters.date_from }}">
+    <input type="hidden" name="date_to" value="{{ report_filters.date_to }}">
+    <input type="hidden" name="instrument_id" value="{{ report_filters.instrument_id }}">
+    <button type="submit" class="btn" data-vis="super_admin site_admin instrument_admin operator">Generate Excel Export</button>
   </form>
   {% if exports %}
-  <div class="warroom-export-links" data-vis="super_admin site_admin instrument_admin operator">
+  <div style="display:flex;flex-direction:column;gap:0.3rem;margin-top:0.5rem;" data-vis="super_admin site_admin instrument_admin operator">
     {% for export in exports[:5] %}
-    <a href="{{ url_for('download_export', filename=export.name) }}" data-vis="super_admin site_admin instrument_admin operator">{{ export.name }}</a>
+    <a class="text-link" href="{{ url_for('download_export', filename=export.name) }}" data-vis="super_admin site_admin instrument_admin operator">{{ export.name }}</a>
     {% endfor %}
   </div>
   {% endif %}

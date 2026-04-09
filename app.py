@@ -5618,10 +5618,10 @@ def stats():
 
     # Status breakdown for doughnut chart
     status_breakdown = query_all(
-        """SELECT status, COUNT(*) AS cnt
+        """SELECT status, COUNT(*) AS count
         FROM sample_requests
         WHERE status NOT IN ('completed','rejected')
-        GROUP BY status ORDER BY cnt DESC""",
+        GROUP BY status ORDER BY count DESC""",
         (),
     )
 
@@ -5640,11 +5640,11 @@ def stats():
 
     # Top requesters
     top_requesters = query_all(
-        """SELECT u.name AS requester_name, COUNT(*) AS total_requests,
-               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed
+        """SELECT u.name AS requester_name, COUNT(*) AS job_count,
+               SUM(sr.sample_count) AS sample_count
         FROM sample_requests sr
         JOIN users u ON u.id = sr.requester_id
-        GROUP BY sr.requester_id ORDER BY total_requests DESC LIMIT 8""",
+        GROUP BY sr.requester_id ORDER BY job_count DESC LIMIT 8""",
         (),
     )
 

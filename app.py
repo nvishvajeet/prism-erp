@@ -3386,6 +3386,7 @@ def index():
             f"""
             SELECT sr.id, sr.request_no, sr.sample_name, sr.status, sr.created_at,
                    sr.sample_submitted_at, sr.sample_received_at, sr.scheduled_for,
+                   sr.assigned_operator_id,
                    i.id AS instrument_id, i.name AS instrument_name,
                    r.name AS requester_name
             FROM sample_requests sr

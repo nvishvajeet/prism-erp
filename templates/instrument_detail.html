@@ -177,9 +177,6 @@
       {% endcall %}
     </section>
 
-  {# RIGHT: queue + control panel + information (~67% width) #}
-  <div class="instrument-right-col" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
-
     {% if can_edit or can_add_downtime_here or can_edit_approval_config or can_archive_instrument or can_restore_instrument %}
     <section class="card" id="instrument-operation-pane" data-vis="requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin">
       {% call card_heading("", "Control Panel") %}

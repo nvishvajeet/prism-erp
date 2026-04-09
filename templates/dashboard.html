@@ -91,6 +91,7 @@
                   <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %} data-vis="{{ V }}">{{ operator["name"] }}</option>
                   {% endfor %}
                 </select>
+                <button type="submit" class="small-button" data-vis="{{ V }}">Assign</button>
               </form>
               {% if row["status"] == "sample_submitted" %}
               <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">

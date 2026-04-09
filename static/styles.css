@@ -5414,3 +5414,406 @@ img.instrument-photo:not([src]) {
   display: grid;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   DOWNTIME / MAINTENANCE STYLING
+   ───────────────────────────────────────────────────────────── */
+.downtime-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.downtime-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.downtime-form label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.downtime-form input,
+.downtime-form select {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+.downtime-form input:focus,
+.downtime-form select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(52, 101, 197, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.form-actions .btn {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #2e55c1;
+  box-shadow: 0 2px 4px rgba(52, 101, 197, 0.3);
+}
+
+.btn-secondary {
+  background-color: var(--bg-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-tertiary);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INSTRUMENT DETAIL: 5-PANEL GRID LAYOUT
+   ───────────────────────────────────────────────────────────── */
+
+.inst-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.95rem;
+  margin-top: 0;
+}
+
+/* Panel positioning in 5-column grid */
+.inst-detail-panel {
+  min-width: 0;
+}
+
+/* Info panel: top-left */
+.inst-detail-info-panel {
+  grid-column: 1 / 2;
+  grid-row: 1;
+}
+
+/* Stats panel: top-right */
+.inst-detail-stats-panel {
+  grid-column: 2 / 3;
+  grid-row: 1;
+}
+
+/* Queue panel: full-width row 2 */
+.inst-detail-queue-panel {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+/* Admin panel: bottom-left */
+.inst-detail-admin-panel {
+  grid-column: 1 / 2;
+  grid-row: 3;
+}
+
+/* Activity panel: bottom-right */
+.inst-detail-activity-panel {
+  grid-column: 2 / 3;
+  grid-row: 3;
+}
+
+/* Mobile: single column */
+@media (max-width: 900px) {
+  .inst-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inst-detail-info-panel,
+  .inst-detail-stats-panel,
+  .inst-detail-admin-panel,
+  .inst-detail-activity-panel {
+    grid-column: 1 / -1;
+  }
+
+  .inst-detail-queue-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INSTRUMENT DETAIL PANELS: CONTENT STYLING
+   ───────────────────────────────────────────────────────────── */
+
+/* Photo in Info panel */
+.inst-detail-photo-shell {
+  border-radius: calc(var(--radius-lg) - 0.2rem);
+  overflow: hidden;
+  margin-bottom: 1rem;
+  background: var(--panel-soft);
+  aspect-ratio: 4 / 3;
+}
+
+.instrument-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Stats grid in Stats panel */
+.inst-detail-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.inst-detail-stat-grid .stat {
+  padding: 0.65rem 0.85rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  text-align: left;
+  background: var(--panel-soft);
+  border-color: transparent;
+  transition: all 140ms ease;
+}
+
+.inst-detail-stat-grid .stat span {
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: inline;
+  margin: 0;
+}
+
+.inst-detail-stat-grid .stat small {
+  font-size: 0.8rem;
+  display: inline;
+  flex: 1;
+}
+
+.inst-detail-stat-grid .stat:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* Assignments in Admin panel */
+.inst-detail-assignments {
+  margin-bottom: 1.2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.assignment-block {
+  margin-bottom: 1rem;
+}
+
+.assignment-block .section-kicker {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.75rem;
+}
+
+.assignment-block .people-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.person-item {
+  padding: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.person-item a {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.person-item a:hover {
+  text-decoration: underline;
+}
+
+/* Compact details list */
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.compact-detail-grid {
+  grid-template-columns: auto 1fr;
+}
+
+.detail-grid dt {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detail-grid dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+/* Activity section styling */
+.activity-section {
+  margin-bottom: 1.2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.activity-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.activity-section .section-kicker {
+  margin: 0 0 0.6rem 0;
+  font-size: 0.75rem;
+}
+
+/* Downtime item */
+.downtime-item {
+  padding: 0.6rem 0.75rem;
+  background: var(--panel-soft);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.downtime-dates {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.downtime-dates span {
+  color: var(--ink);
+}
+
+.downtime-item .hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 0.3rem;
+}
+
+/* Activity event table in Activity panel */
+.inst-detail-activity-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.inst-detail-activity-panel tbody tr {
+  border-bottom: 1px solid var(--line);
+  padding: 0;
+}
+
+.inst-detail-activity-panel tbody tr:last-child {
+  border-bottom: none;
+}
+
+.inst-detail-activity-panel td {
+  padding: 0.6rem 0;
+  line-height: 1.45;
+}
+
+.inst-detail-activity-panel strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.inst-detail-activity-panel .muted {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Collapsible admin tools */
+.compact-admin-tools {
+  margin: 0.75rem 0 0 0;
+  padding: 0;
+}
+
+.compact-admin-tools summary {
+  cursor: pointer;
+  padding: 0.6rem 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--accent);
+  user-select: none;
+  transition: color 140ms ease;
+}
+
+.compact-admin-tools summary:hover {
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+.compact-admin-tools[open] summary {
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+
+.top-gap {
+  margin-top: 0.75rem;
+}
+
+/* Danger zone styling */
+.danger-zone summary {
+  color: #d32f2f;
+}
+
+.danger-zone summary:hover {
+  color: #b71c1c;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  .inst-detail-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .inst-detail-stat-grid .stat {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+  }
+
+  .inst-detail-stat-grid .stat span,
+  .inst-detail-stat-grid .stat small {
+    display: block;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid dt,
+  .detail-grid dd {
+    grid-column: 1;
+  }
+
+  .detail-grid dt {
+    margin-top: 0.5rem;
+  }
+}
+

@@ -31,3 +31,4 @@ exports/
 # Environment variables
 .env
 .env.local
+venv_310/

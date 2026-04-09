@@ -1862,14 +1862,14 @@ table td {
 }
 
 .instruments-table .col-name {
-  width: 18%;
+  width: 16%;
 }
 
-.instruments-table .col-links {
+.instruments-table .col-status {
   width: 10%;
 }
 
-.instruments-table .col-operation {
+.instruments-table .col-links {
   width: 10%;
 }
 
@@ -1886,11 +1886,7 @@ table td {
 }
 
 .instruments-table .col-location {
-  width: 12%;
-}
-
-.instruments-table .col-office {
-  width: 10%;
+  width: 14%;
 }
 
 .instruments-table th,
@@ -3662,6 +3658,13 @@ img.instrument-photo:not([src]) {
   max-width: 180px !important;
 }
 
+.location-line {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Paginated pane with max_height=none: no scrolling, paginate only ── */
 .paginated-pane-scroll[style*="--pane-max-height: none"] {
   overflow: visible;
@@ -4565,5 +4568,36 @@ img.instrument-photo:not([src]) {
   flex-direction: column;
   gap: 0.3rem;
   margin-top: 0.5rem;
+}
+
+/* ── Hover Back Button ── */
+.hover-back-btn {
+  position: fixed;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 900;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 1rem;
+  opacity: 0.5;
+  transition: opacity 0.2s, background 0.2s, box-shadow 0.2s, color 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  cursor: pointer;
+}
+
+.hover-back-btn:hover {
+  opacity: 1;
+  background: var(--panel-strong);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  color: var(--ink);
 }
 

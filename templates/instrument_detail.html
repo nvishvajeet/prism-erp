@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% from "_request_macros.html" import request_identity, requester_block, operator_block, status_block, meta_link with context %}
+{% block hover_back %}<a href="{{ url_for('instruments') }}" class="hover-back-btn" title="Back to Instruments">←</a>{% endblock %}
 {% block content %}
 
 {# ── Page header ── #}

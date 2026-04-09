@@ -68,6 +68,7 @@
   {% endif %}
 
   <main class="page" data-vis="{{ V }}">
+    {% block hover_back %}{% endblock %}
     {% if not current_user %}
     <nav class="nav" data-vis="requester">
       <a class="{% if request.endpoint == 'login' %}nav-active{% endif %}" href="{{ url_for('login') }}" data-vis="requester">Login</a>

@@ -82,7 +82,7 @@
               <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
             </div>
             <div class="quick-intake-actions" data-vis="{{ V }}">
-              <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" style="display: flex; gap: 0.4rem; align-items: center;" data-vis="{{ V }}">
+              <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-row" data-vis="{{ V }}">
                 <input type="hidden" name="action" value="quick_assign">
                 <input type="hidden" name="request_id" value="{{ row['id'] }}">
                 <select name="assigned_operator_id" data-vis="{{ V }}">

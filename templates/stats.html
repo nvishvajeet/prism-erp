@@ -75,7 +75,7 @@
   {{ card_heading("", "Instrument Status Board") }}
   <div class="warroom-instrument-grid" data-vis="{{ V }}">
     {% for inst in live_by_instrument %}
-    <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" class="warroom-inst-tile {% if inst.active_jobs > 0 %}wr-inst-active{% elif inst.queued_jobs > 0 %}wr-inst-queued{% else %}wr-inst-idle{% endif %}" style="text-decoration: none; color: inherit;" title="{{ inst.instrument_name }}" data-vis="{{ V }}">
+    <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" class="warroom-inst-tile {% if inst.active_jobs > 0 %}wr-inst-active{% elif inst.queued_jobs > 0 %}wr-inst-queued{% else %}wr-inst-idle{% endif %}" title="{{ inst.instrument_name }}" data-vis="{{ V }}">
       <div class="wr-inst-head" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">{{ inst.code or inst.instrument_name[:12] }}</strong>
         <span class="wr-inst-status-dot" data-vis="{{ V }}"></span>

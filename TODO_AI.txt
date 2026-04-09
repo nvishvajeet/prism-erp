@@ -119,11 +119,11 @@ WAVE 6: Documentation Rewrite
       - Update TODO section
       - Ensure schema section matches current DB
 
-WAVE 7: Verification
-  26. Run populate_full_demo.py and verify data integrity
-  27. Full crawl: all roles, all pages, all actions
-  28. Cross-page consistency check: counter verification, queue slice matching
-  29. Final smoke test
+WAVE 7: Verification ✅ (completed 2026-04-10)
+  26. ✅ Visibility audit: 171/171 pass, 0 fail (8 roles × 12 pages)
+  27. ✅ 500-action populate crawl: 0 server errors, 0 exceptions
+  28. ✅ Fixed sitemap TypeError (dict.items → group.entries)
+  29. ✅ Updated test matrix: finance_admin full access
 
 ---
 
@@ -143,3 +143,123 @@ that are visible to everyone; use subset variables (VA, etc.) for restricted ele
 
 Component system: Enforce macros over ad-hoc markup. All stat blobs, card headings,
 paginated panes, status badges, and chart bars use shared macros.
+
+===================================================================
+PHASE 4: ARCHITECTURAL IMPROVEMENT PLAN
+===================================================================
+
+Full crawl audit performed 2026-04-10 across all templates, CSS,
+app.py, and JS/static assets. Findings organized by Apple/Ive/Ferrari
+design philosophy: every element earns its place.
+
+Execution order: attack in waves, parallelize where possible.
+
+WAVE G: Breathing Room & Visual Density (Jony Ive Spacing)
+  30. Increase card padding (1rem → 1.5rem) and table cell padding
+      (0.5rem → 1rem). Tables are the #1 visual density problem.
+  31. Reduce table columns from 7 to 4-5 max on:
+      - Queue: merge Request+Instrument, hide Files column
+      - Instruments: move Avg Return + Location to detail view
+      - Finance revenue: collapse Paid/Free into single column
+  32. Add section-level spacing (2rem gap between major sections).
+      Currently sections touch each other — cramped, not Apple.
+  33. Empty state component: replace all "No data" strings with
+      centered icon + message + action link macro.
+  34. Action button clarity: rename ambiguous verbs:
+      - "Accept" → "Accept Sample"
+      - "Take Up" → "Schedule Job"
+      - "Assign" → "Assign to Operator"
+
+WAVE H: CSS Architecture Cleanup
+  35. Consolidate 3 duplicate button definitions (lines 2450, 2462,
+      5186) into single .btn base with BEM modifiers.
+  36. Extract 50+ hardcoded colors to CSS variables:
+      - .operation-status (#f4f6f7) → var(--panel)
+      - .operation-dot colors → var(--tone-active), etc.
+      - .nav-menu hover (#eef5fb) → var(--panel-hover)
+      - Input borders (#cbd7e3) → var(--line)
+  37. Remove 14 !important instances from Prism grid system.
+      Rebuild with BEM: .prism-grid__button--active
+  38. Standardize breakpoints to 3: 640px, 900px, 1280px.
+      Currently 12 different breakpoints scattered.
+  39. Add light theme input :focus state (currently invisible).
+      Add :disabled state for buttons (opacity 0.5, cursor: not-allowed).
+  40. Create shadow scale: --shadow-sm, --shadow-md, --shadow-lg.
+      Currently 8+ hardcoded shadow values.
+  41. Move DayPilot vendor CSS (lines 2935-3032) to separate file
+      or remove entirely (DayPilot JS is unused).
+  42. Add z-index scale: --z-dropdown: 30, --z-sticky: 40,
+      --z-modal: 50, --z-tooltip: 60. Currently 4 scattered values.
+
+WAVE I: App Architecture & Code Quality
+  43. Add database indexes (HIGH IMPACT, LOW EFFORT):
+      - sample_requests(status)
+      - sample_requests(instrument_id, status)
+      - approval_steps(sample_request_id, status)
+      - request_attachments(request_id, is_active)
+      - instrument_operators(instrument_id, user_id)
+      - audit_logs(entity_type, entity_id, created_at)
+  44. Extract permission check decorator to eliminate 12+ duplicated
+      access control patterns across routes:
+      @instrument_access_required("manage_or_operate")
+  45. Create RequestQueryBuilder to centralize the 6 near-identical
+      SELECT sr.*, i.name ... JOIN patterns.
+  46. Cache assigned_instrument_ids() in Flask g context.
+      Currently queries 3 tables per page load per user.
+  47. Break up request_detail() (682 lines!) into action handler
+      classes: ApproveStepAction, MarkReceivedAction, etc.
+  48. Add request status state machine:
+      TRANSITIONS = { "submitted": ["under_review", "rejected"], ... }
+      Enforce valid transitions; reject invalid status changes.
+
+WAVE J: Accessibility & PWA (Apple-Quality Polish)
+  49. Add ARIA attributes:
+      - role="navigation" on nav dropdowns
+      - aria-label on all interactive elements
+      - aria-hidden="true" on data-vis hidden elements
+      - Focus trap on modal dialogs (Tab key containment)
+  50. Add skip navigation link for screen readers.
+  51. Add meta tags for Apple polish:
+      - <meta name="theme-color"> (matches --accent)
+      - <meta name="apple-mobile-web-app-capable" content="yes">
+      - <link rel="apple-touch-icon"> (192px + 512px)
+  52. Create manifest.json for PWA installability.
+  53. Add toast notification system (bottom-right, auto-dismiss 3s)
+      to replace flash messages that require scroll-to-top.
+  54. Add client-side form validation with inline error states.
+      Currently all validation is server-side with page reload.
+
+WAVE K: Missing Production Features
+  55. Per-instrument custom request form fields:
+      - XRD needs crystal_system, ICP-MS needs sample_matrix
+      - Admin UI to define fields per instrument
+      - Dynamic form rendering on /requests/new
+  56. Bulk operations on queue page:
+      - Checkbox select multiple requests
+      - Bulk approve, bulk assign, bulk download
+  57. Notification system:
+      - Approval request emails (approve by deadline)
+      - Sample dropoff reminders (N days overdue)
+      - Status change notifications
+  58. Cost/grant tracking:
+      - Grant/account code per request
+      - Invoice generation
+      - Payment reconciliation UI
+  59. Approval chain customization UI:
+      - Admin can reorder/skip approval steps per instrument
+      - Default approver selection
+  60. Remove demo mode from production:
+      - Gate /demo/switch/ behind DEMO_MODE env flag
+      - Don't seed demo users on init_db() in production
+  61. Add Flask-WTF CSRF protection on all POST routes.
+
+WAVE L: Documentation & API
+  62. Create /api/v1 blueprint with JSON endpoints:
+      - GET /api/v1/requests — list with filters
+      - GET /api/v1/requests/:id — detail
+      - GET /api/v1/instruments — list
+      - POST /api/v1/requests/:id/actions/:action — state changes
+  63. Add OpenAPI/Swagger documentation.
+  64. Create .env.example with all required environment variables.
+  65. Create config.py with environment-specific defaults
+      (DevelopmentConfig, ProductionConfig).

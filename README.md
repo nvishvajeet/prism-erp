@@ -54,9 +54,66 @@ A Flask-based sample request and instrument workflow system for MIT-WPU's shared
 | F2 | 500-action populate crawl (0 server errors, 0 exceptions) | ✅ Done | ████████████████████ 100% |
 | F3 | Fix sitemap template bug (dict.items collision) + update test matrix | ✅ Done | ████████████████████ 100% |
 
+### Phase 4: Architectural Improvements (from full crawl audit)
+
+### Wave G: Breathing Room & Visual Density 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| G1 | Increase card + table padding (Ive spacing) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| G2 | Reduce table columns to 4-5 max (queue, instruments, finance) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| G3 | Section-level spacing (2rem gaps between major sections) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| G4 | Empty state component (icon + message + action link macro) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| G5 | Rename ambiguous action buttons (Accept→Accept Sample, etc.) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
+### Wave H: CSS Architecture Cleanup 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| H1 | Consolidate 3 duplicate button definitions → single .btn base | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| H2 | Extract 50+ hardcoded colors to CSS variables | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| H3 | Remove 14 !important instances (rebuild Prism with BEM) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| H4 | Standardize breakpoints to 3 (640/900/1280px) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| H5 | Add :focus, :disabled states + shadow/z-index scales | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| H6 | Remove unused DayPilot vendor code | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
+### Wave I: App Architecture & Code Quality 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| I1 | Add 6 database indexes (status, instrument+status, approvals) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| I2 | Extract permission check decorator (eliminates 12 duplications) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| I3 | RequestQueryBuilder (centralizes 6 identical SELECT patterns) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| I4 | Cache assigned_instrument_ids() in Flask g context | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| I5 | Break up request_detail() (682 lines) into action handlers | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| I6 | Request status state machine (enforce valid transitions) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
+### Wave J: Accessibility & PWA 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| J1 | ARIA attributes + focus trapping on modals | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| J2 | Apple meta tags (theme-color, touch-icon, PWA manifest) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| J3 | Toast notification system (replace flash messages) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| J4 | Client-side form validation with inline error states | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
+### Wave K: Production Features 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| K1 | Per-instrument custom request form fields | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| K2 | Bulk operations on queue (select, approve, assign, download) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| K3 | Notification system (approval emails, reminders) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| K4 | Cost/grant tracking + invoice generation | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| K5 | Approval chain customization UI | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| K6 | Security: CSRF protection + demo mode gating | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
+### Wave L: Documentation & API 🔲
+| # | Task | Status | Progress |
+|---|------|--------|----------|
+| L1 | /api/v1 JSON blueprint (requests, instruments, actions) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| L2 | OpenAPI/Swagger documentation | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| L3 | .env.example + config.py (dev/prod configs) | 🔲 Pending | ░░░░░░░░░░░░░░░░░░░░ 0% |
+
 ### Overall Progress
 
 ```
+Phase 3 — MVP Build
 Wave A  Foundation & Polish     [████████████████████] 100%  5/5
 Wave B  Settings & Navigation   [████████████████████] 100%  4/4
 Wave C  Panels & Dialog         [████████████████████] 100%  3/3
@@ -64,7 +121,17 @@ Wave D  Calendar Integration    [███████████████�
 Wave E  Demo Data & Docs        [░░░░░░░░░░░░░░░░░░░░]   0%  0/4
 Wave F  Final Verification      [████████████████████] 100%  3/3
 ─────────────────────────────────────────────────────────────
-TOTAL                           [████████████████████] 100%  24/24
+Phase 3 subtotal                                       83%  20/24
+
+Phase 4 — Architectural Improvements
+Wave G  Breathing Room          [░░░░░░░░░░░░░░░░░░░░]   0%  0/5
+Wave H  CSS Architecture        [░░░░░░░░░░░░░░░░░░░░]   0%  0/6
+Wave I  App Architecture        [░░░░░░░░░░░░░░░░░░░░]   0%  0/6
+Wave J  Accessibility & PWA     [░░░░░░░░░░░░░░░░░░░░]   0%  0/4
+Wave K  Production Features     [░░░░░░░░░░░░░░░░░░░░]   0%  0/6
+Wave L  Documentation & API     [░░░░░░░░░░░░░░░░░░░░]   0%  0/3
+─────────────────────────────────────────────────────────────
+TOTAL (all phases)              [████████░░░░░░░░░░░░]  37%  20/54
 ```
 
 ---

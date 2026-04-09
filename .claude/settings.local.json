@@ -9,7 +9,9 @@
       "Bash(curl -s http://127.0.0.1:5088)",
       "Bash(pkill -f view_readme.py)",
       "Bash(python /Users/vishvajeetn/Library/CloudStorage/Dropbox/Scheduler/Main/view_readme.py)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(venv/bin/python3 app.py)",
+      "Bash(venv/bin/python3 test_populate_crawl.py)"
     ]
   }
 }

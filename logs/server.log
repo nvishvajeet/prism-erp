@@ -1,0 +1,24 @@
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5055
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 132-408-163
+127.0.0.1 - - [09/Apr/2026 19:53:39] "GET /login HTTP/1.1" 200 -
+ * Detected change in '/Users/vishvajeetn/Library/CloudStorage/Dropbox/Scheduler/Main/test_populate_crawl.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 132-408-163
+127.0.0.1 - - [09/Apr/2026 19:55:06] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [09/Apr/2026 19:55:06] "GET /static/styles.css HTTP/1.1" 200 -
+127.0.0.1 - - [09/Apr/2026 19:55:06] "GET /static/grid-overlay.js HTTP/1.1" 200 -
+127.0.0.1 - - [09/Apr/2026 19:55:10] "GET /instruments HTTP/1.1" 200 -
+127.0.0.1 - - [09/Apr/2026 19:55:10] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Apr/2026 19:55:10] "[36mGET /static/grid-overlay.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Apr/2026 19:55:13] "GET /instruments/10 HTTP/1.1" 200 -
+127.0.0.1 - - [09/Apr/2026 19:55:13] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [09/Apr/2026 19:55:13] "[36mGET /static/grid-overlay.js HTTP/1.1[0m" 304 -
+/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/resource_tracker.py:216: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

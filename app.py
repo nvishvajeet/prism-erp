@@ -6274,7 +6274,7 @@ def request_calendar_card(request_id: int):
 @login_required
 def admin_users():
     user = current_user()
-    can_open_user_admin = is_owner(user) or user["role"] == "super_admin"
+    can_open_user_admin = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     if not can_open_user_admin:
         abort(403)
     can_create_users = is_owner(user)

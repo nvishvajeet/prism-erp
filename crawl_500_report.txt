@@ -1,0 +1,295 @@
+======================================================================
+PRISM 500-ACTION POPULATE CRAWL REPORT
+Generated: 2026-04-09T18:01:49.184737
+======================================================================
+Total actions:      500
+  OK (2xx/3xx):     427
+  Client err (4xx): 73
+  Server err (5xx): 0
+  Exceptions:       0
+Unique routes:      22
+Action types:       74
+
+FINAL DATABASE STATE:
+  users: 27
+  instruments: 14
+  requests: 13
+  messages: 50
+  request_statuses: {'awaiting_sample_submission': 1, 'completed': 1, 'under_review': 11}
+
+STATUS DISTRIBUTION:
+  200:   427 ( 85.4%) ██████████████████████████████████████████
+  403:    73 ( 14.6%) ███████
+
+TOP ACTIONS:
+  random_browse                                   128
+  create_request                                  116
+  post_message                                    100
+  random_request_detail                            54
+  create_user_requester                             8
+  browse_request_detail                             5
+  mark_sample_submitted                             5
+  mark_sample_received                              5
+  create_user_operator                              4
+  duplicate_request                                 4
+  create_user_instrument_admin                      3
+  create_user_faculty_in_charge                     3
+  health_check                                      2
+  create_user_professor_approver                    2
+  change_password                                   2
+  browse_empty_dashboard                            1
+  browse_empty_instruments                          1
+  browse_admin_users_empty                          1
+  create_user_super_admin                           1
+  create_user_site_admin                            1
+  create_user_finance_admin                         1
+  create_instrument_FESEM-01                        1
+  create_instrument_XRD-01                          1
+  create_instrument_NMR-01                          1
+  create_instrument_FTIR-01                         1
+
+ACTIONS BY ROLE:
+  anonymous                     2 actions
+  faculty_in_charge            28 actions
+  finance_admin                41 actions
+  instrument_admin             38 actions
+  operator                     40 actions
+  professor_approver           30 actions
+  requester                   176 actions
+  site_admin                   41 actions
+  super_admin                 104 actions
+
+ROUTE COVERAGE (22 unique):
+  /
+  /admin/users
+  /api/health-check
+  /calendar
+  /docs
+  /history/processed
+  /instruments
+  /instruments/<id>
+  /instruments/<id>/history
+  /me
+  /my/history
+  /profile/change-password
+  /requests/<id>
+  /requests/<id>/duplicate
+  /requests/new
+  /schedule
+  /sitemap
+  /stats
+  /users/<id>
+  /visualizations
+  /visualizations/group/Spectroscopy
+  /visualizations/instrument/<id>
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ALL ERRORS (73):
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  [121] [operator] POST /requests/5 -> 403
+    Action: post_message
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "post_message", "message_body": "Cross-referencing with previous batch results."}
+
+  [144] [operator] POST /requests/7 -> 403
+    Action: mark_sample_received
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "mark_sample_received"}
+
+  [150] [operator] POST /requests/3 -> 403
+    Action: start_request
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "start"}
+
+  [180] [finance_admin] GET /calendar -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [181] [finance_admin] POST /requests/3 -> 403
+    Action: post_message
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "post_message", "message_body": "Faculty reviewed \u2014 no issues found."}
+
+  [187] [finance_admin] GET /requests/3 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [204] [requester] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [211] [operator] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [225] [faculty_in_charge] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [227] [finance_admin] GET /schedule -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [237] [instrument_admin] POST /requests/8 -> 403
+    Action: post_message
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "post_message", "message_body": "Requesting extension on deadline."}
+
+  [260] [professor_approver] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [261] [faculty_in_charge] POST /requests/8 -> 403
+    Action: post_message
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+    POST Data: {"action": "post_message", "message_body": "Sample has been prepared according to protocol SOP-42."}
+
+  [270] [faculty_in_charge] GET /requests/9 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [276] [finance_admin] GET /stats -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [281] [operator] GET /requests/6 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [296] [instrument_admin] GET /requests/7 -> 403
+    Action: random_request_detail
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [307] [site_admin] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [471] [finance_admin] GET /admin/users -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  [486] [finance_admin] GET /instruments -> 403
+    Action: random_browse
+    Detail: <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Access Restricted</title>
+  <link rel="stylesheet" href
+
+  (53 duplicate errors suppressed)

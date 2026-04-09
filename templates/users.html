@@ -3,36 +3,36 @@
 {% block content %}
 {% call page_intro("", "User Management") %}
 {% endcall %}
-<section class="card" data-vis="site_admin super_admin">
+<section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Create / Invite User") }}
   {% if can_create_users %}
-  <form method="post" class="form-grid" data-vis="site_admin super_admin">
+  <form method="post" class="form-grid" data-vis="{{ V }}">
     <input type="hidden" name="action" value="create_user">
-    <label data-vis="site_admin super_admin">Name
-      <input type="text" name="name" required data-vis="site_admin super_admin">
+    <label data-vis="{{ V }}">Name
+      <input type="text" name="name" required data-vis="{{ V }}">
     </label>
-    <label data-vis="site_admin super_admin">Email
-      <input type="email" name="email" required data-vis="site_admin super_admin">
+    <label data-vis="{{ V }}">Email
+      <input type="email" name="email" required data-vis="{{ V }}">
     </label>
-    <label data-vis="site_admin super_admin">Role
-      <select name="role" data-vis="site_admin super_admin">
-        <option value="requester" selected data-vis="site_admin super_admin">Requester</option>
-        <option value="finance_admin" data-vis="site_admin super_admin">Finance</option>
-        <option value="professor_approver" data-vis="site_admin super_admin">Professor Approver</option>
-        <option value="faculty_in_charge" data-vis="site_admin super_admin">Faculty In-Charge</option>
-        <option value="site_admin" data-vis="site_admin super_admin">Website-Wide Admin</option>
-        <option value="instrument_admin" data-vis="site_admin super_admin">Instrument Admin</option>
-        <option value="operator" data-vis="site_admin super_admin">Operator</option>
+    <label data-vis="{{ V }}">Role
+      <select name="role" data-vis="{{ V }}">
+        <option value="requester" selected data-vis="{{ V }}">Requester</option>
+        <option value="finance_admin" data-vis="{{ V }}">Finance</option>
+        <option value="professor_approver" data-vis="{{ V }}">Professor Approver</option>
+        <option value="faculty_in_charge" data-vis="{{ V }}">Faculty In-Charge</option>
+        <option value="site_admin" data-vis="{{ V }}">Website-Wide Admin</option>
+        <option value="instrument_admin" data-vis="{{ V }}">Instrument Admin</option>
+        <option value="operator" data-vis="{{ V }}">Operator</option>
         <option value="super_admin" data-vis="super_admin">Super Admin</option>
       </select>
     </label>
-    <label data-vis="site_admin super_admin">Temporary Password
-      <input type="text" name="password" value="SimplePass123" data-vis="site_admin super_admin">
+    <label data-vis="{{ V }}">Temporary Password
+      <input type="text" name="password" value="SimplePass123" data-vis="{{ V }}">
     </label>
-    <button type="submit" data-vis="site_admin super_admin">Create User</button>
+    <button type="submit" data-vis="{{ V }}">Create User</button>
   </form>
   {% else %}
-  <p class="hint" data-vis="site_admin super_admin">Restricted.</p>
+  <p class="hint" data-vis="{{ V }}">Restricted.</p>
   {% endif %}
 </section>
 
@@ -51,25 +51,25 @@
         <td data-vis="{{ V }}">{{ "Yes" if user["active"] else "No" }}</td>
         <td data-vis="{{ V }}">
           {% if can_elevate_members and user["active"] %}
-          <form method="post" class="inline-form" data-vis="site_admin super_admin">
+          <form method="post" class="inline-form" data-vis="{{ V }}">
             <input type="hidden" name="action" value="elevate_member">
             <input type="hidden" name="user_id" value="{{ user['id'] }}">
-            <select name="new_role" data-vis="site_admin super_admin">
-              <option value="operator" data-vis="site_admin super_admin">Operator</option>
-              <option value="instrument_admin" data-vis="site_admin super_admin">Instrument Admin</option>
-              <option value="faculty_in_charge" data-vis="site_admin super_admin">Faculty In-Charge</option>
-              <option value="site_admin" data-vis="site_admin super_admin">Site Admin</option>
-              <option value="finance_admin" data-vis="site_admin super_admin">Finance Admin</option>
-              <option value="professor_approver" data-vis="site_admin super_admin">Professor Approver</option>
+            <select name="new_role" data-vis="{{ V }}">
+              <option value="operator" data-vis="{{ V }}">Operator</option>
+              <option value="instrument_admin" data-vis="{{ V }}">Instrument Admin</option>
+              <option value="faculty_in_charge" data-vis="{{ V }}">Faculty In-Charge</option>
+              <option value="site_admin" data-vis="{{ V }}">Site Admin</option>
+              <option value="finance_admin" data-vis="{{ V }}">Finance Admin</option>
+              <option value="professor_approver" data-vis="{{ V }}">Professor Approver</option>
             </select>
-            <button type="submit" data-vis="site_admin super_admin">Elevate</button>
+            <button type="submit" data-vis="{{ V }}">Elevate</button>
           </form>
           {% endif %}
           {% if can_delete_members and user["active"] %}
-          <form method="post" class="inline-form" data-vis="site_admin super_admin">
+          <form method="post" class="inline-form" data-vis="{{ V }}">
             <input type="hidden" name="action" value="delete_member">
             <input type="hidden" name="user_id" value="{{ user['id'] }}">
-            <button type="submit" class="danger" data-vis="site_admin super_admin">Delete Member</button>
+            <button type="submit" class="danger" data-vis="{{ V }}">Delete Member</button>
           </form>
           {% elif not can_elevate_members %}
           <span data-vis="{{ V }}">-</span>

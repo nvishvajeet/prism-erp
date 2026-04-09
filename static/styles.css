@@ -909,6 +909,47 @@ a:hover {
   transform: translateX(18px);
 }
 
+/* ── Input dialog (universal message/search widget) ── */
+.input-dialog { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: flex-start; }
+.input-dialog-type,
+.input-dialog-route { flex: 0 0 auto; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); font-size: 0.82rem; color: var(--ink); }
+.input-dialog-body { flex: 1 1 100%; display: flex; align-items: flex-end; gap: 0.4rem; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.4rem; background: var(--panel); }
+.input-dialog-body textarea { flex: 1; border: none; background: transparent; font: inherit; font-size: 0.85rem; color: var(--ink); resize: vertical; min-height: 2.2rem; outline: none; }
+.input-dialog-actions { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+.input-dialog-file { cursor: pointer; font-size: 1.1rem; opacity: 0.6; transition: opacity 0.15s; }
+.input-dialog-file:hover { opacity: 1; }
+.input-dialog-file input[type="file"] { display: none; }
+.input-dialog-send { padding: 0.3rem 0.7rem; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 0.82rem; cursor: pointer; white-space: nowrap; }
+.input-dialog-send:hover { filter: brightness(1.1); }
+
+/* ── Progress bar (docs page) ── */
+.progress-grid { display: flex; flex-direction: column; gap: 0.8rem; }
+.progress-phase { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 0.8rem; align-items: center; }
+.progress-phase-head { display: flex; align-items: center; gap: 0.5rem; grid-column: 1 / -1; }
+.progress-track { height: 0.5rem; border-radius: 0.25rem; background: var(--line); overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 0.25rem; transition: width 0.4s ease; background: var(--accent); }
+.progress-fill.fill-done { background: var(--lifecycle-ok); }
+.progress-fill.fill-active { background: var(--accent); }
+.progress-pct { font-size: 0.78rem; color: var(--muted); text-align: right; }
+.badge-done { background: var(--lifecycle-ok); color: #fff; }
+.badge-active { background: var(--accent); color: #fff; }
+.badge-planned { background: var(--line); color: var(--muted); }
+
+/* ── Docs page body ── */
+.doc-body { padding: var(--spacing-lg); line-height: 1.65; }
+.doc-body h1 { font-size: 1.4rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+.doc-body h2 { font-size: 1.15rem; margin: 1.3rem 0 0.4rem; }
+.doc-body h3 { font-size: 1rem; margin: 1rem 0 0.3rem; }
+.doc-body p { margin: 0.4rem 0; }
+.doc-body pre { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem; overflow-x: auto; font-size: 0.82rem; margin: 0.5rem 0; }
+.doc-body code { font-size: 0.85em; background: var(--line); padding: 0.1rem 0.3rem; border-radius: 3px; }
+.doc-body pre code { background: none; padding: 0; }
+.doc-body ul { padding-left: 1.2rem; margin: 0.3rem 0; }
+.doc-body li { margin: 0.15rem 0; }
+.doc-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+.doc-table th, .doc-table td { padding: 0.35rem 0.6rem; border: 1px solid var(--line); text-align: left; }
+.doc-table th { background: var(--panel); font-weight: 600; }
+
 .section-head {
   display: flex;
   justify-content: space-between;

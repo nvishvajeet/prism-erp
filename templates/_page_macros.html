@@ -65,6 +65,54 @@
 </div>
 {%- endmacro %}
 
+{#
+  input_dialog(form_action, action_name, placeholder, submit_label,
+               note_types=[], allow_file=True, allow_routing=False, routing_options=[])
+  Universal search/input panel widget — reusable across request comments,
+  instrument events, issue flagging, etc.
+  - form_action: URL the form POSTs to
+  - action_name: hidden input value for the "action" field
+  - placeholder: text for the textarea
+  - submit_label: button text
+  - note_types: list of (value, label) tuples for comment type dropdown
+  - allow_file: show file attachment input
+  - allow_routing: show routing selector (person/role)
+  - routing_options: list of (value, label) tuples for routing dropdown
+#}
+{% macro input_dialog(form_action, action_name, placeholder='Write a message...', submit_label='Send',
+                      note_types=[], allow_file=True, allow_routing=False, routing_options=[]) -%}
+<form method="post" action="{{ form_action }}" enctype="multipart/form-data" class="input-dialog" data-vis="{{ V }}">
+  <input type="hidden" name="action" value="{{ action_name }}">
+  {% if note_types %}
+  <select name="note_kind" class="input-dialog-type" data-vis="{{ V }}">
+    {% for val, label in note_types %}
+    <option value="{{ val }}" data-vis="{{ V }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  {% if allow_routing and routing_options %}
+  <select name="route_to" class="input-dialog-route" data-vis="{{ V }}">
+    <option value="" data-vis="{{ V }}">Send to...</option>
+    {% for val, label in routing_options %}
+    <option value="{{ val }}" data-vis="{{ V }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <div class="input-dialog-body" data-vis="{{ V }}">
+    <textarea name="message_body" rows="2" placeholder="{{ placeholder }}" data-vis="{{ V }}"></textarea>
+    <div class="input-dialog-actions" data-vis="{{ V }}">
+      {% if allow_file %}
+      <label class="input-dialog-file" data-vis="{{ V }}">
+        <input type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt">
+        <span data-vis="{{ V }}">📎</span>
+      </label>
+      {% endif %}
+      <button type="submit" class="input-dialog-send" data-vis="{{ V }}">{{ submit_label }}</button>
+    </div>
+  </div>
+</form>
+{%- endmacro %}
+
 {% macro card_heading(kicker, title, hint='') -%}
 <div class="section-head" data-vis="{{ V }}">
   <div data-vis="{{ V }}">

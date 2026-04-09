@@ -3586,6 +3586,130 @@ def sitemap():
     return render_template("sitemap.html", sections=sections, title="Settings")
 
 
+@app.route("/docs")
+@login_required
+def docs():
+    """Render project documentation + progress bar from PROJECT.md."""
+    import re
+
+    project_path = os.path.join(os.path.dirname(__file__), "PROJECT.md")
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+
+    project_content = ""
+    readme_content = ""
+    try:
+        with open(project_path, "r") as f:
+            project_content = f.read()
+    except FileNotFoundError:
+        project_content = "_PROJECT.md not found._"
+    try:
+        with open(readme_path, "r") as f:
+            readme_content = f.read()
+    except FileNotFoundError:
+        readme_content = ""
+
+    # Parse progress table from README
+    progress_phases = []
+    for line in readme_content.split("\n"):
+        m = re.match(r"\|\s*(.+?)\s*\|\s*(Done|In Progress|Planned|Future)\s*\|.*?(\d+)%\s*\|", line)
+        if m:
+            progress_phases.append({
+                "name": m.group(1).strip(),
+                "status": m.group(2).strip(),
+                "pct": int(m.group(3)),
+            })
+
+    # Simple markdown-to-HTML (headings, bold, code blocks, lists, tables, links)
+    def md_to_html(md):
+        lines = md.split("\n")
+        html_parts = []
+        in_code = False
+        in_table = False
+        in_list = False
+        for line in lines:
+            # Code blocks
+            if line.strip().startswith("```"):
+                if in_code:
+                    html_parts.append("</code></pre>")
+                    in_code = False
+                else:
+                    lang = line.strip()[3:].strip()
+                    html_parts.append(f'<pre><code class="lang-{lang}">')
+                    in_code = True
+                continue
+            if in_code:
+                import html as html_mod
+                html_parts.append(html_mod.escape(line))
+                continue
+            # Close table/list if needed
+            if in_table and not line.strip().startswith("|"):
+                html_parts.append("</tbody></table>")
+                in_table = False
+            if in_list and not re.match(r"^\s*[-*]\s", line) and not re.match(r"^\s*\d+\.\s", line) and line.strip():
+                html_parts.append("</ul>")
+                in_list = False
+            # Blank lines
+            if not line.strip():
+                continue
+            # Headings
+            hm = re.match(r"^(#{1,6})\s+(.*)", line)
+            if hm:
+                level = len(hm.group(1))
+                text = hm.group(2).strip()
+                html_parts.append(f"<h{level}>{text}</h{level}>")
+                continue
+            # Tables
+            if line.strip().startswith("|"):
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                if all(re.match(r"^[-:]+$", c) for c in cells):
+                    continue  # separator row
+                if not in_table:
+                    html_parts.append('<table class="doc-table"><thead><tr>')
+                    for c in cells:
+                        html_parts.append(f"<th>{c}</th>")
+                    html_parts.append("</tr></thead><tbody>")
+                    in_table = True
+                else:
+                    html_parts.append("<tr>")
+                    for c in cells:
+                        html_parts.append(f"<td>{c}</td>")
+                    html_parts.append("</tr>")
+                continue
+            # Lists
+            lm = re.match(r"^\s*[-*]\s+(.*)", line)
+            if lm:
+                if not in_list:
+                    html_parts.append("<ul>")
+                    in_list = True
+                item_text = lm.group(1)
+                # Checkboxes
+                item_text = item_text.replace("[x]", "&#9745;").replace("[ ]", "&#9744;")
+                html_parts.append(f"<li>{item_text}</li>")
+                continue
+            # Paragraph — apply inline formatting
+            text = line
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+            text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+            text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
+            html_parts.append(f"<p>{text}</p>")
+        if in_table:
+            html_parts.append("</tbody></table>")
+        if in_list:
+            html_parts.append("</ul>")
+        if in_code:
+            html_parts.append("</code></pre>")
+        return "\n".join(html_parts)
+
+    project_html = md_to_html(project_content)
+
+    return render_template(
+        "docs.html",
+        title="Documentation",
+        progress_phases=progress_phases,
+        project_html=project_html,
+    )
+
+
 @app.route("/requests/<int:request_id>/quick-receive", methods=["POST"])
 @login_required
 def quick_receive_request(request_id: int):

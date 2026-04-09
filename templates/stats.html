@@ -2,7 +2,6 @@
 {% from "_stream_macros.html" import stream_header with context %}
 {% from "_page_macros.html" import card_heading, paginated_pane, stat_blob with context %}
 {# V is injected globally by inject_globals(); no need to redefine #}
-{% set VA = "super_admin site_admin instrument_admin" %}
 {% block content %}
 
 {# ══════════════════════════════════════════════════════
@@ -100,9 +99,9 @@
 
     {# Instrument Throughput #}
     {% if admin_graphs %}
-    <section class="card" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ V }}">
       {{ card_heading("", "Instrument Throughput") }}
-      <div class="chart-container" data-vis="{{ VA }}">
+      <div class="chart-container" data-vis="{{ V }}">
         <canvas id="instrumentChart"></canvas>
       </div>
     </section>
@@ -110,9 +109,9 @@
 
     {# Turnaround Time #}
     {% if admin_graphs %}
-    <section class="card" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ V }}">
       {{ card_heading("", "Turnaround Time (hours)") }}
-      <div class="chart-container" data-vis="{{ VA }}">
+      <div class="chart-container" data-vis="{{ V }}">
         <canvas id="turnaroundChart"></canvas>
       </div>
     </section>
@@ -166,9 +165,9 @@
 
     {# Top Requesters #}
     {% if admin_graphs and top_requesters %}
-    <section class="card" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ V }}">
       {{ card_heading("", "Top Requesters") }}
-      <div class="chart-container" data-vis="{{ VA }}">
+      <div class="chart-container" data-vis="{{ V }}">
         <canvas id="requesterChart"></canvas>
       </div>
     </section>
@@ -176,9 +175,9 @@
 
     {# Weekly Bar #}
     {% if admin_graphs %}
-    <section class="card" data-vis="{{ VA }}">
+    <section class="card" data-vis="{{ V }}">
       {{ card_heading("", "Weekly Overview") }}
-      <div class="chart-container" data-vis="{{ VA }}">
+      <div class="chart-container" data-vis="{{ V }}">
         <canvas id="weeklyBarChart"></canvas>
       </div>
     </section>
@@ -226,19 +225,19 @@
 </div>
 
 {# ── Export ── #}
-<section class="card compact" data-vis="super_admin site_admin instrument_admin operator">
+<section class="card compact" data-vis="{{ V }}">
   {{ card_heading("", "Export") }}
-  <form method="post" action="{{ url_for('generate_export') }}" class="stats-export-form" data-vis="super_admin site_admin instrument_admin operator">
+  <form method="post" action="{{ url_for('generate_export') }}" class="stats-export-form" data-vis="{{ V }}">
     <input type="hidden" name="horizon" value="{{ report_filters.horizon }}">
     <input type="hidden" name="date_from" value="{{ report_filters.date_from }}">
     <input type="hidden" name="date_to" value="{{ report_filters.date_to }}">
     <input type="hidden" name="instrument_id" value="{{ report_filters.instrument_id }}">
-    <button type="submit" class="btn" data-vis="super_admin site_admin instrument_admin operator">Generate Excel Export</button>
+    <button type="submit" class="btn" data-vis="{{ V }}">Generate Excel Export</button>
   </form>
   {% if exports %}
-  <div class="stats-export-list" data-vis="super_admin site_admin instrument_admin operator">
+  <div class="stats-export-list" data-vis="{{ V }}">
     {% for export in exports[:5] %}
-    <a class="text-link" href="{{ url_for('download_export', filename=export.name) }}" data-vis="super_admin site_admin instrument_admin operator">{{ export.name }}</a>
+    <a class="text-link" href="{{ url_for('download_export', filename=export.name) }}" data-vis="{{ V }}">{{ export.name }}</a>
     {% endfor %}
   </div>
   {% endif %}

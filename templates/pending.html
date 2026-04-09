@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, bounded_pane %}
+{% block content %}
+
+<div class="page-title-bar" data-vis="all">
+  <h1 class="page-title" data-vis="all">Pending</h1>
+  {% if total > 0 %}
+  <div class="page-title-actions" data-vis="all">
+    <span class="hint" data-vis="all">{{ current_idx + 1 }} of {{ total }}</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if total == 0 %}
+<section class="card" data-vis="all">
+  <p class="hint p-075" data-vis="all">Nothing pending. All caught up.</p>
+</section>
+{% else %}
+
+{# ── Card viewer with left/right nav ── #}
+<div class="pending-viewer" data-vis="all">
+  <a class="pending-nav pending-nav--prev {% if current_idx == 0 %}pending-nav--disabled{% endif %}"
+     href="{{ url_for('pending_review', idx=current_idx - 1) }}" data-vis="all">←</a>
+
+  <div class="pending-card-area" data-vis="all">
+    {% if current_request %}
+    <section class="card" data-vis="all">
+      <div class="section-head" data-vis="all">
+        <div data-vis="all">
+          <h2 data-vis="all">{{ current_request["request_no"] }}</h2>
+          <span class="badge status-{{ current_request['status'] }}" data-vis="all">{{ request_display_status(current_request["status"]) }}</span>
+        </div>
+        <a class="text-link" href="{{ url_for('request_detail', request_id=current_request['id']) }}" data-vis="all">Open Full Page →</a>
+      </div>
+      <dl class="detail-grid compact-detail-grid" data-vis="all">
+        <dt data-vis="all">Instrument</dt><dd data-vis="all">{{ current_request["instrument_name"] }}</dd>
+        <dt data-vis="all">Sample</dt><dd data-vis="all">{{ current_request["sample_name"] }} ({{ current_request["sample_count"] }})</dd>
+        <dt data-vis="all">Requester</dt><dd data-vis="all">{{ current_request["requester_name"] }}</dd>
+        {% if current_request["operator_name"] %}<dt data-vis="all">Operator</dt><dd data-vis="all">{{ current_request["operator_name"] }}</dd>{% endif %}
+        <dt data-vis="all">Created</dt><dd data-vis="all">{{ format_dt(current_request["created_at"]) }}</dd>
+        {% if current_request["scheduled_for"] %}<dt data-vis="all">Scheduled</dt><dd data-vis="all">{{ format_dt(current_request["scheduled_for"]) }}</dd>{% endif %}
+        {% if current_request["material"] %}<dt data-vis="all">Material</dt><dd data-vis="all">{{ current_request["material"] }}</dd>{% endif %}
+        {% if current_request["description"] %}<dt data-vis="all">Description</dt><dd class="dd-wrap" data-vis="all">{{ current_request["description"] }}</dd>{% endif %}
+      </dl>
+    </section>
+    {% endif %}
+  </div>
+
+  <a class="pending-nav pending-nav--next {% if current_idx >= total - 1 %}pending-nav--disabled{% endif %}"
+     href="{{ url_for('pending_review', idx=current_idx + 1) }}" data-vis="all">→</a>
+</div>
+
+{# ── List below the viewer ── #}
+{% if pending_approval %}
+<section class="card" data-vis="all">
+  {{ card_heading("", "Needs Your Approval") }}
+  {% call bounded_pane('pendingList', max_height='none', page_size=10) %}
+  <table class="inst-list-table" data-vis="all">
+    <thead data-vis="all"><tr data-vis="all"><th data-vis="all">Request</th><th data-vis="all">Instrument</th><th data-vis="all">Role</th><th data-vis="all">Date</th></tr></thead>
+    <tbody data-vis="all">
+    {% for pa in pending_approval %}
+    <tr data-pane-item data-vis="all" {% if all_ids[current_idx] == pa['id'] %}class="queue-row-focus"{% endif %}>
+      <td data-vis="all"><a class="text-link" href="{{ url_for('pending_review', idx=loop.index0) }}" data-vis="all">{{ pa["request_no"] }}</a></td>
+      <td data-vis="all">{{ pa["instrument_name"] }}</td>
+      <td data-vis="all"><span class="inst-cat-tag" data-vis="all">{{ pa["approver_role"].replace("_"," ").title() }}</span></td>
+      <td data-vis="all"><small data-vis="all">{{ format_date(pa["created_at"]) }}</small></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+</section>
+{% endif %}
+
+{% if own_requests %}
+<section class="card" data-vis="all">
+  {{ card_heading("", "Your Requests") }}
+  {% call bounded_pane('ownList', max_height='none', page_size=10) %}
+  <table class="inst-list-table" data-vis="all">
+    <thead data-vis="all"><tr data-vis="all"><th data-vis="all">Request</th><th data-vis="all">Instrument</th><th data-vis="all">Status</th><th data-vis="all">Date</th></tr></thead>
+    <tbody data-vis="all">
+    {% for req in own_requests %}
+    {% set offset = pending_approval|length %}
+    <tr data-pane-item data-vis="all" {% if all_ids[current_idx] == req['id'] %}class="queue-row-focus"{% endif %}>
+      <td data-vis="all"><a class="text-link" href="{{ url_for('pending_review', idx=offset + loop.index0) }}" data-vis="all">{{ req["request_no"] }}</a></td>
+      <td data-vis="all">{{ req["instrument_name"] }}</td>
+      <td data-vis="all"><span class="badge status-{{ req['status'] }}" data-vis="all">{{ request_display_status(req["status"]) }}</span></td>
+      <td data-vis="all"><small data-vis="all">{{ format_date(req["created_at"]) }}</small></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+</section>
+{% endif %}
+{% endif %}
+
+<script>
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowLeft') {
+    var prev = document.querySelector('.pending-nav--prev:not(.pending-nav--disabled)');
+    if (prev) prev.click();
+  }
+  if (e.key === 'ArrowRight') {
+    var next = document.querySelector('.pending-nav--next:not(.pending-nav--disabled)');
+    if (next) next.click();
+  }
+});
+</script>
+{% endblock %}

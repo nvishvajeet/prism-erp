@@ -1,0 +1,76 @@
+AI_INSTRUCTION:
+
+This file contains active tasks and user-reported issues. Treat this file as high priority guidance, not as a rigid or mandatory script.
+
+Guidelines for AI agents:
+
+1. Read this file before starting work and use it to understand current priorities.
+2. Do not blindly execute everything. First verify the current system state and ensure changes are correct in context.
+3. If parts of this file are outdated, inconsistent, or already implemented, you may clean them up or ignore them.
+4. If formatting of this file becomes messy due to frequent updates, you may reorganize or clean the structure, but do not remove user intent or content.
+5. Prefer fixing root causes in the codebase rather than mechanically applying instructions.
+6. If you detect bugs or inconsistencies not listed here, you should fix them and optionally append them to this file under a separate section.
+7. Do not force architectural changes unless clearly necessary. Adapt to the existing system.
+8. This to-do list is a guide to intent, not a strict contract.
+
+PRIORITY:
+
+- First ensure system stability and consistency.
+- Then implement improvements listed here where applicable.
+- Maintain coherence across pages, views, and data flow.
+
+OPTIONAL_MAINTENANCE:
+
+- You may normalize formatting of this file.
+- You may group related items.
+- You may remove duplication.
+- You may append execution notes separately if useful.
+
+Do not block progress just because this file is imperfect.
+
+
+DateTime: 2026-04-09 12:40 PM CEST
+
+Status: ALL ITEMS IMPLEMENTED (2026-04-09)
+
+Execution notes:
+- #1/#6 (duplicate): Instruments table restructured — Name, Status, Avg Return, Operator, Faculty, Location, Links
+- #2: Quick intake panel — page_size=3, max_height=none, inline Assign dropdown + Accept button
+- #3: Instrument queue blocks — flex-wrap grid (no carousel), 5 samples per card, overflow link
+- #4: Queue columns — Request, Instrument, Status, Requester, Time, File, Action (operator-only). All hyperlinked. Files limited to last 3.
+- #5: Stats page — all counters clickable, instrument tiles link to detail, unified stat classes
+- #7: Hover back button — fixed circle in left margin on sub-pages
+- #8: Instrument detail — "Create New Request" button, three-block layout
+- #9: Instrument detail — machine left (1/3), queue+control right (2/3)
+- #10: No scroll panes — all paginated_pane max_height='none'
+
+Log:
+
+1. On the instrument page, ensure the D1, D2, D3 elements are each in their own distinct column. The columns should be structured as follows: first column is the instrument name, second column is the status (e.g., accepting, maintenance), third is average return time, fourth is the operator, fifth is faculty in charge, and sixth is location. In the location column, display address line 1 above address line 2, with a fixed character limit of 20 characters each. Lastly, in the links column, replace L3, L8, L13 with labeled links: Queue, Calendar, and History. Keep all link labels explicitly named as such.
+
+2. On the home page, panel B1 to B6 should not be scrollable. This panel should only have three rows of sample blocks. Each sample block should contain quick actions. In the queue page, quick actions like assign and accept are on the side. Here, assign should be in the same row as the dropdown menu. So first have the dropdown menu (e.g., Annika), and to the right, assign. Below that, accept should be shown only if the sample needs acceptance.
+
+3. On the home page, L1 to L9 blocks should be there (at most). These blocks are in a view pane. The blocks should wrap. For L1, it should have four data columns. First is the request name (not a number). Below the name, if there is space, show secondary metadata. If not, skip it. Next is status, which is a blob, then time. Time or date, choose to avoid clutter. Five samples max are shown. If there are more, the fifth row shows overflow, which leads to the next page.
+
+4. In the job queue page, the columns should be request, instrument, status, requester, time (decide whether to split across two lines), file, and action. Every field should be hyperlinked to the relevant page. Clicking request, status, time, requester, or file should lead to their respective pages. In the file column, show the last three files from the sample’s event log.
+
+5. On the statistics page, below K1 and similar elements, all counters should be unified into a single class template. Instead of inst-001 etc., show the instrument name. This page should only show exactly the statistics relevant to the user’s role—fully labeled and clear. It should act like a "war room" view, focused and crisp. Each item should be clickable and lead back to its relevant page. Propagate the general philosophy of queue-based partial views and scoped counters to this statistics page.
+
+6. On the instrument page, ensure the D1, D2, D3 elements are each in their own distinct column. The columns should be structured as follows: first column is the instrument name, second column is the status (e.g., accepting, maintenance), third is average return time, fourth is the operator, fifth is faculty in charge, and sixth is location. In the location column, display address line 1 above address line 2, with a fixed character limit of 20 characters each. Lastly, in the links column, replace L3, L8, L13 with labeled links: Queue, Calendar, and History. Keep all link labels explicitly named as such.”
+
+
+
+7. So, I am on the instruments page. Let’s say I went to one of the instruments, let’s say AFM. Firstly, you’ll have a hover back button everywhere in the left margin on all pages where it helps to have this back structure that helps navigate and not make a person lost. Okay, write this down as number seven.
+
+
+8. On the instrument page, structure the main layout into three distinct blocks: first, the main block for the instrument’s metadata; second, a control panel block; and third, an update form block. The update form block is visible only to admins and allows them to customize all fields the request form user can see. Additionally, on the top right of the nav bar, add a ‘Create New Request’ button. Any authorized user can click this to create a request. The request ID will be formed from the first two letters of the instrument, even numbers for internal requests, odd numbers for external requests, followed by a three- or four-digit sequential number (e.g., AF02-001 for internal, AF01-003 for external).
+
+
+
+9. On the instrument page, reposition the blocks as follows: the machine metadata block (currently C4) should be on the left, occupying about one-third of horizontal space. Next to it on the right, place the queue block (currently C2) with the same horizontal endpoint as C4. Below the queue block, add the control panel block, followed by an information block about the instrument. Below that, place a form control panel related to forms for that instrument. When a user clicks ‘Create New Request’ and selects the instrument, a ticket number will be generated at the top. The request will proceed through an approval sequence, allowing up to 10 levels of approval. Admins should be able to adjust the form options, including adding or removing choices. Each instrument can have up to 10 operators and up to 10 faculty-in-charge roles.”
+
+
+10.
+ Here’s entry ten for you:
+
+“10. Standardize event panes across the site for instruments, jobs, and samples. Each event pane should allow comments and file attachments, just like sample pages, creating a record for the instrument. The queue pane for an instrument should be a slice of the global queue with the same template. Show only four or five samples for that instrument. Across the entire website, avoid scroll panes. Use view panes with overflow instead. Everything should be static, except the hovering back button. Even nested view panes should have overflow behavior rather than scrolling.”

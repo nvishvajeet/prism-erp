@@ -130,23 +130,36 @@ To run a lightweight regression pass:
 4. **Commit after finishing** each task. Never leave uncommitted work.
 5. If the last job wasn't completed, revert via git, re-read the plan, complete it, then move on.
 
+## Task Execution Source
+
+All active work is defined in:
+
+TODO_AI.txt
+
+Workflow:
+
+1. Read TODO_AI.txt first.
+2. Execute tasks in order.
+3. Do not invent new architecture unless required.
+4. Do not ignore TODO_AI.txt even if other instructions exist.
+
 ## Current Task
 
-**Crawler-ready Grid Overlay** — DONE
+**TODO_AI.txt Implementation** — DONE
 
-Completed:
-- [x] Grid overlay JS with alphanumeric codes (H1, S3, E4…)
-- [x] Click-to-log feedback panel with inline notes, path mode, copy export
-- [x] Full CSS for panel, badges, dark theme
-- [x] `prism.on/off/tap/codes/at/find` API for programmatic use
-- [x] `prism.path.start()` / `.step(code, note)` / `.end()` for path recording
-- [x] Error interception: window.onerror, unhandledrejection, console.error → errorLog
-- [x] `prism.errors()` to dump caught exceptions with page + timestamp
-- [x] `prism.dump()` → full JSON export (log + errors + paths + page metadata)
-- [x] Non-destructive: data-prism-ignore, form element passthrough, capture-phase intercepts
-- [x] Server persistence: auto-flush to `/prism/save`, read from `/prism/log`, clear via `/prism/clear`
-- [x] `prism.flush()` for crawlers to force immediate save
-- [x] Tested via JS console injection on all pages — zero JS errors
+All 10 tasks from TODO_AI.txt have been implemented:
+
+- [x] #1/#6: Instruments page — 7-column table (Name, Status, Avg Return, Operator, Faculty, Location, Links)
+- [x] #2: Dashboard quick intake — 3 rows max, no scroll, inline Assign/Accept actions
+- [x] #3: Dashboard instrument queues — wrapping flex grid (up to 9), 5 samples per card, overflow link
+- [x] #4: Queue page — reordered columns (Request, Instrument, Status, Requester, Time, File, Action), all hyperlinked, file column limited to last 3
+- [x] #5: Statistics — unified clickable counters, instrument tiles link to detail pages, war room feel
+- [x] #7: Hover back button — fixed left-margin button on all sub-pages (instrument detail, request detail, user profile, visualization)
+- [x] #8: Instrument detail — "Create New Request" button in header, three-block layout
+- [x] #9: Instrument detail — machine metadata left (1/3), queue + control panel right (2/3)
+- [x] #10: No scroll panes — all paginated_pane calls use max_height='none', pagination-only overflow
+
+Previous: Crawler-ready Grid Overlay — DONE
 
 ## View Panes
 
@@ -156,27 +169,27 @@ All paginated view panes in the system. Each pane has a unique `data-pane-id` at
 
 | Pane ID | Location | Page Size | Description |
 |---------|----------|-----------|-------------|
-| `quickIntake` | Top section | 8 | Quick intake / recent requests list |
+| `quickIntake` | Top section | 3 | Quick intake with inline Assign/Accept actions |
 | `instCard{N}` | Instrument Queues section | 5 | Per-instrument queue card (dynamic, one per active instrument, e.g. `instCard10` for HPLC) |
 
 ### Instruments (`/instruments`) — instruments.html
 
 | Pane ID | Location | Page Size | Description |
 |---------|----------|-----------|-------------|
-| `mainInstruments` | Main table | 25 | Active instruments table (7 columns: Name, Avg Return, Operator, Faculty, Location, Office, Links) |
+| `mainInstruments` | Main table | 25 | Active instruments table (7 columns: Name, Status, Avg Return, Operator, Faculty, Location, Links) |
 | `archivedInstruments` | Below main table | 25 | Archived instruments table (same 7-column layout) |
 
 ### Queue (`/schedule`) — schedule.html
 
 | Pane ID | Location | Page Size | Description |
 |---------|----------|-----------|-------------|
-| `centralQueue` | Full page table | 25 | Central job queue (8 columns: Request, Stage, Instrument, Requester, Time, Operator, Files, Action) |
+| `centralQueue` | Full page table | 25 | Central job queue (6-7 columns: Request, Instrument, Status, Requester, Time, File, Action if operator) |
 
 ### Instrument Detail (`/instruments/<id>`) — instrument_detail.html
 
 | Pane ID | Location | Page Size | Description |
 |---------|----------|-----------|-------------|
-| `instQueue` | Queue section | 12 | Instrument-specific queue (4 columns: Request, Stage, Time, Action) |
+| `instQueue` | Queue section | 5 | Instrument-specific queue (4 columns: Request, Stage, Time, Action) |
 | `instEvents` | Events section | 10 | Audit event log for the instrument |
 
 ### Request Detail (`/schedule/<id>`) — request_detail.html
@@ -195,8 +208,7 @@ All paginated view panes in the system. Each pane has a unique `data-pane-id` at
 
 ## Known Bugs / TODO
 
-- **Dashboard instrument card CSS** (`.instrument-card`) targets a class that may not be present in `dashboard.html` — verify the card wrapper has this class or the uniform-height styles won't apply.
 - **Queue page title** now always says "Jobs" — consider showing the instrument name in a subtitle or breadcrumb when pre-filtered via `?instrument_id=`.
 - **Template caching pitfall**: production deploys (`debug=False`, no `LAB_SCHEDULER_DEBUG`) cache templates. Any template-only change requires a process restart to take effect. Dev mode now auto-reloads.
-- **stats page `i.status = 'active'` fix**: the previous `i.active = 1` column reference was wrong (column doesn't exist). Fixed to `i.status = 'active'`. Verify no other queries reference `i.active`.
 - **Row serialization**: stats route converts SQLite Row objects to dicts before passing to `tojson`. If new stats queries are added, they must also use `dict(r)` conversion.
+- **Server restart required**: After the latest batch of template changes, the Flask dev server needs a restart to pick up all modifications. Run `python3 app.py` or use `start.sh`.

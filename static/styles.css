@@ -1,4 +1,5 @@
 :root {
+  --page-gap: 0.85rem;
   --bg: #f7f9fc;
   --panel: rgba(255, 255, 255, 0.985);
   --panel-strong: #ffffff;
@@ -696,19 +697,22 @@ a:hover {
   max-width: 1420px;
   margin: 0 auto;
   padding: 1.15rem 1.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
 }
 
 .stats,
 .grid-two {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.2rem;
+  gap: var(--page-gap);
 }
 
 .instrument-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
-  gap: 0.95rem;
+  gap: var(--page-gap);
   align-items: start;
 }
 
@@ -716,7 +720,7 @@ a:hover {
 .instrument-dashboard-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.85fr);
-  gap: 0.95rem;
+  gap: var(--page-gap);
   align-items: start;
 }
 
@@ -805,7 +809,7 @@ a:hover {
 .request-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
-  gap: 0.95rem;
+  gap: var(--page-gap);
   align-items: start;
 }
 
@@ -1002,9 +1006,13 @@ a:hover {
 .card {
   background: var(--panel);
   border-radius: 16px;
-  padding: 0.9rem 1rem;
+  padding: 1rem 1.15rem;
+  line-height: 1.5;
   border: 1px solid rgba(227, 234, 241, 0.96);
   box-shadow: var(--shadow-card);
+}
+.card > * + * {
+  margin-top: 0.6rem;
 }
 
 .card.compact {
@@ -3584,4 +3592,56 @@ img.instrument-photo:not([src]) {
 .instrument-side-col .card {
   overflow: hidden;
 }
+
+/* ── Paginated pane table standardisation (Apple blob philosophy) ── */
+.paginated-pane table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.paginated-pane thead {
+  position: sticky;
+  top: 0;
+  background: var(--panel-strong);
+  z-index: 1;
+}
+.paginated-pane thead th {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.paginated-pane tbody td {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid rgba(227, 234, 241, 0.5);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paginated-pane tbody tr:hover {
+  background: var(--hover-soft);
+}
+.pane-empty-slot {
+  height: 2.5rem;
+}
+.pane-empty-slot td {
+  border-bottom: 1px dashed rgba(227, 234, 241, 0.35);
+}
+
+/* ── File link table (no outer borders) ── */
+.file-link-table { border-collapse: collapse; width: 100%; }
+.file-link-table td { padding: 0.35rem 0; border: none; }
+
+/* ── Event stream table (no outer borders) ── */
+.event-stream-table { border-collapse: collapse; width: 100%; }
+.event-stream-table td { padding: 0; border: none; white-space: normal; max-width: none; }
+.event-stream-table tr:hover { background: transparent; }
+
+/* ── Quick intake table (no outer borders) ── */
+.quick-intake-table { border-collapse: collapse; width: 100%; }
+.quick-intake-table td { padding: 0; border: none; }
 

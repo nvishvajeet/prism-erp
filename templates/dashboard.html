@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
-{% from "_page_macros.html" import card_heading %}
+{% from "_page_macros.html" import card_heading, paginated_pane %}
 {% block content %}
 
 {% if dashboard_metrics %}
@@ -69,17 +69,23 @@
     <label class="quick-intake-search" data-vis="{{ V }}">
       <input type="text" id="quickIntakeSearch" placeholder="Type job number or sample number" data-vis="{{ V }}">
     </label>
-    <div class="quick-intake-list scroll-pane wrapped-list" id="quickIntakeList" data-vis="{{ V }}">
+    {% call paginated_pane('quickIntake', page_size=8, max_height='20rem') %}
+    <table class="quick-intake-table" data-vis="{{ V }}">
+      <tbody id="quickIntakeBody" data-vis="{{ V }}">
       {% for row in pending_receipt_lookup_rows %}
-      <div class="quick-intake-item" data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}" data-request-id="{{ row['id'] }}" data-vis="{{ V }}">
-        <button type="button" class="quick-intake-button" data-quick-receive="{{ url_for('quick_receive_request', request_id=row['id']) }}" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ row["request_no"] }}</strong>
-          <span data-vis="{{ V }}">{{ row["sample_name"] }}</span>
-          <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
-        </button>
-      </div>
+      <tr data-pane-item data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}" data-request-id="{{ row['id'] }}" data-vis="{{ V }}">
+        <td data-vis="{{ V }}">
+          <button type="button" class="quick-intake-button" data-quick-receive="{{ url_for('quick_receive_request', request_id=row['id']) }}" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ row["request_no"] }}</strong>
+            <span data-vis="{{ V }}">{{ row["sample_name"] }}</span>
+            <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
+          </button>
+        </td>
+      </tr>
       {% endfor %}
-    </div>
+      </tbody>
+    </table>
+    {% endcall %}
   </div>
   {% endif %}
 
@@ -91,13 +97,13 @@
           <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
           <a class="btn-open-queue-sm" href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">Open Queue</a>
         </div>
-        <div class="instrument-card-body table-scroll scroll-pane" data-vis="{{ V }}">
+        {% call paginated_pane('instCard' ~ queue.instrument_id, page_size=5, max_height='18rem') %}
           {% if queue.rows %}
           <table data-vis="{{ V }}">
             <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">#</th><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>
-            <tbody data-vis="{{ V }}">
+            <tbody id="instCard{{ queue.instrument_id }}Body" data-vis="{{ V }}">
             {% for row in queue.rows %}
-              <tr data-vis="{{ V }}">
+              <tr data-vis="{{ V }}" data-pane-item>
                 <td data-vis="{{ V }}">{{ loop.index }}</td>
                 <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
                 <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
@@ -109,7 +115,7 @@
           {% else %}
           <p class="muted-note" data-vis="{{ V }}">No jobs queued.</p>
           {% endif %}
-        </div>
+        {% endcall %}
       </div>
       {% endfor %}
     </div>

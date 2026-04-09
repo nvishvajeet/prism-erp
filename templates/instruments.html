@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_page_macros.html" import paginated_pane %}
 {% block content %}
 <section data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
@@ -44,7 +45,7 @@
 </section>
 {% endif %}
 <section class="card" data-vis="{{ V }}">
-  <div class="{% if instruments|length > 25 %}table-scroll scroll-pane instruments-table-shell{% endif %}" data-vis="{{ V }}">
+  {% call paginated_pane('mainInstruments', page_size=20, max_height='36rem', css_class='instruments-table-shell') %}
   <table class="instruments-table" data-vis="{{ V }}">
     <colgroup>
       <col class="col-name">
@@ -59,7 +60,7 @@
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Links</th><th data-vis="{{ V }}">Operation</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operators</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Office</th></tr>
     </thead>
-    <tbody data-vis="{{ V }}">
+    <tbody id="mainInstrumentsBody" data-vis="{{ V }}">
       {% for instrument in instruments %}
       {% if loop.first or instrument["category"] != instruments[loop.index0 - 1]["category"] %}
       <tr class="category-header-row" data-vis="{{ V }}">
@@ -118,7 +119,7 @@
       {% endfor %}
     </tbody>
   </table>
-  </div>
+  {% endcall %}
 </section>
 {% if can_view_archived and archived_instruments %}
 <section class="card" data-vis="{{ V }}">
@@ -127,12 +128,12 @@
       <h2 data-vis="{{ V }}">Archived Instruments</h2>
     </div>
   </div>
-  <div class="{% if archived_instruments|length > 25 %}table-scroll scroll-pane instruments-table-shell{% endif %}" data-vis="{{ V }}">
+  {% call paginated_pane('archivedInstruments', page_size=15, max_height='28rem', css_class='instruments-table-shell') %}
   <table class="instruments-table archived-instruments-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Links</th><th data-vis="{{ V }}">Operation</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Operators</th><th data-vis="{{ V }}">Faculty In-Charge</th></tr>
     </thead>
-    <tbody data-vis="{{ V }}">
+    <tbody id="archivedInstrumentsBody" data-vis="{{ V }}">
       {% for instrument in archived_instruments %}
       <tr data-vis="{{ V }}">
         <td data-vis="{{ V }}">{% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}</td>
@@ -176,7 +177,7 @@
       {% endfor %}
     </tbody>
   </table>
-  </div>
+  {% endcall %}
 </section>
 {% endif %}
 {% if can_add_instrument %}

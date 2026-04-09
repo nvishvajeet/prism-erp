@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_stream_macros.html" import stream_header %}
+{% from "_page_macros.html" import paginated_pane %}
 {% block content %}
 {{ stream_header("Statistics") }}
 <section class="card compact queue-controls-card" data-vis="{{ V }}">
@@ -100,12 +101,12 @@
 <section class="grid-two top-gap" data-vis="{{ V }}">
   <div class="card" data-vis="{{ V }}">
     <div class="section-head" data-vis="{{ V }}"><div data-vis="{{ V }}"><h2 data-vis="{{ V }}">Instrument Performance</h2></div></div>
-    <div class="table-scroll scroll-pane compact-scroll" data-vis="{{ V }}">
+    {% call paginated_pane('instPerf', page_size=10, max_height='22rem') %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Total</th><th data-vis="{{ V }}">Completed</th><th data-vis="{{ V }}">Samples</th></tr></thead>
-      <tbody data-vis="{{ V }}">
+      <tbody id="instPerfBody" data-vis="{{ V }}">
       {% for row in stats.by_instrument %}
-        <tr data-vis="{{ V }}">
+        <tr data-vis="{{ V }}" data-pane-item>
           <td data-vis="{{ V }}">{% if row["instrument_id"] and visible_links.get(row["instrument_id"]) %}<a class="text-link" href="{{ url_for('instrument_detail', instrument_id=row['instrument_id']) }}" data-vis="{{ V }}">{{ row["instrument_name"] }}</a>{% else %}{{ row["instrument_name"] }}{% endif %}</td>
           <td data-vis="{{ V }}">{{ row["total_requests"] }}</td>
           <td data-vis="{{ V }}">{{ row["completed_jobs"] }}</td>
@@ -116,23 +117,23 @@
       {% endfor %}
       </tbody>
     </table>
-    </div>
+    {% endcall %}
   </div>
 
   <div class="card" data-vis="{{ V }}">
     <div class="section-head" data-vis="{{ V }}"><div data-vis="{{ V }}"><h2 data-vis="{{ V }}">Weekly Throughput</h2></div></div>
-    <div class="table-scroll scroll-pane compact-scroll" data-vis="{{ V }}">
+    {% call paginated_pane('weeklyThru', page_size=10, max_height='22rem') %}
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Week</th><th data-vis="{{ V }}">Jobs</th><th data-vis="{{ V }}">Samples</th></tr></thead>
-      <tbody data-vis="{{ V }}">
+      <tbody id="weeklyThruBody" data-vis="{{ V }}">
       {% for row in stats.weekly %}
-        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">{{ row["bucket"] }}</td><td data-vis="{{ V }}">{{ row["jobs"] }}</td><td data-vis="{{ V }}">{{ row["samples"] }}</td></tr>
+        <tr data-vis="{{ V }}" data-pane-item><td data-vis="{{ V }}">{{ row["bucket"] }}</td><td data-vis="{{ V }}">{{ row["jobs"] }}</td><td data-vis="{{ V }}">{{ row["samples"] }}</td></tr>
       {% else %}
         <tr data-vis="{{ V }}"><td colspan="3" data-vis="{{ V }}">No data.</td></tr>
       {% endfor %}
       </tbody>
     </table>
-    </div>
+    {% endcall %}
   </div>
 </section>
 

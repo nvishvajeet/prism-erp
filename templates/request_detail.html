@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin" %}
-{% from "_page_macros.html" import card_heading %}
+{% from "_page_macros.html" import card_heading, paginated_pane %}
 {% block content %}
 <section data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
@@ -76,13 +76,17 @@
       {% if card_policy.fields.submitted_documents and submitted_documents %}
       <div class="locked-box" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">Files</strong>
-        <div class="file-link-list top-gap scroll-pane wrapped-list compact-scroll" data-vis="{{ V }}">
+        {% call paginated_pane('reqFiles', page_size=6, max_height='14rem') %}
+        <table class="file-link-table" data-vis="{{ V }}">
+          <tbody id="reqFilesBody" data-vis="{{ V }}">
           {% for attachment in submitted_documents %}
-          <div data-vis="{{ V }}">
-            <a class="text-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a>
-          </div>
+          <tr data-pane-item data-vis="{{ V }}">
+            <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a></td>
+          </tr>
           {% endfor %}
-        </div>
+          </tbody>
+        </table>
+        {% endcall %}
       </div>
       {% endif %}
     </div>
@@ -90,39 +94,47 @@
     <div class="card" data-vis="{{ V }}">
       {{ card_heading("", "Events") }}
       {% if card_policy.fields.events %}
-      <div class="event-stream wrapped-list scroll-pane" data-vis="{{ V }}">
+      {% call paginated_pane('reqEvents', page_size=10, max_height='24rem') %}
+      <table class="event-stream-table" data-vis="{{ V }}">
+        <tbody id="reqEventsBody" data-vis="{{ V }}">
         {% for entry in timeline_entries %}
-        <article class="event-item {% if entry.kind == 'note' and entry.side == 'left' %}event-left{% elif entry.kind == 'note' and entry.side == 'right' %}event-right{% else %}event-center{% endif %}" data-vis="{{ V }}">
-          <div class="event-card" data-vis="{{ V }}">
-            <div class="message-meta" data-vis="{{ V }}">
-              <strong data-vis="{{ V }}">{{ entry["title"] }}</strong>
-              <span data-vis="{{ V }}">{{ format_dt(entry["at"]) }}</span>
-            </div>
-            {% if entry["actor"] %}
-            <p class="hint" data-vis="{{ V }}">{{ entry["actor"] }}</p>
-            {% endif %}
-            {% if entry["detail"] %}
-            <p data-vis="{{ V }}">{{ entry["detail"] }}</p>
-            {% endif %}
-            {% if entry["files"] %}
-            <div class="event-attachments top-gap wrapped-list" data-vis="{{ V }}">
-              {% for attachment in entry["files"] %}
-              <div class="event-attachment-row" data-vis="{{ V }}">
-                <span class="event-attachment-tag" data-vis="{{ V }}">
-                  {% set filename_lower = attachment["original_filename"]|lower %}
-                  {% if filename_lower.endswith('.pdf') %}PDF{% else %}FILE{% endif %}
-                </span>
-                <a class="text-link event-attachment-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a>
+        <tr data-pane-item data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <article class="event-item {% if entry.kind == 'note' and entry.side == 'left' %}event-left{% elif entry.kind == 'note' and entry.side == 'right' %}event-right{% else %}event-center{% endif %}" data-vis="{{ V }}">
+              <div class="event-card" data-vis="{{ V }}">
+                <div class="message-meta" data-vis="{{ V }}">
+                  <strong data-vis="{{ V }}">{{ entry["title"] }}</strong>
+                  <span data-vis="{{ V }}">{{ format_dt(entry["at"]) }}</span>
+                </div>
+                {% if entry["actor"] %}
+                <p class="hint" data-vis="{{ V }}">{{ entry["actor"] }}</p>
+                {% endif %}
+                {% if entry["detail"] %}
+                <p data-vis="{{ V }}">{{ entry["detail"] }}</p>
+                {% endif %}
+                {% if entry["files"] %}
+                <div class="event-attachments top-gap wrapped-list" data-vis="{{ V }}">
+                  {% for attachment in entry["files"] %}
+                  <div class="event-attachment-row" data-vis="{{ V }}">
+                    <span class="event-attachment-tag" data-vis="{{ V }}">
+                      {% set filename_lower = attachment["original_filename"]|lower %}
+                      {% if filename_lower.endswith('.pdf') %}PDF{% else %}FILE{% endif %}
+                    </span>
+                    <a class="text-link event-attachment-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
               </div>
-              {% endfor %}
-            </div>
-            {% endif %}
-          </div>
-        </article>
+            </article>
+          </td>
+        </tr>
         {% else %}
-        <p class="hint" data-vis="{{ V }}">No events.</p>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><p class="hint" data-vis="{{ V }}">No events.</p></td></tr>
         {% endfor %}
-      </div>
+        </tbody>
+      </table>
+      {% endcall %}
       {% else %}
       <p class="hint" data-vis="{{ V }}">Restricted.</p>
       {% endif %}

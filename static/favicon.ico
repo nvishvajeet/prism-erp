@@ -1,0 +1,930 @@
+<script>
+	// setTimeout(() => {
+// 		window.location.href = 'https://mitwpu.edu.in/';
+	// }, 3000);
+</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>
+MIT-WPU</title>
+<meta name="description" content="MIT-WPU" />
+<meta name="keywords" content="MIT-WPU" />
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mitwpu.edu.in/favicon.ico">
+<meta property="og:title" content="MIT-WPU">
+<meta property="og:description" content="MIT-WPU">
+<meta property="og:image" content="https://mitwpu.edu.in/assets/frontend/images/mit-wpu_logo.png">
+<meta property="twitter:card" content="summary">
+<meta name="twitter:domain" content="https://mitwpu.edu.in/" />
+<meta property="twitter:url" content="https://mitwpu.edu.in/favicon.ico">
+<meta property="twitter:title" content="MIT-WPU">
+<meta property="twitter:description" content="MIT-WPU">
+<meta property="twitter:image" content="https://mitwpu.edu.in/uploads/logo/logo-mitwpu.webp">
+<link rel="canonical" href="https://mitwpu.edu.in/favicon.ico" />
+<meta name="robots" content="index,follow">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+<link rel="shortcut icon" type="image/x-icon" href="https://mitwpu.edu.in/assets/frontend/images/favicon.ico">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/fonts.min.css?v=290925.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/bootstrap.min.css?v=300925.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/style.min.css?v=230126.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/owl-slick.min.css?v=300925.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/common.min.css?v=240226.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/inner-page.min.css?14072025.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/inner-responsive.min.css?v=14072025.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/home-page.min.css?v=03072025.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/home-responsive.min.css?v=16052025.0">
+<link rel="stylesheet" type="text/css" href="https://mitwpu.edu.in/assets/frontend/css/font-awesome.min.css">
+<link rel="stylesheet" href="https://mitwpu.edu.in/assets/frontend/css/magnific-popup.min.css"/>
+<script src="https://mitwpu.edu.in/assets/frontend/js/jquery-3.5.1.min.js"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-EKC13GLCLE"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-EKC13GLCLE');
+</script>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-N635XJF');</script>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-T7H4HDJ');</script>
+</head>
+<body>
+<script type="text/javascript">var npf_d='https://admission.mitwpu.edu.in';var npf_c='5081';var npf_m='1';var s=document.createElement("script");s.type="text/javascript";s.async=true;s.src="https://track.nopaperforms.com/js/track.js";document.body.appendChild(s);</script>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N635XJF" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-T7H4HDJ" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org/",
+        "@type": "Quiz",
+        "about": {
+          "@type": "Thing",
+          "name": "Course Full Forms"
+        },
+        "educationalAlignment": [
+          {
+            "@type": "AlignmentObject",
+            "alignmentType": "educationalSubject",
+            "targetName": "UG and PG Programmes Full forms"
+          }
+        ],
+        "hasPart": [
+          {
+            "@context": "https://schema.org/",
+            "@type": "Question",
+            "eduQuestionType": "Flashcard",
+            "text": "B Tech Full form",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Bachelor of Technology"
+            }
+          },
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "BBA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Business Administration"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "Bcom Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Commerce"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "BA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Arts"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "BSc Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Science"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "BFA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Fine Arts"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "LLB Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelor of Legislative Law"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "BCA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Bachelors's in Computer Application"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MCA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Computer Application"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "LLM Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Laws or Legum Magister"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MSc Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Science"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MCom Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Commerce"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MFA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Fine Arts"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MBA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Business Administration"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "MA Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Arts"
+          }},
+          {
+          "@context": "https://schema.org/",
+          "@type": "Question",
+          "eduQuestionType": "Flashcard",
+          "text": "M Tech Full form",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Master of Technology"
+          }
+          }
+        ]
+      }
+      
+</script>
+    <script type='application/ld+json'>
+{
+    "@context": "http://schema.org/",
+    "@type": "Organization",
+    "legalName": "MIT-WPU Pune",
+    "url": "https://mitwpu.edu.in/",
+    "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": " +91 20-7117 7104",
+        "contactType": "Enquiry"
+    },
+    "logo": "https://mitwpu.edu.in/assets/frontend/images/mit_logo.png",
+    "sameAs": [
+        "https://twitter.com/mitwpuofficial",
+        "https://www.youtube.com/c/MITWorldPeaceUniversity",
+        "https://www.instagram.com/mitwpuofficial/",
+        "https://www.facebook.com/MIT-WPUOfficial/",
+        "https://www.linkedin.com/school/mitwpuofficial/"
+    ],
+    "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "S.No.124, Paud Road, Kothrud",
+        "addressLocality": "Pune",
+        "addressRegion": "MahaRashtra",
+        "postalCode": "411038",
+        "addressCountry": "India"
+    }
+}
+</script>
+<script type="application/ld+json">
+{ 
+  "@context": "https://schema.org", 
+  "@type": "BreadcrumbList", 
+  "itemListElement": 
+  [
+            { 
+          "@type": "ListItem", 
+          "position": 1, 
+          "name": "Home",
+          "item": "https://mitwpu.edu.in/"
+        },            { 
+          "@type": "ListItem", 
+          "position": 2, 
+          "name": "Favicon.ico",
+          "item": "https://mitwpu.edu.in/favicon.ico"
+        }      ]
+}
+</script>
+   <header class="header inner-header">
+      <div class="container-fluid header-wrapper">
+            <nav class="navbar">
+               <div class="logo-home ">
+                   <a class="" href="https://mitwpu.edu.in/">
+                    <img width="400" height="92" src="https://mitwpu.edu.in/uploads/images/MIT-WPU-logo-1.webp" class="img-fluid logo-one" alt="MitWpu logo | MITWPU Pune Logo">
+                    <img width="400" height="92" src="https://mitwpu.edu.in/uploads/images/MIT-WPU-logo-1.webp" class="img-fluid logo-two" alt="MitWpu logo | MITWPU Pune Logo">
+                  </a>
+                  <div class="search-mobile">
+                      <a href="javascript:void(0)" onclick="openSearch()" class="search-trigger-icon"><i class="fa fa-search"></i> </a>
+                    </div>
+               </div>
+               <div id="navBar" class="navbar-menu">
+                  <div class="submenu_section seprtr">
+                     <ul>
+                        
+                        <li><a href="https://mitwpu.edu.in/faculty-members">Faculty</a></li>
+                        <li><a href="https://mitwpu.edu.in/alumni" >Alumni</a></li>
+                        <li><a href="https://mitwpu.edu.in/placements">Placement</a></li>
+                        <li><a href="https://mitwpu.edu.in/uploads/images/UGC-Approved.pdf" target="_blank">UGC Approved </a></li>
+                        <li><a href="https://mitwpu.edu.in/about-us/iqac">IQAC</a></li>
+                        <li class="d-none"><a href="https://mitwpu.edu.in/academics/ordinances">Examination</a></li>
+                        <li><a href="https://mitwpu.edu.in/career">Work With Us</a></li>
+                        <li><a href="https://mitwpu.edu.in/student-information">Student Information</a></li>
+                        <li><a href="https://mitwpu.edu.in/sustainability">Green Campus</a></li>
+                        <!--<li><a href="">iOS Centre</a></li>-->
+                        <li class=""><a href="javascript:;" class="apply-bnr" data-bs-toggle="modal" data-bs-target="#applyNowModal">Apply Now</a></li>
+                     </ul>
+                  </div> 
+                  <ul class="inr-sub-menu">
+				                               <li class="drop-menu">
+                        <a href="javascript:void(0);">About Us</a>
+                        <div class="sub-menu">
+                                                      <a href="https://mitwpu.edu.in/about-us/about-mit">About MIT-WPU, Pune</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/history-legacy">History & Legacy</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/founder">Founder</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/executive-president">Executive President</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/executive-director">Executive Director</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/leadership-and-governance/leadership">Leadership and Governance</a> 
+                                                      <a href="https://mitwpu.edu.in/about-us/nirf">NIRF</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/ranking-accreditation">Ranking & Accreditation</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/international-collaboration">International Memberships & Collaborations</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/social-initiatives">Social Initiatives</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/faculty-achievements">Faculty Achievements</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/national-ragging-prevention-programme">National Ragging Prevention Programme</a>
+						                                   <a href="https://mitwpu.edu.in/about-us/administrative-offices">Administrative Offices</a>
+						         
+                        </div>
+                     </li>
+				                            <li class="drop-menu">
+                        <a class="" href="javascript:void(0);">Programmes</a>
+                        <div class="sub-menu">
+                            <a href="https://mitwpu.edu.in/programmes/undergraduate">Undergraduate Programmes</a>
+                           <a href="https://mitwpu.edu.in/programmes/postgraduate">Postgraduate Programmes </a>
+                           <a href="https://mitwpu.edu.in/programmes/phd">Ph.D. </a>
+                           <a href="https://mitwpu.edu.in/programmes/diploma">Diplomas & Certifications</a>
+                        </div>
+                     </li>
+                       <li class="drop-menu">
+                     <a href="javascript:void(0);">Admissions</a>
+                     <div class="sub-menu">
+                        <a  href="https://mitwpu.edu.in/application-process">How to Apply</a>
+                        <a href="https://mitwpu.edu.in/scholarships">Scholarships</a>
+                        <a href="https://mitwpu.edu.in/uploads/images/Admission-Policy-for-AY-2026-27-V3.pdf" target="_blank">Admission Policy 2026</a>
+                        <a href="https://mitwpu.edu.in/mit-wpu-cet-2026">MIT-WPU CET 2026</a>
+                        <a href="https://mitwpu.edu.in/summer-school">Summer School 2026</a>
+                        <a href="https://mitwpu.edu.in/admission-notices">Admission Notices</a>
+                        <a href="https://mitwpu.edu.in/important-dates">Important Dates</a>  
+                        <a href="https://mitwpu.edu.in/student-loans">Student Loans</a>  
+                        <a href="https://mitwpu.edu.in/life-wpu/hostel-facilities">Hostel Facilities</a>
+                        <a href="https://mitwpu.edu.in/admissions-contact-us">Admissions - Contact Us</a>
+                     </div>
+                   </li>
+                     <li class="drop-menu">
+                        <a href="javascript:void(0);">Academics</a>
+                        <div class="sub-menu">
+                            <a href="https://mitwpu.edu.in/schools">Schools</a>
+                            <div class="drop-menu1">
+                              <a href="javascript:void(0);">Examinations</a>
+                              <div class="sub-menu1 sub-menu-right">
+                                <a href="https://mitwpu.edu.in/academics/mode-of-exams">Mode of Exams</a>
+                                <a href="https://mitwpu.edu.in/academics/ordinances">Ordinances</a>
+                                <a href="https://mitwpu.edu.in/academics/evaluation-criteria">Evaluation Criteria</a>
+                                <a href="https://mitwpu.edu.in/academics/student-grievance">Student Grievance Cell</a>
+                                <a href="https://mitwpu.edu.in/exam-notices">Exam Notices</a>
+                                <a href="https://mitwpu.edu.in/academics/exam-timetable">Exam Timetable</a>
+                                <a href="https://mitwpu.edu.in/academics/results">Results</a>
+                                <a href="https://mitwpu.edu.in/academics/faq">FAQ</a>
+                                <a href="https://mitwpu.edu.in/academics/student-assistance">Student Assistance</a>
+                                <a href="https://mitwpu.edu.in/academics/document-verification"> Document Verification</a>
+                                <a href="https://mitwpu.edu.in/academics/examination-contact-us"> Examination- Contact Us</a>
+                                <a href="https://mitwpu.edu.in/academics/convocation">Convocation</a>
+                                <a href="https://mitwpu.edu.in/academics/exam-activity-schedule">Exam Activity Schedule</a>
+                                <a href="https://www.wes.org/send-electronic-academic-records/" target="_blank">WES - Advisory Blog</a>
+                                <a href="https://docswallet.com/user/homepage/index.html" target="_blank">WES - Digital Process </a>
+                              </div>
+                           </div>
+                            <a href="https://mitwpu.edu.in/academics/academic-calender">Academic Calendar 2025-26</a>
+                            <a href="https://mitwpu.edu.in/academic-notices">Academic Notices</a>
+                            <a href="https://mitwpu.edu.in/academics/industry-academia">Industry-Academia (CIAP)</a>
+                            <a href="https://mitwpu.edu.in/academics/list-of-holidays">List of Holidays</a>
+                        </div>
+                     </li>
+                                                             <li class="drop-menu">
+                        <a href="javascript:void(0);">Life@MIT-WPU</a>
+                        <div class="sub-menu">
+                                                            <a href="https://mitwpu.edu.in/life-wpu/event-calendar">
+                                    Event Calendar                                </a>
+                                                            <a href="https://mitwpu.edu.in/life-wpu/sports">
+                                    Sports                                </a>
+                                                        <div class="drop-menu1">
+                                <a href="javascript:void(0);">Infrastructure</a>
+                                <div class="sub-menu1 sub-menu-right">
+                                    <a href="https://mitwpu.edu.in/life-wpu/academic-facilities">Academic Facilities</a>
+                                    <a href="https://mitwpu.edu.in/life-wpu/lab-equipment">Lab Equipment</a>
+                                    <a href="https://mitwpu.edu.in/life-wpu/library">Knowledge Resource Centre (KRC)</a>
+                                    <a href="https://mitwpu.edu.in/life-wpu/medical-facilities">Medical Facilities</a>
+                                    <a href="https://mitwpu.edu.in/life-wpu/hostel-facilities">Hostel Facilities</a>
+                                    <a href="https://mitwpu.edu.in/life-wpu/other-facilities">Other Facilities</a>
+                                </div>
+                            </div>
+                            <div class="drop-menu1">
+                                <a href="javascript:void(0);">Student Life</a>
+                                <div class="sub-menu1 sub-menu-right">
+                                    <a href="https://mitwpu.edu.in/life-wpu/student-achievements">Student Achievements</a>
+                                    <div class="drop-menu2">
+                                        <a href="javascript:void(0);">Student Clubs</a>
+                                        <div class="sub-menu2 sub-menu-left">
+                                            <a href="https://mitwpu.edu.in/life-wpu/clubs">Student Clubs</a> 
+                                            <a href="https://mitwpu.edu.in/life-wpu/adventure-club/about-adventure-club">Adventure Club</a>
+                                        </div>
+                                    </div>
+                                    <a href="https://mitwpu.edu.in/life-wpu/student-projects">Student Projects</a>
+                                    <div class="drop-menu2">
+                                        <a href="javascript:void(0);">Student Council</a>
+                                        <div class="sub-menu2 sub-menu-left">
+                                            <a href="https://mitwpu.edu.in/life-wpu/student-council">Student Council</a>
+                                            <a href="https://mitwpu.edu.in/life-wpu/student-council/student-council-members">Student Council Members</a>
+                                        </div>
+                                    </div>
+                                    <a href="https://mitwpu.edu.in/life-wpu/student-affairs">Student Affairs</a>
+                                </div>
+                            </div>
+                            <div class="drop-menu1">
+                                <a href="javascript:void(0);">Experiential Learning</a>
+                                <div class="sub-menu1 sub-menu-right">
+                                    <a href="https://mitwpu.edu.in/rural-immersion">Rural Immersion</a>
+                                    <a href="https://mitwpu.edu.in/national-immersion">National Immersion</a>
+                                    <a href="https://mitwpu.edu.in/international-immersion">International Immersion</a>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                                                              <li class="drop-menu">
+                          <a class=" " href="javascript:void(0);">International</a>
+                          <div class="sub-menu">
+                            <a href="https://mitwpu.edu.in/study-in-india">Study in India</a>
+                            <a href="https://mitwpu.edu.in/study-abroad">Study Abroad</a>
+                          </div>
+                      </li>
+                                        <li><a href="https://mitwpu.edu.in/research">Research</a></li>
+                     <li class="drop-menu">
+                        <a href="javascript:void(0);">Innovation</a>
+                         <div class="sub-menu">
+                          <div class="drop-menu1">
+                              <a href="javascript:void(0);">Innovation & Entrepreneurship</a>
+                              <div class="sub-menu1 sub-menu-right">
+                                  <a href="https://mitwpu.edu.in/dr-ganesh-kakandikar">Dean's message</a>
+                                  <a href="https://mitwpu.edu.in/institution-innovation-council">Institution Innovation Council</a>
+                                  <a href="https://mitwpu.edu.in/innovation/cbie-startup-accelerator">Center for Business Innovation & Entrepreneurship</a>
+                                   <a href="https://mitwpu.edu.in/innovation-clubs/innovation-hub">Innovation Clubs</a>
+                                   <a href="https://mitwpu.edu.in/innovation/mit-tbi">Technology Business Incubator</a>
+                              </div>
+                           </div>
+                           
+                    </div></li>
+                     <li><a href="https://mitwpu.edu.in/press-release">Media Coverage</a></li>
+                     <li><a href="javascript:void(0)" onclick="openSearch()" class="search-trigger-icon"><i class="fa fa-search"></i> </a></li>
+                  </ul>
+               </div>
+            </nav>
+            <div class="hamberger">
+            <div class="slide-toggle">
+               <span class="bar"></span>
+               <span class="bar"></span>
+               <span class="bar"></span>
+            </div>
+            <div class="side-menu">
+               <span class="close-icon"></span>
+               <div class="row">
+                  <div class="menu-ham">
+                      <div class="ham-repeat">
+                        <span><a href="https://mitwpu.edu.in/blog">BLOGS</a></span>
+                      </div>
+                      <div class="ham-repeat">
+                        <span><a href="https://mitwpu.edu.in/newsletters">NEWSLETTER</a></span>
+                      </div>
+                     <div class="ham-repeat">
+                        <span>TESTIMONIAL</span>
+                        <a href="https://mitwpu.edu.in/testimonials/student">Student</a>   
+                     </div>
+                      <div class="ham-repeat">
+                        <a href="https://mitwpu.edu.in/contact-us"><span>CONTACT US</span></a>
+                     </div>
+                  </div>
+                  <div class="menu-ham">
+                     <div class="ham-repeat">
+                        <span>HAPPENINGS</span>
+                        <a href="https://mitwpu.edu.in/news">News</a>
+                        <a href="https://mitwpu.edu.in/events">Events</a>
+                        <a href="https://mitwpu.edu.in/notices-and-announcements">Notices & Announcements</a>
+                        <a href="https://mitwpu.edu.in/image-gallery">Image Gallery</a>
+                        <a href="https://mitwpu.edu.in/video-gallery">Video Gallery</a>
+                         <a href="https://mitwpu.edu.in/press-release">Media Coverage</a>
+                     </div>
+                  </div>
+               </div>
+            </div>
+            <div class="opacity-bg"></div>
+          </div>
+         </div>
+   </header>
+<main>
+
+	<section class="page_title" data-aos="fade-up-left"  data-aos-duration="1000">
+	   
+		<h1 style="text-align:center;">404 - File Not Found</h1>
+		<p style="text-align:center;">
+				Sorry! Cannot seem to find the page you were looking for.
+				</p>
+		
+	</section>
+
+</main>
+
+<footer class="footer-section">
+   <div class="container">
+      <div class="mobile-footer-menu">
+         <div>
+            <a href="https://mitwpu.edu.in/testimonials/student">Testimonials</a>
+            <a href="https://mitwpu.edu.in/career">Work With Us</a>
+            <a href="https://mitwpu.edu.in/assets/frontend/pdfs/Anti_Ragging_Committee.pdf" target="_blank">Anti Ragging Committee</a>
+            <a href="https://mitwpu.edu.in/assets/frontend/pdfs/ICC.pdf" target="_blank">ICC Committee</a>
+         </div>
+      </div>
+      <div class="f-menu mobile_hide" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="1600">
+         <span>About Us</span>
+         <div class="menu-ul-ftr">
+                                          <a href="https://mitwpu.edu.in/about-us/about-mit">About MIT-WPU, Pune</a>
+                              <a href="https://mitwpu.edu.in/about-us/history-legacy">History & Legacy</a>
+                              <a href="https://mitwpu.edu.in/about-us/founder">Founder</a>
+                              <a href="https://mitwpu.edu.in/about-us/executive-president">Executive President</a>
+                              <a href="https://mitwpu.edu.in/about-us/executive-director">Executive Director</a>
+                              <a href="https://mitwpu.edu.in/about-us/nirf">NIRF</a>
+                              <a href="https://mitwpu.edu.in/about-us/ranking-accreditation">Ranking & Accreditation</a>
+                              <a href="https://mitwpu.edu.in/about-us/international-collaboration">International Memberships & Collaborations</a>
+                              <a href="https://mitwpu.edu.in/about-us/social-initiatives">Social Initiatives</a>
+                              <a href="https://mitwpu.edu.in/about-us/faculty-achievements">Faculty Achievements</a>
+                              <a href="https://mitwpu.edu.in/about-us/national-ragging-prevention-programme">National Ragging Prevention Programme</a>
+                              <a href="https://mitwpu.edu.in/about-us/administrative-offices">Administrative Offices</a>
+                                       </div>
+      </div>
+      <div class="f-menu mobile_hide" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="1400">
+         <span>Programmes</span>
+         <div class="menu-ul-ftr">
+            <a href="https://mitwpu.edu.in/programmes/undergraduate">Undergraduate Programmes</a>
+            <a href="https://mitwpu.edu.in/programmes/postgraduate">Postgraduate Programmes </a>
+            <a href="https://mitwpu.edu.in/programmes/phd">Ph.D.  Programmes</a>
+            <a href="https://mitwpu.edu.in/programmes/diploma">Diplomas & Certifications</a>
+         </div>
+      </div>
+      <div class="f-menu" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="1200">
+         <a href="https://mitwpu.edu.in/research"><span>Research</span></a>
+         <a href="https://mitwpu.edu.in/corporate-social-responsibility-csr"><span>CSR</span></a>
+         <a href="https://mitwpu.edu.in/policy-for-promoting-equality-and-diversity-on-mit-wpu-campus"><span>Equality and Diversity</span></a>
+         <a href="https://mitwpu.edu.in/newsletters"><span>Newsletters</span></a>
+         <a href="https://mitwpu.edu.in/contact-us"><span>Contact Us</span></a>
+         <a href="https://mitwpu.edu.in/application-process"><span>Admissions</span></a>
+         <a href="https://mitwpu.edu.in/life-wpu/academic-facilities"><span>Life@MIT-WPU</span></a>
+         <a href="https://mitwpu.edu.in/news"><span>Happenings</span></a>
+         <a href="https://mitwpu.edu.in/alumni" ><span>Alumni</span></a>
+         <a href="https://mitwpu.edu.in/career"><span>Work With Us</span></a>
+         <a href="https://mitwpu.edu.in/testimonials/student"><span>Testimonials</span></a>
+      </div>
+      <div class="f-menu" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="1000">
+         <span>Social Initiatives</span>
+         <div class="menu-ul-ftr">
+            <a href="https://nlcbharat.org/" target="_blank" >National Legislators' Conference (NLC) Bharat</a>
+            <a href="https://worldpeacedome.in/" target="_blank" >World Peace Dome</a>
+            <a href="https://www.mitwpu-worldparliament.com/" target="_blank">World Parliament of Science, Religion & Philosophy</a>
+            <a href="https://www.bharatiyachhatrasansad.org/" target="_blank">Bharatiya Chhatra Sansad</a>
+            <a href="https://www.nationalwomensparliament.org/" target="_blank">National Women's Parliament</a>
+            <a href="https://mitwpu.edu.in/about-us/social-initiatives/bharat-asmita-national-awards" target="_blank">Bharat Asmita National Awards</a>
+            <a href="https://www.nationalteacherscongress.com/" target="_blank">National Teachers' Congress (NTC)</a>
+         </div>
+         <div class="newsletter mt-5">
+            <span class="mb-0">Newsletter Signup</span>
+            <p class="pt-4">By subscribing to our mailing list you will always be updated with the latest news from us.</p>
+            <form name="newsletter_frm" id="newsletter_frm" method="post" >
+            <input type="email" required name="email_newsletter" maxlength="60" class="form-group email_newsletter" autocomplete="off" placeholder="Subscribe to Newsletter" >
+               <button type="button" name="submit_newsletter">
+                  <img src="https://mitwpu.edu.in/assets/frontend/images/arrow-footer.svg" alt="arrow" class="reserve-button">
+               </button>
+               <span class="errEmail"></span>
+            </form>
+         </div>
+      </div>
+      <div class="f-menu f-menu-other" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="1000">
+         <span>Other Links</span>
+         <div class="menu-ul-ftr">
+            <a href="https://mitwpu.edu.in/blog" class="d-none">Blog</a>
+            <a href="https://mitwpu.edu.in/mandatory-disclosures">Mandatory Disclosures</a>
+            <a href="https://mitwpu.edu.in/cautionary-notice">Cautionary Notice</a>
+            <a href="https://mitwpu.edu.in/assets/frontend/pdfs/Fraud-Alert-Disclaimer.pdf" target="_blank">Fraud Alert</a>
+            <a href="https://mitwpu.edu.in/tender-notices">Tender Notices</a>
+            <a href="https://mitwpu.edu.in/sitemap">Sitemap</a>
+            <a href="https://mitwpu.edu.in/disclaimer">Disclaimer</a>
+            <a href="https://mitwpu.edu.in/copyright-statement">Copyright Statement</a>
+            <a href="https://mitwpu.edu.in/privacy-policy">Data Protection and Privacy Statement</a>
+         </div>
+      </div>
+      <div class="f-menu" data-aos="fade-left" data-aos-offset="200" data-aos-easing="ease-in-sine" data-aos-duration="800">
+         
+         <div class="vtour">
+            <a href="https://mitwpu.edu.in/virtual-tour" target="_blank">
+               <img src="https://mitwpu.edu.in/assets/frontend/images/360-logo-mit.jpg" class="img-fluid" alt="virtual Tour" width="80">
+            </a>
+         </div>
+         <div class="follows">
+            <span>Follow Us</span>
+            <ul>
+               <li>
+                  <a class="facebook" target="_blank" href="https://www.facebook.com/MIT-WPUOfficial/"><img src="https://mitwpu.edu.in/assets/frontend/images/facebook.svg" alt="facebook"></a>
+               </li>
+               <li>
+                  <a class="twitter" target="_blank" href="https://twitter.com/mitwpuofficial"><img src="https://mitwpu.edu.in/assets/frontend/images/twitter.svg" alt="twitter"></a>
+               </li>
+               <li>
+                  <a class="youtube" target="_blank" href="https://www.youtube.com/c/MITWorldPeaceUniversity"><img src="https://mitwpu.edu.in/assets/frontend/images/youtube.svg" alt="youtube"></a>
+               </li>
+               <li>
+                  <a class="linkden" target="_blank" href="https://www.linkedin.com/school/mitwpuofficial/"><img src="https://mitwpu.edu.in/assets/frontend/images/linkden.svg" alt="linkden"></a>
+               </li>
+               <li>
+                  <a class="instagrame" target="_blank" href="https://www.instagram.com/mitwpuofficial/"><img src="https://mitwpu.edu.in/assets/frontend/images/instagrame.svg" alt="instagram"></a>
+               </li>
+               <li>
+                  <a class="threads"  target="_blank" href="https://www.threads.net/@mitwpuofficial"><img src="https://mitwpu.edu.in/assets/frontend/images/threads.webp" width="15" alt="threads"></a>
+               </li>
+            </ul>
+         </div>
+         <style>.translated-ltr{margin-top:-40px}.goog-te-banner-frame{display:none!important;}.goog-te-gadget span,.skiptranslate iframe,.goog-logo-link{display:none!important}.goog-te-gadget{color:transparent!important}.goog-te-combo{font-size:14px}</style>
+         <div class="follows"><span>Language </span><div id="googledd"></div></div>
+         <em style="color:#fff;font-size:1.2rem">"This translation is system-generated and may contain errors or inaccuracies. For the most accurate information, please refer to the original English version of the website."</em>
+      </div>
+   </div>
+   <div class="quick-menu" data-aos="fade-right" data-aos-anchor-placement="center-bottom" data-aos-duration="1000">
+      <div class="container">
+         <div class="quick-inn">
+            <a href="https://mitwpu.edu.in/blog" class="d-none">Blog</a>
+               <a href="https://mitwpu.edu.in/uploads/images/Admission-Policy-for-AY-2026-27-V3.pdf" target="_blank">Admission Policy</a>
+            <a href="https://mitwpu.edu.in/mandatory-disclosures">Mandatory Disclosures</a>
+            <a href="https://mitwpu.edu.in/cautionary-notice" >Cautionary Notice</a>
+            <a href="https://mitwpu.edu.in/assets/frontend/pdfs/Fraud-Alert-Disclaimer.pdf" target="_blank">Fraud Alert</a>
+            <a href="https://mitwpu.edu.in/tender-notices">Tender Notices</a>
+            <a href="https://mitwpu.edu.in/sitemap">Sitemap</a>
+            <a href="https://mitwpu.edu.in/disclaimer">Disclaimer</a>
+            <a href="https://mitwpu.edu.in/copyright-statement">Copyright Statement</a>
+            <a href="https://mitwpu.edu.in/privacy-policy">Data Protection and Privacy Statement</a>
+         </div>
+      </div>
+   </div>
+      <div class="copyright" data-aos="fade-left" data-aos-anchor-placement="center-bottom" data-aos-duration="1000">
+      <p>© 2026  All Rights Reserved </p> <p>Website Design and Development by <a href="https://mitwpu.edu.in/" target="_blank">MIT-WPU</a></p>   </div></footer>
+<section class="mobile-bottom-menu">
+   <ul>
+      <li class="active">
+         <a class="notificat togglee"><figure><img src="https://mitwpu.edu.in/assets/frontend/images/m-call-icon.svg" alt="icon"></figure><p>Apply Now</p></a>
+      </li>
+      <li>
+         <a href="javascript:void(0)" class="m-enquiry togglee"><figure><img src="https://mitwpu.edu.in/assets/frontend/images/m-book-icon.svg" alt="icon"></figure><p>Programmes</p></a>
+      </li>
+      <li>
+         <a href="https://mitwpu.edu.in/schools" class="togglee"><figure><img src="https://mitwpu.edu.in/assets/frontend/images/m-collage-icon.svg" alt="icon"></figure><p>Schools</p></a>
+      </li>
+      <li>
+         <a href="javascript:void(0)" class="m-insurance togglee"><figure><img src="https://mitwpu.edu.in/assets/frontend/images/m-menu-icon.svg" alt="icon"></figure><p>Menu</p></a>
+      </li>
+   </ul>
+   <div class="call-mobile m-pop sec">
+      <div class="call-inner">
+         <a class="apply-bnr" data-bs-toggle="modal" data-bs-target="#applyNowModal">Apply Now 2026 <img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/white-arrow.svg" alt="Apply Now "></a>
+         <a class="call-now" href="tel:+91 20 71177104">Admission Help +91 20 71177104</a>         <a href="mailto:admissions@mitwpu.edu.in" class="mail-now">
+            <img src="https://mitwpu.edu.in/assets/frontend/images/mobile-mail.svg" alt="mobile-mail">
+            admissions@mitwpu.edu.in</a>         </div>
+   </div>
+   <div class="enquiry-mobile m-pop sec">
+      <div class="m-search-ftr">
+         <div class="search-home">
+               <div class="home-submit searchable">
+               <input type="text" name="search_course" class="form-control programSearchInput" placeholder="Type Programme Name" autocomplete="off" onkeyup="filterFunction(this,event)">
+                  <ul class="programListContainer"></ul>
+               <div class="submit-btn"><a href="javascript:void(0);" onclick="myFunction()"><img src="https://mitwpu.edu.in/assets/frontend/images/search-icon.svg" alt="search" class="img-fluid"></a></div>
+            </div>
+         </div>
+         <a href="https://mitwpu.edu.in/programmes/undergraduate" class="ug-p">Undergraduate Programmes <img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/arrow-m.svg" alt="arrow-m"></a>
+         <a href="https://mitwpu.edu.in/programmes/postgraduate" class="pg-p">Postgraduate Programmes <img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/arrow-m.svg" alt="arrow-m"></a>
+         <a href="https://mitwpu.edu.in/programmes/phd" class="pg-p">Ph.D. Programmes <img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/arrow-m.svg" alt="arrow-m"></a>
+         <a href="https://mitwpu.edu.in/programmes/diploma" class="pg-p">Diploma Programmes <img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/arrow-m.svg" alt="arrow-m"></a>
+         <a class="yellow-btn apply-online" href="https://mitwpu.edu.in/programmes" style="color:#000!important" >View All Programmes<img class="lazyload" data-src="https://mitwpu.edu.in/assets/frontend/images/arrow-m.svg" style="filter:invert();" alt="arrow-m"></a>
+      </div>
+   </div>
+   <div class="insurance-mobile m-pop sec">
+      <div class="main-links">
+            <ul class="menu-bx-inn">
+            <li><a href="https://mitwpu.edu.in/">HOME</a></li>
+            <li>
+               <a href="javascript:void(0);">ABOUT US</a>
+               <ul>
+                                                               <li><a href="https://mitwpu.edu.in/about-us/about-mit">About MIT-WPU, Pune</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/history-legacy">History & Legacy</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/founder">Founder</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/executive-president">Executive President</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/executive-director">Executive Director</a></li>
+                                             <a href="https://mitwpu.edu.in/about-us/leadership-and-governance/leadership">Leadership and Governance</a>
+                                                <li><a href="https://mitwpu.edu.in/about-us/nirf">NIRF</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/ranking-accreditation">Ranking & Accreditation</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/international-collaboration">International Memberships & Collaborations</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/social-initiatives">Social Initiatives</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/faculty-achievements">Faculty Achievements</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/national-ragging-prevention-programme">National Ragging Prevention Programme</a></li>
+                                             <li><a href="https://mitwpu.edu.in/about-us/administrative-offices">Administrative Offices</a></li>
+                                                      </ul>
+            </li>
+            <li>
+               <a href="javascript:void(0);">PROGRAMMES</a>
+               <ul>
+                     <li><a href="https://mitwpu.edu.in/programmes/undergraduate">Undergraduate Programmes</a></li>
+                     <li><a href="https://mitwpu.edu.in/programmes/postgraduate">Postgraduate Programmes</a></li>
+                     <li><a href="https://mitwpu.edu.in/programmes/phd">Ph.D.</a></li>
+                  <li><a href="https://mitwpu.edu.in/programmes/diploma">Diplomas & Certifications</a></li>
+               </ul>
+            </li>
+            <li>
+               <a href="javascript:void(0);">ADMISSIONS</a>
+               <ul>
+                  <li><a  href="https://mitwpu.edu.in/application-process">How to Apply</a></li>
+                  <li><a href="https://mitwpu.edu.in/scholarships">Scholarships</a></li>
+                  <li><a href="https://mitwpu.edu.in/uploads/images/Admission-Policy-for-AY-2026-27-V3.pdf" target="_blank">Admission Policy 2026</a></li>
+                  <a href="https://mitwpu.edu.in/mit-wpu-cet-2026">MIT-WPU CET 2026</a>
+                  <a href="https://mitwpu.edu.in/summer-school">Summer School 2026</a>
+                  <li><a href="https://mitwpu.edu.in/admission-notices">Admission Notices</a></li>
+                  <li><a href="https://mitwpu.edu.in/important-dates">Important Dates</a></li>
+                  <li><a href="https://mitwpu.edu.in/student-loans">Student Loans</a></li>
+                  <li><a href="https://mitwpu.edu.in/life-wpu/hostel-facilities">Hostel Facilities</a></li>
+                  <li><a href="https://mitwpu.edu.in/admissions-contact-us">Admissions - Contact Us</a></li>
+               </ul>
+            </li>
+            <li>
+               <a href="javascript:void(0);">ACADEMICS</a>
+               <ul>
+                     <li><a href="https://mitwpu.edu.in/schools">Schools</a></li>
+                     <li class="step-3">
+                     <a href="javascript:void(0);">Examinations</a>
+                     <ul>
+                        <li><a href="https://mitwpu.edu.in/academics/mode-of-exams">Mode of Exams</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/ordinances">Ordinances</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/evaluation-criteria">Evaluation Criteria</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/student-grievance">Student Grievance Cell</a></li>
+                        <li><a href="https://mitwpu.edu.in/exam-notices">Exam Notices</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/exam-timetable">Exam Timetable</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/results">Results</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/faq">FAQ</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/student-assistance">Student Assistance</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/document-verification"> Document Verification</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/examination-contact-us"> Examination- Contact Us</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/convocation">Convocation</a></li>
+                        <li><a href="https://mitwpu.edu.in/academics/exam-activity-schedule">Exam Activity Schedule</a></li>
+                        <li><a href="https://www.wes.org/send-electronic-academic-records/" target="_blank">WES - Advisory Blog</a></li>
+                        <li><a href="https://docswallet.com/user/homepage/index.html" target="_blank">WES - Digital Process</a></li>
+                     </ul>
+                  </li>
+                     <li><a href="https://mitwpu.edu.in/academics/academic-calender">Academic Calendar 2025-26</a></li>
+                     <li><a href="https://mitwpu.edu.in/academic-notices">Academic Notices</a></li>
+                     <li><a href="https://mitwpu.edu.in/academics/industry-academia">Industry-Academia (CIAP)</a></li>
+                     <li><a href="https://mitwpu.edu.in/about-us/iqac">IQAC</a></li>
+                     <li> <a href="https://mitwpu.edu.in/academics/list-of-holidays">List of Holidays</a></li>
+                  </ul>
+            </li>
+                                                <li>
+                  <a href="javascript:void(0);">LIFE@MIT-WPU</a>
+                  <ul>
+                                             <li>
+                           <a href="https://mitwpu.edu.in/life-wpu/event-calendar">Event Calendar</a>
+                        </li>
+                                          <li>
+                           <a href="https://mitwpu.edu.in/life-wpu/sports">Sports</a>
+                        </li>
+                                    <li class="step-3">
+                     <a href="javascript:void(0);">Infrastructure</a>
+                     <ul>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/academic-facilities">Academic Facilities</a></li>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/lab-equipment">Lab Equipment</a></li>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/library">Knowledge Resource Centre (KRC)</a></li>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/medical-facilities">Medical Facilities</a></li>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/hostel-facilities">Hostel Facilities</a></li>
+                        <li><a href="https://mitwpu.edu.in/life-wpu/other-facilities">Other Facilities</a></li>
+                     </ul>
+                  </li>
+                  <li class="step-3">
+                        <a href="javascript:void(0);">Student Life</a>
+                        <ul>
+                           <li><a href="https://mitwpu.edu.in/life-wpu/student-achievements">Student Achievements</a></li>
+                           <li class="step-3">
+                              <a href="javascript:void(0);">Student Clubs</a>
+                              <ul class="step4-ul">
+                                 <li><a href="https://mitwpu.edu.in/life-wpu/clubs">Student Clubs</a></li>
+                                 <li><a href="https://mitwpu.edu.in/life-wpu/adventure-club/about-adventure-club">Adventure Club</a></li>
+                              </ul>
+                           </li>
+                           <li><a href="https://mitwpu.edu.in/life-wpu/student-projects">Student Projects</a></li>
+                           <li class="step-3">
+                              <a href="javascript:void(0);">Student Council</a>
+                              <ul class="step4-ul">
+                                 <li><a href="https://mitwpu.edu.in/life-wpu/student-council">Student Council</a></li>
+                                 <li><a href="https://mitwpu.edu.in/life-wpu/student-council/student-council-members">Student Council Members</a></li>
+                              </ul>
+                           </li>
+                           <li><a href="https://mitwpu.edu.in/life-wpu/student-affairs">Student Affairs</a></li>
+                        </ul>
+                  </li>
+                  <li class="step-3">
+                     <a href="javascript:void(0);">Experiential Learning</a>
+                     <ul>
+                        <li><a href="https://mitwpu.edu.in/rural-immersion">Rural Immersion</a></li>
+                        <li><a href="https://mitwpu.edu.in/national-immersion">National Immersion</a></li>
+                        <li><a href="https://mitwpu.edu.in/international-immersion">International Immersion</a></li>
+                     </ul>
+                  </li>
+                                    </ul>
+               </li>
+                                          <li>
+               <a href="javascript:void(0);">INTERNATIONAL</a>
+               <ul>
+                  <li><a href="https://mitwpu.edu.in/study-in-india">Study in India</a></li>
+                  <li><a href="https://mitwpu.edu.in/study-abroad">Study Abroad</a></li> 
+               </ul>
+            </li>
+                           <li><a href="https://mitwpu.edu.in/research">RESEARCH</a></li>
+            <li class="last_menu_bdr">
+               <a href="javascript:void(0);">INNOVATION</a>
+               <ul>
+                  <li class="step-3">
+                     <a href="javascript:void(0);">Innovation & Entrepreneurship</a>
+                     <ul>
+                        <li><a href="https://mitwpu.edu.in/innovation/mit-tbi">Technology Business Incubator</a></li>
+                        <li><a href="https://mitwpu.edu.in/innovation/cbie-startup-accelerator">Center for Business Innovation & Entrepreneurship</a></li>
+                        <li><a href="https://mitwpu.edu.in/institution-innovation-council">Institution Innovation Council</a></li>
+                     </ul>
+                  </li>
+               </ul>
+            </li>
+         </ul>
+      </div>
+      <div class="link-other arrow_hide">
+         <ul class="menu-bx-inn">
+            <li><a href="https://mitwpu.edu.in/press-release">Media Coverage</a></li>
+            <li><a href="https://mitwpu.edu.in/sustainability">Green Campus</a></li>
+            <li><a href="https://mitwpu.edu.in/faculty-members">Faculty</a></li>
+            <li><a href="https://mitwpu.edu.in/alumni" >Alumni</a></li>
+            <li><a href="https://mitwpu.edu.in/placements">Placement</a></li>
+            <li><a href="https://mitwpu.edu.in/uploads/images/UGC-Approved.pdf" target="_blank">UGC Approved </a></li>
+            <li class="d-none"><a href="https://mitwpu.edu.in/academics/ordinances">Examination</a></li>
+            <li><a href="https://mitwpu.edu.in/career">Work With Us</a></li>
+            <li><a href="https://mitwpu.edu.in/student-information">Student Information</a></li>
+            <li>
+               <a href="javascript:void(0);">Happenings</a>
+               <ul>
+                  <li><a href="https://mitwpu.edu.in/news">News</a></li>
+                  <li><a href="https://mitwpu.edu.in/events">Event</a></li>
+                  <li><a href="https://mitwpu.edu.in/notices-and-announcements">Notices & Announcements</a></li>
+                  <li><a href="https://mitwpu.edu.in/image-gallery">Image Gallery</a></li>
+                  <li><a href="https://mitwpu.edu.in/video-gallery">Video Gallery</a></li>
+                  <li><a href="https://mitwpu.edu.in/press-release">Media Coverage</a></li>
+               </ul>
+            </li>
+            <!--<li><a href="">iOS Centre</a></li>-->
+            <li><a href="https://mitwpu.edu.in/blog">Blogs</a></li>
+            <li><a href="https://mitwpu.edu.in/contact-us">Contact Us</a></li>
+         </ul>
+      </div>
+   </div>
+</section>
+<div class="stickySidebar sidebar-home " id="stickySidebar" >
+   <div class="stickySidebar__wrapper">
+      <div class="stickySidebar__wrapper--left"><p>Admission Enquiry</p></div>
+      <div class="stickySidebar__wrapper--right"><div class="npf_wgts" data-height="650px" data-w="e98f3c938902da99f3d245e9e8e6d273"></div></div>
+   </div>
+</div>
+<a class="cta-student " href="https://mitwpu.edu.in/chat-with-a-student-ambassador">
+   <div class="stickySidebar sidebar_brochure sidebar_student"  id="stickySidebar">
+      <div><div class="stickySidebar__wrapper--left stbtn"><p> Chat with Student</p></div></div>
+   </div>
+</a>
+   <a href="tel:+912071177104" class="qcontact-link clink "><img width="20" height="20" class="img-fluid" alt="Call" src="https://mitwpu.edu.in/assets/frontend/images/call-icon.svg"><span>+91 2071177104</span></a>
+    <a href="https://api.whatsapp.com/send?phone=919881492848" target="_blank" class="qcontact-link whatsapp "><img width="20" height="20" class="img-fluid" alt="WhatsApp" src="https://mitwpu.edu.in/assets/frontend/images/whatusp-icon.svg"><span>+91 98814 92848</span></a> 
+   <a href="https://mitwpu.edu.in/virtual-tour" target="_blank" class="qcontact-link virtualtour"><img alt="MIT-WPU Virtual tour" class="img-fluid" src="https://mitwpu.edu.in/assets/frontend/images/virtual-tour.png" style="width: 22px" ><span>Virtual Tour &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+   </a>
+   <a href="https://mitwpu.edu.in/uploads/pdf/MIT-WPU_Brochure_2025.pdf" target="_blank" class="qcontact-link brochurefile ">
+      <img  width="22" height="22" class="img-fluid" alt="Download" src="https://mitwpu.edu.in/assets/frontend/images/download-pdf-icon.svg" style="width:22px;margin-right:2px;"><span style="padding-left:4px;font-size:1.5rem;">Download Brochure&nbsp;</span>
+   </a>
+   <div class="modal fade" id="applyNowModal" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="applyNowModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+         <div class="modal-content">
+            <div class="modal-header"><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-body"><div class="npf_wgts" data-height="630px" data-w="e98f3c938902da99f3d245e9e8e6d273"></div></div>
+            <div class="modal-footer"></div>
+         </div>
+      </div>
+   </div>
+   <!--chatbot-->
+   <div class="npf_chatbots" data-w="b0d1e15eacfc456493218e69215627c6" style="display:none;"></div>
+   <script>window.site_url = 'https://mitwpu.edu.in/';</script>
+      <script src="https://mitwpu.edu.in/assets/frontend/js/bootstrap.bundle.min.js" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/slick.min.js" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/owl.carousel.min.js?v=07052025.1" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/main.min.js?v=260925.0" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/jquery.magnific-popup.min.js" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/jquery.touchSwipe.min.js" defer></script>
+   <script src="https://mitwpu.edu.in/assets/frontend/js/lazysizes.min.js" defer></script>
+<script src="https://mitwpu.edu.in/assets/frontend/js/google-translate.js"></script>
+<script type="text/javascript">
+function loadGoogleTranslate(){new google.translate.TranslateElement({pageLanguage:'',includedLanguages:'en,hi,mr',autoDisplay:true},'googledd');const googlebutton=document.getElementsByClassName('goog-te-combo');googlebutton[0].className='goog-te-combo btn btn-light';const poweredby=document.getElementsByClassName('skiptranslate goog-te-gadget');poweredby[0].firstChild.nextSibling.remove();const googlelogo=document.getElementsByClassName('VIpgJd-ZVi9od-l4eHX-hSRGPd')[0].remove()}
+</script>
+<script>function openPdfViewer(pdfUrl){window.open('https://mitwpu.edu.in/assets/pdfjs/web/viewer.html?file='+encodeURIComponent(pdfUrl),'_blank')}</script>
+<script type="text/javascript">var s=document.createElement("script");s.type="text/javascript";s.async=true;s.src="https://widgets.in5.nopaperforms.com/emwgts.js";document.body.appendChild(s);</script>
+<script type="text/javascript"> var s=document.createElement("script"); s.type="text/javascript"; s.async=true; s.src="https://chatbot.in5.nopaperforms.com/en-gb/backend/bots/niaachtbtscpt.js/508161b0a00b2fae8/b0d1e15eacfc456493218e69215627c6"; document.body.appendChild(s); </script>
+<div id="searchOverlay" class="search-overlay">
+    <span class="close-btn" onclick="closeSearch()">&times;</span>
+    <div class="overlay-content">
+        <form action="https://mitwpu.edu.in/search/results" method="GET">
+            <input type="text" placeholder="Search courses, events, or campuses..." name="q" required autocomplete="off" autofocus maxlength="100">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+</div><script>
+function openSearch() {document.getElementById("searchOverlay").style.display = "block";}
+function closeSearch() {document.getElementById("searchOverlay").style.display = "none";}
+</script>
+</body>
+</html>

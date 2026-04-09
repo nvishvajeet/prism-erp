@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro, card_heading with context %}
+{% from "_page_macros.html" import page_intro, card_heading, chart_bar with context %}
 {% block hover_back %}
   {% if scope_kind == 'instrument' and current_instrument %}
   <a href="{{ url_for('instrument_detail', instrument_id=current_instrument['id']) }}" class="hover-back-btn" title="Back to Instrument">←</a>
@@ -89,13 +89,7 @@
     <h2 data-vis="{{ V }}">Daily Throughput</h2>
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in daily_chart %}
-      <div class="chart-row" data-vis="{{ V }}">
-        <div class="chart-meta" data-vis="{{ V }}">
-          <span data-vis="{{ V }}">{{ row.label }}</span>
-          <strong data-vis="{{ V }}">{{ row.value }}</strong>
-        </div>
-        <div class="chart-track" data-vis="{{ V }}"><div class="chart-fill dark" style="width: {{ row.width }}%;" data-vis="{{ V }}"></div></div>
-      </div>
+      {{ chart_bar(row.label, row.value, row.width, dark=True) }}
       {% else %}
       <p class="hint" data-vis="{{ V }}">No data.</p>
       {% endfor %}

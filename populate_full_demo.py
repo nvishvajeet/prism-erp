@@ -10,19 +10,40 @@ Creates:
 - 500 sample requests spread across 6 months (Oct 2025 - Apr 2026)
 - Realistic lifecycle distributions: 60% completed, 15% in-progress/scheduled, 10% under_review/awaiting, 10% sample_submitted/received, 5% rejected
 - Event log entries with SHA-256 hash chain audit trail
-- Cross-instrument permissions and grant/funding tracking
+- Conversation messages on requests (comments, status updates)
+- Instrument downtime entries (2-3 per instrument)
+- Approval chain configs for instruments
 """
 
 from __future__ import annotations
+
+"""
+PRISM Lab Scheduler - Comprehensive Demo Data Populator
+
+Usage:
+    python populate_full_demo.py
+
+Note: Ensure the virtual environment is activated first:
+    source venv_310/bin/activate
+    python populate_full_demo.py
+"""
 
 import hashlib
 import json
 import random
 import sqlite3
+import sys
+from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from werkzeug.security import generate_password_hash
+try:
+    from werkzeug.security import generate_password_hash
+except ImportError:
+    print("Error: werkzeug module not found.", file=sys.stderr)
+    print("Please activate the virtual environment first:", file=sys.stderr)
+    print("  source venv_310/bin/activate", file=sys.stderr)
+    sys.exit(1)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -31,6 +52,240 @@ DEFAULT_PASSWORD = "SimplePass123"
 
 # Random seed for reproducibility
 random.seed(42)
+
+
+def init_db() -> None:
+    """Initialize database schema (recreates fresh DB)."""
+    db = sqlite3.connect(DB_PATH)
+    with closing(db.cursor()) as cur:
+        cur.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                invited_by INTEGER,
+                invite_status TEXT NOT NULL DEFAULT 'active',
+                active INTEGER NOT NULL DEFAULT 1,
+                member_code TEXT DEFAULT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS instruments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                code TEXT UNIQUE NOT NULL,
+                category TEXT NOT NULL,
+                location TEXT NOT NULL,
+                daily_capacity INTEGER NOT NULL DEFAULT 3,
+                status TEXT NOT NULL DEFAULT 'active',
+                notes TEXT NOT NULL DEFAULT '',
+                office_info TEXT NOT NULL DEFAULT '',
+                faculty_group TEXT NOT NULL DEFAULT '',
+                manufacturer TEXT NOT NULL DEFAULT '',
+                model_number TEXT NOT NULL DEFAULT '',
+                capabilities_summary TEXT NOT NULL DEFAULT '',
+                machine_photo_url TEXT NOT NULL DEFAULT '',
+                reference_links TEXT NOT NULL DEFAULT '',
+                instrument_description TEXT NOT NULL DEFAULT '',
+                accepting_requests INTEGER NOT NULL DEFAULT 1,
+                soft_accept_enabled INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_admins (
+                user_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, instrument_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_operators (
+                user_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, instrument_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_faculty_admins (
+                user_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, instrument_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS sample_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_no TEXT UNIQUE NOT NULL,
+                sample_ref TEXT UNIQUE,
+                requester_id INTEGER NOT NULL,
+                created_by_user_id INTEGER NOT NULL,
+                originator_note TEXT NOT NULL DEFAULT '',
+                instrument_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                sample_name TEXT NOT NULL,
+                sample_count INTEGER NOT NULL DEFAULT 1,
+                description TEXT NOT NULL,
+                sample_origin TEXT NOT NULL DEFAULT 'internal',
+                receipt_number TEXT NOT NULL DEFAULT '',
+                amount_due REAL NOT NULL DEFAULT 0,
+                amount_paid REAL NOT NULL DEFAULT 0,
+                finance_status TEXT NOT NULL DEFAULT 'n/a',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'submitted',
+                submitted_to_lab_at TEXT,
+                sample_submitted_at TEXT,
+                sample_received_at TEXT,
+                sample_dropoff_note TEXT NOT NULL DEFAULT '',
+                received_by_operator_id INTEGER,
+                assigned_operator_id INTEGER,
+                scheduled_for TEXT,
+                remarks TEXT NOT NULL DEFAULT '',
+                results_summary TEXT NOT NULL DEFAULT '',
+                result_email_status TEXT NOT NULL DEFAULT '',
+                result_email_sent_at TEXT,
+                completion_locked INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY (requester_id) REFERENCES users(id),
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id),
+                FOREIGN KEY (received_by_operator_id) REFERENCES users(id),
+                FOREIGN KEY (assigned_operator_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS approval_steps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sample_request_id INTEGER NOT NULL,
+                step_order INTEGER NOT NULL,
+                approver_role TEXT NOT NULL,
+                approver_user_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'pending',
+                remarks TEXT NOT NULL DEFAULT '',
+                acted_at TEXT,
+                FOREIGN KEY (sample_request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (approver_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                actor_id INTEGER,
+                payload_json TEXT NOT NULL,
+                prev_hash TEXT NOT NULL,
+                entry_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (actor_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS request_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                original_filename TEXT NOT NULL,
+                stored_filename TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                file_extension TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                uploaded_by_user_id INTEGER NOT NULL,
+                uploaded_at TEXT NOT NULL,
+                attachment_type TEXT NOT NULL DEFAULT 'other',
+                note TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                request_message_id INTEGER,
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id),
+                FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (request_message_id) REFERENCES request_messages(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS request_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                sender_user_id INTEGER NOT NULL,
+                note_kind TEXT NOT NULL DEFAULT 'requester_note',
+                message_body TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (sender_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS request_issues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                created_by_user_id INTEGER NOT NULL,
+                issue_message TEXT NOT NULL,
+                response_message TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL,
+                responded_at TEXT,
+                responded_by_user_id INTEGER,
+                resolved_at TEXT,
+                resolved_by_user_id INTEGER,
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (responded_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (resolved_by_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_downtime (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS generated_exports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT UNIQUE NOT NULL,
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                scope_label TEXT NOT NULL,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_approval_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                step_order INTEGER NOT NULL,
+                approver_role TEXT NOT NULL,
+                approver_user_id INTEGER,
+                UNIQUE(instrument_id, step_order),
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
+                FOREIGN KEY (approver_user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS announcements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                priority TEXT NOT NULL DEFAULT 'info',
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            );
+            """
+        )
+    db.commit()
+    db.close()
+    print("Database schema initialized.")
 
 
 def now_iso(dt: datetime | None = None) -> str:
@@ -293,6 +548,97 @@ def create_approval_chain(db: sqlite3.Connection, request_id: int, instrument_co
         )
 
 
+def create_instrument_downtime(db: sqlite3.Connection, instrument_id: int, created_by_user_id: int, base_dt: datetime, idx: int) -> None:
+    """Create 2-3 downtime entries per instrument."""
+    downtime_reasons = [
+        "Scheduled preventive maintenance",
+        "Routine calibration and validation",
+        "Component replacement",
+        "Software update and testing",
+        "Filter replacement and cleaning",
+    ]
+
+    num_downtimes = random.randint(2, 3)
+    for i in range(num_downtimes):
+        # Spread downtimes across the 6-month period
+        days_offset = random.randint(0, 180)
+        start_dt = base_dt + timedelta(days=days_offset, hours=random.randint(8, 16))
+        end_dt = start_dt + timedelta(hours=random.randint(4, 24))
+
+        db.execute(
+            """
+            INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, created_by_user_id, created_at, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                instrument_id,
+                now_iso(start_dt),
+                now_iso(end_dt),
+                random.choice(downtime_reasons),
+                created_by_user_id,
+                now_iso(start_dt - timedelta(hours=1)),
+            ),
+        )
+
+
+def add_request_messages(db: sqlite3.Connection, request_id: int, created_at_str: str) -> None:
+    """Add conversation messages to a sample request."""
+    message_templates = [
+        "Sample received and logged in system.",
+        "Scheduling analysis for next available slot.",
+        "Analysis in progress, estimated completion in 2 hours.",
+        "Results being compiled and validated.",
+        "Quality check passed, preparing report.",
+        "Report ready for download.",
+        "Please confirm receipt of results.",
+        "Sample stored for reference.",
+        "Request completed successfully.",
+        "Need clarification on sample preparation method used.",
+        "Performing additional verification as requested.",
+        "Instrument recalibrated, re-running analysis.",
+    ]
+
+    # Get the created_at timestamp to add messages progressively
+    base_created = datetime.fromisoformat(created_at_str.rstrip("Z"))
+
+    # Add 1-4 messages per request randomly
+    if random.random() < 0.6:  # 60% of requests have messages
+        num_messages = random.randint(1, 4)
+        for i in range(num_messages):
+            msg_dt = base_created + timedelta(hours=random.randint(2, 48))
+
+            # Get a random sender (operator or requester)
+            if random.random() < 0.6:
+                # Operator message
+                sender_id = db.execute(
+                    """
+                    SELECT u.id
+                    FROM users u
+                    JOIN sample_requests sr ON sr.assigned_operator_id = u.id
+                    WHERE sr.id = ?
+                    LIMIT 1
+                    """,
+                    (request_id,),
+                ).fetchone()
+                if not sender_id:
+                    continue
+                sender_id = sender_id["id"]
+            else:
+                # Requester message
+                sender_id = db.execute(
+                    "SELECT requester_id FROM sample_requests WHERE id = ?",
+                    (request_id,),
+                ).fetchone()["requester_id"]
+
+            db.execute(
+                """
+                INSERT INTO request_messages (request_id, sender_user_id, note_kind, message_body, created_at, is_active)
+                VALUES (?, ?, 'conversation', ?, ?, 1)
+                """,
+                (request_id, sender_id, random.choice(message_templates), now_iso(msg_dt)),
+            )
+
+
 def seed_full_demo(db: sqlite3.Connection) -> None:
     """Seed comprehensive full demo dataset."""
 
@@ -480,6 +826,31 @@ def seed_full_demo(db: sqlite3.Connection) -> None:
             inst_id = instrument_map[inst_code]
             assign_operator(db, operator_id, inst_id)
 
+    # ========== CREATE INSTRUMENT DOWNTIME ENTRIES ==========
+
+    # Create 2-3 downtime entries per instrument
+    print("Creating instrument downtime entries...")
+    start_date = datetime(2025, 10, 1, 9, 0, 0)
+    for idx, (inst_code, inst_id) in enumerate(instrument_map.items()):
+        # Pick a random operator for this instrument as creator
+        operator_id = db.execute(
+            """
+            SELECT u.id
+            FROM users u
+            JOIN instrument_operators io ON io.user_id = u.id
+            WHERE io.instrument_id = ?
+            ORDER BY RANDOM()
+            LIMIT 1
+            """,
+            (inst_id,),
+        ).fetchone()
+        if operator_id:
+            operator_id = operator_id["id"]
+        else:
+            # Fallback to first operator
+            operator_id = db.execute("SELECT id FROM users WHERE role = 'operator' LIMIT 1").fetchone()["id"]
+        create_instrument_downtime(db, inst_id, operator_id, start_date, idx)
+
     # ========== CREATE 500 SAMPLE REQUESTS ==========
 
     sample_titles = [
@@ -565,8 +936,12 @@ def seed_full_demo(db: sqlite3.Connection) -> None:
     end_date = datetime(2026, 4, 30, 17, 0, 0)
     total_days = (end_date - start_date).days
 
+    print("Creating 500 sample requests...")
     request_count = 0
     for req_idx in range(500):
+        if req_idx % 100 == 0:
+            print(f"  Progress: {req_idx}/500 requests...")
+
         # Spread evenly across 6 months
         day_offset = int((req_idx / 500) * total_days)
         base_dt = start_date + timedelta(days=day_offset, hours=random.randint(0, 8))
@@ -755,11 +1130,26 @@ def seed_full_demo(db: sqlite3.Connection) -> None:
         if status == "rejected":
             log_action(db, operator_id, request_id, "rejected", {"remarks": remarks}, now_iso(base_dt + timedelta(hours=11)))
 
+        # Add conversation messages
+        add_request_messages(db, request_id, now_iso(base_dt))
+
 
 def main() -> None:
     """Main entry point for demo data population."""
+    # Delete existing database
+    if DB_PATH.exists():
+        DB_PATH.unlink()
+        print(f"Deleted existing database: {DB_PATH}")
+
+    # Initialize fresh database schema
+    print("Initializing fresh database schema...")
+    init_db()
+
+    # Connect and populate
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
+
+    print("Seeding comprehensive demo data...")
     seed_full_demo(db)
     db.commit()
 
@@ -773,6 +1163,8 @@ def main() -> None:
     requests = db.execute("SELECT COUNT(*) FROM sample_requests").fetchone()[0]
     audit_logs = db.execute("SELECT COUNT(*) FROM audit_logs").fetchone()[0]
     approval_steps = db.execute("SELECT COUNT(*) FROM approval_steps").fetchone()[0]
+    messages = db.execute("SELECT COUNT(*) FROM request_messages").fetchone()[0]
+    downtime = db.execute("SELECT COUNT(*) FROM instrument_downtime").fetchone()[0]
 
     print(f"\nUSERS: {users}")
 
@@ -819,6 +1211,10 @@ def main() -> None:
     print(f"\nAUDIT & APPROVAL:")
     print(f"  Total audit log entries: {audit_logs}")
     print(f"  Total approval steps: {approval_steps}")
+
+    print(f"\nCONVERSATIONS & MAINTENANCE:")
+    print(f"  Total request messages (conversations): {messages}")
+    print(f"  Total instrument downtime entries: {downtime}")
 
     db.close()
     print("\n" + "="*70)

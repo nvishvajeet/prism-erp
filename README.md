@@ -122,6 +122,26 @@ To run a lightweight regression pass:
 .venv/bin/python smoke_test.py
 ```
 
+## AI Agent Workflow Rules
+
+1. **Always commit before starting** a new task.
+2. **Write the plan in this README** (under Current Task) before coding.
+3. **Break work into <5 min tasks**. Use parallel agents where possible.
+4. **Commit after finishing** each task. Never leave uncommitted work.
+5. If the last job wasn't completed, revert via git, re-read the plan, complete it, then move on.
+
+## Current Task
+
+**Grid Overlay + Feedback Panel** (in progress)
+
+- [x] Grid overlay JS: alphanumeric codes (H1, S3, E4…) on every UI element (Ctrl+G toggle)
+- [x] Click-to-log: clicking a badge registers it in a feedback panel
+- [x] Feedback panel JS: draggable panel, inline notes per entry, path mode, copy-to-clipboard export
+- [x] Base.html: linked grid-overlay.js
+- [ ] **Feedback panel CSS** — style the floating panel, log entries, form inputs, path separator, flash animation
+- [ ] **Test on all pages** — verify overlay + panel work on Home, Instruments, Queue, Stats, Calendar
+- [ ] **Final commit**
+
 ## Known Bugs / TODO
 
 - **Archived instruments table** on `/instruments` still uses the old 6-column layout (Name, Links, Operation, Location, Operators, Faculty). Should be updated to match the new 7-column active instruments layout.

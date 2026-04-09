@@ -3567,8 +3567,8 @@ def sitemap():
         "title": "General",
         "icon": "⚙",
         "groups": [
-            {"title": "Navigation", "items": core_items},
-            {"title": "Account", "items": core_info},
+            {"title": "Navigation", "entries": core_items},
+            {"title": "Account", "entries": core_info},
         ],
     })
 
@@ -3586,7 +3586,7 @@ def sitemap():
             "key": "operations",
             "title": "Operations",
             "icon": "⚡",
-            "groups": [{"title": "Workspace", "items": ops_items}],
+            "groups": [{"title": "Workspace", "entries": ops_items}],
         })
 
     # Reporting section
@@ -3601,7 +3601,7 @@ def sitemap():
             "key": "reporting",
             "title": "Reporting",
             "icon": "📊",
-            "groups": [{"title": "Views", "items": report_items}],
+            "groups": [{"title": "Views", "entries": report_items}],
         })
 
     # Administration section — admins only
@@ -3620,8 +3620,8 @@ def sitemap():
             "title": "Administration",
             "icon": "🔧",
             "groups": [
-                {"title": "Manage", "items": admin_items},
-                {"title": "System", "items": system_items},
+                {"title": "Manage", "entries": admin_items},
+                {"title": "System", "entries": system_items},
             ],
         })
 

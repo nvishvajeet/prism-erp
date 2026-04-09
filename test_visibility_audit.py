@@ -75,27 +75,27 @@ ACCESS_MATRIX = {
     "/instruments": {
         "super_admin": True, "site_admin": True, "instrument_admin": True,
         "faculty_in_charge": True, "operator": True, "professor_approver": True,
-        "finance_admin": False, "requester": True,  # has instrument assignments in test
+        "finance_admin": True, "requester": True,  # finance_admin granted full access (fc468fa)
     },
     "/schedule": {
         "super_admin": True, "site_admin": True, "instrument_admin": True,
         "faculty_in_charge": True, "operator": True, "professor_approver": True,
-        "finance_admin": False, "requester": True,  # has instrument assignments
+        "finance_admin": True, "requester": True,
     },
     "/calendar": {
         "super_admin": True, "site_admin": True, "instrument_admin": True,
         "faculty_in_charge": True, "operator": True, "professor_approver": True,
-        "finance_admin": False, "requester": True,  # has instrument assignments
+        "finance_admin": True, "requester": True,
     },
     "/stats": {
         "super_admin": True, "site_admin": True, "instrument_admin": True,
         "faculty_in_charge": True, "operator": True, "professor_approver": True,
-        "finance_admin": False, "requester": True,  # has instrument assignments
+        "finance_admin": True, "requester": True,
     },
     "/visualizations": {
         "super_admin": True, "site_admin": True, "instrument_admin": True,
         "faculty_in_charge": True, "operator": True, "professor_approver": True,
-        "finance_admin": False, "requester": True,  # has instrument assignments
+        "finance_admin": True, "requester": True,
     },
     "/admin/users": {
         "super_admin": True, "site_admin": True, "instrument_admin": False,
@@ -122,7 +122,7 @@ NAV_TABS = {
     "faculty_in_charge": {"Home", "Instruments", "Queue", "Calendar", "Statistics", "Settings", "Docs", "New Request"},
     "operator": {"Home", "Instruments", "Queue", "Calendar", "Statistics", "Settings", "Docs", "New Request"},
     "professor_approver": {"Home", "Instruments", "Queue", "Calendar", "Statistics", "Settings", "Docs", "New Request"},
-    "finance_admin": {"Home", "Queue", "Settings", "Docs", "New Request"},  # no instrument access → simplified nav
+    "finance_admin": {"Home", "Instruments", "Queue", "Calendar", "Statistics", "Settings", "Docs", "New Request"},  # full access (fc468fa)
     "requester": {"Home", "Instruments", "Queue", "Calendar", "Statistics", "Settings", "Docs", "New Request"},
 }
 

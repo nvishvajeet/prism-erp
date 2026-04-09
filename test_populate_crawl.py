@@ -437,11 +437,11 @@ class ActionRunner:
         """Admin creates an instrument through /instruments POST."""
         data = {
             "action": "create_instrument",
-            "name": inst_data["name"],
-            "code": inst_data["code"],
-            "category": inst_data["category"],
-            "location": inst_data["location"],
-            "daily_capacity": inst_data["daily_capacity"],
+            "new_name": inst_data["name"],
+            "new_code": inst_data["code"],
+            "new_category": inst_data["category"],
+            "new_location": inst_data["location"],
+            "new_daily_capacity": inst_data["daily_capacity"],
         }
         status, _ = self.post("super_admin", "/instruments", data, f"create_instrument_{inst_data['code']}")
         if status < 400:
@@ -633,7 +633,7 @@ def run_500_crawl():
         prism_app.init_db()
         db = prism_app.get_db()
         db.execute(
-            "INSERT INTO users (name, email, password_hash, role, invite_status, active) "
+            "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status, active) "
             "VALUES (?, ?, ?, 'super_admin', 'active', 1)",
             ("Admin Owner", "admin@lab.local", PW_HASH),
         )

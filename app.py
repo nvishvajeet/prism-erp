@@ -5198,9 +5198,9 @@ def duplicate_request(request_id: int):
         "title": f"Copy of {sr['title']}",
         "sample_name": sr["sample_name"],
         "sample_count": sr["sample_count"],
-        "description": sr.get("description", ""),
-        "sample_origin": sr.get("sample_origin", "internal"),
-        "priority": sr.get("priority", "normal"),
+        "description": sr["description"] or "",
+        "sample_origin": sr["sample_origin"] or "internal",
+        "priority": sr["priority"] or "normal",
     }
     return redirect(url_for("new_request", **params))
 

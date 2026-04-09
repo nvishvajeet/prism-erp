@@ -149,13 +149,19 @@
       <p class="hint" data-vis="{{ V }}">Restricted.</p>
       {% endif %}
       {% if card_policy.fields.conversation and card_policy.actions.reply %}
+      {% set _note_opts = [('', 'Comment')] %}
+      {% if conversation_note_types %}
+        {% for nk, nl, _nh in conversation_note_types %}
+          {% if _note_opts.append((nk, nl)) %}{% endif %}
+        {% endfor %}
+      {% endif %}
       <div class="top-gap" data-vis="{{ V }}">
         {{ input_dialog(
             form_action=url_for('request_detail', request_id=sample_request['id']),
             action_name='post_message',
             placeholder='Write a reply or update',
             submit_label='Add Comment',
-            note_types=[('', 'Comment')] + [(nk, nl) for nk, nl, _nh in conversation_note_types] if conversation_note_types else [],
+            note_types=_note_opts,
             allow_file=True
         ) }}
       </div>

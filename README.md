@@ -38,9 +38,9 @@ Password: `SimplePass123`
 |-------|--------|----------|
 | Core Platform | Done | ████████████████████ 100% |
 | UI Architecture | Done | ████████████████████ 100% |
-| Navigation & Widgets | In Progress | ████████████░░░░░░░░ 60% |
-| Calendar Integration | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
-| User Customization | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| Navigation & Widgets | Done | ██████████████████░░ 90% |
+| Calendar Integration | In Progress | ████████░░░░░░░░░░░░ 40% |
+| User Customization | In Progress | ██████░░░░░░░░░░░░░░ 30% |
 | Finance Extension | Future | ░░░░░░░░░░░░░░░░░░░░ 0% |
 | Full Demo & Verification | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
 

@@ -203,6 +203,11 @@ def handle_not_found(_exc):
     return render_template("error.html", title="Page Not Found", heading="Page Not Found", message="This page does not exist or is no longer available.", code=404), 404
 
 
+@app.errorhandler(500)
+def handle_server_error(_exc):
+    return render_template("error.html", title="Server Error", heading="Something went wrong", message="An internal error occurred. Please try again shortly.", code=500), 500
+
+
 def query_all(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     return get_db().execute(sql, params).fetchall()
 

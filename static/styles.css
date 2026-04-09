@@ -5299,3 +5299,53 @@ img.instrument-photo:not([src]) {
   color: var(--accent);
 }
 
+/* ── Error page ── */
+.error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.error-glyph {
+  opacity: 0.25;
+  margin-bottom: 1.5rem;
+}
+.error-code {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  opacity: 0.12;
+  margin: 0;
+}
+.error-heading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+.error-detail {
+  font-size: 0.9rem;
+  opacity: 0.55;
+  max-width: 28rem;
+  margin: 0 auto 1.5rem;
+}
+.error-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+.error-nav a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.error-nav a:hover {
+  opacity: 1;
+}
+

@@ -34,7 +34,7 @@
 {% if budgets %}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Active Budgets") }}
-  {% call bounded_pane('budgetsList', max_height='none', page_size=15) %}
+  {% call paginated_pane('budgetsList', max_height='none', page_size=15) %}
   <table class="inst-list-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}"><tr data-vis="{{ V }}">
       <th data-vis="{{ V }}">Budget</th>

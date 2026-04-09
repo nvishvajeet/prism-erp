@@ -34,15 +34,26 @@ Password: `SimplePass123`
 
 ## Progress
 
-| Phase | Status | Progress |
-|-------|--------|----------|
-| Core Platform | Done | ████████████████████ 100% |
-| UI Architecture | Done | ████████████████████ 100% |
-| Navigation & Widgets | Done | ██████████████████░░ 90% |
-| Calendar Integration | In Progress | ████████░░░░░░░░░░░░ 40% |
-| User Customization | In Progress | ██████░░░░░░░░░░░░░░ 30% |
-| Finance Extension | Future | ░░░░░░░░░░░░░░░░░░░░ 0% |
-| Full Demo & Verification | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| Wave | Description | Status | Progress |
+|------|-------------|--------|----------|
+| — | Core Platform (routes, DB, auth, RBAC) | Done | ████████████████████ 100% |
+| — | UI Architecture (macros, data-vis, nav) | Done | ████████████████████ 100% |
+| 1 | Full Demo Population (500-action crawl) | Done | ████████████████████ 100% |
+| 2 | Admin/Settings Page Redesign | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| 3 | Navigation + Widget Improvements | In Progress | ████████░░░░░░░░░░░░ 40% |
+| 4 | Calendar Integration | Planned | ░░░░░░░░░░░░░░░░░░░░ 0% |
+| 5 | Template Centralization | Done | ██████████████████░░ 95% |
+| 6 | Documentation Rewrite | In Progress | ██████░░░░░░░░░░░░░░ 30% |
+| 7 | Verification (crawl + audit) | Done | ████████████████████ 100% |
+
+### Benchmark (2026-04-09)
+
+- **app.py**: 6,413 lines, 41 routes, 15 DB tables
+- **Templates**: 28 HTML files, 0 orphaned data-vis, 0 bounded_pane calls
+- **Roles**: 9 roles with ROLE_ACCESS_PRESETS, OR-logic with instrument assignments
+- **Crawl**: 500-action populate crawl — 0 server errors
+- **Visibility audit**: 169 checks across 8 roles — 0 failures
+- **Finance admin**: full instrument area access (read-only, approver-level)
 
 ## AI Agent Workflow Rules
 

@@ -43,7 +43,7 @@
 {% if budgets %}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Budgets & Grants") }}
-  {% call bounded_pane('finBudgets', max_height='none', page_size=10) %}
+  {% call paginated_pane('finBudgets', max_height='none', page_size=10) %}
   <table class="inst-list-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}"><tr data-vis="{{ V }}">
       <th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Type</th>
@@ -74,7 +74,7 @@
 {# ── Revenue by instrument ── #}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Revenue by Instrument") }}
-  {% call bounded_pane('finInstruments', max_height='none', page_size=15) %}
+  {% call paginated_pane('finInstruments', max_height='none', page_size=15) %}
   <table class="inst-list-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}"><tr data-vis="{{ V }}">
       <th data-vis="{{ V }}">Instrument</th>
@@ -114,7 +114,7 @@
 {% if recent_paid %}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("", "Recent Paid Transactions") }}
-  {% call bounded_pane('finRecent', max_height='none', page_size=10) %}
+  {% call paginated_pane('finRecent', max_height='none', page_size=10) %}
   <table class="inst-list-table" data-vis="{{ V }}">
     <thead data-vis="{{ V }}"><tr data-vis="{{ V }}">
       <th data-vis="{{ V }}">Request</th>

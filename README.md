@@ -132,15 +132,21 @@ To run a lightweight regression pass:
 
 ## Current Task
 
-**Grid Overlay + Feedback Panel** (in progress)
+**Crawler-ready Grid Overlay** (in progress)
 
-- [x] Grid overlay JS: alphanumeric codes (H1, S3, E4…) on every UI element (Ctrl+G toggle)
-- [x] Click-to-log: clicking a badge registers it in a feedback panel
-- [x] Feedback panel JS: draggable panel, inline notes per entry, path mode, copy-to-clipboard export
-- [x] Base.html: linked grid-overlay.js
-- [ ] **Feedback panel CSS** — style the floating panel, log entries, form inputs, path separator, flash animation
-- [ ] **Test on all pages** — verify overlay + panel work on Home, Instruments, Queue, Stats, Calendar
-- [ ] **Final commit**
+Previous work done:
+- [x] Grid overlay JS with alphanumeric codes (H1, S3, E4…)
+- [x] Click-to-log feedback panel with inline notes, path mode, copy export
+- [x] Full CSS for panel, badges, dark theme
+
+Current task — make overlay robust for automated crawlers:
+- [ ] `prism.crawl` API: programmatic activate/scan/click/log without mouse
+- [ ] `prism.path.start()` / `.step(code, note)` / `.end()` for path recording
+- [ ] Error interception: capture window.onerror, unhandledrejection, console.error into log
+- [ ] `prism.errors()` to dump caught exceptions with page + timestamp
+- [ ] Non-destructive guarantee: all click intercepts use capture phase with passive fallback, no preventDefault on form elements, overlay elements excluded from DOM queries via data-prism-ignore
+- [ ] `prism.export()` → full JSON dump (log + errors + paths + page metadata)
+- [ ] Test via JS console injection on all pages
 
 ## Known Bugs / TODO
 

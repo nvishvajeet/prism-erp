@@ -15,7 +15,16 @@ import populate_live_demo  # noqa: E402
 def login(client, email: str, password: str = "SimplePass123") -> None:
     response = client.post("/login", data={"email": email, "password": password}, follow_redirects=True)
     assert response.status_code == 200
-    assert b"Overview" in response.data or b"My History" in response.data or b"Site Map" in response.data
+    # Sanity: post-login response should be a logged-in PRISM page (not the
+    # login form). Match against the universal `<title>` and a nav fragment
+    # from base.html so the assertion survives template-level rewrites of
+    # individual page bodies.
+    assert b"PRISM" in response.data or b"Lab Scheduler" in response.data, (
+        f"login({email!r}): post-login response did not contain PRISM/Lab Scheduler title"
+    )
+    assert b'name="email"' not in response.data, (
+        f"login({email!r}): still on login form after submit — credentials wrong?"
+    )
 
 
 def main() -> None:

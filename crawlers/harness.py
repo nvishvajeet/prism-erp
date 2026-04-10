@@ -137,9 +137,22 @@ class Harness:
 
     # -- Bootstrap ----------------------------------------------------
     def bootstrap(self) -> None:
-        """Point Flask at a fresh temp DB, init schema, wire test client."""
-        # Owner emails + temp DB must be set BEFORE app is imported
+        """Point Flask at a fresh temp DB, init schema, wire test client.
+
+        Safe to call repeatedly: the first call imports + configures the
+        Flask app, subsequent calls just swap the DB path and re-init the
+        schema. This is what lets a wave run multiple strategies through
+        the same Python process without tripping Flask's "setup method
+        can no longer be called" guard after the first request.
+        """
+        # Owner emails must be set BEFORE app is imported the first time
         os.environ.setdefault("OWNER_EMAILS", "admin@lab.local")
+        # Demo mode must be on so seed_data()/login routes behave like dev
+        os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
+        # CSRF enforcement OFF for the test client — W6.6 gates it on
+        # LAB_SCHEDULER_CSRF=1, and we want to keep crawlers form-friendly
+        os.environ.setdefault("LAB_SCHEDULER_CSRF", "0")
+
         self.temp_db_path = Path(tempfile.mktemp(suffix=".db"))
         os.environ["LAB_SCHEDULER_DB_PATH"] = str(self.temp_db_path)
 
@@ -155,11 +168,6 @@ class Harness:
         flask_app = prism_app.app
         flask_app.config["TESTING"] = True
         flask_app.config["WTF_CSRF_ENABLED"] = False
-
-        # csrf_token() is called by a handful of templates; stub it.
-        @flask_app.context_processor
-        def _inject_csrf():  # noqa: WPS430
-            return {"csrf_token": lambda: "test-csrf-token"}
 
         prism_app.init_db()
         self.flask_app = flask_app

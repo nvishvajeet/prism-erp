@@ -8,6 +8,64 @@ LAN-first. Single-binary deploy. SQLite. No build step.
 
 ---
 
+## Phase 5 Progress & Schedule
+
+Current focus: **Phase 5 — Widget Propagation.** Extract recurring
+widgets to macros, then convert every user-facing page to the tile
+pattern set by `templates/instrument_detail.html`.
+
+Effort sizing is **relative** (S / M / L / XL) — small = isolated
+edits, XL = multi-session rewrite with template + handler refactor.
+No hour estimates; the surprise budget for each page varies too much.
+
+| Step | Scope | Effort | State |
+|---|---|---|---|
+| W5.1 | Shared widget macros (8 primitives + CSS) | M | **Done** (24f4308) |
+| W5.2 | `schedule.html` tile conversion | L | Next |
+| W5.3 | `request_detail.html` tile conversion | XL | Not started |
+| W5.4 | `dashboard.html` tile conversion | L | Not started |
+| W5.5 | `stats.html` tile conversion | M | Not started |
+| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | Not started |
+| W5.7 | CSS hygiene pass (retire legacy class families) | M | Rolling (alongside W5.2–W5.6) |
+
+**Sizing rationale:**
+- **W5.2 (L)** — highest-touch page; swaps monolithic 7-col table for
+  tiles, rewires filter pill JS, wires up bulk-actions tile.
+- **W5.3 (XL)** — drops the fragile `.request-workspace` 2-col layout,
+  adopts threaded `activity_feed`, collapses duplicated approve/reject
+  forms. The 682-line `request_detail()` Python handler split is
+  deferred to Phase 6 unless it blocks.
+- **W5.4 (L)** — kills the `.instrument-carousel`, adopts `kpi_grid`
+  and `queue_action_stack`, replaces `.grid-two` layout.
+- **W5.5 (M)** — mostly chart tile wrapping + KPI adoption; data
+  layer untouched.
+- **W5.6 (L)** — six secondary pages, each small on its own but the
+  bundle is sizeable; `users.html` gets a `user_table` extraction.
+- **W5.7 (M)** — not a standalone wave; each page conversion retires
+  its own legacy classes as it lands.
+
+**W5.1 macro checklist** (`templates/_page_macros.html`):
+
+- [x] `status_pills_row` — unifies stream-pill / role-toggle / warroom-pill
+- [x] `person_chip` — avatar + name, composes with permission checks
+- [x] `metadata_grid` — canonical `<dl>` for label/value pairs
+- [x] `kpi_grid` — KPI counter grid wrapping `stat_blob`
+- [x] `approval_action_form` — approve/reject forms for one approval step
+- [x] `queue_action_stack` — accept sample + quick assign forms
+- [x] `activity_feed` — timeline with optional chat threading
+- [x] `toggleable_form` — disclosure pattern for inline editors
+- [x] Validation: adopt 3 macros in `instrument_detail.html` (metadata_grid, person_chip, status_pills_row)
+- [x] Crawls green (`test_visibility_audit.py` 171/171, `test_populate_crawl.py` 500 actions, 0 5xx)
+
+After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB
+indexes, the permission decorator, the request status state machine,
+CSRF, and the `request_detail()` handler refactor.
+
+Update this block as steps land. The source of truth for task detail
+lives in `TODO_AI.txt`; this panel is a progress mirror.
+
+---
+
 ## Design Philosophy
 
 Apple / Jony Ive / Ferrari. Every element earns its place.
@@ -26,57 +84,6 @@ Apple / Jony Ive / Ferrari. Every element earns its place.
 
 Reference implementation: `templates/instrument_detail.html` — 10
 tiles on a 6-column fluid grid. Match its rhythm everywhere else.
-
----
-
-## Current Focus
-
-**Phase 5 — Widget Propagation.** Extract recurring widgets to macros,
-then convert each user-facing page to the tile pattern, in priority
-order:
-
-1. `schedule.html` — highest-touch page
-2. `request_detail.html` — high-complexity detail view
-3. `dashboard.html` — hub page
-4. `stats.html` — operations dashboard
-5. Calendar, instruments, pending, users, finance — secondary polish
-
-See `TODO_AI.txt` for the full plan, including the macros to extract
-first (W5.1) and the CSS hygiene pass (W5.7) that runs alongside.
-
-After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB
-indexes, the permission decorator, the request status state machine,
-CSRF, and the request_detail() handler refactor.
-
----
-
-## Phase 5 Progress
-
-| Step | Scope | State |
-|---|---|---|
-| W5.1 | Shared widget macros (8 primitives + CSS) | Done |
-| W5.2 | `schedule.html` tile conversion | Not started |
-| W5.3 | `request_detail.html` tile conversion | Not started |
-| W5.4 | `dashboard.html` tile conversion | Not started |
-| W5.5 | `stats.html` tile conversion | Not started |
-| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | Not started |
-| W5.7 | CSS hygiene pass (retire legacy class families) | Not started |
-
-**W5.1 macro checklist** (`templates/_page_macros.html`):
-
-- [x] `status_pills_row` — unifies stream-pill / role-toggle / warroom-pill
-- [x] `person_chip` — avatar + name, composes with permission checks
-- [x] `metadata_grid` — canonical `<dl>` for label/value pairs
-- [x] `kpi_grid` — KPI counter grid wrapping `stat_blob`
-- [x] `approval_action_form` — approve/reject forms for one approval step
-- [x] `queue_action_stack` — accept sample + quick assign forms
-- [x] `activity_feed` — timeline with optional chat threading
-- [x] `toggleable_form` — disclosure pattern for inline editors
-- [x] Validation: adopt 3 macros in `instrument_detail.html` (metadata_grid, person_chip, status_pills_row)
-- [x] Crawls green (`test_visibility_audit.py` 171/171, `test_populate_crawl.py` 500 actions, 0 5xx)
-
-Update this block as steps land. The source of truth for task detail
-lives in `TODO_AI.txt`; this panel is a progress mirror.
 
 ---
 

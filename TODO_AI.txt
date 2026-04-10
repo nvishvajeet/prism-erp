@@ -44,6 +44,16 @@ codebase teaches itself the pattern.
 Order matters: extract macros first, then convert pages, so each page
 benefits from the macros built before it.
 
+Effort sizing (relative — S/M/L/XL — not hours):
+
+  W5.1  M    DONE   shared widget macros + CSS
+  W5.2  L    NEXT   schedule.html
+  W5.3  XL          request_detail.html (handler split deferred to P6)
+  W5.4  L           dashboard.html (kills .instrument-carousel)
+  W5.5  M           stats.html (chart wrapping + KPI adoption)
+  W5.6  L           secondary pages bundle (6 pages)
+  W5.7  M    ROLL   CSS hygiene — runs alongside W5.2-W5.6, not solo
+
 W5.1  Shared widget macros (foundation — do these first)
   Each macro lives in `_page_macros.html` unless noted.
 

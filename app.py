@@ -3482,6 +3482,40 @@ def seed_data() -> None:
     db.close()
 
 
+ROLE_DISPLAY_NAMES = {
+    "super_admin": "Facility Owner",
+    "site_admin": "Site Admin",
+    "instrument_admin": "Instrument Admin",
+    "faculty_in_charge": "Faculty in Charge",
+    "operator": "Operator",
+    "professor_approver": "Professor Approver",
+    "finance_admin": "Finance Admin",
+    "requester": "Lab Member",
+}
+
+ROLE_NEXT_ACTIONS = {
+    # One-line orientation per role — surfaces in the topbar and the
+    # sitemap page so the skeleton has a consistent "you are here" hint.
+    # Kept deliberately short: the page tiles carry the details.
+    "super_admin": "Full facility control. Start at Stats or Users.",
+    "site_admin": "Manage users and site-wide settings. Start at Admin → Users.",
+    "instrument_admin": "Run your instruments. Start at Instruments or Schedule.",
+    "faculty_in_charge": "Oversee your instrument. Start at Instruments.",
+    "operator": "Handle today's queue. Start at Schedule.",
+    "professor_approver": "Approve pending requests. Start at Schedule → Under Review.",
+    "finance_admin": "Clear finance approvals. Start at Schedule → Under Review.",
+    "requester": "Submit and track your samples. Start at New Request.",
+}
+
+
+def role_display_name(role: str | None) -> str:
+    return ROLE_DISPLAY_NAMES.get(role or "", (role or "").replace("_", " ").title())
+
+
+def role_next_action(role: str | None) -> str:
+    return ROLE_NEXT_ACTIONS.get(role or "", "")
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
@@ -3501,6 +3535,10 @@ def inject_globals():
         "V": V,
         "current_user": user,
         "access_profile_user": access_profile,
+        "role_display_name": role_display_name,
+        "role_next_action": role_next_action,
+        "current_role_display": role_display_name(user["role"]) if user else "",
+        "current_role_hint": role_next_action(user["role"]) if user else "",
         "support_admin_email": support_admin_email,
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,
@@ -6436,6 +6474,103 @@ def user_profile(user_id: int):
             )
             flash(f"Profile updated for {new_name}.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
+        if action == "change_role":
+            # Per-user role promotion / demotion. Site-admin+ can move a
+            # user between requester, operator, instrument_admin,
+            # faculty_in_charge, professor_approver, and finance_admin.
+            # Only super_admin can promote to or demote from site_admin,
+            # and super_admin rows can only be touched by a super_admin.
+            # Owner rows are never demoted here.
+            if not can_manage_members(viewer):
+                abort(403)
+            if is_owner(target_user):
+                abort(403)
+            if target_user["id"] == viewer["id"]:
+                abort(403)
+            new_role = (request.form.get("new_role") or "").strip()
+            all_roles = {
+                "requester", "operator", "instrument_admin",
+                "faculty_in_charge", "professor_approver", "finance_admin",
+                "site_admin", "super_admin",
+            }
+            if new_role not in all_roles:
+                flash("Pick a valid role.", "error")
+                return redirect(url_for("user_profile", user_id=user_id))
+            if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+                abort(403)
+            if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+                abort(403)
+            execute(
+                "UPDATE users SET role = ?, invite_status = 'active', active = 1 WHERE id = ?",
+                (new_role, user_id),
+            )
+            log_action(
+                viewer["id"], "user", user_id, "user_role_changed",
+                {"from_role": target_user["role"], "to_role": new_role, "email": target_user["email"]},
+            )
+            flash(f"Role updated to {role_display_name(new_role)}.", "success")
+            return redirect(url_for("user_profile", user_id=user_id))
+        if action == "update_user_instruments":
+            # Bulk per-instrument assignment across the three lanes
+            # (admin / operator / faculty). Accepts three POST lists —
+            # admin_ids, operator_ids, faculty_ids — where each entry is
+            # an instrument id the user should be a member of. Any prior
+            # membership not present in the new list is removed. Non-
+            # super-admins are limited to instruments they can already
+            # manage, so a site_admin can't over-grant.
+            if not can_manage_members(viewer):
+                abort(403)
+            if is_owner(target_user) and not is_owner(viewer):
+                abort(403)
+            def _ids(field: str) -> set[int]:
+                return {int(v) for v in request.form.getlist(field) if str(v).strip().isdigit()}
+            desired = {
+                "instrument_admins": _ids("admin_ids"),
+                "instrument_operators": _ids("operator_ids"),
+                "instrument_faculty_admins": _ids("faculty_ids"),
+            }
+            manageable_rows = query_all(
+                "SELECT id FROM instruments WHERE status = 'active'"
+            )
+            if viewer["role"] != "super_admin":
+                manageable_rows = [
+                    row for row in manageable_rows
+                    if can_manage_instrument(viewer["id"], row["id"], viewer["role"])
+                ]
+            manageable_ids = {row["id"] for row in manageable_rows}
+            for table, wanted in desired.items():
+                wanted &= manageable_ids
+                current_ids = {
+                    row["instrument_id"]
+                    for row in query_all(
+                        f"SELECT instrument_id FROM {table} WHERE user_id = ?",
+                        (user_id,),
+                    )
+                    if row["instrument_id"] in manageable_ids
+                }
+                to_add = wanted - current_ids
+                to_remove = current_ids - wanted
+                for instrument_id in to_add:
+                    execute(
+                        f"INSERT OR IGNORE INTO {table} (user_id, instrument_id) VALUES (?, ?)",
+                        (user_id, instrument_id),
+                    )
+                for instrument_id in to_remove:
+                    execute(
+                        f"DELETE FROM {table} WHERE user_id = ? AND instrument_id = ?",
+                        (user_id, instrument_id),
+                    )
+            log_action(
+                viewer["id"], "user", user_id, "user_instrument_assignments_updated",
+                {
+                    "email": target_user["email"],
+                    "admin_count": len(desired["instrument_admins"]),
+                    "operator_count": len(desired["instrument_operators"]),
+                    "faculty_count": len(desired["instrument_faculty_admins"]),
+                },
+            )
+            flash("Instrument assignments saved.", "success")
+            return redirect(url_for("user_profile", user_id=user_id))
 
     scope_clauses, scope_params = request_scope_sql(viewer, "sr")
     rows = query_all(
@@ -6496,6 +6631,44 @@ def user_profile(user_id: int):
         """,
         (*scope_params, user_id, user_id),
     )
+    can_edit_user_value = (
+        can_manage_members(viewer)
+        and (not is_owner(target_user) or is_owner(viewer))
+        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+    )
+    instrument_roster: list[sqlite3.Row] = []
+    instrument_categories: list[str] = []
+    assigned_admin_ids: set[int] = set()
+    assigned_operator_ids: set[int] = set()
+    assigned_faculty_ids: set[int] = set()
+    if can_edit_user_value:
+        instrument_roster = query_all(
+            "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
+        )
+        assigned_admin_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_operator_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_faculty_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (user_id,)
+            )
+        }
+        instrument_categories = sorted({(r["category"] or "Uncategorized") for r in instrument_roster})
+    # Role choices the viewer is allowed to promote/demote this target to.
+    role_choices: list[tuple[str, str]] = []
+    if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
+        base_roles = ["requester", "operator", "instrument_admin", "faculty_in_charge",
+                      "professor_approver", "finance_admin"]
+        if viewer["role"] == "super_admin":
+            base_roles += ["site_admin", "super_admin"]
+        role_choices = [(r, role_display_name(r)) for r in base_roles]
     return render_template(
         "user_detail.html",
         target_user=target_user,
@@ -6506,11 +6679,13 @@ def user_profile(user_id: int):
         originated_count=originated_count,
         is_self=viewer["id"] == target_user["id"],
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
-        can_edit_user=(
-            can_manage_members(viewer)
-            and (not is_owner(target_user) or is_owner(viewer))
-            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
-        ),
+        can_edit_user=can_edit_user_value,
+        instrument_roster=instrument_roster,
+        instrument_categories=instrument_categories,
+        assigned_admin_ids=assigned_admin_ids,
+        assigned_operator_ids=assigned_operator_ids,
+        assigned_faculty_ids=assigned_faculty_ids,
+        role_choices=role_choices,
     )
 
 

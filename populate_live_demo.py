@@ -275,6 +275,12 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
         ("XRD Admin", "xrd.admin@lab.local", "instrument_admin", "active"),
         ("XRD Operator", "leo@lab.local", "operator", "active"),
         ("DSC Operator", "fatima@lab.local", "operator", "active"),
+        # Canonical role anchors — one user per elevated role, so the
+        # live demo mirrors the crawler's ROLE_PERSONAS matrix. Without
+        # these, siteadmin@lab.local / sen@lab.local can't actually log
+        # in as the role they name, and per-role UI can't be surveyed.
+        ("Site Admin", "siteadmin@lab.local", "site_admin", "active"),
+        ("Prof. Sen", "sen@lab.local", "faculty_in_charge", "active"),
     ]
     for record in users:
         ensure_user(db, *record)

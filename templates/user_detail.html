@@ -84,6 +84,79 @@
   </div>
 </section>
 
+{% if can_edit_user and role_choices %}
+<section class="card tile tile-user-role" data-vis="{{ V }}">
+  {% call card_heading("", "Role") %}
+    <button type="button" class="link-button" data-toggle-target="#userRoleForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Change Role</button>
+  {% endcall %}
+  <p class="tile-lead" data-vis="{{ V }}">Current role: <strong>{{ role_display_name(target_user['role']) }}</strong>. Changing a role takes effect immediately — the user's next page load will reflect the new permissions.</p>
+  <form method="post" class="meta-edit-form top-gap" id="userRoleForm" hidden data-vis="{{ V }}">
+    <input type="hidden" name="action" value="change_role">
+    <div class="meta-edit-grid" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">New Role
+        <select name="new_role" data-vis="{{ V }}">
+          {% for value, label in role_choices %}
+          <option value="{{ value }}" {% if target_user['role'] == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="meta-edit-actions" data-vis="{{ V }}">
+      <button type="submit" data-vis="{{ V }}">Apply Role</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if can_edit_user and instrument_roster %}
+<section class="card tile tile-user-instruments" data-vis="{{ V }}">
+  {% call card_heading("", "Instrument Access") %}
+    <button type="button" class="link-button" data-toggle-target="#userInstrumentsForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+  {% endcall %}
+  <p class="tile-lead" data-vis="{{ V }}">This user is currently assigned to
+    <strong>{{ assigned_admin_ids|length }}</strong> instrument(s) as admin,
+    <strong>{{ assigned_operator_ids|length }}</strong> as operator, and
+    <strong>{{ assigned_faculty_ids|length }}</strong> as faculty in charge. Edit to grant or revoke access by instrument or by category.</p>
+  <form method="post" class="meta-edit-form top-gap" id="userInstrumentsForm" hidden data-vis="{{ V }}">
+    <input type="hidden" name="action" value="update_user_instruments">
+    <p class="hint" data-vis="{{ V }}">Select the lane(s) for each instrument. Use the category quick-grant buttons to assign a whole group at once.</p>
+    <table class="assignment-matrix" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Instrument</th>
+          <th class="lane-col" data-vis="{{ V }}">Admin</th>
+          <th class="lane-col" data-vis="{{ V }}">Operator</th>
+          <th class="lane-col" data-vis="{{ V }}">Faculty</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for category in instrument_categories %}
+        <tr class="assignment-category-row" data-vis="{{ V }}">
+          <td colspan="4" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ category }}</strong>
+            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="operator_ids" data-vis="{{ V }}">Grant all as operator</button>
+            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="admin_ids" data-vis="{{ V }}">Grant all as admin</button>
+            <button type="button" class="link-button category-grant danger" data-assignment-category="{{ category }}" data-assignment-lane="clear" data-vis="{{ V }}">Clear</button>
+          </td>
+        </tr>
+        {% for inst in instrument_roster if (inst['category'] or 'Uncategorized') == category %}
+        <tr class="assignment-row" data-assignment-category="{{ category }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><span class="assignment-name" data-vis="{{ V }}">{{ inst['name'] }}</span><small class="hint" data-vis="{{ V }}">{{ inst['code'] }} · {{ inst['location'] }}</small></td>
+          <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="admin_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_admin_ids %}checked{% endif %}></td>
+          <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="operator_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_operator_ids %}checked{% endif %}></td>
+          <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="faculty_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_faculty_ids %}checked{% endif %}></td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="meta-edit-actions" data-vis="{{ V }}">
+      <button type="submit" data-vis="{{ V }}">Save Assignments</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
 {% if can_remove_access %}
 <section class="card compact" data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
@@ -96,6 +169,32 @@
     <button type="submit" class="danger" data-vis="{{ V }}">Remove Access</button>
   </form>
 </section>
+{% endif %}
+
+{% if can_edit_user and instrument_roster %}
+<script>
+  /* Category quick-grant buttons for the instrument assignment matrix */
+  (function () {
+    var buttons = document.querySelectorAll('.category-grant');
+    if (!buttons.length) return;
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var category = btn.getAttribute('data-assignment-category');
+        var lane = btn.getAttribute('data-assignment-lane');
+        var rows = document.querySelectorAll('tr.assignment-row[data-assignment-category="' + category + '"]');
+        rows.forEach(function (row) {
+          if (lane === 'clear') {
+            row.querySelectorAll('input[type=checkbox]').forEach(function (cb) { cb.checked = false; });
+          } else {
+            var box = row.querySelector('input[name="' + lane + '"]');
+            if (box) box.checked = true;
+          }
+        });
+      });
+    });
+  })();
+</script>
 {% endif %}
 
 <section class="card" id="submitted-jobs" data-vis="{{ V }}">

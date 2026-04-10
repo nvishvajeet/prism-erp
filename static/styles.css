@@ -5493,6 +5493,48 @@ img.instrument-photo:not([src]) {
   .meta-edit-assignments { grid-template-columns: 1fr; }
 }
 
+/* ── Per-user role + instrument assignment tiles ── */
+.tile-user-role,
+.tile-user-instruments { grid-column: 1 / -1; }
+
+.assignment-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.assignment-matrix th,
+.assignment-matrix td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+.assignment-matrix .lane-col {
+  width: 80px;
+  text-align: center;
+}
+.assignment-matrix thead th {
+  font-weight: 600;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg-2, #f5f5f5) 60%, transparent);
+}
+.assignment-matrix .assignment-category-row td {
+  background: color-mix(in srgb, var(--bg-2, #f5f5f5) 90%, transparent);
+  font-size: 0.85rem;
+  padding-top: 0.6rem;
+}
+.assignment-matrix .assignment-category-row .category-grant {
+  margin-left: 0.6rem;
+  font-size: 0.8rem;
+}
+.assignment-matrix .assignment-name {
+  font-weight: 500;
+  display: block;
+}
+.assignment-matrix .hint {
+  font-size: 0.75rem;
+}
+
 /* ── Tile: Danger Zone ── */
 .tile-danger { border-color: color-mix(in srgb, #c34a4a 25%, var(--line)); }
 

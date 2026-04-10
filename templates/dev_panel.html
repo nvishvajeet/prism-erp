@@ -58,19 +58,34 @@
   </section>
 
   {# ── Tile: Bridge Status ── #}
+  {% set local_label  = "up" if local_status.ok  else "down" %}
+  {% set local_pct    = 100  if local_status.ok  else 8      %}
+  {% set remote_label = "up" if remote_status.ok else "down" %}
+  {% set remote_pct   = 100  if remote_status.ok else 8      %}
   <section class="card tile tile-control" data-vis="{{ V }}">
     {{ card_heading("BRIDGE", "Ollama endpoints") }}
     <div class="tile-info-body" data-vis="{{ V }}">
-      {{ chart_bar("Local", (local_status.ok and "up") or "down", (local_status.ok and 100) or 8) }}
-      <p class="hint dp-bridge-detail" data-vis="{{ V }}" id="dpLocalDetail">
-        {% if local_status.ok %}{{ local_status.endpoint }} · {{ local_status.models|join(', ') or '(no models)' }}{% else %}{{ local_status.error|default('unreachable') }}{% endif %}
+
+      {{ chart_bar("Local", local_label, local_pct) }}
+      <p class="hint dp-bridge-detail" id="dpLocalDetail" data-vis="{{ V }}">
+        {% if local_status.ok %}
+          {{ local_status.endpoint }} · {{ local_status.models|join(', ') or '(no models)' }}
+        {% else %}
+          {{ local_status.error|default('unreachable') }}
+        {% endif %}
       </p>
-      <span id="dpLocalStatus" hidden data-vis="{{ V }}">{% if local_status.ok %}up{% else %}down{% endif %}</span>
-      {{ chart_bar("Remote", (remote_status.ok and "up") or "down", (remote_status.ok and 100) or 8) }}
-      <p class="hint dp-bridge-detail" data-vis="{{ V }}" id="dpRemoteDetail">
-        {% if remote_status.ok %}{{ remote_status.endpoint }} · {{ remote_status.models|join(', ') or '(no models)' }}{% else %}{{ remote_status.error|default('unreachable') }}{% endif %}
+      <span id="dpLocalStatus" hidden data-vis="{{ V }}">{{ local_label }}</span>
+
+      {{ chart_bar("Remote", remote_label, remote_pct) }}
+      <p class="hint dp-bridge-detail" id="dpRemoteDetail" data-vis="{{ V }}">
+        {% if remote_status.ok %}
+          {{ remote_status.endpoint }} · {{ remote_status.models|join(', ') or '(no models)' }}
+        {% else %}
+          {{ remote_status.error|default('unreachable') }}
+        {% endif %}
       </p>
-      <span id="dpRemoteStatus" hidden data-vis="{{ V }}">{% if remote_status.ok %}up{% else %}down{% endif %}</span>
+      <span id="dpRemoteStatus" hidden data-vis="{{ V }}">{{ remote_label }}</span>
+
       <div class="dp-metadata-row" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">Model</strong>
         <span data-vis="{{ V }}">{{ ollama_model }}</span>
@@ -96,7 +111,10 @@
           <span data-vis="{{ V }}">Dual</span>
         </label>
       </div>
-      <textarea id="dpFireInstruction" rows="4" placeholder="Describe a small mechanical task. Be specific. e.g. 'List the templates that contain a <form method=&quot;post&quot;> without a csrf_token() input.'" data-vis="{{ V }}"></textarea>
+      <textarea id="dpFireInstruction"
+                rows="4"
+                placeholder='Describe a small mechanical task. Be specific. e.g. "List every template with a <form method="post"> that is missing a csrf_token() input."'
+                data-vis="{{ V }}"></textarea>
       <div class="dp-fire-actions" data-vis="{{ V }}">
         <button type="button" class="btn btn-primary" id="dpFireBtn" data-vis="{{ V }}">Fire</button>
         <span class="hint" id="dpFireHint" data-vis="{{ V }}">Synchronous run. For unattended tasks use <code>./run_ollama_task.sh</code>.</span>

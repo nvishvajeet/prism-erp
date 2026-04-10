@@ -103,8 +103,9 @@
   {% endif %}
 
   {# ── Tile: Queue ── #}
+  {% set queue_title = ("Queue — " ~ queue_source_label) if queue_source_label else "Queue" %}
   <section class="card tile tile-queue tile-queue-schedule" data-vis="{{ V }}">
-    {% call card_heading("", "Queue") %}
+    {% call card_heading("", queue_title) %}
       <div class="view-toggle-group" data-vis="{{ V }}">
         <button type="button" class="view-toggle view-toggle-active" id="viewDetailed" data-view="detailed" data-vis="{{ V }}">Detailed</button>
         <button type="button" class="view-toggle" id="viewCompact" data-view="compact" data-vis="{{ V }}">Compact</button>

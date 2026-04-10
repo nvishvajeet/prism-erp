@@ -261,5 +261,10 @@ commit lands on master.
 1. Read `TODO_AI.txt` before starting.
 2. Verify state before acting — items may already be done.
 3. Fix root causes, not symptoms.
-4. Commit and push after every meaningful change.
-5. Keep visibility audit + populate crawl green.
+4. **Commit and push every ~2 minutes. Never leave changes hanging.**
+   Pull → work → commit → push is the default rhythm. Batch only when a
+   single logical unit genuinely spans multiple files; otherwise commit
+   each file change as it lands. `git push` is mandatory after every
+   commit on PRISM/Scheduler — never leave commits local.
+5. Keep `test_visibility_audit.py` + `test_populate_crawl.py` green
+   before every push. `crawler_suite.py` offers `run all` to batch.

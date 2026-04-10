@@ -9,7 +9,16 @@ Guidelines for AI agents
 2. Fix root causes, not symptoms.
 3. If you find bugs not listed here, fix them and note them.
 4. Don't force architectural changes unless they unblock the current task.
-5. Commit and push after every meaningful change.
+5. Commit and push every ~2 minutes. Never leave changes hanging.
+   - Default rhythm is: pull → work → commit → push.
+   - Commit each file change as it lands unless a single logical unit
+     genuinely spans multiple files. Small, focused commits > large ones.
+   - `git push` is mandatory after every commit. No local-only commits.
+   - If you are mid-refactor and something breaks, commit the WIP under
+     a `wip:` prefix and push — never sit on broken work.
+6. Keep the visibility audit + populate crawl green before every push.
+   `crawler_suite.py` (see `crawlers/` module) exposes `run all` for
+   batched verification.
 
 ----------------------------------------------------------------------
 DESIGN PHILOSOPHY (load-bearing — read every session)

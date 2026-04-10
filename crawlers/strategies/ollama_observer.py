@@ -41,6 +41,7 @@ not a gate.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.request
@@ -55,25 +56,70 @@ from ..harness import Harness
 OLLAMA_URL = "http://127.0.0.1:11435/api/generate"
 OLLAMA_MODEL = "llama3:latest"
 OLLAMA_TIMEOUT = 180  # seconds per call
-EXCERPT_LIMIT = 2000  # characters of rendered text per prompt
+EXCERPT_LIMIT = 1800  # characters of rendered text per prompt
 
-# (email, role) — two roles, picked to cover both sides of the
-# permission matrix without making the run take forever.
-OBSERVER_ROLES = [
+# Full matrix: 4 roles × 10 routes = 40 Ollama calls ≈ 3 min per run.
+# Set OLLAMA_OBSERVER_FAST=1 to drop to the 2×4 smoke profile (~30 s).
+OBSERVER_ROLES_FULL = [
+    ("admin@lab.local", "super_admin"),
+    ("finance@lab.local", "finance_admin"),
+    ("anika@lab.local", "operator"),
+    ("shah@lab.local", "requester"),
+]
+
+OBSERVER_ROLES_FAST = [
     ("admin@lab.local", "super_admin"),
     ("shah@lab.local", "requester"),
 ]
 
-# Four critical routes per role = 8 total Ollama calls per run.
-OBSERVER_PATHS = [
+OBSERVER_PATHS_FULL = [
+    "/",
+    "/schedule",
+    "/instruments",
+    "/instruments/1",
+    "/calendar",
+    "/stats",
+    "/requests/new",
+    "/me",
+    "/sitemap",
+    "/docs",
+]
+
+OBSERVER_PATHS_FAST = [
     "/",
     "/schedule",
     "/instruments",
     "/stats",
 ]
 
+# Narration scanner — keywords that suggest a genuine finding rather
+# than a happy-path description. Every hit becomes a WARN on the
+# CrawlResult so unattended runs surface issues automatically.
+FLAG_KEYWORDS = (
+    "broken",
+    "missing",
+    "empty",
+    "error",
+    "not clickable",
+    "incomplete",
+    "unclear",
+    "placeholder",
+    "unreachable",
+    "unavailable",
+    "nothing to show",
+    "does not exist",
+    "fails",
+    "invalid",
+)
+
 OBSERVATIONS_FILE = Path("ollama_observations.md")
 OUTPUTS_DIR = Path("ollama_outputs")
+
+
+def _scan_flags(narration: str) -> list[str]:
+    """Return every keyword from FLAG_KEYWORDS found in `narration`."""
+    text = narration.lower()
+    return [kw for kw in FLAG_KEYWORDS if kw in text]
 
 # Trim any Jinja-level tags, script/style blocks, and excessive
 # whitespace so llama3 gets human-readable text, not HTML noise.
@@ -154,10 +200,20 @@ class OllamaObserverStrategy(CrawlerStrategy):
 
     name = "ollama_observer"
     aspect = "observation"
-    description = "Ollama narrates ~8 critical pages as two roles (probe)"
+    description = (
+        "Ollama narrates ~40 critical pages across 4 roles, scans the "
+        "narration for findings, emits warnings for anything that "
+        "smells broken. Set OLLAMA_OBSERVER_FAST=1 for the 8-page "
+        "smoke profile."
+    )
 
     def run(self, harness: Harness) -> CrawlResult:
         result = CrawlResult(name=self.name, aspect=self.aspect)
+
+        fast = os.environ.get("OLLAMA_OBSERVER_FAST", "").lower() in {"1", "true", "yes"}
+        roles = OBSERVER_ROLES_FAST if fast else OBSERVER_ROLES_FULL
+        paths = OBSERVER_PATHS_FAST if fast else OBSERVER_PATHS_FULL
+        profile = "fast" if fast else "full"
 
         # If Ollama is down we still hit every page so the harness
         # log has the HTTP traffic, but we don't try to ask.
@@ -171,69 +227,90 @@ class OllamaObserverStrategy(CrawlerStrategy):
         OUTPUTS_DIR.mkdir(exist_ok=True)
         ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
         raw_log = OUTPUTS_DIR / f"observer_{ts}.txt"
+        jsonl_log = OUTPUTS_DIR / f"observer_{ts}.jsonl"
 
         # Open the markdown observations file in append mode, with a
         # session header so multiple runs stack cleanly.
         header = (
-            f"\n\n## Observer session {ts}\n"
+            f"\n\n## Observer session {ts} ({profile})\n"
             f"- Model: {OLLAMA_MODEL}\n"
             f"- Reachable: {reachable}\n"
-            f"- Roles: {', '.join(r for _, r in OBSERVER_ROLES)}\n"
-            f"- Paths: {', '.join(OBSERVER_PATHS)}\n\n"
+            f"- Roles ({len(roles)}): {', '.join(r for _, r in roles)}\n"
+            f"- Paths ({len(paths)}): {', '.join(paths)}\n\n"
         )
         with OBSERVATIONS_FILE.open("a", encoding="utf-8") as md:
             md.write(header)
 
         entries: list[dict] = []
-        for email, role in OBSERVER_ROLES:
-            with harness.logged_in(email):
-                for path in OBSERVER_PATHS:
-                    try:
-                        resp = harness.get(
-                            path, note=f"observer:{role}",
-                            follow_redirects=True,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        result.failed += 1
-                        result.details.append(
-                            f"{role} {path} → exception: {exc}"
-                        )
-                        continue
+        jsonl_fh = jsonl_log.open("w", encoding="utf-8")
+        try:
+            for email, role in roles:
+                with harness.logged_in(email):
+                    for path in paths:
+                        try:
+                            resp = harness.get(
+                                path, note=f"observer:{role}",
+                                follow_redirects=True,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            result.failed += 1
+                            result.details.append(
+                                f"{role} {path} → exception: {exc}"
+                            )
+                            continue
 
-                    status = resp.status_code
-                    body = resp.data.decode("utf-8", errors="replace")
-                    excerpt = _extract_text(body)
-                    if status >= 400:
-                        result.warnings += 1
-                        result.details.append(f"{role} {path} → {status}")
-                    else:
-                        result.passed += 1
+                        status = resp.status_code
+                        body = resp.data.decode("utf-8", errors="replace")
+                        excerpt = _extract_text(body)
+                        if status >= 400:
+                            result.warnings += 1
+                            result.details.append(f"HTTP  {role} {path} → {status}")
+                        else:
+                            result.passed += 1
 
-                    if reachable and excerpt:
-                        prompt = _build_prompt(role, path, status, excerpt)
-                        narration, elapsed = _ask_ollama(prompt)
-                    else:
-                        narration = "(Ollama skipped)"
-                        elapsed = 0.0
+                        if reachable and excerpt:
+                            prompt = _build_prompt(role, path, status, excerpt)
+                            narration, elapsed = _ask_ollama(prompt)
+                        else:
+                            narration = "(Ollama skipped)"
+                            elapsed = 0.0
 
-                    entry = {
-                        "role": role,
-                        "path": path,
-                        "status": status,
-                        "excerpt_len": len(excerpt),
-                        "elapsed_s": round(elapsed, 2),
-                        "narration": narration,
-                    }
-                    entries.append(entry)
+                        # Scan narration for finding keywords. Each hit
+                        # becomes a warning on the crawl result so
+                        # unattended runs surface issues automatically.
+                        flags = _scan_flags(narration) if not narration.startswith("ERROR") else []
+                        for kw in flags:
+                            result.warnings += 1
+                            result.details.append(
+                                f"FLAG  {role} {path} → '{kw}'"
+                            )
 
-                    with OBSERVATIONS_FILE.open("a", encoding="utf-8") as md:
-                        md.write(f"### {role} — `{path}` (HTTP {status})\n")
-                        md.write(
-                            f"*excerpt {len(excerpt)} chars, "
-                            f"ollama {elapsed:.2f} s*\n\n"
-                        )
-                        md.write(narration or "(empty response)")
-                        md.write("\n\n")
+                        entry = {
+                            "ts": ts,
+                            "profile": profile,
+                            "role": role,
+                            "path": path,
+                            "status": status,
+                            "excerpt_len": len(excerpt),
+                            "elapsed_s": round(elapsed, 2),
+                            "flags": flags,
+                            "narration": narration,
+                        }
+                        entries.append(entry)
+                        jsonl_fh.write(json.dumps(entry) + "\n")
+                        jsonl_fh.flush()
+
+                        with OBSERVATIONS_FILE.open("a", encoding="utf-8") as md:
+                            flag_tag = f" — flags: {', '.join(flags)}" if flags else ""
+                            md.write(f"### {role} — `{path}` (HTTP {status}){flag_tag}\n")
+                            md.write(
+                                f"*excerpt {len(excerpt)} chars, "
+                                f"ollama {elapsed:.2f} s*\n\n"
+                            )
+                            md.write(narration or "(empty response)")
+                            md.write("\n\n")
+        finally:
+            jsonl_fh.close()
 
         with raw_log.open("w", encoding="utf-8") as fh:
             json.dump(entries, fh, indent=2)

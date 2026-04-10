@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, empty_state with context %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, empty_state, chart_bar with context %}
 {% block content %}
 
 {# ─── Header ─────────────────────────────────────────── #}
@@ -37,10 +37,9 @@
     <div class="tile-info-body" data-vis="{{ V }}">
       {% if progress.versions %}
       {% for v in progress.versions %}
-      <div class="metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">{{ v.name }}</strong>
-        <span class="muted-note" data-vis="{{ V }}">{{ v.done }}/{{ v.done + v.open }} done</span>
-      </div>
+      {% set vtotal = v.done + v.open %}
+      {% set vpct = (v.done * 100 / vtotal) if vtotal > 0 else 0 %}
+      {{ chart_bar(v.name, (v.done|string) ~ "/" ~ (vtotal|string), vpct) }}
       {% if v.entries %}
       <ul class="dp-todo-list" data-vis="{{ V }}">
         {% for item in v.entries %}
@@ -62,25 +61,17 @@
   <section class="card tile tile-control" data-vis="{{ V }}">
     {{ card_heading("BRIDGE", "Ollama endpoints") }}
     <div class="tile-info-body" data-vis="{{ V }}">
-      <div class="metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Local</strong>
-        <span id="dpLocalStatus" class="badge {% if local_status.ok %}status-completed{% else %}status-rejected{% endif %}" data-vis="{{ V }}">
-          {% if local_status.ok %}up{% else %}down{% endif %}
-        </span>
-      </div>
-      <p class="hint" data-vis="{{ V }}" id="dpLocalDetail">
+      {{ chart_bar("Local", (local_status.ok and "up") or "down", (local_status.ok and 100) or 8) }}
+      <p class="hint dp-bridge-detail" data-vis="{{ V }}" id="dpLocalDetail">
         {% if local_status.ok %}{{ local_status.endpoint }} · {{ local_status.models|join(', ') or '(no models)' }}{% else %}{{ local_status.error|default('unreachable') }}{% endif %}
       </p>
-      <div class="metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Remote</strong>
-        <span id="dpRemoteStatus" class="badge {% if remote_status.ok %}status-completed{% else %}status-rejected{% endif %}" data-vis="{{ V }}">
-          {% if remote_status.ok %}up{% else %}down{% endif %}
-        </span>
-      </div>
-      <p class="hint" data-vis="{{ V }}" id="dpRemoteDetail">
+      <span id="dpLocalStatus" hidden data-vis="{{ V }}">{% if local_status.ok %}up{% else %}down{% endif %}</span>
+      {{ chart_bar("Remote", (remote_status.ok and "up") or "down", (remote_status.ok and 100) or 8) }}
+      <p class="hint dp-bridge-detail" data-vis="{{ V }}" id="dpRemoteDetail">
         {% if remote_status.ok %}{{ remote_status.endpoint }} · {{ remote_status.models|join(', ') or '(no models)' }}{% else %}{{ remote_status.error|default('unreachable') }}{% endif %}
       </p>
-      <div class="metadata-row" data-vis="{{ V }}">
+      <span id="dpRemoteStatus" hidden data-vis="{{ V }}">{% if remote_status.ok %}up{% else %}down{% endif %}</span>
+      <div class="dp-metadata-row" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">Model</strong>
         <span data-vis="{{ V }}">{{ ollama_model }}</span>
       </div>
@@ -162,9 +153,14 @@
       <div class="dp-chat-feed" id="dpChatFeed" data-vis="{{ V }}">
         <p class="hint" data-vis="{{ V }}">Chat history appears here. Empty until you send a message.</p>
       </div>
+      <div class="dp-progress" data-vis="{{ V }}">
+        <div class="dp-progress-track" data-vis="{{ V }}">
+          <div class="dp-progress-fill" id="dpChatProgress" data-vis="{{ V }}"></div>
+        </div>
+      </div>
       <div class="input-dialog" data-vis="{{ V }}">
         <div class="input-dialog-body" data-vis="{{ V }}">
-          <textarea id="dpChatInput" rows="2" placeholder="Ask Ollama anything…" data-vis="{{ V }}"></textarea>
+          <textarea id="dpChatInput" rows="2" placeholder="Ask Ollama anything… (Cmd/Ctrl+Enter to send)" data-vis="{{ V }}"></textarea>
           <div class="input-dialog-actions" data-vis="{{ V }}">
             <button type="button" class="input-dialog-send" id="dpChatSend" data-vis="{{ V }}">Send</button>
           </div>
@@ -231,15 +227,12 @@
       .then(r => r.json())
       .then(j => {
         function paint(prefix, status) {
-          const badge = $(prefix + "Status");
+          const hidden = $(prefix + "Status");
           const detail = $(prefix + "Detail");
+          if (hidden) hidden.textContent = status.ok ? "up" : "down";
           if (status.ok) {
-            badge.className = "badge status-completed";
-            badge.textContent = "up";
             detail.textContent = (status.endpoint || "") + " · " + ((status.models || []).join(", ") || "(no models)");
           } else {
-            badge.className = "badge status-rejected";
-            badge.textContent = "down";
             detail.textContent = status.error || "unreachable";
           }
         }
@@ -291,29 +284,52 @@
   });
 
   // ── Chat ──
-  function appendChat(role, text) {
+  function appendChat(side, text, tag) {
+    // side: "me" (right) or "bot" (left). tag: optional muted label above bubble.
     const feed = $("dpChatFeed");
     const placeholder = feed.querySelector(".hint");
     if (placeholder) placeholder.remove();
     const wrap = document.createElement("div");
-    wrap.className = "dp-chat-line dp-chat-" + role;
-    const tag = document.createElement("strong");
-    tag.textContent = role + ": ";
-    const body = document.createElement("span");
-    body.textContent = text;
-    wrap.appendChild(tag);
-    wrap.appendChild(body);
+    wrap.className = "dp-chat-row dp-chat-" + side;
+    if (tag) {
+      const t = document.createElement("span");
+      t.className = "dp-chat-tag";
+      t.textContent = tag;
+      wrap.appendChild(t);
+    }
+    const bubble = document.createElement("div");
+    bubble.className = "dp-chat-bubble";
+    bubble.textContent = text;
+    wrap.appendChild(bubble);
     feed.appendChild(wrap);
     feed.scrollTop = feed.scrollHeight;
+  }
+
+  let chatProgressTimer = null;
+  function chatProgressStart() {
+    const bar = $("dpChatProgress");
+    bar.style.width = "10%";
+    let w = 10;
+    chatProgressTimer = setInterval(() => {
+      w = Math.min(w + 4, 90);
+      bar.style.width = w + "%";
+    }, 250);
+  }
+  function chatProgressStop() {
+    if (chatProgressTimer) { clearInterval(chatProgressTimer); chatProgressTimer = null; }
+    const bar = $("dpChatProgress");
+    bar.style.width = "100%";
+    setTimeout(() => { bar.style.width = "0%"; }, 400);
   }
 
   $("dpChatSend").addEventListener("click", () => {
     const target = selectedTarget("dpChatTarget");
     const prompt = $("dpChatInput").value.trim();
     if (!prompt) return;
-    appendChat("you", prompt);
+    appendChat("me", prompt);
     $("dpChatInput").value = "";
     $("dpChatSend").disabled = true;
+    chatProgressStart();
 
     const fd = new FormData();
     fd.append("target", target);
@@ -325,20 +341,23 @@
       .then(r => r.json())
       .then(j => {
         $("dpChatSend").disabled = false;
+        chatProgressStop();
         if (j.target === "dual" && j.responses) {
           j.responses.forEach(r => {
-            if (r.ok) appendChat(r.target, r.response || "(empty)");
-            else appendChat(r.target || "?", "ERROR: " + (r.error || "unknown"));
+            const tag = r.target ? ("via " + r.target) : "";
+            if (r.ok) appendChat("bot", r.response || "(empty)", tag);
+            else appendChat("bot", "ERROR: " + (r.error || "unknown"), tag);
           });
         } else if (j.ok) {
-          appendChat(target, j.response || "(empty)");
+          appendChat("bot", j.response || "(empty)");
         } else {
-          appendChat(target, "ERROR: " + (j.error || "unknown"));
+          appendChat("bot", "ERROR: " + (j.error || "unknown"));
         }
       })
       .catch(e => {
         $("dpChatSend").disabled = false;
-        appendChat(target, "Network error: " + e);
+        chatProgressStop();
+        appendChat("bot", "Network error: " + e);
       });
   });
 
@@ -350,31 +369,5 @@
   });
 })();
 </script>
-
-{# ─── Minimal panel-only CSS (kept inline so we don't add a new file) ─── #}
-<style>
-.dp-todo-list { list-style: none; padding: 0; margin: 0.25rem 0 0.75rem; }
-.dp-todo-item { display: flex; gap: 0.4rem; padding: 0.15rem 0; font-size: 0.85rem; }
-.dp-todo-done { opacity: 0.55; text-decoration: line-through; }
-.dp-todo-mark { display: inline-block; width: 1.1rem; text-align: center; opacity: 0.7; }
-.dp-machine-toggle { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
-.dp-toggle-pill { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border, #d0d4dc); border-radius: 999px; cursor: pointer; font-size: 0.85rem; }
-.dp-toggle-pill input { margin: 0; }
-.dp-fire-actions { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap; }
-.dp-progress { margin-top: 0.5rem; }
-.dp-progress-track { height: 6px; background: var(--surface-2, #eef0f5); border-radius: 999px; overflow: hidden; }
-.dp-progress-fill { height: 100%; width: 0; background: var(--accent, #4c6ef5); transition: width 0.3s ease; }
-.dp-log-wrap, .dp-doc-wrap { max-height: 22rem; overflow: auto; border: 1px solid var(--border, #d0d4dc); border-radius: 8px; background: var(--surface-2, #f6f7fa); }
-.dp-log, .dp-doc { margin: 0; padding: 0.7rem 0.9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-.dp-doc-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
-.dp-doc-tab { padding: 0.25rem 0.6rem; border: 1px solid var(--border, #d0d4dc); background: transparent; border-radius: 6px; cursor: pointer; font-size: 0.78rem; }
-.dp-doc-tab-active { background: var(--accent, #4c6ef5); color: #fff; border-color: var(--accent, #4c6ef5); }
-.dp-chat-feed { max-height: 18rem; overflow: auto; border: 1px solid var(--border, #d0d4dc); border-radius: 8px; padding: 0.6rem 0.8rem; background: var(--surface-2, #f6f7fa); margin-bottom: 0.5rem; }
-.dp-chat-line { font-size: 0.85rem; margin: 0.25rem 0; line-height: 1.4; white-space: pre-wrap; }
-.dp-chat-you strong { color: var(--accent, #4c6ef5); }
-.dp-commit-list { list-style: none; padding: 0; margin: 0; }
-.dp-commit-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.82rem; align-items: baseline; }
-.metadata-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.85rem; }
-</style>
 
 {% endblock %}

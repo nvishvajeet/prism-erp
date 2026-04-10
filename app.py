@@ -2818,21 +2818,47 @@ def can_operate_instrument(user_id: int, instrument_id: int, role: str) -> bool:
 
 
 def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
+    """Return the instrument IDs the user has any role on.
+
+    Cached in Flask `g` per request, keyed by user id, because it
+    fires 3–5 times on a single dashboard or schedule render
+    (dashboard fan-out, calendar filter, scope SQL, template
+    visibility checks). The DB issues 3 table scans + a UNION on
+    every uncached call, so the cache saves real work.
+
+    Cache is invalidated automatically at the end of every request
+    via Flask's `g` lifecycle. Outside a request context the function
+    just runs the query directly.
+    """
+    try:
+        cache = g.setdefault("_assigned_instrument_ids", {})
+    except RuntimeError:
+        cache = None  # outside request context (CLI, scripts, tests)
+
+    user_id = user["id"]
+    if cache is not None and user_id in cache:
+        return cache[user_id]
+
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
         rows = query_all("SELECT id FROM instruments ORDER BY id")
-        return [row["id"] for row in rows]
-    rows = query_all(
-        """
-        SELECT instrument_id FROM instrument_admins WHERE user_id = ?
-        UNION
-        SELECT instrument_id FROM instrument_operators WHERE user_id = ?
-        UNION
-        SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?
-        ORDER BY instrument_id
-        """,
-        (user["id"], user["id"], user["id"]),
-    )
-    return [row["instrument_id"] for row in rows]
+        result = [row["id"] for row in rows]
+    else:
+        rows = query_all(
+            """
+            SELECT instrument_id FROM instrument_admins WHERE user_id = ?
+            UNION
+            SELECT instrument_id FROM instrument_operators WHERE user_id = ?
+            UNION
+            SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?
+            ORDER BY instrument_id
+            """,
+            (user_id, user_id, user_id),
+        )
+        result = [row["instrument_id"] for row in rows]
+
+    if cache is not None:
+        cache[user_id] = result
+    return result
 
 
 def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.Row]:

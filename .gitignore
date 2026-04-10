@@ -32,3 +32,6 @@ exports/
 .env
 .env.local
 venv_310/
+
+# Crawler reports (generated every run)
+reports/

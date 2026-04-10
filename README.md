@@ -236,6 +236,81 @@ commit lands on master.
 
 ---
 
+## Crawler Suite
+
+Every type of crawler we've used to test / improve PRISM now lives in
+the `crawlers/` package. Each crawler is a reusable `CrawlerStrategy`
+subclass registered against an *aspect* (visibility, lifecycle,
+coverage, performance, accessibility, dead_links, css_hygiene,
+regression, data_integrity). Drop in a new file, import it in
+`crawlers/strategies/__init__.py`, and the CLI picks it up
+automatically.
+
+### CLI
+
+```bash
+venv/bin/python -m crawlers list                 # all registered strategies
+venv/bin/python -m crawlers describe <name>      # docstring + aspect
+venv/bin/python -m crawlers run <name|all>       # run one crawler (or all)
+venv/bin/python -m crawlers list-waves           # all wave pipelines
+venv/bin/python -m crawlers wave <name>          # run a named wave
+```
+
+Every run writes a JSON log + plain-text summary under `reports/`.
+
+### Registered strategies
+
+| Name | Aspect | What it improves |
+| --- | --- | --- |
+| `smoke` | regression | Critical paths × 3 roles — pre-push sanity check |
+| `visibility` | visibility | 8 roles × ~12 pages access matrix |
+| `role_behavior` | visibility | Each role performs its signature action (behavioral RBAC) |
+| `lifecycle` | lifecycle | End-to-end request lifecycle through the UI |
+| `dead_link` | dead_links | BFS href harvest + hit across 4 roles |
+| `performance` | performance | p50/p95/max on hot routes (budgets: warn 300ms / fail 1500ms) |
+| `random_walk` | coverage | MCMC walk over (role × route) cells, ~800 steps |
+| `contrast_audit` | accessibility | WCAG AA contrast check on the fixed palette |
+| `color_improvement` | accessibility | Grep rendered HTML for palette drift + low-contrast pairs |
+| `architecture` | regression | Handler body size / template size / CSS line budget |
+| `philosophy` | css_hygiene | Template-level design creed audit (tiles, vars, vis, deprecated classes) |
+| `css_orphan` | css_hygiene | Scan `static/styles.css` for unused selectors |
+| `cleanup` | css_hygiene | Find suspected dead Python functions / templates / stale files |
+
+### Wave pipelines (`python -m crawlers wave <name>`)
+
+Waves batch strategies into phased pipelines matching the dev
+improvement phases of PRISM.
+
+| Wave | Strategies | Purpose |
+| --- | --- | --- |
+| `sanity` | smoke → visibility → contrast_audit | **Pre-push gate** — stops on first failure |
+| `static` | architecture → philosophy → css_orphan | No-DB structural analysis |
+| `behavioral` | role_behavior → visibility | Behavioral RBAC — "can act", not just "can load" |
+| `lifecycle` | lifecycle → dead_link | End-to-end UI journeys + dead-link sweep |
+| `coverage` | random_walk → performance | MCMC coverage + perf sampling |
+| `accessibility` | contrast_audit → color_improvement | WCAG + palette-drift detection |
+| `cleanup` | cleanup → css_orphan → philosophy | Dead-code retirement backlog |
+| `all` | every wave in order | Full pre-release gate (slow) |
+
+The `sanity` wave has `stop_on_fail=True`; the others run through to
+collect a complete backlog of findings.
+
+### Adding a new crawler
+
+1. Drop `my_strategy.py` into `crawlers/strategies/`.
+2. Subclass `CrawlerStrategy`, set `name`, `aspect`, `description`, and
+   implement `run(harness) -> CrawlResult`.
+3. Call `MyStrategy.register()` at the bottom of the file.
+4. Import the module in `crawlers/strategies/__init__.py`.
+5. Optionally add it to a wave in `crawlers/waves.py`.
+
+The shared `Harness` bootstraps a temp SQLite DB, seeds the 8-role
+persona cohort + 3 instruments, and hands back a logged Flask test
+client — so strategies only ever express *what to crawl*, never *how
+to boot PRISM*.
+
+---
+
 ## File Uploads
 
 - **Location:** `uploads/users/<user_id>/requests/req_<id>_<request_no>/attachments/`
@@ -267,4 +342,10 @@ commit lands on master.
    each file change as it lands. `git push` is mandatory after every
    commit on PRISM/Scheduler — never leave commits local.
 5. Keep `test_visibility_audit.py` + `test_populate_crawl.py` green
-   before every push. `crawler_suite.py` offers `run all` to batch.
+   before every push. The `crawlers/` package exposes
+   `python -m crawlers run all` for batched verification.
+6. **Batch terminal permissions up front.** Front-load shell
+   operations into long chained commands (`mkdir && write && test &&
+   git add/commit/push`) rather than drip-feeding many small calls.
+   When a multi-step task is predictable, list every command you'll
+   need at the top of the reply so the user can authorize in one pass.

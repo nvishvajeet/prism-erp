@@ -16,6 +16,7 @@ from io import BytesIO
 from pathlib import Path
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask_wtf.csrf import CSRFProtect
 from openpyxl import Workbook
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -62,6 +63,17 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+
+# CSRF protection — token machinery is wired up but enforcement is gated
+# behind LAB_SCHEDULER_CSRF=1 so we can roll templates and tests over to
+# the protected mode in a follow-up wave without forcing an all-or-nothing
+# flag day. The meta tag in base.html is always emitted; the JS shim
+# auto-injects tokens into forms and fetch() calls.
+app.config["WTF_CSRF_ENABLED"] = os.environ.get("LAB_SCHEDULER_CSRF", "").lower() in {"1", "true", "yes"}
+app.config["WTF_CSRF_TIME_LIMIT"] = None  # Tokens valid for the session lifetime, not 1 hour
+app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
+
+csrf = CSRFProtect(app)
 
 
 def now_iso() -> str:

@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{{ title or "Lab Scheduler MVP" }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
@@ -11,6 +12,38 @@
       const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       const theme = stored || (systemDark ? "dark" : "light");
       document.documentElement.setAttribute("data-theme", theme);
+    })();
+    // Auto-inject CSRF token into every form on submit + every fetch POST.
+    // The server requires it on all unsafe methods. This sits at the top of
+    // <head> so it runs before any other inline form scripts.
+    (function () {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (!meta) return;
+      const token = meta.getAttribute('content');
+      // Forms: inject hidden input on submit if absent
+      document.addEventListener('submit', function (e) {
+        const form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+        const method = (form.method || 'get').toLowerCase();
+        if (method === 'get') return;
+        if (form.querySelector('input[name="csrf_token"]')) return;
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = token;
+        form.appendChild(input);
+      }, true);
+      // fetch(): wrap so unsafe methods carry the token via header
+      const origFetch = window.fetch;
+      window.fetch = function (input, init) {
+        init = init || {};
+        const method = (init.method || (typeof input === 'string' ? 'GET' : (input && input.method) || 'GET')).toUpperCase();
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+          init.headers = new Headers(init.headers || {});
+          if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
+        }
+        return origFetch.call(this, input, init);
+      };
     })();
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>

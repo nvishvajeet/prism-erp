@@ -1023,19 +1023,40 @@ def request_metadata_path(request_row: sqlite3.Row) -> Path:
     return request_folder_path(request_row) / "request_metadata.json"
 
 
-def request_snapshot_row(request_id: int) -> sqlite3.Row | None:
-    return query_one(
-        """
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
-               r.name AS requester_name, r.email AS requester_email,
-               c.name AS originator_name, c.email AS originator_email, c.role AS originator_role,
-               op.name AS operator_name, recv.name AS received_by_name
+# ── Canonical join shape for `sample_requests` queries ──
+# Aliases (load-bearing — every caller depends on these):
+#   sr   — sample_requests
+#   i    — instruments
+#   r    — requester (users)
+#   c    — created_by / originator (users)
+#   op   — assigned operator (users)
+#   recv — received_by operator (users)
+#
+# Add `REQUEST_ATTACHMENTS_JOIN` after this when you need the attachment
+# count / GROUP_CONCAT — it depends on the same `sr` alias and brings in
+# `ra` for the request_attachments table.
+REQUEST_DETAIL_JOINS = """
         FROM sample_requests sr
         JOIN instruments i ON i.id = sr.instrument_id
         JOIN users r ON r.id = sr.requester_id
         LEFT JOIN users c ON c.id = sr.created_by_user_id
         LEFT JOIN users op ON op.id = sr.assigned_operator_id
         LEFT JOIN users recv ON recv.id = sr.received_by_operator_id
+"""
+
+REQUEST_ATTACHMENTS_JOIN = """
+        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
+"""
+
+
+def request_snapshot_row(request_id: int) -> sqlite3.Row | None:
+    return query_one(
+        f"""
+        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
+               r.name AS requester_name, r.email AS requester_email,
+               c.name AS originator_name, c.email AS originator_email, c.role AS originator_role,
+               op.name AS operator_name, recv.name AS received_by_name
+        {REQUEST_DETAIL_JOINS}
         WHERE sr.id = ?
         """,
         (request_id,),
@@ -2023,13 +2044,8 @@ def request_history_query(
                op.name AS operator_name, recv.name AS received_by_name,
                COALESCE(COUNT(ra.id), 0) AS attachment_count,
                GROUP_CONCAT(ra.original_filename, ', ') AS attachment_names
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        JOIN users r ON r.id = sr.requester_id
-        LEFT JOIN users c ON c.id = sr.created_by_user_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN users recv ON recv.id = sr.received_by_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
+        {REQUEST_DETAIL_JOINS}
+        {REQUEST_ATTACHMENTS_JOIN}
         {where_sql}
         GROUP BY sr.id
         ORDER BY {order_sql}
@@ -4619,16 +4635,12 @@ def new_request():
 def request_detail(request_id: int):
     user = current_user()
     sample_request = query_one(
-        """
-        SELECT sr.*, i.name AS instrument_name, i.daily_capacity, i.accepting_requests, i.soft_accept_enabled, r.name AS requester_name, r.email AS requester_email,
+        f"""
+        SELECT sr.*, i.name AS instrument_name, i.daily_capacity, i.accepting_requests, i.soft_accept_enabled,
+               r.name AS requester_name, r.email AS requester_email,
                c.name AS originator_name, c.email AS originator_email, c.role AS originator_role,
                op.name AS operator_name, recv.name AS received_by_name
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        JOIN users r ON r.id = sr.requester_id
-        LEFT JOIN users c ON c.id = sr.created_by_user_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN users recv ON recv.id = sr.received_by_operator_id
+        {REQUEST_DETAIL_JOINS}
         WHERE sr.id = ?
         """,
         (request_id,),

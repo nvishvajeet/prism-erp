@@ -1,0 +1,7 @@
+Here are three repo-specific small tasks:
+
+Task 1: Update the request attachments system to support uploading of multiple files at once.
+
+Task 2: Improve the visibility and accessibility of the calendar page by adding ARIA attributes and ensuring that the calendar events are properly described for screen readers.
+
+Task 3: Enhance the instrument detail page to display more detailed information about each instrument, such as its category, location, and any relevant notes or descriptions.

@@ -11,7 +11,30 @@
       "Bash(python /Users/vishvajeetn/Library/CloudStorage/Dropbox/Scheduler/Main/view_readme.py)",
       "Bash(git checkout:*)",
       "Bash(venv/bin/python3 app.py)",
-      "Bash(venv/bin/python3 test_populate_crawl.py)"
+      "Bash(venv/bin/python3 test_populate_crawl.py)",
+      "Bash(venv/bin/python3 -c \"import app; app.init_db\\(\\)\")",
+      "Bash(venv/bin/python3 -c ':*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(venv/bin/python3 -c \"import app; print\\('imports OK'\\)\")",
+      "Bash(/usr/bin/curl -sb /tmp/c.txt -o /dev/null -w '%{http_code}' http://127.0.0.1:5055__TRACKED_VAR__)",
+      "Bash(rm -f /tmp/c.txt)",
+      "Bash(/usr/bin/curl -sc /tmp/c.txt http://127.0.0.1:5055/login -o /tmp/login.html)",
+      "Bash(/usr/bin/curl -sc /tmp/c.txt -b /tmp/c.txt -X POST -d \"email=admin@lab.local&password=SimplePass123\" http://127.0.0.1:5055/login -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(grep -v '^$')",
+      "Bash(venv/bin/python3)",
+      "Bash(grep -n -A1 'FROM sample_requests sr$' app.py)",
+      "Bash(grep -A1 'sr$')",
+      "Bash(venv/bin/python3 -c \"import app; print\\('OK'\\)\")",
+      "Bash(venv/bin/pip show:*)",
+      "Bash(ls test_*.py *_test.py)",
+      "Bash(venv/bin/python3 test_visibility_audit.py)",
+      "Bash(ls static/*.svg static/*.png static/*.ico static/*.json)",
+      "Bash(ls *.txt *.md)",
+      "Bash(grep -n '|safe\\\\b\\\\| safe\\\\b\\\\|markupsafe\\\\||escape' templates/*.html)",
+      "Bash(ls templates/*.html)",
+      "Bash(git fetch:*)"
     ]
   }
 }

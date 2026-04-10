@@ -645,3 +645,58 @@ any stale process on port 5055 first, and writes everything to
 
 Open `http://127.0.0.1:5055`. Demo password for the seeded accounts
 is `SimplePass123` (only present when `DEMO_MODE` is on).
+
+
+
+## Operator runtime policy
+
+Default Ollama session window is 120 minutes when no arguments are passed.
+
+Remote usage:
+- Use remote Ollama when you want Mac mini compute.
+- Start remote chat and then pass prompts directly in the terminal.
+- Responses are shown immediately and logged.
+
+Local usage:
+- Use local Ollama when you want MacBook-only compute.
+- Start local chat and then pass prompts directly in the terminal.
+- Responses are shown immediately and logged.
+
+Operational note:
+- If the MacBook sleeps, local chat stops.
+- If the MacBook sleeps, the SSH tunnel to the Mac mini stops.
+- The Mac mini Ollama server itself continues running in tmux once started.
+
+Git policy:
+- All agents use the same Git remote.
+- No long-lived uncommitted work.
+- Commit every few minutes or after each landed file.
+- Push after every commit.
+
+
+## Operator sync policy
+
+Claude and Ollama both work through the same Git remote.
+
+MacBook:
+- normal development
+- review
+- smoke testing
+- final pushes
+
+Mac mini:
+- remote Ollama compute
+- same repo cloned separately
+- pulls before work
+- pushes after bounded tasks if instructed
+
+All useful progress must land in Git quickly.
+
+Required loop:
+1. git pull --rebase
+2. work
+3. smoke test
+4. commit
+5. push
+
+Default Ollama session length is 120 minutes if no argument is passed.

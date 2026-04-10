@@ -4601,8 +4601,8 @@ def new_request():
         except (ValueError, TypeError):
             flash("Sample count must be a number.", "error")
             return redirect(url_for("new_request"))
-        if sample_count < 0 or sample_count > 99:
-            flash("Sample count must be between 0 and 99.", "error")
+        if sample_count < 1 or sample_count > 99:
+            flash("Sample count must be between 1 and 99.", "error")
             return redirect(url_for("new_request"))
         description = request.form.get("description", "").strip()
         sample_origin = request.form.get("sample_origin", "internal")

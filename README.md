@@ -18,15 +18,20 @@ Effort sizing is **relative** (S / M / L / XL) — small = isolated
 edits, XL = multi-session rewrite with template + handler refactor.
 No hour estimates; the surprise budget for each page varies too much.
 
-| Step | Scope | Effort | State |
-|---|---|---|---|
-| W5.1 | Shared widget macros (8 primitives + CSS) | M | **Done** (24f4308) |
-| W5.2 | `schedule.html` tile conversion + bulk-actions tile | L | **Done** |
-| W5.3 | `request_detail.html` tile conversion | XL | Next |
-| W5.4 | `dashboard.html` tile conversion | L | Not started |
-| W5.5 | `stats.html` tile conversion | M | Not started |
-| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | Not started |
-| W5.7 | CSS hygiene pass (retire legacy class families) | M | Rolling (alongside W5.2–W5.6) |
+```
+Phase 5 overall   ██████░░░░░░░░░░░░░░░░░░░░░░   2 / 7  waves   ( W5.1 · W5.2 )
+Solo waves        ████████░░░░░░░░░░░░░░░░░░░░   2 / 6  ( W5.7 rolls alongside )
+```
+
+| Step | Scope | Effort | Progress | State |
+|---|---|---|---|---|
+| W5.1 | Shared widget macros (8 primitives + CSS) | M | `██████████` | **Done** (24f4308) |
+| W5.2 | `schedule.html` tile conversion + bulk-actions tile | L | `██████████` | **Done** (ac8d7c9) |
+| W5.3 | `request_detail.html` tile conversion | XL | `░░░░░░░░░░` | Next |
+| W5.4 | `dashboard.html` tile conversion | L | `░░░░░░░░░░` | Not started |
+| W5.5 | `stats.html` tile conversion | M | `░░░░░░░░░░` | Not started |
+| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `░░░░░░░░░░` | Not started |
+| W5.7 | CSS hygiene pass (retire legacy class families) | M | `██░░░░░░░░` | Rolling (alongside W5.2–W5.6) |
 
 **Sizing rationale:**
 - **W5.2 (L)** — highest-touch page; swaps monolithic 7-col table for

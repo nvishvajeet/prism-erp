@@ -7357,3 +7357,237 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   .tile-dash-quick-intake .quick-intake-block { flex-direction: column; align-items: flex-start; }
 }
 
+/* =========================================================================
+   W5.5 — STATS PAGE TILE ARCHITECTURE
+   Drops .grid-two + bespoke stats-left-column / stats-right-column split.
+   Every concern on /stats is now a tile on the same 6-col fluid grid as
+   every other page. Charts size themselves inside chart-container boxes.
+   ========================================================================= */
+
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 0 0.5rem;
+  align-items: start;
+}
+
+.stats-tiles > .tile {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Full-width tiles */
+.stats-tiles > .tile-stats-header,
+.stats-tiles > .tile-stats-counters,
+.stats-tiles > .tile-stats-inst-board,
+.stats-tiles > .tile-stats-export {
+  grid-column: span 6;
+}
+
+/* Trend chart gets the extra width to breathe */
+.stats-tiles > .tile-stats-trend { grid-column: span 4; }
+.stats-tiles > .tile-stats-status { grid-column: span 2; }
+
+.stats-tiles .tile > .section-head {
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- .tile-stats-header -------------------------------------------- */
+.tile-stats-header-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.tile-stats-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tile-stats-title h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink, #1a1a1f);
+}
+
+.tile-stats-subtitle {
+  color: var(--muted, #6e6e76);
+  font-size: 0.82rem;
+}
+
+.tile-stats-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tile-stats-header .warroom-pulse {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #0a7a3f;
+  box-shadow: 0 0 0 0 rgba(10, 122, 63, 0.5);
+  animation: stats-pulse 2s infinite;
+}
+
+@keyframes stats-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(10, 122, 63, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(10, 122, 63, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(10, 122, 63, 0); }
+}
+
+/* ---------- .tile-stats-counters ------------------------------------------ */
+.tile-stats-counters .kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+
+/* ---------- chart containers ---------------------------------------------- */
+.stats-tiles .chart-container {
+  position: relative;
+  min-height: 15rem;
+  height: 18rem;
+}
+
+.stats-tiles .tile-stats-trend .chart-container {
+  height: 22rem;
+}
+
+.stats-tiles .chart-container-doughnut {
+  position: relative;
+  min-height: 16rem;
+  height: 20rem;
+}
+
+.stats-tiles .warroom-select {
+  appearance: none;
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.55rem;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink, #1a1a1f);
+  cursor: pointer;
+}
+
+/* ---------- .tile-stats-bottlenecks / .tile-stats-activity ---------------- */
+.tile-stats-bottlenecks .warroom-alert-list,
+.tile-stats-activity .warroom-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.tile-stats-bottlenecks .warroom-alert-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #f0c3be;
+  border-left-width: 3px;
+  border-radius: 0.55rem;
+  background: #fdf2f0;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tile-stats-bottlenecks .warroom-alert-metric {
+  font-size: 0.78rem;
+  color: var(--muted, #6e6e76);
+}
+
+.tile-stats-activity .warroom-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.55rem;
+  background: var(--surface, #fff);
+}
+
+.tile-stats-activity .warroom-feed-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.tile-stats-activity .warroom-feed-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tile-stats-activity .warroom-feed-detail strong {
+  font-size: 0.82rem;
+  color: var(--ink, #1a1a1f);
+}
+
+.tile-stats-activity .warroom-feed-detail small {
+  font-size: 0.72rem;
+  color: var(--muted, #6e6e76);
+}
+
+.tile-stats-activity .warroom-feed-time {
+  font-size: 0.7rem;
+  color: var(--muted, #6e6e76);
+  flex-shrink: 0;
+}
+
+/* ---------- .tile-stats-inst-board ---------------------------------------- */
+.tile-stats-inst-board .warroom-instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+/* ---------- .tile-stats-export -------------------------------------------- */
+.tile-stats-export .stats-export-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tile-stats-export .stats-export-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.7rem;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 1200px) {
+  .stats-tiles { grid-template-columns: repeat(4, 1fr); }
+  .stats-tiles > .tile { grid-column: span 2; }
+  .stats-tiles > .tile-stats-header,
+  .stats-tiles > .tile-stats-counters,
+  .stats-tiles > .tile-stats-inst-board,
+  .stats-tiles > .tile-stats-export { grid-column: span 4; }
+  .stats-tiles > .tile-stats-trend { grid-column: span 4; }
+  .stats-tiles > .tile-stats-status { grid-column: span 2; }
+}
+
+@media (max-width: 760px) {
+  .stats-tiles { grid-template-columns: 1fr; padding: 0; }
+  .stats-tiles > .tile,
+  .stats-tiles > .tile-stats-header,
+  .stats-tiles > .tile-stats-counters,
+  .stats-tiles > .tile-stats-inst-board,
+  .stats-tiles > .tile-stats-export,
+  .stats-tiles > .tile-stats-trend,
+  .stats-tiles > .tile-stats-status { grid-column: span 1; }
+  .stats-tiles .chart-container { height: 14rem; }
+  .stats-tiles .tile-stats-trend .chart-container { height: 16rem; }
+}
+

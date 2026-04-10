@@ -19,8 +19,8 @@ edits, XL = multi-session rewrite with template + handler refactor.
 No hour estimates; the surprise budget for each page varies too much.
 
 ```
-Phase 5 overall   ████████████░░░░░░░░░░░░░░░░   4 / 7  waves   ( W5.1 · W5.2 · W5.3 · W5.4 )
-Solo waves        ████████████████░░░░░░░░░░░░   4 / 6  ( W5.7 rolls alongside )
+Phase 5 overall   ████████████████░░░░░░░░░░░░   5 / 7  waves   ( W5.1 · W5.2 · W5.3 · W5.4 · W5.5 )
+Solo waves        ████████████████████░░░░░░░░   5 / 6  ( W5.7 rolls alongside )
 ```
 
 | Step | Scope | Effort | Progress | State |
@@ -29,9 +29,9 @@ Solo waves        ████████████████░░░░�
 | W5.2 | `schedule.html` tile conversion + bulk-actions tile | L | `██████████` | **Done** (ac8d7c9) |
 | W5.3 | `request_detail.html` tile conversion | XL | `██████████` | **Done** (2603cd1) |
 | W5.4 | `dashboard.html` tile conversion | L | `██████████` | **Done** |
-| W5.5 | `stats.html` tile conversion | M | `░░░░░░░░░░` | Next |
-| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `░░░░░░░░░░` | Not started |
-| W5.7 | CSS hygiene pass (retire legacy class families) | M | `████░░░░░░` | Rolling (alongside W5.2–W5.6) |
+| W5.5 | `stats.html` tile conversion | M | `██████████` | **Done** |
+| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `░░░░░░░░░░` | Next |
+| W5.7 | CSS hygiene pass (retire legacy class families) | M | `█████░░░░░` | Rolling (alongside W5.2–W5.6) |
 
 **Sizing rationale:**
 - **W5.2 (L)** — highest-touch page; swaps monolithic 7-col table for
@@ -95,6 +95,17 @@ Solo waves        ████████████████░░░░�
 - [x] Latent bug fix: the quick-intake search JS was targeting `#quickIntakeList` (never existed) and `.quick-intake-item` (class never emitted) — the filter was a no-op on every dashboard load. Now targets `#quickIntakeBody` + `[data-pane-item]` and refreshes the paginated pane on input.
 - [x] Collapse persistence (Hide/Show week+month) survives the refactor — buttons still carry `data-collapse-id` and the collapse script is untouched
 - [x] Crawls green (visibility audit clean, populate crawl clean)
+
+**W5.5 deliverables** (`templates/stats.html`):
+
+- [x] Fourteen tiles on `.stats-tiles` 6-col grid: header / counters / war-room board / trend / status donut / instrument throughput / turnaround / top requesters / weekly bar / bottlenecks / activity / perf table / weekly table / export
+- [x] Killed `.warroom-title-row` + `.warroom-filters` + `.grid-auto-stats` + `.grid-two` + `.stats-left-column` / `.stats-right-column` — every concern is now its own tile
+- [x] `kpi_grid` adopted for the counter cluster + inline week-comparison chevron
+- [x] `.filter-pill-row` adopted for the horizon + instrument filter bars — retires the bespoke `.warroom-filters` markup
+- [x] `paginated_pane` adopted for the instrument perf + weekly throughput tables
+- [x] Chart.js canvases (`trendChart`, `statusChart`, `instChart`, `turnChart`, `topChart`, `weekBarChart`) kept verbatim — canvas IDs untouched, only the wrappers moved
+- [x] Conditional tiles render only when their data source is non-empty (bottlenecks, activity feed, top requesters, war-room board) so empty roles don't see stub cards
+- [x] Crawls green (visibility audit 171/171, populate crawl 500/0 5xx/0 exceptions)
 
 After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB
 indexes, the permission decorator, the request status state machine,

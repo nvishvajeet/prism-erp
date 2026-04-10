@@ -5589,6 +5589,268 @@ def dev_panel_doc():
     return jsonify({"name": safe, "content": text})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio panel — owner-only.
+# Reads state files written by ~/Downloads/portfolio-plan/{daily,analyze,simulate}.py
+# and renders a dashboard with charts using the existing UI components and the
+# Chart.js bundle already loaded by base.html.
+# ─────────────────────────────────────────────────────────────────────────────
+import csv as _csv  # local import — only used by portfolio routes
+
+PORTFOLIO_DIR = Path(os.environ.get(
+    "PORTFOLIO_PLAN_DIR",
+    str(Path.home() / "Downloads" / "portfolio-plan"),
+))
+
+
+def _portfolio_load_json(name: str) -> dict | None:
+    p = PORTFOLIO_DIR / name
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _portfolio_load_orders() -> list[dict]:
+    p = PORTFOLIO_DIR / "orders.csv"
+    if not p.exists():
+        return []
+    out: list[dict] = []
+    try:
+        with p.open() as f:
+            reader = _csv.DictReader(f)
+            for row in reader:
+                row["amount_inr"] = int(float(row.get("amount_inr") or 0))
+                row["nav"] = float(row.get("nav") or 0)
+                row["units"] = float(row.get("units") or 0)
+                out.append(row)
+    except OSError:
+        return []
+    return out
+
+
+def _portfolio_load_nav_history(max_days: int = 365) -> dict:
+    """Read history/*.csv and return {fund_tag: [{date, nav}, ...]} truncated."""
+    daily = _portfolio_load_json("daily_state.json") or {}
+    isin_map = {tag: isin for tag, isin in (daily.get("fund_labels") or {}).items()}
+    # Use the canonical map from market_snapshot.json instead — its keys are ISIN.
+    snap = _portfolio_load_json("market_snapshot.json") or {}
+    funds_meta = snap.get("funds", {})
+    tag_to_isin = {info.get("tag"): isin for isin, info in funds_meta.items() if info.get("tag")}
+
+    hist_dir = PORTFOLIO_DIR / "history"
+    if not hist_dir.exists():
+        return {}
+
+    out: dict[str, list[dict]] = {}
+    for tag in [
+        "HDFC_FLEXI_CAP", "HDFC_FOCUSED", "NIPPON_LARGE_CAP",
+        "JM_FLEXICAP", "NIPPON_MULTI_CAP", "SBI_CONTRA",
+    ]:
+        f = hist_dir / f"{tag}.csv"
+        if not f.exists():
+            continue
+        try:
+            with f.open() as fh:
+                rows = list(_csv.DictReader(fh))
+        except OSError:
+            continue
+        # rows are date,nav — keep last `max_days`
+        rows = rows[-max_days:]
+        out[tag] = [{"date": r.get("date"), "nav": float(r.get("nav") or 0)} for r in rows]
+    return out
+
+
+def _portfolio_compute_value_series(history: dict, orders: list[dict]) -> list[dict]:
+    """Replay orders to produce a daily portfolio value series.
+    Cheap, single-pass, no pandas. Returns [{date, value}, ...]."""
+    if not history:
+        return []
+    # Build a unified date axis from any one fund's history (they're aligned).
+    any_tag = next(iter(history))
+    dates = [r["date"] for r in history[any_tag]]
+    nav_by_date = {tag: {r["date"]: r["nav"] for r in rows} for tag, rows in history.items()}
+
+    # Position book: tag → cumulative units up to and including each date.
+    units_by_tag: dict[str, float] = {tag: 0.0 for tag in history}
+    # Sort orders by date; ignore unknown tags.
+    orders_sorted = sorted(
+        [o for o in orders if o.get("fund_tag") in history and o.get("date")],
+        key=lambda o: o["date"],
+    )
+    oi = 0
+
+    series: list[dict] = []
+    for d in dates:
+        # Apply any orders dated on/before d that haven't been applied yet.
+        while oi < len(orders_sorted) and orders_sorted[oi]["date"] <= d:
+            o = orders_sorted[oi]
+            units_by_tag[o["fund_tag"]] += float(o["units"] or 0)
+            oi += 1
+        total = 0.0
+        for tag, units in units_by_tag.items():
+            nav = nav_by_date.get(tag, {}).get(d)
+            if nav is not None and units:
+                total += units * nav
+        series.append({"date": d, "value": round(total, 2)})
+    return series
+
+
+def _portfolio_state() -> dict:
+    """Bundle everything the portfolio template needs into one dict."""
+    daily = _portfolio_load_json("daily_state.json") or {}
+    analysis = _portfolio_load_json("analysis_state.json") or {}
+    simulation = _portfolio_load_json("simulation_results.json") or {}
+    snap = _portfolio_load_json("market_snapshot.json") or {}
+    orders = _portfolio_load_orders()
+
+    history = _portfolio_load_nav_history(max_days=365)
+    value_series = _portfolio_compute_value_series(history, orders)
+
+    # Equity allocation chart data (current vs target)
+    weights = analysis.get("target_weights", {}) or daily.get("today", {}).get("baseline_per_fund", {})
+    current_by_tag = analysis.get("current_equity_by_tag", {})
+    equity_total = sum(current_by_tag.values()) or 1.0
+    allocation = []
+    fund_labels = (daily.get("fund_labels") or {})
+    for tag, w in (analysis.get("target_weights") or {}).items():
+        cur = current_by_tag.get(tag, 0.0)
+        allocation.append({
+            "tag": tag,
+            "label": fund_labels.get(tag, tag),
+            "target_pct": round(w * 100, 1),
+            "current_pct": round(cur / equity_total * 100, 1) if equity_total else 0,
+            "current_inr": round(cur, 2),
+            "target_inr": round(w * (analysis.get("new_equity_total") or equity_total), 2),
+        })
+
+    # MTD progress per fund
+    mtd = daily.get("month_to_date", {}) or {}
+    monthly_target = daily.get("monthly_target_per_fund", {}) or {}
+    mtd_progress = []
+    for tag, tgt in monthly_target.items():
+        spent = int(mtd.get(tag, 0))
+        pct = round((spent / tgt) * 100, 1) if tgt else 0
+        mtd_progress.append({
+            "tag": tag,
+            "label": fund_labels.get(tag, tag),
+            "spent": spent,
+            "target": int(tgt),
+            "pct": min(pct, 100),
+        })
+
+    return {
+        "exists": bool(daily or analysis),
+        "portfolio_dir": str(PORTFOLIO_DIR),
+        "daily": daily,
+        "analysis": analysis,
+        "simulation": simulation,
+        "nifty": (snap.get("nifty") or {}),
+        "fx": (snap.get("fx") or {}),
+        "orders": orders[-25:][::-1],  # last 25, newest first
+        "orders_count": len(orders),
+        "allocation": allocation,
+        "mtd_progress": mtd_progress,
+        "value_series": value_series,
+        "fund_labels": fund_labels,
+    }
+
+
+@app.route("/admin/portfolio")
+@owner_required
+def portfolio_panel():
+    """Owner-only personal portfolio dashboard."""
+    state = _portfolio_state()
+    return render_template("portfolio.html", pf=state)
+
+
+@app.route("/admin/portfolio/order", methods=["POST"])
+@owner_required
+def portfolio_log_order():
+    """Append an executed order to portfolio-plan/orders.csv."""
+    fund_tag = (request.form.get("fund_tag") or "").strip()
+    amount_raw = (request.form.get("amount_inr") or "").strip()
+    nav_raw = (request.form.get("nav") or "").strip()
+    note = (request.form.get("note") or "").strip()
+    order_date = (request.form.get("date") or date.today().isoformat()).strip()
+
+    if not fund_tag or not amount_raw:
+        flash("Fund and amount are required.", "error")
+        return redirect(url_for("portfolio_panel"))
+    try:
+        amount = float(amount_raw)
+    except ValueError:
+        flash("Amount must be a number.", "error")
+        return redirect(url_for("portfolio_panel"))
+
+    # Resolve ISIN + NAV from market_snapshot if not supplied
+    daily = _portfolio_load_json("daily_state.json") or {}
+    snap = _portfolio_load_json("market_snapshot.json") or {}
+    funds_meta = snap.get("funds", {})
+    isin = ""
+    last_nav = 0.0
+    for i, info in funds_meta.items():
+        if info.get("tag") == fund_tag:
+            isin = i
+            last_nav = float(info.get("last_nav") or 0)
+            break
+
+    nav = float(nav_raw) if nav_raw else last_nav
+    units = round(amount / nav, 4) if nav else 0.0
+
+    orders_path = PORTFOLIO_DIR / "orders.csv"
+    is_new = not orders_path.exists()
+    try:
+        orders_path.parent.mkdir(parents=True, exist_ok=True)
+        with orders_path.open("a", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=["date", "fund_tag", "isin", "amount_inr", "nav", "units", "note"])
+            if is_new:
+                w.writeheader()
+            w.writerow({
+                "date": order_date,
+                "fund_tag": fund_tag,
+                "isin": isin,
+                "amount_inr": int(round(amount)),
+                "nav": round(nav, 4),
+                "units": units,
+                "note": note,
+            })
+    except OSError as exc:
+        flash(f"Could not write orders.csv: {exc}", "error")
+        return redirect(url_for("portfolio_panel"))
+
+    flash(f"Logged {fund_tag} ₹{int(amount):,} @ NAV {nav:.4f} → {units} units", "success")
+    return redirect(url_for("portfolio_panel"))
+
+
+@app.route("/admin/portfolio/refresh", methods=["POST"])
+@owner_required
+def portfolio_refresh():
+    """Run `./run.sh quick` in PORTFOLIO_DIR to refresh state files."""
+    script = PORTFOLIO_DIR / "run.sh"
+    if not script.exists():
+        flash(f"run.sh not found in {PORTFOLIO_DIR}", "error")
+        return redirect(url_for("portfolio_panel"))
+    try:
+        result = subprocess.run(
+            ["bash", str(script), "quick"],
+            cwd=str(PORTFOLIO_DIR),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            tail = (result.stderr or result.stdout)[-300:]
+            flash(f"Refresh failed: {tail}", "error")
+        else:
+            flash("Portfolio data refreshed.", "success")
+    except Exception as exc:
+        flash(f"Refresh error: {exc}", "error")
+    return redirect(url_for("portfolio_panel"))
+
+
 @app.route("/requests/<int:request_id>/duplicate")
 @login_required
 def duplicate_request(request_id: int):

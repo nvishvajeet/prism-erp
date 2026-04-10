@@ -130,6 +130,7 @@
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
     {% if is_owner_user %}
     <a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Owner-only development control panel">Dev</a>
+    <a class="{% if endpoint == 'portfolio_panel' %}nav-active{% endif %}" href="{{ url_for('portfolio_panel') }}" data-vis="{{ V }}" title="Owner-only personal portfolio dashboard">Portfolio</a>
     {% endif %}
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% endif %}

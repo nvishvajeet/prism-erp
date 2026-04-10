@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#3b6d99" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a2230" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="PRISM">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='mitwpu-logo.webp') }}">
   <title>{{ title or "Lab Scheduler MVP" }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
@@ -49,6 +57,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body{% if current_user %} data-user-role="{{ current_user.role }}"{% endif %}>
+  <a class="skip-nav" href="#main-content">Skip to main content</a>
   <header class="topbar" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
       <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Lab Scheduler MVP</a></h1>
@@ -87,9 +96,13 @@
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     {% if access_profile_user.can_access_instruments %}
     <div class="nav-dropdown" data-vis="{{ V }}">
-      <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}" href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
+      <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}"
+         href="{{ url_for('instruments') }}"
+         aria-haspopup="true"
+         aria-expanded="false"
+         data-vis="{{ V }}">Instruments</a>
       {% if nav_instruments %}
-      <div class="nav-menu" data-vis="{{ V }}">
+      <div class="nav-menu" role="menu" aria-label="Instruments" data-vis="{{ V }}">
         {% for inst in nav_instruments %}
         <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" data-vis="{{ V }}">
           <span class="nav-inst-code" data-vis="{{ V }}">{{ inst['code'] }}</span>
@@ -120,7 +133,7 @@
   </nav>
   {% endif %}
 
-  <main class="page" data-vis="{{ V }}">
+  <main class="page" id="main-content" data-vis="{{ V }}">
     {% block hover_back %}{% endblock %}
     {% if not current_user %}
     <nav class="nav" data-vis="requester">
@@ -309,9 +322,13 @@
   </script>
   <script src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
   <script>
-    /* ── Instrument dropdown mobile support ── */
+    /* ── Instrument dropdown mobile support + ARIA ── */
     (function () {
       var dropdowns = document.querySelectorAll('.nav-dropdown');
+      function setExpanded(dropdown, value) {
+        var trigger = dropdown.querySelector('.nav-trigger');
+        if (trigger) trigger.setAttribute('aria-expanded', value ? 'true' : 'false');
+      }
       dropdowns.forEach(function (dropdown) {
         var trigger = dropdown.querySelector('.nav-trigger');
         if (!trigger) return;
@@ -320,7 +337,20 @@
           var isTouch = e.pointerType === 'touch' || e.pointerType === '';
           if (!isTouch) return; // Let hover handle desktop
           e.preventDefault();
-          dropdown.classList.toggle('nav-dropdown-open');
+          var nowOpen = !dropdown.classList.contains('nav-dropdown-open');
+          dropdown.classList.toggle('nav-dropdown-open', nowOpen);
+          setExpanded(dropdown, nowOpen);
+        });
+        // Hover open/close on desktop — keep ARIA in sync
+        dropdown.addEventListener('mouseenter', function () { setExpanded(dropdown, true); });
+        dropdown.addEventListener('mouseleave', function () { setExpanded(dropdown, false); });
+        // Esc closes
+        dropdown.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') {
+            dropdown.classList.remove('nav-dropdown-open');
+            setExpanded(dropdown, false);
+            trigger.focus();
+          }
         });
       });
 
@@ -329,6 +359,7 @@
         if (!e.target.closest('.nav-dropdown')) {
           dropdowns.forEach(function (d) {
             d.classList.remove('nav-dropdown-open');
+            setExpanded(d, false);
           });
         }
       });

@@ -8,6 +8,9 @@ import os
 import random
 import smtplib
 import sqlite3
+import subprocess
+import urllib.error
+import urllib.request
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
@@ -5430,6 +5433,293 @@ def request_detail(request_id: int):
         approval_candidates=approval_candidates,
         remarks_author=remarks_author,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# Development Control Panel
+# ─────────────────────────────────────────────────────────────
+#
+# Owner-only admin page that surfaces:
+#   - project progress (parsed from CHANGELOG / TODO_AI / git)
+#   - Ollama bridge status (local + remote endpoints)
+#   - one-shot Ollama task firing on local / remote / dual
+#   - in-page README viewer
+#   - chat with either Ollama machine
+#
+# All routes are gated by `@owner_required`. The Ollama
+# endpoints are best-effort: if a machine is unreachable, the
+# UI surfaces a friendly error rather than 5xx.
+
+DEV_PANEL_LOCAL_OLLAMA = os.environ.get("DEV_PANEL_LOCAL_OLLAMA", "http://127.0.0.1:11435")
+DEV_PANEL_REMOTE_OLLAMA = os.environ.get("DEV_PANEL_REMOTE_OLLAMA", "http://127.0.0.1:11434")
+DEV_PANEL_OLLAMA_MODEL = os.environ.get("DEV_PANEL_OLLAMA_MODEL", "llama3")
+DEV_PANEL_DOC_FILES = ("README.md", "PROJECT.md", "TODO_AI.txt", "CHANGELOG.md", "OLLAMA_DEV_PLAN.md", "ollama_qc_log.md")
+DEV_PANEL_RUNS_DIR = BASE_DIR / "ollama_outputs" / "dev_panel_runs"
+
+
+def _dev_panel_git(*args: str) -> str:
+    """Run a git subcommand and return stdout (or empty on failure)."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(BASE_DIR),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
+def _dev_panel_progress() -> dict:
+    """Compute current project progress from git + the docs."""
+    branch = _dev_panel_git("symbolic-ref", "--short", "HEAD") or "DETACHED"
+    ahead_behind = _dev_panel_git("rev-list", "--left-right", "--count", "HEAD...origin/main")
+    ahead, behind = "0", "0"
+    if ahead_behind:
+        parts = ahead_behind.split()
+        if len(parts) == 2:
+            ahead, behind = parts
+    dirty_lines = _dev_panel_git("status", "--porcelain")
+    dirty_count = len([line for line in dirty_lines.splitlines() if line.strip()])
+    recent_commits = []
+    log_out = _dev_panel_git("log", "--oneline", "-10")
+    for line in log_out.splitlines():
+        if " " in line:
+            sha, _, subject = line.partition(" ")
+            recent_commits.append({"sha": sha, "subject": subject})
+
+    # Parse TODO_AI.txt for the version-scoped headings.
+    todo_path = BASE_DIR / "TODO_AI.txt"
+    versions: list[dict] = []
+    current_version: dict | None = None
+    if todo_path.exists():
+        for raw in todo_path.read_text(errors="ignore").splitlines():
+            line = raw.strip()
+            if line.startswith("v1.") and "—" in line:
+                if current_version:
+                    versions.append(current_version)
+                current_version = {"name": line, "entries": [], "done": 0, "open": 0}
+            elif current_version is not None and line.startswith("1.") and len(line) >= 6 and line[2] == ".":
+                # sub-item heading like "1.3.0-b  Flip CSRF enforcement on   M  [O]"
+                done = "DONE" in line.upper()
+                current_version["entries"].append({"label": line, "done": done})
+                if done:
+                    current_version["done"] += 1
+                else:
+                    current_version["open"] += 1
+        if current_version:
+            versions.append(current_version)
+
+    # Current release from CHANGELOG.md.
+    changelog_path = BASE_DIR / "CHANGELOG.md"
+    current_release = "unknown"
+    if changelog_path.exists():
+        for raw in changelog_path.read_text(errors="ignore").splitlines():
+            line = raw.strip()
+            if line.startswith("## [") and "Unreleased" not in line:
+                # "## [1.2.0] — 2026-04-10"
+                current_release = line.split("[", 1)[1].split("]", 1)[0]
+                break
+
+    return {
+        "branch": branch,
+        "ahead": ahead,
+        "behind": behind,
+        "dirty": dirty_count,
+        "recent_commits": recent_commits,
+        "versions": versions,
+        "current_release": current_release,
+    }
+
+
+def _dev_panel_endpoint(target: str) -> str:
+    if target == "local":
+        return DEV_PANEL_LOCAL_OLLAMA
+    if target == "remote":
+        return DEV_PANEL_REMOTE_OLLAMA
+    raise ValueError(f"unknown target: {target!r}")
+
+
+def _dev_panel_ollama_ping(target: str) -> dict:
+    """Best-effort reachability check. Returns dict with status + models."""
+    try:
+        endpoint = _dev_panel_endpoint(target)
+    except ValueError as exc:
+        return {"target": target, "ok": False, "error": str(exc), "models": []}
+    try:
+        req = urllib.request.Request(f"{endpoint}/api/tags")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        models = [m.get("name", "?") for m in payload.get("models", [])]
+        return {"target": target, "ok": True, "endpoint": endpoint, "models": models}
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        return {"target": target, "ok": False, "endpoint": endpoint, "error": str(exc), "models": []}
+
+
+def _dev_panel_ollama_call(target: str, prompt: str, model: str | None = None, timeout: int = 60) -> dict:
+    """Single one-shot call to an Ollama generate endpoint."""
+    try:
+        endpoint = _dev_panel_endpoint(target)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc), "response": ""}
+    body = json.dumps({
+        "model": model or DEV_PANEL_OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{endpoint}/api/generate",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        return {
+            "ok": True,
+            "target": target,
+            "response": payload.get("response", "") or payload.get("error", ""),
+        }
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+        return {"ok": False, "target": target, "error": str(exc), "response": ""}
+
+
+def _dev_panel_run_dir() -> Path:
+    DEV_PANEL_RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    return DEV_PANEL_RUNS_DIR
+
+
+def _dev_panel_safe_doc_name(name: str) -> str | None:
+    """Return the doc name if it is in the allowlist, else None."""
+    return name if name in DEV_PANEL_DOC_FILES else None
+
+
+@app.route("/admin/dev_panel")
+@owner_required
+def dev_panel():
+    """Owner-only development control panel."""
+    progress = _dev_panel_progress()
+    local_status = _dev_panel_ollama_ping("local")
+    remote_status = _dev_panel_ollama_ping("remote")
+    return render_template(
+        "dev_panel.html",
+        progress=progress,
+        local_status=local_status,
+        remote_status=remote_status,
+        doc_files=DEV_PANEL_DOC_FILES,
+        ollama_model=DEV_PANEL_OLLAMA_MODEL,
+    )
+
+
+@app.route("/admin/dev_panel/doc")
+@owner_required
+def dev_panel_doc():
+    """Return the raw text of an allowlisted doc for the in-page viewer."""
+    name = request.args.get("name", "README.md")
+    safe = _dev_panel_safe_doc_name(name)
+    if safe is None:
+        abort(404)
+    path = BASE_DIR / safe
+    if not path.exists():
+        return jsonify({"name": safe, "content": f"({safe} not found)"}), 200
+    try:
+        text = path.read_text(errors="replace")
+    except OSError as exc:
+        return jsonify({"name": safe, "content": f"(error reading {safe}: {exc})"}), 200
+    return jsonify({"name": safe, "content": text})
+
+
+@app.route("/admin/dev_panel/ping")
+@owner_required
+def dev_panel_ping():
+    """Re-ping the local + remote Ollama endpoints (no caching)."""
+    return jsonify({
+        "local": _dev_panel_ollama_ping("local"),
+        "remote": _dev_panel_ollama_ping("remote"),
+    })
+
+
+@app.route("/admin/dev_panel/chat", methods=["POST"])
+@owner_required
+def dev_panel_chat():
+    """Send a single chat prompt to local / remote / dual Ollama."""
+    target = (request.form.get("target") or "remote").strip().lower()
+    prompt = (request.form.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"ok": False, "error": "empty prompt"}), 400
+    if target not in {"local", "remote", "dual"}:
+        return jsonify({"ok": False, "error": "target must be local|remote|dual"}), 400
+    if target == "dual":
+        return jsonify({
+            "ok": True,
+            "target": "dual",
+            "responses": [
+                _dev_panel_ollama_call("local", prompt),
+                _dev_panel_ollama_call("remote", prompt),
+            ],
+        })
+    return jsonify(_dev_panel_ollama_call(target, prompt))
+
+
+@app.route("/admin/dev_panel/fire", methods=["POST"])
+@owner_required
+def dev_panel_fire():
+    """Fire a longer-form Ollama task and stream the result into a run log.
+
+    Synchronous for now: the call blocks until Ollama responds, then writes
+    the run log to disk and returns the run id. The page polls /log/<run_id>
+    afterwards. Unattended async runs go through `run_ollama_task.sh` from
+    the shell, not this endpoint.
+    """
+    target = (request.form.get("target") or "remote").strip().lower()
+    instruction = (request.form.get("instruction") or "").strip()
+    if not instruction:
+        return jsonify({"ok": False, "error": "empty instruction"}), 400
+    if target not in {"local", "remote", "dual"}:
+        return jsonify({"ok": False, "error": "target must be local|remote|dual"}), 400
+
+    run_dir = _dev_panel_run_dir()
+    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = run_dir / f"run-{run_id}.log"
+
+    header = (
+        f"# dev panel run {run_id}\n"
+        f"# target: {target}\n"
+        f"# model:  {DEV_PANEL_OLLAMA_MODEL}\n\n"
+        f"## INSTRUCTION\n{instruction}\n\n## OUTPUT\n"
+    )
+    log_path.write_text(header)
+
+    targets = ["local", "remote"] if target == "dual" else [target]
+    results = []
+    for t in targets:
+        result = _dev_panel_ollama_call(t, instruction, timeout=120)
+        results.append(result)
+        with log_path.open("a") as fh:
+            fh.write(f"\n--- {t} ---\n")
+            if result.get("ok"):
+                fh.write(result.get("response", "") or "(empty)")
+            else:
+                fh.write(f"ERROR: {result.get('error', 'unknown')}")
+            fh.write("\n")
+
+    return jsonify({"ok": True, "run_id": run_id, "log": log_path.name, "results": results})
+
+
+@app.route("/admin/dev_panel/log/<run_id>")
+@owner_required
+def dev_panel_log(run_id: str):
+    """Return the contents of a fire-run log for polling."""
+    if not run_id.replace("-", "").isalnum():
+        abort(404)
+    log_path = _dev_panel_run_dir() / f"run-{run_id}.log"
+    if not log_path.exists():
+        return jsonify({"ok": False, "content": "(log not found)"}), 404
+    return jsonify({"ok": True, "content": log_path.read_text(errors="replace")})
 
 
 @app.route("/requests/<int:request_id>/duplicate")

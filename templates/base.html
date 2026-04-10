@@ -128,6 +128,9 @@
     {% endif %}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
+    {% if is_owner_user %}
+    <a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Owner-only development control panel">Dev</a>
+    {% endif %}
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% endif %}
   </nav>

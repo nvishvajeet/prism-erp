@@ -13,10 +13,29 @@ detail.
 
 Forward plan lives in `TODO_AI.txt`. Headline:
 
-- **v1.3.0** — handler split, CSRF enforcement on, input
-  validation everywhere, persisted state-transition test.
+- **v1.3.0** — CSRF enforcement on, input validation everywhere,
+  persisted state-transition test (done). The originally-planned
+  `request_detail()` handler split is dropped — the state machine
+  + `tests/test_status_transitions.py` already lock every status
+  write, so the 685-line function is ugly but not unsafe.
 - **v1.4.0** — bulk operations on the queue tile.
 - **v1.5.0** — SQLite FTS5 full-text search.
+
+### Added (in flight)
+
+- **`tests/test_status_transitions.py`** — exhaustive walk of
+  `REQUEST_STATUS_TRANSITIONS`: 21 legal pairs, 70 illegal pairs,
+  terminal lock, idempotent self-transitions, admin force-override
+  bypass, fast-track. Wired into the pre-push gate next to
+  `smoke_test.py`. (v1.3.0-d)
+- **Ollama bridge** — `OLLAMA_DEV_PLAN.md` (the contract),
+  `setup_remote.command` (interactive Mac mini setup including
+  the `usekeychain` typo fix), and a clean rewrite of
+  `run_ollama_task.sh` (sandboxed `ollama-work` branch, refuses
+  to run on master/main with `--commit`, three modes: local /
+  remote / dual). Gives the project an unattended-task lane for
+  mechanical work (CSRF inputs, `safe_int` wraps) while Claude
+  handles judgment calls.
 
 ## [1.2.0] — 2026-04-10
 

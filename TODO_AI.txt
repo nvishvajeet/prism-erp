@@ -40,8 +40,10 @@ GUIDELINES FOR AI AGENTS
    decisions. Ollama is for small bounded tasks (single-file edits,
    boilerplate, repetitive cleanup, summaries, first-pass drafts).
    Ollama must NEVER touch security-critical logic, the permission
-   model, or do broad stateful refactors. See README.md §"Claude +
-   Ollama workflow" for the bridge details.
+   model, or do broad stateful refactors. See OLLAMA_DEV_PLAN.md
+   for the full bridge contract: branch sandbox, task spec format,
+   acceptance criteria, Claude resume protocol. Items in the
+   roadmap below tagged `[O]` are Ollama-shaped.
 
 ----------------------------------------------------------------------
 DESIGN PHILOSOPHY (load-bearing — read every session)
@@ -68,42 +70,26 @@ tiles on a 6-column fluid grid. CSS at `static/styles.css` under
 Match its rhythm.
 
 ======================================================================
-v1.3.0 — HARDENING COMPLETE
+v1.3.0 — HARDENING (in progress)
 ======================================================================
 
-Four changes that close the security / correctness story. None of
+Three changes that close the security / correctness story. None of
 them touch the user-visible feature set; they make the existing
-features unbreakable.
+features unbreakable. The compressed plan: leverage the crawler
+suite as the regression gate, lean on Ollama for the mechanical
+wraps, and let Claude focus on judgment calls.
+
+NOTE: 1.3.0-d (state-transition test) is **done** — see
+tests/test_status_transitions.py and commit 397d963.
+
+NOTE: the originally-planned 1.3.0-a request_detail() handler
+split is **dropped**. The state machine + tests/test_status_transitions.py
+already lock every status write, so the 685-line function is ugly
+but not unsafe. Splitting it is cosmetic, costs hours, and risks
+regressions for zero user value. Revisit if it grows past ~900 lines.
 
 ----------------------------------------------------------------------
-1.3.0-a  Split request_detail() into per-action handlers      XL  NEXT
-----------------------------------------------------------------------
-
-The 685-line `request_detail()` view is the largest single function
-in the codebase. It dispatches 14 actions: approve_step, reject_step,
-schedule, admin_schedule_override, start, complete,
-admin_complete_override, reject, mark_sample_submitted,
-mark_sample_received, cancel, reassign_operator, and two more.
-
-Plan:
-  - Extract one private function per action: `_action_approve_step`,
-    `_action_schedule`, `_action_complete`, etc.
-  - Each takes `(user, sample_request, form_data)` and returns a
-    `(flash_message, flash_category, redirect_url)` tuple.
-  - The dispatch lives in `request_detail()`: a small dict mapping
-    action name → handler function.
-  - All status writes already go through `assert_status_transition()`,
-    so no new state machine work needed.
-  - Permission checks (`can_manage`, `can_operate`,
-    `completion_locked`) stay at the top of `request_detail()` before
-    dispatch, not in each handler.
-  - Tests: visibility audit + populate crawl + the new
-    test_status_transitions.py from 1.3.0-d (when it lands).
-
-Files: `app.py` only.
-
-----------------------------------------------------------------------
-1.3.0-b  Flip CSRF enforcement on                              M
+1.3.0-b  Flip CSRF enforcement on                              M  [O]
 ----------------------------------------------------------------------
 
 The Flask-WTF machinery is in place but `WTF_CSRF_ENABLED` defaults
@@ -116,13 +102,18 @@ Rolling enforcement out:
   2. Update test_visibility_audit.py, test_populate_crawl.py,
      smoke_test.py to fetch the meta tag and send the token.
   3. Default `LAB_SCHEDULER_CSRF=1` in start.sh.
-  4. Re-run all three test scripts.
+  4. Re-run all three test scripts + `python -m crawlers wave sanity`.
 
 Files: every template with a POST form, the three test scripts,
 start.sh, app.py (default).
 
+[O] Step 1 is Ollama-shaped: pure mechanical insertion behind a
+grep-able acceptance criterion. See ollama_tasks/csrf_inputs.md
+for the spec when ready. Steps 2-4 stay with Claude (test rig
+edits + env defaults).
+
 ----------------------------------------------------------------------
-1.3.0-c  Server-side input validation everywhere               M
+1.3.0-c  Server-side input validation everywhere               M  [O]
 ----------------------------------------------------------------------
 
 Wrap every `int(request.form[…])` and `float(request.form[…])` in
@@ -141,17 +132,21 @@ Roughly ~30 sites.
 
 Files: `app.py` only.
 
+[O] This is the cleanest Ollama task in the roadmap. Spec at
+ollama_tasks/safe_int_wrap.md when ready. Acceptance: the grep
+count of unwrapped `int(request.form` / `float(request.form`
+goes to zero and `python -m crawlers wave sanity` exits clean.
+
 ----------------------------------------------------------------------
-1.3.0-d  test_status_transitions.py                            S
+1.3.0-d  test_status_transitions.py                            DONE
 ----------------------------------------------------------------------
 
-Persist the legal-pair exhaustive check as a real test file.
-Exhaustively walks `REQUEST_STATUS_TRANSITIONS` and asserts every
-legal pair succeeds + a sample of illegal pairs raises
-`InvalidStatusTransition`. Adds it to the regression gates.
-
-Files: `tests/test_status_transitions.py` (new), pre-push gate
-docs.
+Done. See tests/test_status_transitions.py and commit 397d963.
+Exhaustively walks `REQUEST_STATUS_TRANSITIONS`: 21 legal pairs +
+70 illegal pairs + terminal lock + idempotent self-transitions +
+admin force override + unknown current statuses + the
+awaiting_sample_submission → sample_received fast-track. Wired
+into the pre-push gate alongside smoke_test.py.
 
 ======================================================================
 v1.4.0 — BULK OPERATIONS

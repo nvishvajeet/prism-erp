@@ -201,7 +201,12 @@
   .tile-info-meta ad-hoc layouts.
   - items: list of (label, value) tuples OR (label, value, css_class) triples
   - compact: tightens row spacing when True
-  Values are rendered |safe so callers can pass formatted HTML.
+
+  Values are rendered with Jinja's standard auto-escaping. Plain
+  strings (including all user-supplied text from sample_requests,
+  users, instruments) are XSS-safe. Callers that need to render
+  HTML must use a {% set var %}...{% endset %} block, which produces
+  a Markup object that bypasses escaping safely.
 #}
 {% macro metadata_grid(items, compact=False) -%}
 <dl class="meta-grid{% if compact %} meta-grid-compact{% endif %}" data-vis="{{ V }}">
@@ -211,7 +216,7 @@
   {% set extra = item[2] if item|length > 2 else '' %}
   <div class="meta-grid-row{% if extra %} {{ extra }}{% endif %}" data-vis="{{ V }}">
     <dt data-vis="{{ V }}">{{ label }}</dt>
-    <dd data-vis="{{ V }}">{{ value|safe if value is string else value }}</dd>
+    <dd data-vis="{{ V }}">{{ value }}</dd>
   </div>
   {% endfor %}
 </dl>

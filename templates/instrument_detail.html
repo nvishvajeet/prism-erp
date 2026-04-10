@@ -33,9 +33,11 @@
              onerror="this.onerror=null; this.src='{{ url_for('static', filename='instrument-placeholder.svg') }}';"
              data-vis="{{ V }}">
       </div>
+      {% set _code_html %}<code class="inline-code">{{ instrument["code"] }}</code>{% endset %}
+      {% set _status_html %}<span class="badge status-{{ instrument["status"] }}">{{ instrument["status"].replace("_", " ").title() }}</span>{% endset %}
       {% set info_items = [
-        ('Code', '<code class="inline-code">' ~ instrument["code"] ~ '</code>'),
-        ('Status', '<span class="badge status-' ~ instrument["status"] ~ '">' ~ instrument["status"].replace("_", " ").title() ~ '</span>'),
+        ('Code', _code_html),
+        ('Status', _status_html),
         ('Category', instrument["category"] or "—"),
         ('Location', instrument["location"]),
         ('Manufacturer', instrument["manufacturer"] or "—"),

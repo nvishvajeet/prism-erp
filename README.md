@@ -8,6 +8,47 @@ LAN-first. Single-binary deploy. SQLite. No build step.
 
 ---
 
+## Current Job — Pending
+
+The active plan lives in `TODO_AI.txt` (Tracks A and B). The
+short version of what's *next* on master right now:
+
+**Track A — strengthening (finish Phase 6 first):**
+
+| Wave  | Scope                                                | Effort | State   |
+|-------|------------------------------------------------------|--------|---------|
+| W6.10 | Split `request_detail()` (682 lines) into action handlers | XL  | **Next** |
+| W6.11 | Flip CSRF enforcement on (~30 forms + 3 test scripts)     | M   | Pending |
+| W6.12 | Extract scope helpers for the 20+ remaining query patterns | M  | Pending |
+| W6.13 | Server-side input validation everywhere (`safe_int` / `safe_float`) | M | Pending |
+| W6.14 | `log_action()` completeness audit + static-analysis test | S | Pending |
+| W6.15 | Database backup + restore script + admin button | S | Pending |
+| W6.16 | Replace Werkzeug dev server with `waitress` for prod | S | Pending |
+| W6.17 | `test_status_transitions.py` regression test | S | Pending |
+| W6.18 | Structured logging (JSON to `logs/server.log`) | S | Pending |
+| W6.19 | `.env.example` listing every `LAB_SCHEDULER_*` flag | S | Pending |
+| W6.20 | `init_db()` idempotency smoke test | S | Pending |
+
+**Track B — extensions (after Track A is clean):**
+
+`W7.1` Bulk operations on the queue · `W7.2` Per-instrument custom
+form fields · `W7.3` Email notifications · `W7.4` Cost / grant
+tracking + invoicing · `W7.5` Recurring / templated requests ·
+`W7.6` Mobile breakpoint pass · `W7.7` Approval delegation ·
+`W7.8` SQLite FTS5 search · `W7.9` `/api/v1` JSON blueprint ·
+`W7.10` Per-user dashboard customization · `W7.11` Audit log
+viewer · `W7.12` OAuth2 / SAML SSO · `W7.13` Multi-tenant.
+
+**Recommended next session: W6.10.** It is the only XL item left
+in Phase 6 and was deferred from W5.3. Splitting the 682-line
+`request_detail()` into per-action handler functions isolates
+each of the 14 actions so a bug in one path can't bleed into
+another. All status writes already go through
+`assert_status_transition()` (W6.5), so the state machine is
+ready to back the split.
+
+---
+
 ## Phase 5 Progress & Schedule
 
 **Status: complete.** Every user-facing page now matches the tile

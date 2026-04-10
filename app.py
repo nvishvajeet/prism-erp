@@ -377,6 +377,65 @@ def approval_role_label(role: str | None) -> str:
     return labels.get(role, role.replace("_", " ").title())
 
 
+# ── Request status state machine ───────────────────────────────────────────
+# Defines which status transitions are legal. Any handler that mutates
+# `sample_requests.status` should call `assert_status_transition()` first
+# to reject invalid moves before they reach the database.
+#
+# `submitted` is the entry point. `completed`, `rejected`, and `cancelled`
+# are terminal — nothing leaves them. `awaiting_sample_submission` is the
+# branch the requester drives; the operator path runs from `sample_received`
+# onward.
+#
+# Admin overrides (admin_schedule_override, admin_complete_override) are
+# allowed to skip ahead — they pass `force=True` to bypass this check.
+REQUEST_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "submitted":                  {"under_review", "rejected", "cancelled"},
+    "under_review":               {"awaiting_sample_submission", "rejected", "cancelled"},
+    # awaiting → sample_received is the operator quick-receive fast-track:
+    # the operator confirms the sample is physically present without
+    # waiting for the requester to mark it submitted.
+    "awaiting_sample_submission": {"sample_submitted", "sample_received", "rejected", "cancelled"},
+    "sample_submitted":           {"sample_received", "rejected"},
+    "sample_received":            {"scheduled", "in_progress", "rejected"},
+    "scheduled":                  {"in_progress", "scheduled", "completed", "rejected"},
+    "in_progress":                {"completed", "rejected"},
+    "completed":                  set(),  # terminal
+    "rejected":                   set(),  # terminal
+    "cancelled":                  set(),  # terminal
+}
+
+
+class InvalidStatusTransition(ValueError):
+    pass
+
+
+def assert_status_transition(current: str | None, target: str, *, force: bool = False) -> None:
+    """Raise InvalidStatusTransition if `current → target` is not allowed.
+
+    Pass `force=True` for admin overrides that intentionally skip the
+    workflow (admin_schedule_override, admin_complete_override).
+    """
+    if force:
+        return
+    current = (current or "").strip()
+    if current not in REQUEST_STATUS_TRANSITIONS:
+        raise InvalidStatusTransition(f"Unknown current status: {current!r}")
+    if target == current:
+        return  # idempotent updates (e.g. re-schedule on same status) are fine
+    if target not in REQUEST_STATUS_TRANSITIONS[current]:
+        raise InvalidStatusTransition(
+            f"Cannot transition request from {current!r} to {target!r}. "
+            f"Allowed: {sorted(REQUEST_STATUS_TRANSITIONS[current]) or 'terminal'}"
+        )
+
+
+@app.errorhandler(InvalidStatusTransition)
+def handle_invalid_status_transition(exc: InvalidStatusTransition):
+    flash(f"Invalid status change: {exc}", "error")
+    return redirect(request.referrer or url_for("index"))
+
+
 def request_status_group(status: str | None) -> str:
     status = status or ""
     if status in {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled"}:
@@ -885,6 +944,8 @@ def release_submitted_requests_for_instrument(instrument_id: int, actor_id: int)
         )
         if existing_steps is None:
             create_approval_chain(db, row["id"], instrument_id)
+        # Source query constrains status to 'submitted' so the transition is always valid.
+        assert_status_transition("submitted", "under_review")
         execute(
             "UPDATE sample_requests SET status = 'under_review', remarks = ?, updated_at = ? WHERE id = ?",
             ("Lab is accepting jobs again. Request released into review.", now_iso(), row["id"]),
@@ -3916,6 +3977,7 @@ def quick_receive_request(request_id: int):
         return jsonify({"ok": False, "error": "Forbidden."}), 403
     if sample_request["status"] not in {"sample_submitted", "awaiting_sample_submission"}:
         return jsonify({"ok": False, "error": "Sample cannot be marked received from its current state."}), 400
+    assert_status_transition(sample_request["status"], "sample_received")
     execute(
         """
         UPDATE sample_requests
@@ -4573,6 +4635,8 @@ def new_request():
         )
         if instrument["accepting_requests"]:
             create_approval_chain(get_db(), request_id, instrument_id)
+            # Just inserted with `initial_status='submitted'` above; transition is always submitted -> under_review.
+            assert_status_transition("submitted", "under_review")
             execute("UPDATE sample_requests SET status = 'under_review' WHERE id = ?", (request_id,))
         else:
             execute(
@@ -4936,6 +5000,7 @@ def request_detail(request_id: int):
                 (remarks, now_iso(), step_id),
             )
             next_status = build_request_status(get_db(), request_id)
+            assert_status_transition(sample_request["status"], next_status)
             execute("UPDATE sample_requests SET status = ?, remarks = ?, updated_at = ? WHERE id = ?", (next_status, remarks, now_iso(), request_id))
             if approval_attachment and (approval_attachment.filename or "").strip():
                 try:
@@ -4963,6 +5028,7 @@ def request_detail(request_id: int):
                 "UPDATE approval_steps SET status = 'rejected', remarks = ?, acted_at = ? WHERE id = ?",
                 (remarks, now_iso(), step_id),
             )
+            assert_status_transition(sample_request["status"], "rejected")
             execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_rejected", {"step_id": step_id})
         elif action == "assign_approver" and can_manage:
@@ -4993,6 +5059,7 @@ def request_detail(request_id: int):
                 flash("This lab is not accepting sample dropoff right now.", "error")
                 return redirect(url_for("request_detail", request_id=request_id))
             dropoff_note = request.form.get("sample_dropoff_note", "").strip()
+            assert_status_transition(sample_request["status"], "sample_submitted")
             execute(
                 """
                 UPDATE sample_requests
@@ -5008,6 +5075,7 @@ def request_detail(request_id: int):
                 flash("Sample can only be received after member handoff.", "error")
                 return redirect(url_for("request_detail", request_id=request_id))
             remarks = request.form.get("remarks", "").strip()
+            assert_status_transition(sample_request["status"], "sample_received")
             execute(
                 """
                 UPDATE sample_requests
@@ -5045,6 +5113,7 @@ def request_detail(request_id: int):
             scheduled_for = request.form["scheduled_for"]
             operator_id = int(request.form["assigned_operator_id"]) if request.form["assigned_operator_id"] else user["id"]
             remarks = request.form.get("remarks", "").strip()
+            assert_status_transition(sample_request["status"], "scheduled")
             execute(
                 "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
                 (scheduled_for, operator_id, remarks, now_iso(), request_id),
@@ -5054,6 +5123,7 @@ def request_detail(request_id: int):
             scheduled_for = request.form["scheduled_for"]
             operator_id = int(request.form["assigned_operator_id"]) if request.form["assigned_operator_id"] else user["id"]
             remarks = request.form.get("remarks", "").strip()
+            assert_status_transition(sample_request["status"], "scheduled", force=True)
             execute(
                 """
                 UPDATE sample_requests
@@ -5070,6 +5140,7 @@ def request_detail(request_id: int):
             log_action(user["id"], "sample_request", request_id, "admin_schedule_override", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
         elif action == "start" and (can_operate or can_manage):
             remarks = request.form.get("remarks", "").strip()
+            assert_status_transition(sample_request["status"], "in_progress")
             execute("UPDATE sample_requests SET status = 'in_progress', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, "started", {})
         elif action == "complete" and (can_operate or can_manage):
@@ -5080,6 +5151,7 @@ def request_detail(request_id: int):
             email_ok, email_message = send_completion_email(sample_request, results_summary)
             now_value = now_iso()
             completion_fields = completion_override_fields(sample_request, user["id"], now_value)
+            assert_status_transition(sample_request["status"], "completed")
             execute(
                 """
                 UPDATE sample_requests
@@ -5124,6 +5196,7 @@ def request_detail(request_id: int):
             email_ok, email_message = send_completion_email(sample_request, results_summary)
             now_value = now_iso()
             completion_fields = completion_override_fields(sample_request, operator_id, now_value)
+            assert_status_transition(sample_request["status"], "completed", force=True)
             execute(
                 """
                 UPDATE sample_requests
@@ -5239,6 +5312,7 @@ def request_detail(request_id: int):
             return redirect(url_for("request_detail", request_id=request_id))
         elif action == "reject" and can_manage:
             remarks = request.form.get("remarks", "").strip()
+            assert_status_transition(sample_request["status"], "rejected", force=True)
             execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, "rejected", {})
         else:
@@ -5564,6 +5638,7 @@ def schedule_actions():
             return redirect_to_queue()
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
         remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled")
         execute(
             "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
             (scheduled_for, operator_id, remarks, now_iso(), request_id),
@@ -5625,6 +5700,7 @@ def schedule_actions():
             slot_dt = compute_next_schedule_slot(planner_date, same_day_rows)
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
         remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled")
         execute(
             "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
             (slot_dt.isoformat(timespec="minutes"), operator_id, remarks, now_iso(), request_id),
@@ -5643,6 +5719,7 @@ def schedule_actions():
         if sample_request["status"] != "sample_submitted":
             flash("Only submitted samples can be marked received from the board.", "error")
             return redirect_to_queue()
+        assert_status_transition(sample_request["status"], "sample_received")
         execute(
             """
             UPDATE sample_requests
@@ -5661,6 +5738,7 @@ def schedule_actions():
             return redirect_to_queue()
         remarks = request.form.get("remarks", "").strip()
         operator_id = sample_request["assigned_operator_id"] or user["id"]
+        assert_status_transition(sample_request["status"], "in_progress")
         execute(
             "UPDATE sample_requests SET status = 'in_progress', assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
             (operator_id, remarks, now_iso(), request_id),
@@ -5683,6 +5761,7 @@ def schedule_actions():
         email_ok, email_message = send_completion_email(sample_request, results_summary)
         now_value = now_iso()
         completion_fields = completion_override_fields(sample_request, user["id"], now_value)
+        assert_status_transition(sample_request["status"], "completed")
         execute(
             """
             UPDATE sample_requests

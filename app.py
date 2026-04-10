@@ -3182,6 +3182,43 @@ def init_db() -> None:
             except:
                 pass  # Column already exists or other issue, skip
 
+        # Phase 6 W6.1 — Indexes for hot query paths.
+        # Every query that filters by status, instrument, requester, or
+        # joins approval_steps/audit_logs/request_attachments hits these.
+        cur.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sr_status              ON sample_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_sr_instrument_status   ON sample_requests(instrument_id, status);
+            CREATE INDEX IF NOT EXISTS idx_sr_requester           ON sample_requests(requester_id);
+            CREATE INDEX IF NOT EXISTS idx_sr_assigned_operator   ON sample_requests(assigned_operator_id);
+            CREATE INDEX IF NOT EXISTS idx_sr_created_at          ON sample_requests(created_at);
+            CREATE INDEX IF NOT EXISTS idx_sr_completed_at        ON sample_requests(completed_at);
+            CREATE INDEX IF NOT EXISTS idx_sr_scheduled_for       ON sample_requests(scheduled_for);
+
+            CREATE INDEX IF NOT EXISTS idx_steps_request          ON approval_steps(sample_request_id);
+            CREATE INDEX IF NOT EXISTS idx_steps_request_order    ON approval_steps(sample_request_id, step_order);
+            CREATE INDEX IF NOT EXISTS idx_steps_status           ON approval_steps(status);
+
+            CREATE INDEX IF NOT EXISTS idx_attach_request         ON request_attachments(request_id);
+            CREATE INDEX IF NOT EXISTS idx_attach_active          ON request_attachments(request_id, is_active);
+
+            CREATE INDEX IF NOT EXISTS idx_messages_request       ON request_messages(request_id);
+
+            CREATE INDEX IF NOT EXISTS idx_issues_request         ON request_issues(request_id);
+            CREATE INDEX IF NOT EXISTS idx_issues_status          ON request_issues(status);
+
+            CREATE INDEX IF NOT EXISTS idx_audit_entity           ON audit_logs(entity_type, entity_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_created          ON audit_logs(created_at);
+
+            CREATE INDEX IF NOT EXISTS idx_inst_operators_inst    ON instrument_operators(instrument_id);
+            CREATE INDEX IF NOT EXISTS idx_inst_admins_inst       ON instrument_admins(instrument_id);
+            CREATE INDEX IF NOT EXISTS idx_inst_faculty_inst      ON instrument_faculty_admins(instrument_id);
+
+            CREATE INDEX IF NOT EXISTS idx_downtime_inst          ON instrument_downtime(instrument_id);
+            CREATE INDEX IF NOT EXISTS idx_downtime_active        ON instrument_downtime(is_active);
+            """
+        )
+
         db.commit()
     db.close()
     seed_data()

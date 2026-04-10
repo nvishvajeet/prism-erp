@@ -1,13 +1,16 @@
 # PRISM — Architecture Specification
 
+**Version 1.2.0**
+
 A request-tracking and operator-workflow system for MIT-WPU's
 Department of Research & Development. One Python process, one
 SQLite database, browser-based interface.
 
 This file is the **current architecture spec** — what the system
-*is*, not how it got here. Read `README.md` for progress / phase
-status, `TODO_AI.txt` for the active plan, `git log` for the
-history. The roadmap doesn't live here anymore.
+*is*, not how it got here. Read `README.md` for the release
+overview and roadmap, `TODO_AI.txt` for the forward plan,
+`CHANGELOG.md` for the version history, `git log` for the
+commit-level history. The roadmap does not live here.
 
 A competent developer reading this file alongside `app.py` should
 be able to understand every architectural decision.
@@ -274,7 +277,7 @@ so users can re-download recent reports.
 | `GET /instruments/<id>/calendar`            | redirect → `/calendar`    | view         | Calendar filtered by instrument               |
 | `GET /schedule`                             | `schedule.html`           | login        | **The Queue** — central working page          |
 | `POST /schedule/actions`                    | —                         | varies       | Per-row queue actions                         |
-| `POST /schedule/bulk`                       | —                         | varies       | Bulk-action tile (W5.2)                       |
+| `POST /schedule/bulk`                       | —                         | varies       | Bulk-action tile                              |
 | `GET /requests/new`                         | `new_request.html`        | login        | Submit new request                            |
 | `GET/POST /requests/<id>`                   | `request_detail.html`     | login        | Full card view + 14 actions                   |
 | `POST /requests/<id>/quick-receive`         | JSON                      | operator     | Operator fast-track sample receive            |
@@ -321,9 +324,11 @@ so users can re-download recent reports.
 Main/
 ├── app.py                       Single application file (~6,750 lines)
 ├── lab_scheduler.db             SQLite database (git-ignored, auto-created)
-├── README.md                    Quick start, phase progress, workflow patterns
+├── README.md                    Release overview, running, testing, crawler suite
 ├── PROJECT.md                   This file — architecture spec
-├── TODO_AI.txt                  Active plan (next waves only)
+├── CHANGELOG.md                 Version history (semver)
+├── TODO_AI.txt                  Forward plan (next versions only)
+├── .env.example                 Every environment flag PRISM reads
 ├── SECURITY_TODO.md             Hardening checklist + HTTPS migration
 ├── CRAWL_PLAN.md                Test strategy reference
 ├── ROLE_VISIBILITY_MATRIX.md    Visibility audit reference
@@ -645,6 +650,34 @@ any stale process on port 5055 first, and writes everything to
 
 Open `http://127.0.0.1:5055`. Demo password for the seeded accounts
 is `SimplePass123` (only present when `DEMO_MODE` is on).
+
+---
+
+## 15. Versioning
+
+PRISM uses [Semantic Versioning](https://semver.org). The version
+in this file's header is the **architecture spec version** — bump
+the minor when an architectural decision in §1–§14 changes, bump
+the patch when a section is reworded without changing meaning.
+
+The version of the codebase itself is recorded in `CHANGELOG.md`
+and stamped into the running app via `app.config["PRISM_VERSION"]`
+(planned for v1.3.0).
+
+| Bump  | When                                                       |
+|-------|------------------------------------------------------------|
+| Major | Breaking change to schema, route contract, or auth model   |
+| Minor | New user-facing capability, new architectural primitive    |
+| Patch | Bug fix, doc-only change, internal cleanup                 |
+
+Architectural changes that warrant a minor bump in this spec:
+adding a new schema table, a new role, a new helper in §11, a new
+macro in `_page_macros.html`, or a new layer in §10 (Security).
+Patch bumps cover wording fixes and clarifications.
+
+`README.md` carries the **release version** (currently 1.2.0). The
+two versions usually move in lockstep but are tracked separately so
+documentation work can ship without a code release.
 
 
 

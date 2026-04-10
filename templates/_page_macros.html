@@ -234,31 +234,31 @@
 
 {#
   approval_action_form(step, allow_file=False, allow_note=True)
-  Approve/Reject forms for one approval step. step must expose:
-    step.id, step.step_order, step.approver_role (or approver_role_label)
-  Renders two forms inside one .approval-action-block so the caller can
-  drop this into any tile that hosts actionable approvals.
+  Approve/Reject forms for one approval step. step is a sqlite Row (or dict)
+  with keys: id, step_order, approver_role.
+  Field names match the server handler (remarks, approval_attachment).
+  allow_file=True renders the receipt/bill upload input (finance step).
 #}
 {% macro approval_action_form(step, allow_file=False, allow_note=True) -%}
-{% set role_label = step.approver_role_label if step.approver_role_label is defined else step.approver_role %}
+{% set role_label = step['approver_role'].replace('_', ' ').title() %}
 <div class="approval-action-block" data-vis="{{ V }}">
-  <p class="approval-action-heading" data-vis="{{ V }}">Step {{ step.step_order }} · {{ role_label }}</p>
+  <p class="approval-action-heading" data-vis="{{ V }}">Step {{ step['step_order'] }} · {{ role_label }}</p>
   <form method="post" enctype="multipart/form-data" class="approval-action-form approve" data-vis="{{ V }}">
     <input type="hidden" name="action" value="approve_step">
-    <input type="hidden" name="step_id" value="{{ step.id }}">
-    {% if allow_note %}<textarea name="note" rows="2" placeholder="Optional note…" data-vis="{{ V }}"></textarea>{% endif %}
+    <input type="hidden" name="step_id" value="{{ step['id'] }}">
+    {% if allow_note %}<textarea name="remarks" rows="2" placeholder="Optional approval note" data-vis="{{ V }}"></textarea>{% endif %}
     {% if allow_file %}
     <label class="approval-action-file" data-vis="{{ V }}">
-      <input type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt">
-      <span data-vis="{{ V }}">📎 Attach</span>
+      <input type="file" name="approval_attachment" accept=".pdf,.png,.jpg,.jpeg">
+      <span data-vis="{{ V }}">📎 Receipt / Bill</span>
     </label>
     {% endif %}
-    <button type="submit" class="approval-action-approve" data-vis="{{ V }}">Approve</button>
+    <button type="submit" class="approval-action-approve" data-vis="{{ V }}">Approve — {{ role_label }}</button>
   </form>
   <form method="post" class="approval-action-form reject" data-vis="{{ V }}">
     <input type="hidden" name="action" value="reject_step">
-    <input type="hidden" name="step_id" value="{{ step.id }}">
-    {% if allow_note %}<textarea name="note" rows="2" placeholder="Reason for rejection…" data-vis="{{ V }}"></textarea>{% endif %}
+    <input type="hidden" name="step_id" value="{{ step['id'] }}">
+    {% if allow_note %}<textarea name="remarks" rows="2" placeholder="Reason for rejection (required)" required data-vis="{{ V }}"></textarea>{% endif %}
     <button type="submit" class="approval-action-reject" data-vis="{{ V }}">Reject</button>
   </form>
 </div>

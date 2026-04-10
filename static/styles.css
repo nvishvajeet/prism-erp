@@ -6908,3 +6908,208 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   .tile-queue-schedule #centralQueueTable tbody td { padding: 0.5rem 0.4rem; }
 }
 
+/* =========================================================================
+   W5.3 — REQUEST DETAIL TILE ARCHITECTURE
+   Drops the .request-workspace 2-col sticky layout in favour of a fluid
+   6-column grid. Header + activity tiles span the full row; meta / actions /
+   approvals / files stack into half-row tiles.
+   ========================================================================= */
+
+.request-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 0 0.5rem;
+  align-items: start;
+}
+
+.request-tiles > .tile {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+}
+
+.request-tiles > .tile-request-header,
+.request-tiles > .tile-request-events {
+  grid-column: span 6;
+}
+
+.request-tiles .tile > .section-head {
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- .tile-request-header ------------------------------------------ */
+.tile-request-header-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tile-request-header-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tile-request-header-note {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  background: var(--surface-alt, #f5f5f7);
+  border-radius: 0.55rem;
+  font-size: 0.8rem;
+}
+
+/* ---------- .tile-request-meta -------------------------------------------- */
+.tile-request-meta .meta-grid {
+  margin-bottom: 0.75rem;
+}
+
+.tile-request-note-block {
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--surface-alt, #f5f5f7);
+  border: 1px solid var(--line, #e4e4e9);
+  margin-top: 0.65rem;
+}
+
+.tile-request-note-block strong {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink, #1a1a1f);
+}
+
+.tile-request-note-block p {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink, #1a1a1f);
+  white-space: pre-wrap;
+}
+
+.tile-request-note-block.final-remark,
+.tile-request-note-block.final-result {
+  background: #f1f7f3;
+  border-color: #c9e4d4;
+}
+
+/* ---------- .tile-request-actions ----------------------------------------- */
+.tile-request-actions-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.tile-request-actions-body .action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tile-request-actions-body .action-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted, #6e6e76);
+}
+
+.tile-request-actions-body .action-form input[type="text"],
+.tile-request-actions-body .action-form input[type="datetime-local"],
+.tile-request-actions-body .action-form select,
+.tile-request-actions-body .action-form textarea {
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--surface, #fff);
+}
+
+.tile-request-actions-body .action-form button {
+  align-self: flex-start;
+}
+
+/* ---------- .tile-request-approvals --------------------------------------- */
+.tile-request-approvals-actionable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.tile-request-approvals-actionable > .hint {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink, #1a1a1f);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- .tile-request-files ------------------------------------------- */
+.tile-request-files .file-link-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.tile-request-files .file-link-table tbody td {
+  padding: 0.5rem 0.4rem;
+  border-bottom: 1px solid var(--line-soft, #ececf0);
+}
+
+/* ---------- .tile-request-events ------------------------------------------ */
+.tile-request-events .activity-feed {
+  padding: 0.25rem 0;
+}
+
+.tile-request-events .activity-entry-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.tile-request-events .activity-entry-files a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.tile-request-events .event-attachment-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.3rem;
+  background: var(--surface-alt, #f5f5f7);
+  color: var(--muted, #6e6e76);
+  letter-spacing: 0.05em;
+}
+
+.tile-request-events .input-dialog {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .request-tiles { grid-template-columns: repeat(4, 1fr); }
+  .request-tiles > .tile { grid-column: span 4; }
+  .request-tiles > .tile-request-meta,
+  .request-tiles > .tile-request-actions,
+  .request-tiles > .tile-request-approvals,
+  .request-tiles > .tile-request-files { grid-column: span 2; }
+}
+
+@media (max-width: 760px) {
+  .request-tiles { grid-template-columns: 1fr; padding: 0; }
+  .request-tiles > .tile,
+  .request-tiles > .tile-request-meta,
+  .request-tiles > .tile-request-actions,
+  .request-tiles > .tile-request-approvals,
+  .request-tiles > .tile-request-files { grid-column: span 1; }
+}
+

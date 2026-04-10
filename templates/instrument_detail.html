@@ -1,57 +1,60 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, empty_state with context %}
-{% from "_request_macros.html" import request_identity, requester_block, operator_block, status_block, meta_link with context %}
+{% from "_request_macros.html" import request_identity, status_block with context %}
 {% block hover_back %}<a href="{{ url_for('instruments') }}" class="hover-back-btn" title="Back to Instruments">←</a>{% endblock %}
 {% block content %}
 
-{# ── Page header ── #}
-<div class="stream-page-header" data-vis="{{ V }}">
-  <div class="inst-detail-header-wrap" data-vis="{{ V }}">
+{# ─── Header ─────────────────────────────────────────── #}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('instruments') }}" data-vis="{{ V }}">← Instruments</a>
-    <h2 class="stream-title" data-vis="{{ V }}">{{ instrument["name"] }}</h2>
-    <span class="operation-status operation-{{ intake_mode }} operation-status-compact" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ instrument["name"] }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ instrument["code"] }}</span>
+    <span class="operation-status operation-{{ intake_mode }} operation-status-compact inst-header-status" data-vis="{{ V }}">
       <span class="operation-dot" aria-hidden="true"></span>
       <strong data-vis="{{ V }}">{{ intake_mode_label(intake_mode) }}</strong>
     </span>
   </div>
-  <div class="inst-detail-header-actions" data-vis="{{ V }}">
+  <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn btn-primary" href="{{ url_for('new_request', instrument_id=instrument['id']) }}" data-vis="{{ V }}">New Request</a>
   </div>
-</div>
+</header>
 
-{# ── 5-Panel Grid Layout ── #}
-<div class="inst-detail-grid" data-vis="{{ V }}">
+{# ─── Tile Grid ──────────────────────────────────────── #}
+<div class="inst-tiles" data-vis="{{ V }}">
 
-  {# PANEL 1: Info Panel (Top-left) ── #}
-  <section class="card inst-detail-panel inst-detail-info-panel" data-vis="{{ V }}">
-    {% call card_heading("", "Info") %}
-      {% if can_edit %}
-      <button type="button" class="link-button" id="toggleInstrumentEdit" aria-expanded="false" data-vis="{{ V }}">Edit</button>
-      {% endif %}
-    {% endcall %}
-
-    <div class="inst-detail-photo-shell" data-vis="{{ V }}">
-      <img class="instrument-photo" src="{{ instrument_photo_src(instrument['machine_photo_url']) }}" alt="{{ instrument['name'] }}" data-vis="{{ V }}">
+  {# ── Tile: Instrument Info (photo + metadata) ── #}
+  <section class="card tile tile-info" data-vis="{{ V }}">
+    {{ card_heading("", "Instrument") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      <div class="tile-info-photo" data-vis="{{ V }}">
+        <img src="{{ instrument_photo_src(instrument['machine_photo_url']) }}" alt="{{ instrument['name'] }}" data-vis="{{ V }}">
+      </div>
+      <dl class="tile-info-meta" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Code</dt>
+        <dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ instrument["code"] }}</code></dd>
+        <dt data-vis="{{ V }}">Status</dt>
+        <dd data-vis="{{ V }}"><span class="badge status-{{ instrument['status'] }}" data-vis="{{ V }}">{{ instrument["status"].replace("_", " ").title() }}</span></dd>
+        <dt data-vis="{{ V }}">Category</dt>
+        <dd data-vis="{{ V }}">{{ instrument["category"] or "—" }}</dd>
+        <dt data-vis="{{ V }}">Location</dt>
+        <dd data-vis="{{ V }}">{{ instrument["location"] }}</dd>
+        <dt data-vis="{{ V }}">Manufacturer</dt>
+        <dd data-vis="{{ V }}">{{ instrument["manufacturer"] or "—" }}</dd>
+        <dt data-vis="{{ V }}">Model</dt>
+        <dd data-vis="{{ V }}">{{ instrument["model_number"] or "—" }}</dd>
+        {% if instrument["notes"] %}
+        <dt data-vis="{{ V }}">Notes</dt>
+        <dd data-vis="{{ V }}">{{ instrument["notes"] }}</dd>
+        {% endif %}
+      </dl>
     </div>
-
-    <dl class="detail-grid compact-detail-grid" data-vis="{{ V }}">
-      <dt data-vis="{{ V }}">Code</dt><dd data-vis="{{ V }}">{{ instrument["code"] }}</dd>
-      <dt data-vis="{{ V }}">Category</dt><dd data-vis="{{ V }}">{{ instrument["category"] or "—" }}</dd>
-      <dt data-vis="{{ V }}">Location</dt><dd data-vis="{{ V }}">{{ instrument["location"] }}</dd>
-      <dt data-vis="{{ V }}">Manufacturer</dt><dd data-vis="{{ V }}">{{ instrument["manufacturer"] or "—" }}</dd>
-      <dt data-vis="{{ V }}">Model</dt><dd data-vis="{{ V }}">{{ instrument["model_number"] or "—" }}</dd>
-      <dt data-vis="{{ V }}">Status</dt>
-      <dd data-vis="{{ V }}">
-        <span class="badge status-{{ instrument['status'] }}" data-vis="{{ V }}">{{ instrument["status"].replace("_", " ").title() }}</span>
-      </dd>
-      {% if instrument["notes"] %}<dt data-vis="{{ V }}">Notes</dt><dd data-vis="{{ V }}">{{ instrument["notes"] }}</dd>{% endif %}
-    </dl>
   </section>
 
-  {# PANEL 2: Stats Panel (Top-right) ── #}
-  <section class="card inst-detail-panel inst-detail-stats-panel" data-vis="{{ V }}">
-    {{ card_heading("", "Stats") }}
-    <div class="inst-detail-stat-grid" data-vis="{{ V }}">
+  {# ── Tile: Stats counters ── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("", "At A Glance") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
       {{ stat_blob(queue_metrics.pending, "Pending", url_for('schedule', instrument_id=instrument['id'], bucket='pending'), tone='wait') }}
       {{ stat_blob(instrument_queue_counts['active'], "Active", url_for('schedule', instrument_id=instrument['id'], bucket='active'), tone='active') }}
       {{ stat_blob(instrument_queue_counts['done'], "Completed", url_for('schedule', instrument_id=instrument['id'], bucket='completed'), tone='completed') }}
@@ -62,10 +65,10 @@
     </div>
   </section>
 
-  {# PANEL 3: Queue Panel (Full width) ── #}
-  <section class="card inst-detail-panel inst-detail-queue-panel" data-vis="{{ V }}">
+  {# ── Tile: Queue (full width) ── #}
+  <section class="card tile tile-queue" data-vis="{{ V }}">
     {% call card_heading("", "Queue") %}
-      <div class="inst-detail-card-nav-wrap" data-vis="{{ V }}">
+      <div class="inst-tile-head-links" data-vis="{{ V }}">
         <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
         {% if can_view_history %}
         <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='completed') }}" data-vis="{{ V }}">History</a>
@@ -73,7 +76,7 @@
       </div>
     {% endcall %}
 
-    <div class="stream-pill-row inst-detail-pill-row" id="instPills" data-vis="{{ V }}">
+    <div class="stream-pill-row inst-tile-pill-row" id="instPills" data-vis="{{ V }}">
       <button class="stream-pill" data-bucket="" data-vis="{{ V }}">All</button>
       <button class="stream-pill stream-pill-pending" data-bucket="pending" data-vis="{{ V }}">Pending</button>
       <button class="stream-pill" data-bucket="approvals" data-vis="{{ V }}">Approvals</button>
@@ -84,7 +87,7 @@
     </div>
 
     {% call paginated_pane('instQueue', page_size=5, max_height='none') %}
-    <table id="instQueueTable" data-vis="{{ V }}">
+    <table id="instQueueTable" class="tile-queue-table" data-vis="{{ V }}">
       <colgroup>
         <col class="inst-queue-col-request"><col class="inst-queue-col-stage"><col class="inst-queue-col-time"><col class="inst-queue-col-action">
       </colgroup>
@@ -142,225 +145,266 @@
     {% endcall %}
   </section>
 
-  {# PANEL 4: Admin Panel (Bottom-left) ── #}
+  {# ── Tile: Control Panel (operation mode) ── #}
   {% if can_edit %}
-  <section class="card inst-detail-panel inst-detail-admin-panel" data-vis="{{ V }}">
-    {{ card_heading("", "Admin") }}
+  <section class="card tile tile-control" data-vis="{{ V }}">
+    {{ card_heading("", "Control Panel") }}
+    <p class="tile-lead" data-vis="{{ V }}">Change intake state. Applies immediately on submit.</p>
+    <form method="post" id="instrumentOperationForm" class="control-form" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="update_operation">
+      <div class="control-mode-row" data-vis="{{ V }}">
+        <label class="control-mode control-mode-accepting {% if intake_mode == 'accepting' %}is-active{% endif %}" data-vis="{{ V }}">
+          <input type="radio" name="intake_mode" value="accepting" {% if intake_mode == 'accepting' %}checked{% endif %}>
+          <span class="control-mode-dot" aria-hidden="true"></span>
+          <span class="control-mode-label" data-vis="{{ V }}">Accepting</span>
+          <span class="control-mode-hint" data-vis="{{ V }}">Queue open</span>
+        </label>
+        <label class="control-mode control-mode-hold {% if intake_mode == 'on_hold' %}is-active{% endif %}" data-vis="{{ V }}">
+          <input type="radio" name="intake_mode" value="on_hold" {% if intake_mode == 'on_hold' %}checked{% endif %}>
+          <span class="control-mode-dot" aria-hidden="true"></span>
+          <span class="control-mode-label" data-vis="{{ V }}">On Hold</span>
+          <span class="control-mode-hint" data-vis="{{ V }}">Review only</span>
+        </label>
+        <label class="control-mode control-mode-maintenance {% if intake_mode == 'maintenance' %}is-active{% endif %}" data-vis="{{ V }}">
+          <input type="radio" name="intake_mode" value="maintenance" {% if intake_mode == 'maintenance' %}checked{% endif %}>
+          <span class="control-mode-dot" aria-hidden="true"></span>
+          <span class="control-mode-label" data-vis="{{ V }}">Maintenance</span>
+          <span class="control-mode-hint" data-vis="{{ V }}">Closed</span>
+        </label>
+      </div>
+      <div class="control-actions" data-vis="{{ V }}">
+        <button type="submit" class="small-button" data-vis="{{ V }}">Apply Change</button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
 
-    {# Operator & Faculty Assignments #}
-    <div class="inst-detail-assignments" data-vis="{{ V }}">
-      <div class="assignment-block" data-vis="{{ V }}">
+  {# ── Tile: Team (operators + faculty) ── #}
+  <section class="card tile tile-team" data-vis="{{ V }}">
+    {{ card_heading("", "Team") }}
+    <div class="team-columns" data-vis="{{ V }}">
+      <div class="team-col" data-vis="{{ V }}">
         <h3 class="section-kicker" data-vis="{{ V }}">Operators</h3>
-        <div class="people-list" data-vis="{{ V }}">
-          {% if selected_operator_rows %}
-            {% for p in selected_operator_rows %}
-            <div class="person-item" data-vis="{{ V }}">
-              {% if can_view_user_profile_id_user(p['id']) %}
-              <a class="text-link" href="{{ url_for('user_profile', user_id=p['id']) }}" data-vis="{{ V }}">{{ p["name"] }}</a>
-              {% else %}
-              <span data-vis="{{ V }}">{{ p["name"] }}</span>
-              {% endif %}
-            </div>
-            {% endfor %}
-          {% else %}
-          <p class="hint" data-vis="{{ V }}">None assigned</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="assignment-block" data-vis="{{ V }}">
-        <h3 class="section-kicker" data-vis="{{ V }}">Faculty</h3>
-        <div class="people-list" data-vis="{{ V }}">
-          {% if selected_faculty_rows %}
-            {% for p in selected_faculty_rows %}
-            <div class="person-item" data-vis="{{ V }}">
-              {% if can_view_user_profile_id_user(p['id']) %}
-              <a class="text-link" href="{{ url_for('user_profile', user_id=p['id']) }}" data-vis="{{ V }}">{{ p["name"] }}</a>
-              {% else %}
-              <span data-vis="{{ V }}">{{ p["name"] }}</span>
-              {% endif %}
-            </div>
-            {% endfor %}
-          {% else %}
-          <p class="hint" data-vis="{{ V }}">None assigned</p>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    {# Metadata Edit Form #}
-    <details class="compact-admin-tools" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Edit Metadata</summary>
-      <form method="post" enctype="multipart/form-data" class="form-grid compact-admin-form top-gap" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="update_metadata">
-        <label data-vis="{{ V }}">Code<input type="text" name="code" value="{{ instrument['code'] }}" required></label>
-        <label data-vis="{{ V }}">Category<input type="text" name="category" value="{{ instrument['category'] or '' }}"></label>
-        <label data-vis="{{ V }}">Location<input type="text" name="location" value="{{ instrument['location'] }}" required></label>
-        <label data-vis="{{ V }}">Manufacturer<input type="text" name="manufacturer" value="{{ instrument['manufacturer'] }}"></label>
-        <label data-vis="{{ V }}">Model<input type="text" name="model_number" value="{{ instrument['model_number'] }}"></label>
-        <label data-vis="{{ V }}">Photo<input type="file" name="machine_photo_file" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></label>
-        <label data-vis="{{ V }}">Notes<textarea name="notes" rows="2">{{ instrument["notes"] }}</textarea></label>
-        <div data-vis="{{ V }}" style="border-top: 1px solid var(--line); padding-top: 0.75rem;">
-          <label data-vis="{{ V }}">Operators</label>
-          <div class="checkbox-grid" data-vis="{{ V }}">{% for c in operator_candidates %}<label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="operator_ids" value="{{ c['id'] }}" {% if c['id'] in selected_operator_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>{% endfor %}</div>
-        </div>
-        <div data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Faculty</label>
-          <div class="checkbox-grid" data-vis="{{ V }}">{% for c in faculty_candidates %}<label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="faculty_admin_ids" value="{{ c['id'] }}" {% if c['id'] in selected_faculty_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>{% endfor %}</div>
-        </div>
-        <div class="inline-form-row" data-vis="{{ V }}">
-          <button type="submit" data-vis="{{ V }}">Save</button>
-        </div>
-      </form>
-    </details>
-
-    {# Operation Mode #}
-    <details class="compact-admin-tools" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Operation Mode</summary>
-      <div class="operation-status operation-{{ intake_mode }} inst-detail-op-status-box top-gap" data-vis="{{ V }}">
-        <span class="operation-dot" aria-hidden="true"></span>
-        <strong data-vis="{{ V }}">{{ intake_mode_label(intake_mode) }}</strong>
-      </div>
-      <form method="post" class="form-grid compact-admin-form top-gap" id="instrumentOperationForm" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="update_operation">
-        <div class="operation-select-row" data-vis="{{ V }}">
-          <select name="intake_mode" data-vis="{{ V }}">
-            <option value="maintenance" {% if intake_mode == 'maintenance' %}selected{% endif %}>Maintenance</option>
-            <option value="accepting" {% if intake_mode == 'accepting' %}selected{% endif %}>Accepting</option>
-            <option value="on_hold" {% if intake_mode == 'on_hold' %}selected{% endif %}>On Hold</option>
-          </select>
-          <button type="submit" class="small-button" data-vis="{{ V }}">Apply</button>
-        </div>
-      </form>
-    </details>
-
-    {# Downtime #}
-    {% if can_add_downtime_here %}
-    <details class="compact-admin-tools" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Add Downtime</summary>
-      <form method="post" class="form-grid compact-admin-form top-gap" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="add_downtime">
-        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
-        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
-        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
-        <button type="submit" class="small-button" data-vis="{{ V }}">Add</button>
-      </form>
-    </details>
-    {% endif %}
-
-    {# Approval Configuration #}
-    {% if can_edit_approval_config %}
-    <details class="compact-admin-tools" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Approval Sequence</summary>
-      <div class="top-gap" data-vis="{{ V }}">
-        {% if approval_config %}
-        <ol class="people-list compact-step-list" data-vis="{{ V }}">
-          {% for step in approval_config %}
-          <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ step["approver_role"].replace("_"," ").title() }}</strong>{% if step["approver_name"] %}<span class="hint" data-vis="{{ V }}"> — {{ step["approver_name"] }}</span>{% endif %}</li>
+        {% if selected_operator_rows %}
+        <ul class="team-list" data-vis="{{ V }}">
+          {% for p in selected_operator_rows %}
+          <li class="team-item" data-vis="{{ V }}">
+            <span class="team-avatar" aria-hidden="true" data-vis="{{ V }}">{{ (p["name"] or "?")[:1]|upper }}</span>
+            {% if can_view_user_profile_id_user(p['id']) %}
+            <a class="text-link" href="{{ url_for('user_profile', user_id=p['id']) }}" data-vis="{{ V }}">{{ p["name"] }}</a>
+            {% else %}
+            <span data-vis="{{ V }}">{{ p["name"] }}</span>
+            {% endif %}
+          </li>
           {% endfor %}
-        </ol>
+        </ul>
         {% else %}
-        <p class="hint" data-vis="{{ V }}">Default: Finance → Faculty → Operator</p>
+        <p class="hint" data-vis="{{ V }}">None assigned</p>
         {% endif %}
       </div>
-      <form method="post" class="form-grid compact-admin-form top-gap" data-vis="{{ V }}">
+      <div class="team-col" data-vis="{{ V }}">
+        <h3 class="section-kicker" data-vis="{{ V }}">Faculty In Charge</h3>
+        {% if selected_faculty_rows %}
+        <ul class="team-list" data-vis="{{ V }}">
+          {% for p in selected_faculty_rows %}
+          <li class="team-item" data-vis="{{ V }}">
+            <span class="team-avatar" aria-hidden="true" data-vis="{{ V }}">{{ (p["name"] or "?")[:1]|upper }}</span>
+            {% if can_view_user_profile_id_user(p['id']) %}
+            <a class="text-link" href="{{ url_for('user_profile', user_id=p['id']) }}" data-vis="{{ V }}">{{ p["name"] }}</a>
+            {% else %}
+            <span data-vis="{{ V }}">{{ p["name"] }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint" data-vis="{{ V }}">None assigned</p>
+        {% endif %}
+      </div>
+    </div>
+    {% if can_edit %}
+    <p class="tile-footnote" data-vis="{{ V }}">Edit assignments from the <a class="text-link" href="#metaEditTile" data-vis="{{ V }}">Metadata</a> tile.</p>
+    {% endif %}
+  </section>
+
+  {# ── Tile: Approval Sequence ── #}
+  {% if can_edit_approval_config %}
+  <section class="card tile tile-approval" data-vis="{{ V }}">
+    {{ card_heading("", "Approval Sequence") }}
+    <p class="tile-lead" data-vis="{{ V }}">Up to 6 steps. Requests advance through each role in order.</p>
+    <ol class="approval-flow" data-vis="{{ V }}">
+      {% if approval_config %}
+      {% for step in approval_config %}
+      <li class="approval-flow-step" data-vis="{{ V }}">
+        <span class="approval-flow-num" data-vis="{{ V }}">{{ loop.index }}</span>
+        <div class="approval-flow-body" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ step["approver_role"].replace("_"," ").title() }}</strong>
+          {% if step["approver_name"] %}<small class="hint" data-vis="{{ V }}">{{ step["approver_name"] }}</small>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+      {% else %}
+      <li class="approval-flow-empty" data-vis="{{ V }}">
+        <small class="hint" data-vis="{{ V }}">Using default: Finance → Faculty → Operator</small>
+      </li>
+      {% endif %}
+    </ol>
+    <details class="tile-inline-editor" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Edit sequence</summary>
+      <form method="post" class="approval-edit-form top-gap" data-vis="{{ V }}">
         <input type="hidden" name="action" value="save_approval_config">
-        {% for idx in range(1, 4) %}
+        {% for idx in range(1, 7) %}
         {% set cfg = approval_config[idx - 1] if approval_config|length >= idx else none %}
-        <div class="approval-step-row" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Step {{ idx }}<select name="step_role_{{ idx }}" data-vis="{{ V }}">
+        <div class="approval-edit-row" data-vis="{{ V }}">
+          <span class="approval-edit-num" data-vis="{{ V }}">{{ idx }}</span>
+          <select name="step_role_{{ idx }}" data-vis="{{ V }}">
             <option value="">— none —</option>
             <option value="finance" {% if cfg and cfg["approver_role"] == "finance" %}selected{% endif %}>Finance</option>
             <option value="professor" {% if cfg and cfg["approver_role"] == "professor" %}selected{% endif %}>Faculty</option>
             <option value="operator" {% if cfg and cfg["approver_role"] == "operator" %}selected{% endif %}>Operator</option>
-          </select></label>
+          </select>
         </div>
         {% endfor %}
         <button type="submit" class="small-button" data-vis="{{ V }}">Save Sequence</button>
       </form>
     </details>
-    {% endif %}
-
-    {# Archive/Restore #}
-    {% if can_archive_instrument or can_restore_instrument %}
-    <details class="compact-admin-tools danger-zone" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Danger Zone</summary>
-      <div class="top-gap" data-vis="{{ V }}">
-        {% if can_archive_instrument and instrument["status"] != "archived" %}
-        <form method="post" class="form-grid compact-admin-form" data-vis="{{ V }}">
-          <input type="hidden" name="action" value="archive_instrument">
-          <label data-vis="{{ V }}">Type code: <input type="text" name="confirm_code" placeholder="{{ instrument['code'] }}" required></label>
-          <button type="submit" class="danger small-button" data-vis="{{ V }}">Archive</button>
-        </form>
-        {% endif %}
-        {% if can_restore_instrument and instrument["status"] == "archived" %}
-        <form method="post" class="inline-form" data-vis="{{ V }}">
-          <input type="hidden" name="action" value="restore_instrument">
-          <button type="submit" class="small-button" data-vis="{{ V }}">Restore</button>
-        </form>
-        {% endif %}
-      </div>
-    </details>
-    {% endif %}
-
   </section>
   {% endif %}
 
-  {# PANEL 5: Activity Panel (Bottom-right) ── #}
-  <section class="card inst-detail-panel inst-detail-activity-panel" data-vis="{{ V }}">
-    {% call card_heading("", "Activity") %}
-      {% if upcoming_downtime %}
-      <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Schedule</a>
-      {% endif %}
+  {# ── Tile: Downtime ── #}
+  <section class="card tile tile-downtime" data-vis="{{ V }}">
+    {% call card_heading("", "Downtime") %}
+      <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
     {% endcall %}
-
     {% if upcoming_downtime %}
-    <div class="activity-section" data-vis="{{ V }}">
-      <h3 class="section-kicker" data-vis="{{ V }}">Upcoming Downtime</h3>
-      <div class="downtime-list" data-vis="{{ V }}">
-        {% for dt in upcoming_downtime %}
-        <div class="downtime-item" data-vis="{{ V }}">
-          <div class="downtime-dates" data-vis="{{ V }}">
-            <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
-            <span class="hint" data-vis="{{ V }}">→</span>
-            <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
-          </div>
-          {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+    <ul class="downtime-list" data-vis="{{ V }}">
+      {% for dt in upcoming_downtime %}
+      <li class="downtime-item" data-vis="{{ V }}">
+        <div class="downtime-dates" data-vis="{{ V }}">
+          <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
+          <span class="hint" data-vis="{{ V }}">→</span>
+          <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
         </div>
-        {% endfor %}
-      </div>
-    </div>
+        {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
     {% else %}
-    <div class="activity-section" data-vis="{{ V }}">
-      <h3 class="section-kicker" data-vis="{{ V }}">Downtime</h3>
-      <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
-    </div>
+    <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
     {% endif %}
-
-    {% if instrument_timeline_entries %}
-    <div class="activity-section" data-vis="{{ V }}">
-      <h3 class="section-kicker" data-vis="{{ V }}">Recent Events</h3>
-      {% call paginated_pane('instEvents', page_size=6, max_height='none') %}
-      <table data-vis="{{ V }}">
-        <tbody id="instEventsBody">
-          {% for entry in instrument_timeline_entries %}
-          <tr data-pane-item data-vis="{{ V }}">
-            <td data-vis="{{ V }}">
-              <small data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ entry.title }}</strong></small>
-              {% if entry.detail %}<br><small class="hint" data-vis="{{ V }}">{{ entry.detail }}</small>{% endif %}
-              <br><small class="muted" data-vis="{{ V }}">{{ format_dt(entry.at) }} — {{ entry.actor }}</small>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% endcall %}
-    </div>
+    {% if can_add_downtime_here %}
+    <details class="tile-inline-editor" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Add downtime</summary>
+      <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="action" value="add_downtime">
+        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
+        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
+        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
+        <button type="submit" class="small-button" data-vis="{{ V }}">Add Block</button>
+      </form>
+    </details>
     {% endif %}
-
   </section>
 
-</div>{# /5-panel grid #}
+  {# ── Tile: Activity ── #}
+  <section class="card tile tile-activity" data-vis="{{ V }}">
+    {{ card_heading("", "Recent Activity") }}
+    {% if instrument_timeline_entries %}
+    {% call paginated_pane('instEvents', page_size=6, max_height='none') %}
+    <table class="activity-table" data-vis="{{ V }}">
+      <tbody id="instEventsBody">
+        {% for entry in instrument_timeline_entries %}
+        <tr data-pane-item data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <div class="activity-row" data-vis="{{ V }}">
+              <strong data-vis="{{ V }}">{{ entry.title }}</strong>
+              {% if entry.detail %}<span class="hint" data-vis="{{ V }}">{{ entry.detail }}</span>{% endif %}
+              <small class="muted" data-vis="{{ V }}">{{ format_dt(entry.at) }} — {{ entry.actor }}</small>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No recent activity</p>
+    {% endif %}
+  </section>
+
+  {# ── Tile: Metadata Edit (toggleable) ── #}
+  {% if can_edit %}
+  <section class="card tile tile-edit" id="metaEditTile" data-vis="{{ V }}">
+    {% call card_heading("", "Metadata") %}
+      <button type="button" class="link-button" id="toggleMetaEdit" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+    {% endcall %}
+    <p class="tile-lead" data-vis="{{ V }}">Edit instrument details, photo, and team assignments.</p>
+    <form method="post" enctype="multipart/form-data" class="meta-edit-form" id="metaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="action" value="update_metadata">
+      <div class="meta-edit-grid" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Code<input type="text" name="code" value="{{ instrument['code'] }}" required></label>
+        <label data-vis="{{ V }}">Category<input type="text" name="category" value="{{ instrument['category'] or '' }}"></label>
+        <label data-vis="{{ V }}">Location<input type="text" name="location" value="{{ instrument['location'] }}" required></label>
+        <label data-vis="{{ V }}">Manufacturer<input type="text" name="manufacturer" value="{{ instrument['manufacturer'] or '' }}"></label>
+        <label data-vis="{{ V }}">Model<input type="text" name="model_number" value="{{ instrument['model_number'] or '' }}"></label>
+        <label data-vis="{{ V }}">Photo<input type="file" name="machine_photo_file" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></label>
+      </div>
+      <label class="meta-edit-notes" data-vis="{{ V }}">Notes<textarea name="notes" rows="2">{{ instrument["notes"] or '' }}</textarea></label>
+      {% if can_edit_assignments %}
+      <div class="meta-edit-assignments" data-vis="{{ V }}">
+        <fieldset data-vis="{{ V }}">
+          <legend data-vis="{{ V }}">Operators</legend>
+          <div class="checkbox-grid" data-vis="{{ V }}">
+            {% for c in operator_candidates %}
+            <label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="operator_ids" value="{{ c['id'] }}" {% if c['id'] in selected_operator_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <fieldset data-vis="{{ V }}">
+          <legend data-vis="{{ V }}">Faculty In Charge</legend>
+          <div class="checkbox-grid" data-vis="{{ V }}">
+            {% for c in faculty_candidates %}
+            <label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="faculty_admin_ids" value="{{ c['id'] }}" {% if c['id'] in selected_faculty_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+      {% endif %}
+      <div class="meta-edit-actions" data-vis="{{ V }}">
+        <button type="submit" data-vis="{{ V }}">Save Changes</button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+
+  {# ── Tile: Danger Zone ── #}
+  {% if can_archive_instrument or can_restore_instrument %}
+  <section class="card tile tile-danger" data-vis="{{ V }}">
+    {% call card_heading("", "Danger Zone") %}
+      <button type="button" class="link-button danger-toggle-btn" id="toggleDanger" aria-expanded="false" data-vis="{{ V }}">Show</button>
+    {% endcall %}
+    <div class="danger-body" id="dangerBody" hidden data-vis="{{ V }}">
+      {% if can_archive_instrument and instrument["status"] != "archived" %}
+      <form method="post" class="danger-form" data-vis="{{ V }}">
+        <input type="hidden" name="action" value="archive_instrument">
+        <p class="hint" data-vis="{{ V }}">Type the instrument code to archive permanently.</p>
+        <label data-vis="{{ V }}">
+          <input type="text" name="confirm_code" placeholder="{{ instrument['code'] }}" required>
+        </label>
+        <button type="submit" class="danger small-button" data-vis="{{ V }}">Archive Instrument</button>
+      </form>
+      {% endif %}
+      {% if can_restore_instrument and instrument["status"] == "archived" %}
+      <form method="post" data-vis="{{ V }}">
+        <input type="hidden" name="action" value="restore_instrument">
+        <button type="submit" class="small-button" data-vis="{{ V }}">Restore Instrument</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+</div>
 
 <script>
   /* Queue pill filter */
@@ -389,6 +433,32 @@
     var form = document.getElementById('instrumentOperationForm');
     if (!form) return;
     form.addEventListener('submit', function () { var b = form.querySelector('button[type="submit"]'); if (b) b.disabled = true; });
+  })();
+
+  /* Metadata edit toggle */
+  (function () {
+    var btn = document.getElementById('toggleMetaEdit');
+    var form = document.getElementById('metaEditForm');
+    if (!btn || !form) return;
+    btn.addEventListener('click', function () {
+      var open = !form.hidden;
+      form.hidden = open;
+      btn.textContent = open ? 'Edit' : 'Hide';
+      btn.setAttribute('aria-expanded', String(!open));
+    });
+  })();
+
+  /* Danger zone toggle */
+  (function () {
+    var btn = document.getElementById('toggleDanger');
+    var body = document.getElementById('dangerBody');
+    if (!btn || !body) return;
+    btn.addEventListener('click', function () {
+      var open = !body.hidden;
+      body.hidden = open;
+      btn.textContent = open ? 'Show' : 'Hide';
+      btn.setAttribute('aria-expanded', String(!open));
+    });
   })();
 </script>
 {% endblock %}

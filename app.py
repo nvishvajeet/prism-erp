@@ -73,6 +73,11 @@ app.config["WTF_CSRF_ENABLED"] = os.environ.get("LAB_SCHEDULER_CSRF", "").lower(
 app.config["WTF_CSRF_TIME_LIMIT"] = None  # Tokens valid for the session lifetime, not 1 hour
 app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
 
+# Demo mode — gates the /demo/switch role-impersonation route and the
+# seed_data() demo account inserts. Defaults to ON for development; set
+# LAB_SCHEDULER_DEMO_MODE=0 in production to lock both down.
+DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "true", "yes"}
+
 csrf = CSRFProtect(app)
 
 
@@ -3380,6 +3385,11 @@ def init_db() -> None:
 
 
 def seed_data() -> None:
+    if not DEMO_MODE:
+        # Production deployment — never seed demo accounts. The first
+        # super_admin must be created manually via init_db + a one-off
+        # script that inserts a real account.
+        return
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
@@ -4006,6 +4016,8 @@ def quick_receive_request(request_id: int):
 @app.route("/demo/switch/<role_key>")
 @login_required
 def demo_switch_role(role_key: str):
+    if not DEMO_MODE:
+        abort(404)  # Pretend the route doesn't exist in production.
     user = current_user()
     if not can_use_role_switcher(user):
         abort(403)

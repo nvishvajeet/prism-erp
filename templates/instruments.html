@@ -1,201 +1,151 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import paginated_pane with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% block content %}
-<section data-vis="{{ V }}">
-  <div class="section-head" data-vis="{{ V }}">
-    <div data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Instruments</h2>
+
+{% macro instrument_row(instrument, include_category_break=False, prev_category=None, archived=False) -%}
+{% if include_category_break and instrument["category"] != prev_category %}
+<tr class="category-header-row" data-vis="{{ V }}">
+  <td colspan="7" data-vis="{{ V }}">{{ instrument["category"] or "Uncategorised" }}</td>
+</tr>
+{% endif %}
+<tr data-pane-item data-vis="{{ V }}">
+  <td data-vis="{{ V }}">
+    {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
+  </td>
+  <td data-vis="{{ V }}">
+    <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table" data-vis="{{ V }}">
+      <span class="operation-dot" aria-hidden="true" data-vis="{{ V }}"></span>
+      <strong data-vis="{{ V }}">{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
+    </span>
+  </td>
+  <td data-vis="{{ V }}">
+    {% if archived %}
+      <span class="hint" data-vis="{{ V }}">—</span>
+    {% else %}
+      {% set _dur = format_duration_short(turnaround_map.get(instrument["id"])) %}
+      {% if _dur and _dur != '-' %}<span class="duration-blob" data-vis="{{ V }}">{{ _dur }}</span>{% else %}<span class="hint" data-vis="{{ V }}">—</span>{% endif %}
+    {% endif %}
+  </td>
+  <td data-vis="{{ V }}">
+    {% if instrument["operators"] %}
+    <div class="people-list compact-people-list" data-vis="{{ V }}">
+      {% for person in instrument["operators"].split(',') %}
+      {% set name = person.strip() %}
+      {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
+      {% endfor %}
     </div>
-    {% if can_add_instrument %}
-    <div class="section-actions" data-vis="{{ V }}">
+    {% else %}
+    <span class="hint" data-vis="{{ V }}">—</span>
+    {% endif %}
+  </td>
+  <td data-vis="{{ V }}">
+    {% if instrument["faculty_in_charge"] %}
+    <div class="people-list compact-people-list" data-vis="{{ V }}">
+      {% for person in instrument["faculty_in_charge"].split(',') %}
+      {% set name = person.strip() %}
+      {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <span class="hint" data-vis="{{ V }}">—</span>
+    {% endif %}
+  </td>
+  <td class="location-stacked" data-vis="{{ V }}">
+    <div class="location-line" data-vis="{{ V }}">{{ instrument["location"] }}</div>
+  </td>
+  <td data-vis="{{ V }}">
+    {% if visible_links[instrument['id']] %}
+    <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
+    {% else %}
+    <span class="hint" data-vis="{{ V }}">{% if archived %}Restricted{% else %}—{% endif %}</span>
+    {% endif %}
+  </td>
+</tr>
+{%- endmacro %}
+
+<section class="instruments-tiles" data-vis="{{ V }}">
+
+  {# ── TILE 1: Header + optional create form ── #}
+  <article class="card tile tile-inst-header" data-vis="{{ V }}">
+    {% call card_heading("", "Instruments") %}
+      {% if can_add_instrument %}
       <button type="button" class="mini-icon-button" id="toggleInstrumentCreate" aria-expanded="false" aria-controls="instrumentCreatePanel" title="Add New Instrument" data-vis="{{ V }}">+</button>
+      {% endif %}
+    {% endcall %}
+    {% if can_add_instrument %}
+    <div class="edit-panel is-hidden" id="instrumentCreatePanel" data-vis="{{ V }}">
+      <form method="post" class="form-grid compact-admin-form" data-vis="{{ V }}">
+        <input type="hidden" name="action" value="create_instrument">
+        <label data-vis="{{ V }}">Name
+          <input type="text" name="new_name" required data-vis="{{ V }}">
+        </label>
+        <label data-vis="{{ V }}">Code
+          <input type="text" name="new_code" value="{{ suggested_new_code }}" placeholder="INST-011" data-vis="{{ V }}">
+        </label>
+        <label data-vis="{{ V }}">Category
+          <input type="text" name="new_category" required data-vis="{{ V }}">
+        </label>
+        <label data-vis="{{ V }}">Location
+          <input type="text" name="new_location" required data-vis="{{ V }}">
+        </label>
+        <label data-vis="{{ V }}">Daily Capacity
+          <input type="number" name="new_daily_capacity" min="1" max="50" value="3" data-vis="{{ V }}">
+        </label>
+        <div class="inline-form-row" data-vis="{{ V }}">
+          <button type="submit" data-vis="{{ V }}">Add Instrument</button>
+          <button type="button" class="link-button subtle" id="cancelInstrumentCreate" data-vis="{{ V }}">Cancel</button>
+        </div>
+      </form>
     </div>
     {% endif %}
-  </div>
+  </article>
+
+  {# ── TILE 2: Active instruments list ── #}
+  <article class="card tile tile-inst-active" data-vis="{{ V }}">
+    {{ card_heading("", "Active Instruments") }}
+    {% call paginated_pane('mainInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
+    <table class="instruments-table" data-vis="{{ V }}">
+      <colgroup>
+        <col class="col-name"><col class="col-status"><col class="col-return">
+        <col class="col-operators"><col class="col-faculty"><col class="col-location"><col class="col-links">
+      </colgroup>
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Links</th></tr>
+      </thead>
+      <tbody id="mainInstrumentsBody" data-vis="{{ V }}">
+        {% for instrument in instruments %}
+          {{ instrument_row(instrument, include_category_break=True, prev_category=(instruments[loop.index0 - 1]["category"] if not loop.first else None)) }}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+  </article>
+
+  {# ── TILE 3: Archived instruments (conditional) ── #}
+  {% if can_view_archived and archived_instruments %}
+  <article class="card tile tile-inst-archived" data-vis="{{ V }}">
+    {{ card_heading("", "Archived Instruments") }}
+    {% call paginated_pane('archivedInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
+    <table class="instruments-table archived-instruments-table" data-vis="{{ V }}">
+      <colgroup>
+        <col class="col-name"><col class="col-status"><col class="col-return">
+        <col class="col-operators"><col class="col-faculty"><col class="col-location"><col class="col-links">
+      </colgroup>
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Links</th></tr>
+      </thead>
+      <tbody id="archivedInstrumentsBody" data-vis="{{ V }}">
+        {% for instrument in archived_instruments %}
+          {{ instrument_row(instrument, archived=True) }}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+  </article>
+  {% endif %}
+
 </section>
-{% if can_add_instrument %}
-<section class="card edit-panel is-hidden" id="instrumentCreatePanel" data-vis="{{ V }}">
-  <div class="section-head compact-head" data-vis="{{ V }}">
-    <div data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Add New Instrument</h2>
-    </div>
-  </div>
-  <form method="post" class="form-grid compact-admin-form" data-vis="{{ V }}">
-    <input type="hidden" name="action" value="create_instrument">
-    <label data-vis="{{ V }}">Name
-      <input type="text" name="new_name" required data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">Code
-      <input type="text" name="new_code" value="{{ suggested_new_code }}" placeholder="INST-011" data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">Category
-      <input type="text" name="new_category" required data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">Location
-      <input type="text" name="new_location" required data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">Daily Capacity
-      <input type="number" name="new_daily_capacity" min="1" max="50" value="3" data-vis="{{ V }}">
-    </label>
-    <div class="inline-form-row" data-vis="{{ V }}">
-      <button type="submit" data-vis="{{ V }}">Add Instrument</button>
-      <button type="button" class="link-button subtle" id="cancelInstrumentCreate" data-vis="{{ V }}">Cancel</button>
-    </div>
-  </form>
-</section>
-{% endif %}
-<section class="card" data-vis="{{ V }}">
-  {% call paginated_pane('mainInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
-  <table class="instruments-table" data-vis="{{ V }}">
-    <colgroup>
-      <col class="col-name">
-      <col class="col-status">
-      <col class="col-return">
-      <col class="col-operators">
-      <col class="col-faculty">
-      <col class="col-location">
-      <col class="col-links">
-    </colgroup>
-    <thead data-vis="{{ V }}">
-      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Links</th></tr>
-    </thead>
-    <tbody id="mainInstrumentsBody" data-vis="{{ V }}">
-      {% for instrument in instruments %}
-      {% if loop.first or instrument["category"] != instruments[loop.index0 - 1]["category"] %}
-      <tr class="category-header-row" data-vis="{{ V }}">
-        <td colspan="7" data-vis="{{ V }}">{{ instrument["category"] or "Uncategorised" }}</td>
-      </tr>
-      {% endif %}
-      <tr data-pane-item data-vis="{{ V }}">
-        <td data-vis="{{ V }}">
-          {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
-        </td>
-        <td data-vis="{{ V }}">
-          <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table" data-vis="{{ V }}">
-            <span class="operation-dot" aria-hidden="true" data-vis="{{ V }}"></span>
-            <strong data-vis="{{ V }}">{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
-          </span>
-        </td>
-        <td data-vis="{{ V }}">{% set _dur = format_duration_short(turnaround_map.get(instrument["id"])) %}{% if _dur and _dur != '-' %}<span class="duration-blob" data-vis="{{ V }}">{{ _dur }}</span>{% else %}<span class="hint" data-vis="{{ V }}">—</span>{% endif %}</td>
-        <td data-vis="{{ V }}">
-          {% if instrument["operators"] %}
-          <div class="people-list compact-people-list" data-vis="{{ V }}">
-            {% for person in instrument["operators"].split(',') %}
-            {% set name = person.strip() %}
-            {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
-            {% endfor %}
-          </div>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">—</span>
-          {% endif %}
-        </td>
-        <td data-vis="{{ V }}">
-          {% if instrument["faculty_in_charge"] %}
-          <div class="people-list compact-people-list" data-vis="{{ V }}">
-            {% for person in instrument["faculty_in_charge"].split(',') %}
-            {% set name = person.strip() %}
-            {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
-            {% endfor %}
-          </div>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">—</span>
-          {% endif %}
-        </td>
-        <td class="location-stacked" data-vis="{{ V }}">
-          <div class="location-line" data-vis="{{ V }}">{{ instrument["location"] }}</div>
-        </td>
-        <td data-vis="{{ V }}">
-          {% if visible_links[instrument['id']] %}
-          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">—</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endcall %}
-</section>
-{% if can_view_archived and archived_instruments %}
-<section class="card" data-vis="{{ V }}">
-  <div class="section-head" data-vis="{{ V }}">
-    <div data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Archived Instruments</h2>
-    </div>
-  </div>
-  {% call paginated_pane('archivedInstruments', page_size=25, max_height='none', css_class='instruments-table-shell') %}
-  <table class="instruments-table archived-instruments-table" data-vis="{{ V }}">
-    <colgroup>
-      <col class="col-name">
-      <col class="col-status">
-      <col class="col-return">
-      <col class="col-operators">
-      <col class="col-faculty">
-      <col class="col-location">
-      <col class="col-links">
-    </colgroup>
-    <thead data-vis="{{ V }}">
-      <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Avg Return</th><th data-vis="{{ V }}">Operator</th><th data-vis="{{ V }}">Faculty In-Charge</th><th data-vis="{{ V }}">Location</th><th data-vis="{{ V }}">Links</th></tr>
-    </thead>
-    <tbody id="archivedInstrumentsBody" data-vis="{{ V }}">
-      {% for instrument in archived_instruments %}
-      <tr data-pane-item data-vis="{{ V }}">
-        <td data-vis="{{ V }}">
-          {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
-        </td>
-        <td data-vis="{{ V }}">
-          <span class="operation-status operation-{{ instrument_intake_mode(instrument) }} operation-status-table" data-vis="{{ V }}">
-            <span class="operation-dot" aria-hidden="true" data-vis="{{ V }}"></span>
-            <strong data-vis="{{ V }}">{{ intake_mode_label(instrument_intake_mode(instrument)) }}</strong>
-          </span>
-        </td>
-        <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">—</span></td>
-        <td data-vis="{{ V }}">
-          {% if instrument["operators"] %}
-          <div class="people-list compact-people-list" data-vis="{{ V }}">
-            {% for person in instrument["operators"].split(',') %}
-            {% set name = person.strip() %}
-            {% if name %}
-            <div data-vis="{{ V }}">{{ name }}</div>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% else %}
-          <span data-vis="{{ V }}">-</span>
-          {% endif %}
-        </td>
-        <td data-vis="{{ V }}">
-          {% if instrument["faculty_in_charge"] %}
-          <div class="people-list compact-people-list" data-vis="{{ V }}">
-            {% for person in instrument["faculty_in_charge"].split(',') %}
-            {% set name = person.strip() %}
-            {% if name %}
-            <div data-vis="{{ V }}">{{ name }}</div>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% else %}
-          <span data-vis="{{ V }}">-</span>
-          {% endif %}
-        </td>
-        <td class="location-stacked" data-vis="{{ V }}">
-          <div class="location-line" data-vis="{{ V }}">{{ instrument["location"] }}</div>
-        </td>
-        <td data-vis="{{ V }}">
-          {% if visible_links[instrument['id']] %}
-          <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">Restricted</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endcall %}
-</section>
-{% endif %}
+
 {% if can_add_instrument %}
 <script>
   (function () {

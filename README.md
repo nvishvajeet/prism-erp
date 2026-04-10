@@ -19,8 +19,8 @@ edits, XL = multi-session rewrite with template + handler refactor.
 No hour estimates; the surprise budget for each page varies too much.
 
 ```
-Phase 5 overall   ████████████████░░░░░░░░░░░░   5 / 7  waves   ( W5.1 · W5.2 · W5.3 · W5.4 · W5.5 )
-Solo waves        ████████████████████░░░░░░░░   5 / 6  ( W5.7 rolls alongside )
+Phase 5 overall   ████████████████████████░░░░   6 / 7  waves   ( W5.1 · W5.2 · W5.3 · W5.4 · W5.5 · W5.6 )
+Solo waves        ████████████████████████░░░░   6 / 6  ( W5.7 rolls alongside — finishing up )
 ```
 
 | Step | Scope | Effort | Progress | State |
@@ -30,8 +30,8 @@ Solo waves        ████████████████████�
 | W5.3 | `request_detail.html` tile conversion | XL | `██████████` | **Done** (2603cd1) |
 | W5.4 | `dashboard.html` tile conversion | L | `██████████` | **Done** |
 | W5.5 | `stats.html` tile conversion | M | `██████████` | **Done** |
-| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `░░░░░░░░░░` | Next |
-| W5.7 | CSS hygiene pass (retire legacy class families) | M | `█████░░░░░` | Rolling (alongside W5.2–W5.6) |
+| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `██████████` | **Done** |
+| W5.7 | CSS hygiene pass (retire legacy class families) | M | `████████░░` | Rolling (alongside W5.2–W5.6) |
 
 **Sizing rationale:**
 - **W5.2 (L)** — highest-touch page; swaps monolithic 7-col table for
@@ -105,6 +105,15 @@ Solo waves        ████████████████████�
 - [x] `paginated_pane` adopted for the instrument perf + weekly throughput tables
 - [x] Chart.js canvases (`trendChart`, `statusChart`, `instChart`, `turnChart`, `topChart`, `weekBarChart`) kept verbatim — canvas IDs untouched, only the wrappers moved
 - [x] Conditional tiles render only when their data source is non-empty (bottlenecks, activity feed, top requesters, war-room board) so empty roles don't see stub cards
+- [x] Crawls green (visibility audit 171/171, populate crawl 500/0 5xx/0 exceptions)
+
+**W5.6 deliverables** (secondary pages bundle):
+
+- [x] `pending.html` → 3-tile `.pending-tiles` (viewer / approval / own). Adopts `metadata_grid` + `empty_state`, kills the bare `.page-title-bar` + loose-card layout.
+- [x] `users.html` → 4-tile `.users-tiles` (create / members / admins / owners). Inline `user_row` sub-macro collapses 3× near-identical `<tr>` blocks. Member + admin tables now use `paginated_pane`.
+- [x] `finance.html` → 6-tile `.finance-tiles` (header / budgets / by-instrument / monthly / recent / activity). `kpi_grid(variant='dense')` replaces the ad-hoc `.stats-kpi-row`. Chart.js canvas ID untouched.
+- [x] `instruments.html` → 3-tile `.instruments-tiles` (header / active / archived). Inline `instrument_row` macro collapses the duplicated 50-line active+archived `<tr>` pair.
+- [x] `calendar.html` → 2-tile `.calendar-tiles` (filters / grid). Retires the legacy `stream_header` + `role-toggle-strip` markup — filters now use `.filter-pill-row`. FullCalendar instance + overlays kept verbatim.
 - [x] Crawls green (visibility audit 171/171, populate crawl 500/0 5xx/0 exceptions)
 
 After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB

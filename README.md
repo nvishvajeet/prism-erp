@@ -132,6 +132,47 @@ lives in `TODO_AI.txt`; this panel is a progress mirror.
 
 ---
 
+## Phase 6 Progress & Schedule
+
+Current focus: **Phase 6 — Foundation Hardening.** No user-facing
+features — just the load-bearing infrastructure that every future
+wave depends on. Pure plumbing: indexes, decorators, helpers,
+state machine, CSRF token machinery, accessibility.
+
+```
+Phase 6 overall   ██████████████████████████████   9 / 10  waves   ( W6.1 · W6.2 · W6.3 · W6.4 · W6.5 · W6.6 · W6.7 · W6.8 · W6.9 )
+Remaining         ░░░  W6.10 — request_detail() handler split (deferred from W5.3)
+```
+
+| Step | Scope | Effort | Progress | State |
+|---|---|---|---|---|
+| W6.1 | Database indexes for hot query paths (22 indexes) | S | `██████████` | **Done** (83ab6cb) |
+| W6.2 | `@instrument_access_required` decorator (4 levels) | S | `██████████` | **Done** (4d9933f) |
+| W6.3 | `REQUEST_DETAIL_JOINS` constant — kill 3× duplicated join | S | `██████████` | **Done** (6efcf62) |
+| W6.4 | `assigned_instrument_ids()` cached in Flask `g` | S | `██████████` | **Done** (aa85778) |
+| W6.5 | Request status state machine (`TRANSITIONS` + validator) | M | `██████████` | **Done** (8673483) |
+| W6.6 | CSRF token machinery (enforcement gated by env flag) | M | `██████████` | **Done** (e3dcb25) |
+| W6.7 | `/demo/switch` + `seed_data()` gated behind `DEMO_MODE` | S | `██████████` | **Done** (5d3c467) |
+| W6.8 | Toast notification system (replaces `.flash-stack`) | M | `██████████` | **Done** (4df0ec0) |
+| W6.9 | PWA polish — manifest, theme-color, skip-nav, ARIA | M | `██████████` | **Done** (357ffe5) |
+| W6.10 | Split `request_detail()` (682 lines) into action handlers | XL | `░░░░░░░░░░` | Not started |
+
+**Sizing rationale:**
+- **W6.1** — 22 `CREATE INDEX IF NOT EXISTS` lines into `init_db()`. Idempotent on existing databases.
+- **W6.2** — single decorator + 3 route refactors. The `/instruments/<id>` detail handler keeps its custom join.
+- **W6.3** — extracted *only* the verbatim 6-line join shared by 3 callers. Deliberately did not force a `RequestQueryBuilder` over the 20+ divergent aggregation queries.
+- **W6.4** — wraps the existing function with a per-request cache stored in `g`. Falls back gracefully outside a request context.
+- **W6.5** — `REQUEST_STATUS_TRANSITIONS` dict + `assert_status_transition()` wired into 14 update sites across `request_detail()`, `schedule_actions()`, `quick_receive_request()`, `release_submitted_requests_for_instrument()`. Admin override paths pass `force=True`. `awaiting_sample_submission → sample_received` is honored as a fast-track transition (matches `quick_receive`'s real workflow).
+- **W6.6** — Token machinery is in place but `WTF_CSRF_ENABLED` defaults to off so the existing forms / tests / demo agents don't break. Flip via `LAB_SCHEDULER_CSRF=1` once every form template carries an explicit `csrf_token()` input. The base.html JS shim handles automatic token injection for form submits and `fetch()` calls.
+- **W6.7** — `LAB_SCHEDULER_DEMO_MODE=0` makes `/demo/switch` 404 and stops `seed_data()` from inserting demo accounts. Defaults stay on for development.
+- **W6.8** — Flask `flash()` API unchanged; only the rendering moved from an inline `.flash-stack` panel to a fixed-position `.toast-stack` with auto-dismiss, slide-in animation, light/dark variants, and `prefers-reduced-motion` honor.
+- **W6.9** — `static/manifest.json`, theme-color meta tags (light + dark variants), `apple-touch-icon`, skip-nav link, `id="main-content"` target, and ARIA polish on the instrument dropdown (`aria-haspopup`, `aria-expanded` synced via JS, Escape-to-close).
+- **W6.10** — Deferred from W5.3. Splitting the 682-line `request_detail()` into action handlers is an XL refactor that touches the largest handler in the codebase. Park until the rest of Phase 6 settles.
+
+Visibility audit baseline after W6.9: **171/171 PASS** (no regressions across Phase 6).
+
+---
+
 ## Design Philosophy
 
 Apple / Jony Ive / Ferrari. Every element earns its place.

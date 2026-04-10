@@ -103,18 +103,6 @@ def now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
-def generate_unique_reference(prefix: str, table: str, column: str) -> str:
-    db = get_db()
-    while True:
-        candidate = f"{prefix}-{random.randint(100000, 999999)}"
-        existing = db.execute(
-            f"SELECT 1 FROM {table} WHERE {column} = ? LIMIT 1",
-            (candidate,),
-        ).fetchone()
-        if existing is None:
-            return candidate
-
-
 def generate_receipt_reference(sample_origin: str) -> str:
     db = get_db()
     first_two = {
@@ -1062,10 +1050,6 @@ def save_instrument_image(instrument_id: int, uploaded_file) -> str:
     return f"instrument_images/{stored_filename}"
 
 
-def user_upload_root(user_id: int) -> Path:
-    return UPLOAD_DIR / "users" / str(user_id)
-
-
 def request_folder_name(request_row: sqlite3.Row) -> str:
     return f"req_{request_row['id']}_{safe_token(request_row['request_no'])}"
 
@@ -1535,10 +1519,6 @@ def parse_schedule_day(value: str | None) -> date:
     return parsed or datetime.utcnow().date()
 
 
-def planner_datetime_value(day_value: date, moment: datetime) -> str:
-    return moment.replace(year=day_value.year, month=day_value.month, day=day_value.day, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")
-
-
 def compute_next_schedule_slot(day_value: date, existing_rows: list[sqlite3.Row]) -> datetime:
     slots: list[datetime] = []
     for row in existing_rows:
@@ -2001,11 +1981,6 @@ def parse_date_param(value: str | None) -> date | None:
         return None
 
 
-def week_start_for(value: str | None) -> date:
-    anchor = parse_date_param(value) or datetime.utcnow().date()
-    return anchor - timedelta(days=anchor.weekday())
-
-
 def request_filter_values() -> dict[str, str]:
     return {
         "q": request.args.get("q", "").strip(),
@@ -2147,68 +2122,6 @@ def request_history_query(
         ORDER BY {order_sql}
     """
     return sql, query_params
-
-
-def processed_history_query_parts(
-    where_clauses: list[str] | None = None,
-    params: list | None = None,
-    filters: dict[str, str] | None = None,
-) -> tuple[str, str, list]:
-    clauses = list(where_clauses or [])
-    query_params = list(params or [])
-    active_filters = filters or {}
-    clauses.append("sr.status = 'completed'")
-    if active_filters.get("q"):
-        clauses.append(
-            """
-            (
-                sr.request_no LIKE ? OR
-                COALESCE(sr.sample_ref, '') LIKE ? OR
-                sr.title LIKE ? OR
-                sr.sample_name LIKE ? OR
-                COALESCE(sr.description, '') LIKE ? OR
-                COALESCE(sr.receipt_number, '') LIKE ? OR
-                COALESCE(sr.finance_status, '') LIKE ? OR
-                COALESCE(sr.priority, '') LIKE ? OR
-                COALESCE(sr.remarks, '') LIKE ? OR
-                COALESCE(sr.results_summary, '') LIKE ? OR
-                COALESCE(i.name, '') LIKE ? OR
-                COALESCE(i.code, '') LIKE ? OR
-                COALESCE(r.name, '') LIKE ? OR
-                COALESCE(r.email, '') LIKE ? OR
-                COALESCE(c.name, '') LIKE ? OR
-                COALESCE(op.name, '') LIKE ?
-            )
-            """
-        )
-        token = f"%{active_filters['q']}%"
-        query_params.extend([token] * 16)
-    if active_filters.get("instrument_id"):
-        clauses.append("sr.instrument_id = ?")
-        query_params.append(int(active_filters["instrument_id"]))
-    if active_filters.get("operator_id"):
-        clauses.append("sr.assigned_operator_id = ?")
-        query_params.append(int(active_filters["operator_id"]))
-    if active_filters.get("requester_id"):
-        clauses.append("sr.requester_id = ?")
-        query_params.append(int(active_filters["requester_id"]))
-    if active_filters.get("date_from"):
-        clauses.append("substr(COALESCE(sr.completed_at, sr.created_at), 1, 10) >= ?")
-        query_params.append(active_filters["date_from"])
-    if active_filters.get("date_to"):
-        clauses.append("substr(COALESCE(sr.completed_at, sr.created_at), 1, 10) <= ?")
-        query_params.append(active_filters["date_to"])
-
-    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    from_sql = """
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        JOIN users r ON r.id = sr.requester_id
-        LEFT JOIN users c ON c.id = sr.created_by_user_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-    """
-    return from_sql, where_sql, query_params
 
 
 def stats_payload(user: sqlite3.Row | None = None, report_filters: dict[str, str] | None = None) -> dict:
@@ -5822,6 +5735,64 @@ def portfolio_log_order():
         return redirect(url_for("portfolio_panel"))
 
     flash(f"Logged {fund_tag} ₹{int(amount):,} @ NAV {nav:.4f} → {units} units", "success")
+    return redirect(url_for("portfolio_panel"))
+
+
+@app.route("/admin/portfolio/order/bulk", methods=["POST"])
+@owner_required
+def portfolio_log_orders_bulk():
+    """Log today's recommended amounts for the funds the user ticked.
+    Reads canonical amounts from daily_state.json and the latest NAV from
+    market_snapshot.json — never trusts client-supplied numbers."""
+    selected = request.form.getlist("fund_tag")
+    if not selected:
+        flash("No funds selected.", "warning")
+        return redirect(url_for("portfolio_panel"))
+
+    daily = _portfolio_load_json("daily_state.json") or {}
+    snap = _portfolio_load_json("market_snapshot.json") or {}
+    today_amounts = ((daily.get("today") or {}).get("per_fund") or {})
+    funds_meta = snap.get("funds", {})
+    tag_to_isin = {info.get("tag"): isin for isin, info in funds_meta.items() if info.get("tag")}
+    tag_to_nav = {info.get("tag"): float(info.get("last_nav") or 0) for info in funds_meta.values() if info.get("tag")}
+
+    today_iso = date.today().isoformat()
+    orders_path = PORTFOLIO_DIR / "orders.csv"
+    is_new = not orders_path.exists()
+    logged = 0
+    total_inr = 0
+    try:
+        orders_path.parent.mkdir(parents=True, exist_ok=True)
+        with orders_path.open("a", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=["date", "fund_tag", "isin", "amount_inr", "nav", "units", "note"])
+            if is_new:
+                w.writeheader()
+            for tag in selected:
+                amt = int(today_amounts.get(tag, 0) or 0)
+                if amt <= 0:
+                    continue
+                isin = tag_to_isin.get(tag, "")
+                nav = tag_to_nav.get(tag, 0.0)
+                units = round(amt / nav, 4) if nav else 0.0
+                w.writerow({
+                    "date": today_iso,
+                    "fund_tag": tag,
+                    "isin": isin,
+                    "amount_inr": amt,
+                    "nav": round(nav, 4),
+                    "units": units,
+                    "note": "from-recommendation",
+                })
+                logged += 1
+                total_inr += amt
+    except OSError as exc:
+        flash(f"Could not write orders.csv: {exc}", "error")
+        return redirect(url_for("portfolio_panel"))
+
+    if logged == 0:
+        flash("Selected funds had no recommended amount today (skip / 0).", "warning")
+    else:
+        flash(f"Logged {logged} order{'s' if logged != 1 else ''} totalling ₹{total_inr:,} from today's recommendation.", "success")
     return redirect(url_for("portfolio_panel"))
 
 

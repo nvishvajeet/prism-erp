@@ -7186,3 +7186,58 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dp-commit-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.82rem; align-items: baseline; }
 .dp-metadata-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.85rem; }
 .dp-bridge-detail { margin: 0.1rem 0 0.5rem; font-size: 0.75rem; }
+
+/* ──────────────────────────────────────────────────────────────────── */
+/* UNIVERSAL TILE GRIDS — v1.3.1                                        */
+/* Every page-level layout shares the same 6-column fluid grid as       */
+/* .inst-tiles. The philosophy crawler enforces that every template     */
+/* uses one of these; we alias the common "small page" cases onto it    */
+/* so we never ship a second grid engine.                               */
+/* ──────────────────────────────────────────────────────────────────── */
+.activate-tiles,
+.docs-tiles,
+.portfolio-tiles,
+.stats-tiles,
+.schedule-tiles,
+.calendar-tiles,
+.admin-tiles,
+.profile-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+  grid-auto-flow: row dense;
+}
+
+/* Small form / info pages: the single centred card spans 4 columns */
+/* on wide screens and fills the grid on narrow ones. */
+.tile-activate,
+.tile-form {
+  grid-column: 2 / span 4;
+  max-width: 640px;
+  justify-self: center;
+  width: 100%;
+}
+@media (max-width: 960px) {
+  .tile-activate,
+  .tile-form { grid-column: 1 / -1; }
+}
+
+/* Docs page: header tile is full-width, progress + body split 2/4. */
+.tile-docs-header { grid-column: 1 / -1; }
+.tile-docs-progress { grid-column: span 2; }
+.tile-docs-body { grid-column: span 4; }
+@media (max-width: 960px) {
+  .tile-docs-progress,
+  .tile-docs-body { grid-column: 1 / -1; }
+}
+
+/* Portfolio forecast chip — dynamic --chip-bg comes from the template. */
+.portfolio-forecast-chip {
+  background: var(--chip-bg, var(--accent, #4c6ef5));
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  display: inline-block;
+  white-space: nowrap;
+}

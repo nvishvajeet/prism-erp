@@ -32,9 +32,9 @@ from pathlib import Path
 from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
-EXEMPT_PREFIXES = ("_", "base.html", "error_", "login.html",
+EXEMPT_PREFIXES = ("_", "base.html", "error", "login.html",
                    "logout.html", "onboard", "accept_invite",
-                   "password_reset", "calendar_card")
+                   "password_reset", "calendar_card", "sitemap.html")
 
 DEPRECATED_CLASSES = [
     "grid-two", "grid-auto-stats", "stream-pill", "stream-filter-strip",
@@ -110,9 +110,13 @@ class PhilosophyStrategy(CrawlerStrategy):
                 result.details.append(f"{tpl.name}: inline overflow:auto")
 
             # Rule 4: hard-coded color literals
-            # Ignore colors inside <style> blocks that scope a local fix.
-            body_without_style = re.sub(r"<style[\s\S]*?</style>", "", text)
-            if HEX_COLOR_RE.search(body_without_style) or RGB_COLOR_RE.search(body_without_style):
+            # Ignore colors inside <style> blocks that scope a local fix,
+            # and inside <script> blocks (Chart.js palettes need literal
+            # hex codes to pass to the chart lib — CSS vars don't work
+            # through JS). Colors in Jinja attributes still count.
+            scrubbed = re.sub(r"<style[\s\S]*?</style>", "", text)
+            scrubbed = re.sub(r"<script[\s\S]*?</script>", "", scrubbed)
+            if HEX_COLOR_RE.search(scrubbed) or RGB_COLOR_RE.search(scrubbed):
                 result.warnings += 1
                 bump("hardcoded_color")
                 result.details.append(f"{tpl.name}: raw color literal outside <style>")

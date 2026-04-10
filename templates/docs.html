@@ -2,33 +2,37 @@
 {% from "_page_macros.html" import card_heading with context %}
 {% block content %}
 
-<section class="card" data-vis="{{ V }}">
-  {{ card_heading("PRISM", "Project Documentation") }}
-  <p class="hint" data-vis="{{ V }}">Live view of PROJECT.md — the complete system specification.</p>
-</section>
+<div class="docs-tiles" data-vis="{{ V }}">
 
-{% if progress_phases %}
-<section class="card" data-vis="{{ V }}">
-  {{ card_heading("", "Progress") }}
-  <div class="progress-grid" data-vis="{{ V }}">
-    {% for phase in progress_phases %}
-    <div class="progress-phase" data-vis="{{ V }}">
-      <div class="progress-phase-head" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">{{ phase.name }}</strong>
-        <span class="badge {% if phase.status == 'Done' %}badge-done{% elif phase.status == 'In Progress' %}badge-active{% else %}badge-planned{% endif %}" data-vis="{{ V }}">{{ phase.status }}</span>
+  <section class="card tile tile-info tile-docs-header" data-vis="{{ V }}">
+    {{ card_heading("PRISM", "Project Documentation") }}
+    <p class="hint" data-vis="{{ V }}">Live view of PROJECT.md — the complete system specification.</p>
+  </section>
+
+  {% if progress_phases %}
+  <section class="card tile tile-stats tile-docs-progress" data-vis="{{ V }}">
+    {{ card_heading("", "Progress") }}
+    <div class="progress-grid" data-vis="{{ V }}">
+      {% for phase in progress_phases %}
+      <div class="progress-phase" data-vis="{{ V }}">
+        <div class="progress-phase-head" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ phase.name }}</strong>
+          <span class="badge {% if phase.status == 'Done' %}badge-done{% elif phase.status == 'In Progress' %}badge-active{% else %}badge-planned{% endif %}" data-vis="{{ V }}">{{ phase.status }}</span>
+        </div>
+        <div class="progress-track" data-vis="{{ V }}">
+          <div class="progress-fill {% if phase.pct == 100 %}fill-done{% elif phase.pct > 0 %}fill-active{% endif %}" style="width: {{ phase.pct }}%;" data-vis="{{ V }}"></div>
+        </div>
+        <span class="progress-pct" data-vis="{{ V }}">{{ phase.pct }}%</span>
       </div>
-      <div class="progress-track" data-vis="{{ V }}">
-        <div class="progress-fill {% if phase.pct == 100 %}fill-done{% elif phase.pct > 0 %}fill-active{% endif %}" style="width: {{ phase.pct }}%;" data-vis="{{ V }}"></div>
-      </div>
-      <span class="progress-pct" data-vis="{{ V }}">{{ phase.pct }}%</span>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
+  </section>
+  {% endif %}
 
-<section class="card doc-body" data-vis="{{ V }}">
-  {{ project_html|safe }}
-</section>
+  <section class="card tile tile-info tile-docs-body doc-body" data-vis="{{ V }}">
+    {{ project_html|safe }}
+  </section>
+
+</div>
 
 {% endblock %}

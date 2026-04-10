@@ -80,10 +80,12 @@
 
 {# ─── Today's recommendation table + MTD bars ────────── #}
 <section class="card" data-vis="{{ V }}">
-  {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000)") }}
+  {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000) — tick what you bought") }}
+  <form method="post" action="{{ url_for('portfolio_log_orders_bulk') }}" id="todayBuyForm" data-vis="{{ V }}">
   <table data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}">
+        <th data-vis="{{ V }}" style="width:36px"><input type="checkbox" id="selectAllToday" title="Select all" data-vis="{{ V }}"></th>
         <th data-vis="{{ V }}">Fund</th>
         <th data-vis="{{ V }}" style="text-align:right">Today ₹</th>
         <th data-vis="{{ V }}" style="text-align:right">Spent (MTD)</th>
@@ -95,6 +97,11 @@
       {% for row in pf.mtd_progress %}
       {% set today = pf.daily.today.per_fund.get(row.tag, 0) %}
       <tr data-vis="{{ V }}">
+        <td data-vis="{{ V }}">
+          {% if today > 0 %}
+          <input type="checkbox" name="fund_tag" value="{{ row.tag }}" class="todayChk" data-vis="{{ V }}">
+          {% endif %}
+        </td>
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ row.label }}</strong></td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(today) }}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(row.spent) }}</td>
@@ -105,6 +112,7 @@
     </tbody>
     <tfoot data-vis="{{ V }}">
       <tr data-vis="{{ V }}">
+        <td data-vis="{{ V }}"></td>
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">Total</strong></td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(pf.daily.today.total or 0) }}</strong></td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(pf.mtd_progress | sum(attribute='spent')) }}</td>
@@ -113,7 +121,33 @@
       </tr>
     </tfoot>
   </table>
+  <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap" data-vis="{{ V }}">
+    <button type="submit" class="link-button" data-vis="{{ V }}">✓ Log selected as bought (today's amounts at latest NAV)</button>
+    <button type="button" class="link-button subtle" id="buyOneOfEach" data-vis="{{ V }}">✓✓ Buy one of each</button>
+    <span class="hint" style="align-self:center" data-vis="{{ V }}">
+      Each row uses today's recommendation amount + the latest NAV from the morning data refresh.
+    </span>
+  </div>
+  </form>
 </section>
+
+<script>
+(function () {
+  var all = document.getElementById('selectAllToday');
+  var chks = document.querySelectorAll('.todayChk');
+  if (all) all.addEventListener('change', function () {
+    chks.forEach(function (c) { c.checked = all.checked; });
+  });
+  var btn = document.getElementById('buyOneOfEach');
+  var form = document.getElementById('todayBuyForm');
+  if (btn && form) btn.addEventListener('click', function () {
+    chks.forEach(function (c) { c.checked = true; });
+    form.submit();
+  });
+})();
+// Auto-reload every 10 minutes so the page reflects the latest morning refresh.
+setTimeout(function () { window.location.reload(); }, 600000);
+</script>
 
 {# ─── Charts row: portfolio value + allocation doughnut ── #}
 <div class="inst-tiles" data-vis="{{ V }}">
@@ -156,7 +190,7 @@
         <td data-vis="{{ V }}">{{ f.date }}</td>
         <td data-vis="{{ V }}">{{ f.weekday }}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">{{ "%+.2f"|format(f.z_proj or 0) }}</td>
-        <td data-vis="{{ V }}"><span class="badge" style="background:{{ f.color }};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">{{ f.label }}</span></td>
+        <td data-vis="{{ V }}"><span class="badge portfolio-forecast-chip" style="--chip-bg: {{ f.color }}" data-vis="{{ V }}">{{ f.label }}</span></td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(f.total) }}</strong></td>
       </tr>
       {% endfor %}

@@ -7113,3 +7113,247 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   .request-tiles > .tile-request-files { grid-column: span 1; }
 }
 
+/* =========================================================================
+   W5.4 — DASHBOARD TILE ARCHITECTURE
+   Drops .grid-two + .instrument-carousel. Dashboard now lives on the same
+   6-column fluid grid as every other page. Metrics stack into half-row
+   tiles; quick-intake + instrument-queues span full width.
+   ========================================================================= */
+
+.dashboard-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 0 0.5rem;
+  align-items: start;
+}
+
+.dashboard-tiles > .tile {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-tiles > .tile-dash-quick-intake,
+.dashboard-tiles > .tile-dash-instrument-queues {
+  grid-column: span 6;
+}
+
+.dashboard-tiles .tile > .section-head {
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- .tile-dash-week / .tile-dash-month ---------------------------- */
+.tile-dash-week .chart-list,
+.tile-dash-month .chart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.tile-dash-week .kpi-grid,
+.tile-dash-month .kpi-grid {
+  margin-bottom: 0.5rem;
+}
+
+.tile-dash-week .section-collapse-btn,
+.tile-dash-month .section-collapse-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted, #6e6e76);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tile-dash-week .section-collapse-btn:hover,
+.tile-dash-month .section-collapse-btn:hover {
+  background: var(--surface-alt, #f5f5f7);
+  color: var(--ink, #1a1a1f);
+}
+
+/* ---------- .tile-dash-quick-intake --------------------------------------- */
+.tile-dash-quick-intake .quick-intake-search {
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+.tile-dash-quick-intake .quick-intake-search input {
+  width: 100%;
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+  font-size: 0.88rem;
+  background: var(--surface, #fff);
+  transition: border-color 120ms ease;
+}
+
+.tile-dash-quick-intake .quick-intake-search input:focus {
+  outline: none;
+  border-color: var(--ink, #1a1a1f);
+}
+
+.tile-dash-quick-intake .quick-intake-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tile-dash-quick-intake .quick-intake-table tbody td {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line-soft, #ececf0);
+}
+
+.tile-dash-quick-intake .quick-intake-block {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.tile-dash-quick-intake .quick-intake-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 14rem;
+}
+
+.tile-dash-quick-intake .quick-intake-content strong {
+  font-size: 0.88rem;
+  color: var(--ink, #1a1a1f);
+}
+
+.tile-dash-quick-intake .quick-intake-content span {
+  font-size: 0.8rem;
+  color: var(--muted, #6e6e76);
+}
+
+.tile-dash-quick-intake .quick-intake-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- .tile-dash-instrument-queues ---------------------------------- */
+.tile-dash-instrument-queues .dash-instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.tile-dash-instrument-queues .dash-instrument-card {
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.tile-dash-instrument-queues .dash-instrument-card-head strong {
+  font-size: 0.88rem;
+  color: var(--ink, #1a1a1f);
+}
+
+.tile-dash-instrument-queues .dash-instrument-queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.tile-dash-instrument-queues .dash-instrument-queue-table thead th {
+  text-align: left;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted, #6e6e76);
+  font-weight: 600;
+  padding: 0.35rem 0.35rem 0.3rem 0;
+  border-bottom: 1px solid var(--line, #e4e4e9);
+}
+
+.tile-dash-instrument-queues .dash-instrument-queue-table tbody td {
+  padding: 0.4rem 0.35rem 0.4rem 0;
+  border-bottom: 1px solid var(--line-soft, #ececf0);
+  vertical-align: top;
+}
+
+.tile-dash-instrument-queues .dash-instrument-queue-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tile-dash-instrument-queues .dash-instrument-queue-table tr.overflow-indicator td {
+  padding-top: 0.45rem;
+  text-align: right;
+  font-size: 0.72rem;
+}
+
+.tile-dash-instrument-queues .dash-instrument-overflow {
+  margin-top: 0.85rem;
+  text-align: right;
+  font-size: 0.78rem;
+}
+
+/* ---------- .tile-dash-downtime ------------------------------------------- */
+.tile-dash-downtime .downtime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tile-dash-downtime .downtime-item {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.55rem;
+  background: var(--surface-alt, #f5f5f7);
+}
+
+.tile-dash-downtime .downtime-dates {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.82rem;
+  color: var(--ink, #1a1a1f);
+  flex-wrap: wrap;
+}
+
+.tile-dash-downtime .downtime-dates strong {
+  color: var(--ink, #1a1a1f);
+}
+
+/* ---------- .tile-dash-your-jobs ------------------------------------------ */
+.tile-dash-your-jobs .link-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-tiles { grid-template-columns: repeat(4, 1fr); }
+  .dashboard-tiles > .tile { grid-column: span 2; }
+  .dashboard-tiles > .tile-dash-quick-intake,
+  .dashboard-tiles > .tile-dash-instrument-queues { grid-column: span 4; }
+  .tile-dash-instrument-queues .dash-instrument-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .dashboard-tiles { grid-template-columns: 1fr; padding: 0; }
+  .dashboard-tiles > .tile,
+  .dashboard-tiles > .tile-dash-quick-intake,
+  .dashboard-tiles > .tile-dash-instrument-queues { grid-column: span 1; }
+  .tile-dash-instrument-queues .dash-instrument-grid { grid-template-columns: 1fr; }
+  .tile-dash-quick-intake .quick-intake-block { flex-direction: column; align-items: flex-start; }
+}
+

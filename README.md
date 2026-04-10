@@ -19,19 +19,19 @@ edits, XL = multi-session rewrite with template + handler refactor.
 No hour estimates; the surprise budget for each page varies too much.
 
 ```
-Phase 5 overall   █████████░░░░░░░░░░░░░░░░░░░   3 / 7  waves   ( W5.1 · W5.2 · W5.3 )
-Solo waves        ████████████░░░░░░░░░░░░░░░░   3 / 6  ( W5.7 rolls alongside )
+Phase 5 overall   ████████████░░░░░░░░░░░░░░░░   4 / 7  waves   ( W5.1 · W5.2 · W5.3 · W5.4 )
+Solo waves        ████████████████░░░░░░░░░░░░   4 / 6  ( W5.7 rolls alongside )
 ```
 
 | Step | Scope | Effort | Progress | State |
 |---|---|---|---|---|
 | W5.1 | Shared widget macros (8 primitives + CSS) | M | `██████████` | **Done** (24f4308) |
 | W5.2 | `schedule.html` tile conversion + bulk-actions tile | L | `██████████` | **Done** (ac8d7c9) |
-| W5.3 | `request_detail.html` tile conversion | XL | `██████████` | **Done** |
-| W5.4 | `dashboard.html` tile conversion | L | `░░░░░░░░░░` | Next |
-| W5.5 | `stats.html` tile conversion | M | `░░░░░░░░░░` | Not started |
+| W5.3 | `request_detail.html` tile conversion | XL | `██████████` | **Done** (2603cd1) |
+| W5.4 | `dashboard.html` tile conversion | L | `██████████` | **Done** |
+| W5.5 | `stats.html` tile conversion | M | `░░░░░░░░░░` | Next |
 | W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | `░░░░░░░░░░` | Not started |
-| W5.7 | CSS hygiene pass (retire legacy class families) | M | `███░░░░░░░` | Rolling (alongside W5.2–W5.6) |
+| W5.7 | CSS hygiene pass (retire legacy class families) | M | `████░░░░░░` | Rolling (alongside W5.2–W5.6) |
 
 **Sizing rationale:**
 - **W5.2 (L)** — highest-touch page; swaps monolithic 7-col table for
@@ -83,6 +83,17 @@ Solo waves        ████████████░░░░░░░░�
 - [x] Activity tile uses `.activity-feed` / `.activity-entry-threaded` — chat-style left/right alignment replaces the old `.event-left` / `.event-right` / `.event-center` triple
 - [x] Empty-state macro replaces the bare "No events." fallback
 - [x] `input_dialog` reply composer kept verbatim inside the activity tile
+- [x] Crawls green (visibility audit clean, populate crawl clean)
+
+**W5.4 deliverables** (`templates/dashboard.html`):
+
+- [x] Six tiles on `.dashboard-tiles` 6-col grid: week / month / quick-intake / instrument-queues / downtime / your-jobs
+- [x] Killed `.grid-two` — metrics tiles now compose into the same fluid grid as every other page
+- [x] Killed `.instrument-carousel` — replaced with a `.dash-instrument-grid` of up to 9 inline mini-queue cards that reflow to 3 / 2 / 1 cols
+- [x] `kpi_grid(variant='dense')` adopted for both week + month counter clusters — retires `.stats.compact-stats`
+- [x] `queue_action_stack` adopted for the Quick Intake accept+assign forms — kills the two ad-hoc inline forms in the intake row
+- [x] Latent bug fix: the quick-intake search JS was targeting `#quickIntakeList` (never existed) and `.quick-intake-item` (class never emitted) — the filter was a no-op on every dashboard load. Now targets `#quickIntakeBody` + `[data-pane-item]` and refreshes the paginated pane on input.
+- [x] Collapse persistence (Hide/Show week+month) survives the refactor — buttons still carry `data-collapse-id` and the collapse script is untouched
 - [x] Crawls green (visibility audit clean, populate crawl clean)
 
 After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB

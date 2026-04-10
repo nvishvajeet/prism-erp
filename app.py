@@ -2738,6 +2738,46 @@ def owner_required(view):
     return wrapped
 
 
+def instrument_access_required(level: str = "view"):
+    """Validate `instrument_id` URL param, fetch the instrument, gate access.
+
+    Levels:
+      view    — `can_view_instrument_history` (read-only stats / history)
+      open    — `can_open_instrument_detail`  (open the detail page)
+      manage  — `can_manage_instrument`       (edit settings, downtime)
+      operate — `can_operate_instrument`      (act on requests)
+
+    On success the wrapped view receives an additional `instrument`
+    keyword argument so it does not need to re-query.
+
+    404 if the instrument does not exist; 403 if the user lacks the
+    requested level. Must be applied AFTER `@login_required`.
+    """
+    def decorator(view):
+        @wraps(view)
+        def wrapped(instrument_id: int, **kwargs):
+            user = current_user()
+            instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
+            if instrument is None:
+                abort(404)
+            if level == "view":
+                allowed = can_view_instrument_history(user, instrument_id)
+            elif level == "open":
+                allowed = can_open_instrument_detail(user, instrument_id)
+            elif level == "manage":
+                allowed = can_manage_instrument(user["id"], instrument_id, user["role"])
+            elif level == "operate":
+                allowed = can_operate_instrument(user["id"], instrument_id, user["role"])
+            else:
+                raise ValueError(f"Unknown instrument access level: {level}")
+            if not allowed:
+                abort(403)
+            kwargs["instrument"] = instrument
+            return view(instrument_id=instrument_id, **kwargs)
+        return wrapped
+    return decorator
+
+
 def can_manage_instrument(user_id: int, instrument_id: int, role: str) -> bool:
     if role in {"super_admin", "site_admin"}:
         return True
@@ -5863,13 +5903,8 @@ def user_history(user_id: int):
 
 @app.route("/instruments/<int:instrument_id>/history")
 @login_required
-def instrument_history(instrument_id: int):
-    user = current_user()
-    instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
-    if instrument is None:
-        abort(404)
-    if not can_view_instrument_history(user, instrument_id):
-        abort(403)
+@instrument_access_required("view")
+def instrument_history(instrument_id: int, instrument):
     args = request.args.to_dict()
     args["instrument_id"] = str(instrument_id)
     args["source_label"] = instrument["name"]
@@ -6084,7 +6119,8 @@ def calendar_events():
 
 @app.route("/instruments/<int:instrument_id>/calendar")
 @login_required
-def instrument_calendar(instrument_id: int):
+@instrument_access_required("view")
+def instrument_calendar(instrument_id: int, instrument):
     return redirect(url_for("calendar", instrument_id=instrument_id))
 
 
@@ -6253,13 +6289,9 @@ def visualizations():
 
 @app.route("/visualizations/instrument/<int:instrument_id>")
 @login_required
-def instrument_visualization(instrument_id: int):
+@instrument_access_required("view")
+def instrument_visualization(instrument_id: int, instrument):
     user = current_user()
-    if not can_view_instrument_history(user, instrument_id) and user["role"] != "super_admin":
-        abort(403)
-    instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
-    if instrument is None:
-        abort(404)
     report_filters = report_filter_values()
     stats = stats_payload_for_scope(user, report_filters, instrument_id=instrument_id)
     return render_template(

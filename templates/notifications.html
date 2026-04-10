@@ -7,18 +7,16 @@
 {% if audit_logs %}
 <section class="card" data-vis="{{ V }}">
   {% call paginated_pane('notifList', max_height='none', page_size=15) %}
-  <div class="event-stream-list" data-vis="{{ V }}">
+  <div class="activity-feed" data-vis="{{ V }}">
     {% for e in audit_logs %}
-    <article class="event-item event-center" data-pane-item data-vis="{{ V }}">
-      <div class="event-card" data-vis="{{ V }}">
-        <div class="message-meta" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ e["action"].replace("_"," ").title() }}</strong>
-          <span data-vis="{{ V }}">{{ format_dt(e["created_at"]) }}</span>
-        </div>
-        {% if e["actor_name"] %}<p class="hint" data-vis="{{ V }}">{{ e["actor_name"] }}</p>{% endif %}
-        {% if e["entity_type"] == "sample_request" %}<a class="text-link" href="{{ url_for('request_detail', request_id=e['entity_id']) }}" data-vis="{{ V }}">Request #{{ e["entity_id"] }}</a>{% endif %}
+    <div class="activity-entry" data-pane-item data-vis="{{ V }}">
+      <div class="activity-meta" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ e["action"].replace("_"," ").title() }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ format_dt(e["created_at"]) }}</span>
       </div>
-    </article>
+      {% if e["actor_name"] %}<p class="hint" data-vis="{{ V }}">{{ e["actor_name"] }}</p>{% endif %}
+      {% if e["entity_type"] == "sample_request" %}<a class="text-link" href="{{ url_for('request_detail', request_id=e['entity_id']) }}" data-vis="{{ V }}">Request #{{ e["entity_id"] }}</a>{% endif %}
+    </div>
     {% endfor %}
   </div>
   {% endcall %}

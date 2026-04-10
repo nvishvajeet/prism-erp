@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <a class="page-back" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Back to Instrument</a>
-<div class="page-title-bar" data-vis="{{ V }}">
-  <h1 class="page-title" data-vis="{{ V }}">Configure {{ instrument["name"] }}</h1>
-</div>
+<h1 class="config-page-title" data-vis="{{ V }}">Configure {{ instrument["name"] }}</h1>
 
 <section class="config-grid" data-vis="super_admin site_admin instrument_admin operator">
   <div class="card" data-vis="{{ V }}">
@@ -75,6 +73,7 @@
 </section>
 
 <style>
+  .config-page-title { font-size: 1.5rem; margin: 0.5rem 0 1rem 0; }
   .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
   .approval-config-row { display: grid; grid-template-columns: 30px 1fr 1fr; gap: 10px; align-items: center; margin-bottom: 8px; }
   .step-num { font-weight: 800; opacity: 0.5; }

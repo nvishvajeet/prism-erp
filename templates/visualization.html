@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import page_intro, card_heading, chart_bar with context %}
+{% from "_page_macros.html" import page_intro, card_heading, chart_bar, kpi_grid with context %}
 {% block hover_back %}
   {% if scope_kind == 'instrument' and current_instrument %}
   <a href="{{ url_for('instrument_detail', instrument_id=current_instrument['id']) }}" class="hover-back-btn" title="Back to Instrument">←</a>
@@ -20,8 +20,8 @@
   {% endif %}
 {% endcall %}
 
-<section class="grid-two" data-vis="{{ V }}">
-  <div class="card" data-vis="{{ V }}">
+<section class="viz-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-viz-filters" data-vis="{{ V }}">
     {{ card_heading("", "Filters") }}
     <form method="get" class="form-grid filters-grid" data-vis="{{ V }}">
       {% if scope_kind == 'global' and instrument_selector_enabled %}
@@ -56,9 +56,9 @@
       </label>
       <button type="submit" data-vis="{{ V }}">Apply</button>
     </form>
-  </div>
+  </article>
 
-  <div class="card" data-vis="{{ V }}">
+  <article class="card tile tile-viz-export" data-vis="{{ V }}">
     {{ card_heading("", "Export") }}
     <form method="post" action="{{ url_for(export_endpoint) }}" class="action-form" data-vis="{{ V }}">
       <input type="hidden" name="horizon" value="{{ report_filters.horizon }}">
@@ -72,20 +72,21 @@
       {% endif %}
       <button type="submit" data-vis="{{ V }}">Download Data Sheet</button>
     </form>
-  </div>
-</section>
+  </article>
 
-<section class="stats" data-vis="{{ V }}">
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.this_week_jobs }}</span><small data-vis="{{ V }}">This Week Jobs</small></div>
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.this_week_samples }}</span><small data-vis="{{ V }}">This Week Samples</small></div>
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.last_week_jobs }}</span><small data-vis="{{ V }}">Last Week Jobs</small></div>
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.month_to_date_jobs }}</span><small data-vis="{{ V }}">Month-To-Date Jobs</small></div>
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.avg_jobs_per_week }}</span><small data-vis="{{ V }}">Avg Jobs / Week</small></div>
-  <div class="stat" data-vis="{{ V }}"><span data-vis="{{ V }}">{{ stats.summary.avg_samples_per_week }}</span><small data-vis="{{ V }}">Avg Samples / Week</small></div>
-</section>
+  <article class="card tile tile-viz-kpis" data-vis="{{ V }}">
+    {{ card_heading("", "Summary") }}
+    {{ kpi_grid([
+      {'value': stats.summary.this_week_jobs, 'label': 'This Week Jobs'},
+      {'value': stats.summary.this_week_samples, 'label': 'This Week Samples'},
+      {'value': stats.summary.last_week_jobs, 'label': 'Last Week Jobs'},
+      {'value': stats.summary.month_to_date_jobs, 'label': 'Month-To-Date Jobs'},
+      {'value': stats.summary.avg_jobs_per_week, 'label': 'Avg Jobs / Week'},
+      {'value': stats.summary.avg_samples_per_week, 'label': 'Avg Samples / Week'},
+    ], variant='dense') }}
+  </article>
 
-<section class="grid-two" data-vis="{{ V }}">
-  <div class="card" data-vis="{{ V }}">
+  <article class="card tile tile-viz-daily" data-vis="{{ V }}">
     <h2 data-vis="{{ V }}">Daily Throughput</h2>
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in daily_chart %}
@@ -94,9 +95,9 @@
       <p class="hint" data-vis="{{ V }}">No data.</p>
       {% endfor %}
     </div>
-  </div>
+  </article>
 
-  <div class="card" data-vis="{{ V }}">
+  <article class="card tile tile-viz-monthly" data-vis="{{ V }}">
     <h2 data-vis="{{ V }}">Monthly Samples</h2>
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in monthly_chart %}
@@ -111,17 +112,11 @@
       <p class="hint" data-vis="{{ V }}">No data.</p>
       {% endfor %}
     </div>
-  </div>
-</section>
+  </article>
 
-{% if scope_kind != 'instrument' %}
-<section class="grid-two" data-vis="{{ V }}">
-  <div class="card" data-vis="{{ V }}">
-    <div class="section-head" data-vis="{{ V }}">
-      <div data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">By Instrument</h2>
-      </div>
-    </div>
+  {% if scope_kind != 'instrument' %}
+  <article class="card tile tile-viz-by-instrument" data-vis="{{ V }}">
+    {{ card_heading("", "By Instrument") }}
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in instrument_chart %}
       <div class="chart-row" data-vis="{{ V }}">
@@ -135,14 +130,10 @@
       <p class="hint" data-vis="{{ V }}">No data.</p>
       {% endfor %}
     </div>
-  </div>
+  </article>
 
-  <div class="card" data-vis="{{ V }}">
-    <div class="section-head" data-vis="{{ V }}">
-      <div data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">By Group</h2>
-      </div>
-    </div>
+  <article class="card tile tile-viz-by-group" data-vis="{{ V }}">
+    {{ card_heading("", "By Group") }}
     <div class="chart-list" data-vis="{{ V }}">
       {% for row in group_chart %}
       <div class="chart-row" data-vis="{{ V }}">
@@ -163,12 +154,10 @@
       <p class="hint" data-vis="{{ V }}">No data.</p>
       {% endfor %}
     </div>
-  </div>
-</section>
-{% endif %}
+  </article>
+  {% endif %}
 
-<section class="grid-two" data-vis="{{ V }}">
-  <div class="card" data-vis="{{ V }}">
+  <article class="card tile tile-viz-weekly-table" data-vis="{{ V }}">
     <h2 data-vis="{{ V }}">Weekly Table</h2>
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Week</th><th data-vis="{{ V }}">Jobs</th><th data-vis="{{ V }}">Samples</th></tr></thead>
@@ -180,9 +169,9 @@
       {% endfor %}
       </tbody>
     </table>
-  </div>
+  </article>
 
-  <div class="card" data-vis="{{ V }}">
+  <article class="card tile tile-viz-instrument-table" data-vis="{{ V }}">
     <h2 data-vis="{{ V }}">Instrument Table</h2>
     <table data-vis="{{ V }}">
       <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Total</th><th data-vis="{{ V }}">Completed</th><th data-vis="{{ V }}">Samples</th></tr></thead>
@@ -205,6 +194,7 @@
       {% endfor %}
       </tbody>
     </table>
-  </div>
+  </article>
+
 </section>
 {% endblock %}

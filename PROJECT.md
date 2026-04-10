@@ -1,46 +1,53 @@
-# Lab Scheduler — Project Specification
+# PRISM — Architecture Specification
 
-<!-- ============================================================
-     PROJECT.md — Lab Scheduler
-     ============================================================
+A request-tracking and operator-workflow system for MIT-WPU's
+Department of Research & Development. One Python process, one
+SQLite database, browser-based interface.
 
-     AI AGENT CONSTRAINT:
-     You MUST update this file before and after every job.
+This file is the **current architecture spec** — what the system
+*is*, not how it got here. Read `README.md` for progress / phase
+status, `TODO_AI.txt` for the active plan, `git log` for the
+history. The roadmap doesn't live here anymore.
 
-     BEFORE you start:
-      1. Read this file.
-      2. Add a CHANGELOG entry: date, agent, intent.
-         Status: STARTED
-      3. Commit this file.
-
-     AFTER you finish:
-      1. Update your CHANGELOG entry with what changed.
-         Status: COMPLETED
-      2. If architecture changed, update that section.
-      3. Update the Roadmap section.
-      4. Commit this file with your code. Push.
-
-     Use Git. Always push: git push origin master
-     Commit with: Co-Authored-By: <Name> <email>
-     Never force-push. Never rewrite history.
-     ============================================================
--->
-
-A request-tracking and operator-workflow system for a shared instrument facility on a local network. One Python process, one SQLite database, browser-based interface.
-
-**This file is the single authoritative reference for the project.** A competent developer reading only this file must be able to reconstruct a functionally identical system.
+A competent developer reading this file alongside `app.py` should
+be able to understand every architectural decision.
 
 ---
 
 ## 1. Philosophy
 
-**The Request Card.** Every sample request is a card. The card is created when a requester submits a job and accumulates all data over its lifetime: approvals, notes, files, operator actions, timestamps, results. Nothing is stored separately — the card is the single source of truth for that job.
+**The Request Card.** Every sample request is a card. The card is
+created when a requester submits a job and accumulates all data over
+its lifetime: approvals, notes, files, operator actions, timestamps,
+results. Nothing is stored separately — the card is the single
+source of truth for that job.
 
-**Sliced visibility.** The same cards form a single queue. Every page on the site is a filtered, role-appropriate slice of that queue. The Queue page (`/schedule`) is the canonical view; the Home dashboard, Instrument detail, Calendar, and Statistics pages are derived views. There is no data duplication between pages.
+**Sliced visibility.** The same cards form a single queue. Every
+page on the site is a filtered, role-appropriate slice of that
+queue. The Queue page (`/schedule`) is the canonical view; the Home
+dashboard, Instrument detail, Calendar, and Statistics pages are
+derived views. There is no data duplication between pages.
 
-**Blobs within blobs.** Every visual element on a page is a panel (blob). Panels contain sub-panels. Each panel has a role-visibility attribute: if the user's role is not in the panel's allowed set, the panel is not rendered. This applies uniformly to every element — page sections, card fields, action buttons, navigation items. There are no exposed hyperlinks; navigation is through buttons and panel actions.
+**Tiles, not pages.** Each concern is a self-contained widget tile
+on a fluid grid. No mixed concerns inside one card. Reference
+implementation: `templates/instrument_detail.html` — 10 tiles on a
+6-column grid. Match its rhythm everywhere.
 
-**LAN-first.** This is a lightweight internal tool. It runs on a single machine on the local network. There is no cloud dependency, no external authentication provider, no CDN. The design favours simplicity and maintainability.
+**Pagination, never scroll.** Long lists use the `paginated_pane`
+macro. No `overflow: auto` inside content panes.
+
+**Macros over markup.** If a pattern shows up twice, it becomes a
+macro. Templates compose; they do not duplicate. The 8 widget
+macros in `_page_macros.html` are the canonical building blocks.
+
+**Visibility is sliced server-side first.** `data-vis` is a safety
+net for the visual layer, not the security gate. The server never
+returns data the user is not authorised to see.
+
+**LAN-first.** This is a lightweight internal tool. It runs on a
+single machine on the local network. There is no cloud dependency,
+no external authentication provider, no CDN. The design favours
+simplicity and maintainability.
 
 ---
 
@@ -48,84 +55,80 @@ A request-tracking and operator-workflow system for a shared instrument facility
 
 | Component   | Choice                                  |
 |-------------|-----------------------------------------|
-| Language    | Python 3.10+                            |
-| Framework   | Flask (single file: `app.py`)           |
+| Language    | Python 3.9+ (tested on 3.9.6 and 3.14)  |
+| Framework   | Flask 3.1 + Flask-WTF (CSRF)            |
 | Database    | SQLite (`lab_scheduler.db`, git-ignored) |
-| Templates   | Jinja2                                  |
+| Templates   | Jinja2 with auto-escape                  |
 | Styles      | Single CSS file (`static/styles.css`)   |
-| JavaScript  | Vanilla JS, FullCalendar for calendar   |
+| JavaScript  | Vanilla JS, FullCalendar, Chart.js      |
 | Server      | Flask dev server, port 5055             |
+| Excel I/O   | openpyxl                                 |
 
-No external Python packages beyond Flask and its dependencies. No build step. No bundler. No transpiler.
+No build step. No bundler. No transpiler. Dependencies in
+`requirements.txt`; install via `venv/bin/pip install -r requirements.txt`.
 
 ---
 
-## 3. User Roles (9 roles total)
+## 3. User Roles
 
-Roles are assigned per user. Owners (determined by `OWNER_EMAILS` env var) bypass all restrictions and have full access.
+Roles are hierarchical. A higher role inherits all capabilities of
+lower roles unless otherwise noted.
 
-| Role | Scope | Key Permissions |
-|------|-------|-----------------|
-| `requester` | Own requests | Submit requests, view own cards, reply, upload attachments, mark sample submitted |
-| `finance_admin` | All requests (finance only) | View all requests, access instruments, stats, calendar; approve/reject finance steps; view finance_data |
-| `professor_approver` | All requests | View all requests, all instruments; approve/reject professor steps; view requester/operator identity |
-| `faculty_in_charge` | Assigned instruments | View own instrument queue only; reply, upload; view profiles; no approval actions |
-| `operator` | Assigned instruments | View own queue; mark received, reassign, finish jobs, update status; no view-all |
-| `instrument_admin` | Assigned instruments | Manage instrument config; view own queue; all operator actions + update_status |
-| `site_admin` | All requests + instruments | Full operational access (view all, all actions); no user management |
-| `super_admin` | All | Full access including user creation, member elevation, role switching |
-| `owner` | All | Full system access, determined by OWNER_EMAILS env var (not a database role) |
+| Role                  | Scope                | Purpose                                                       |
+|-----------------------|----------------------|---------------------------------------------------------------|
+| `requester`           | Own cards            | Submit requests, track own jobs                               |
+| `finance_admin`       | Finance steps        | Approve / reject finance approval steps                       |
+| `professor_approver`  | All cards            | Approve / reject faculty approval steps                       |
+| `faculty_in_charge`   | Assigned instruments | Faculty oversight of specific instruments (junction table)    |
+| `operator`            | Assigned instruments | Run instruments, receive samples, complete jobs               |
+| `instrument_admin`    | Assigned instruments | Manage instrument settings, operators, approval chains        |
+| `site_admin`          | All                  | Full operational access; cannot create users                  |
+| `super_admin`         | All                  | Full access including user management                         |
 
-### Permission Matrix (derived from ROLE_ACCESS_PRESETS)
+Owner status is determined by email match against the `OWNER_EMAILS`
+environment variable, not by role. Owners bypass all restrictions.
 
-| Capability | requester | finance | professor | faculty | operator | inst_admin | site_admin | super_admin |
-|------------|-----------|---------|-----------|---------|----------|------------|-----------|------------|
-| Access Instruments page | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Access Schedule/Queue | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Access Calendar | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Access Stats | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Manage members | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
-| Use role switcher | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
-| View all requests | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| View all instruments | ✗ | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| View user profiles | ✗ | ✗ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| View finance stage | ✗ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| View professor stage | ✗ | ✗ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ |
-| Card visible fields | Remarks, Results, Docs, Conversation, Events, Requester, Operator | Remarks, Docs, Conv, Events, Requester, Finance | Remarks, Results, Docs, Conv, Events, Requester, Operator | Remarks, Results, Docs, Conv, Events, Requester, Operator | Remarks, Results, Docs, Conv, Events, Requester, Operator | Remarks, Results, Docs, Conv, Events, Requester, Operator | Remarks, Results, Docs, Conv, Events, Requester, Operator | Remarks, Results, Docs, Conv, Events, Requester, Operator |
-| Card actions | Reply, Upload, Mark Submitted | Reply, Upload | Reply, Upload | Reply, Upload | Reply, Upload, Finish Fast, Reassign, Mark Received | Reply, Upload, Finish Fast, Reassign, Mark Received, Update Status | Reply, Upload, Finish Fast, Reassign, Mark Received, Update Status | Reply, Upload, Finish Fast, Reassign, Mark Received, Update Status |
+### Visibility surface
 
-### Visibility Matrix
+Two layers, both load-bearing:
 
-Every UI element checks the user's role before rendering. The `card_policy` object (computed per request, per user) contains two sets:
+- **Server-side** — `request_card_policy()` returns `fields` and
+  `actions` sets per (user, request) pair. The handler never returns
+  data the user is not authorised to see. `request_scope_sql()`
+  returns `(clauses, params)` to filter queries by role.
+- **Client-side** — every visible HTML element carries
+  `data-vis="{{ V }}"`. JS hides the element on page load if the
+  user's role is not in the list. Tested by the visibility audit
+  (`crawlers/strategies/visibility.py`), 171/171 baseline.
 
-- `card_policy.fields` — which data fields are visible (instrument, requester identity, operator identity, remarks, results, events, conversation, submitted documents, finance details).
-
-- `card_policy.actions` — which action buttons are shown (approve, reject, mark submitted, mark received, schedule, complete, reassign, upload, reply, flag issue, update status).
-
-The `user_access_profile()` function returns a dict of boolean capabilities used by templates to show/hide navigation items, page sections, and dashboard widgets.
-
-For detailed role-to-page mapping, see ROLE_VISIBILITY_MATRIX.md.
+`user_access_profile(user)` returns a dict of boolean capabilities
+that templates use to show/hide nav items, page sections, and
+dashboard widgets.
 
 ---
 
 ## 4. Request Lifecycle
 
-A card moves through these statuses in order. Each transition is logged in the immutable audit trail.
+A card moves through these statuses in order. Each transition is
+guarded by `assert_status_transition(current, target)` and logged
+in the immutable audit trail.
 
 ```
 submitted
   │  (instrument accepting → auto-create approval chain)
   ▼
 under_review
-  │  Finance approves → Professor approves → Operator approves
-  │  (any rejection → rejected)
+  │  Finance → Professor → Operator (each approval_step in turn)
+  │  Any rejection → rejected
   ▼
 awaiting_sample_submission
   │  Requester marks physical sample delivered
-  ▼
-sample_submitted
-  │  Operator confirms receipt
-  ▼
+  ▼  ────────────────────────┐
+sample_submitted              │  (operator quick-receive
+  │                           │   fast-track)
+  │  Operator confirms        │
+  │  receipt                  │
+  ▼  ◄───────────────────────┘
 sample_received
   │  Operator assigns schedule time
   ▼
@@ -135,651 +138,510 @@ scheduled
 in_progress
   │  Operator completes with results
   ▼
-completed  (record locked)
+completed (record locked, completion_locked = 1)
 
-rejected   (terminal — any approval step rejection)
+rejected   (terminal — any approval rejection or manager override)
+cancelled  (terminal — requester withdrawal before sample-received)
 ```
+
+### State machine — `REQUEST_STATUS_TRANSITIONS`
+
+The dict in `app.py` is the single source of truth for legal moves.
+Every site that mutates `sample_requests.status` calls
+`assert_status_transition()` first. Admin overrides
+(`admin_schedule_override`, `admin_complete_override`,
+manager `reject`) pass `force=True` to bypass the check.
+
+Same-status writes (e.g. re-scheduling at a different time, still
+`scheduled`) are idempotent.
+
+`InvalidStatusTransition` is registered as a Flask error handler
+that turns the exception into a flash + redirect to the referrer.
 
 ### Approval Chain
 
-Default sequence: Finance → Professor → Operator. Configurable per instrument via `instrument_approval_config`. Steps execute in strict order. A step cannot be actioned until all prior steps are approved.
+Default sequence: Finance → Professor → Operator. Configurable per
+instrument via `instrument_approval_config`. Steps execute in
+strict order; a step cannot be actioned until all prior steps are
+approved. The chain is created by `create_approval_chain()` when a
+request enters `under_review`.
 
 ---
 
 ## 5. Database Schema
 
-15 tables. All have foreign key enforcement.
+15 tables. Foreign keys are enforced (`PRAGMA foreign_keys = ON`).
+22 indexes cover the hot query paths (status filters, instrument
+scoping, approval step joins, audit log entity scans, attachment
+filters, junction lookups).
 
-### users
-`id` (PK), `name`, `email` (UNIQUE), `password_hash`, `role`, `invited_by`, `invite_status` (active|invited), `active` (0|1), `member_code`.
+### `users`
+`id`, `name`, `email` (unique), `password_hash`, `role`, `invited_by`,
+`invite_status` (`active` | `invited`), `active` (0|1), `member_code`.
 
-### instruments
-`id` (PK), `name`, `code` (UNIQUE), `category`, `location`, `daily_capacity`, `status` (active|archived), `notes`, `office_info`, `faculty_group`, `manufacturer`, `model_number`, `capabilities_summary`, `machine_photo_url`, `reference_links`, `instrument_description`, `accepting_requests` (0|1), `soft_accept_enabled` (0|1).
+### `instruments`
+`id`, `name`, `code` (unique), `category`, `location`,
+`daily_capacity`, `status` (`active` | `archived`), `notes`,
+`office_info`, `faculty_group`, `manufacturer`, `model_number`,
+`capabilities_summary`, `machine_photo_url`, `reference_links`,
+`instrument_description`, `accepting_requests` (0|1),
+`soft_accept_enabled` (0|1).
 
-### instrument_admins
-`user_id`, `instrument_id`. Primary key (user_id, instrument_id). Junction table for admin assignments. Foreign keys on both sides with CASCADE delete.
+### `instrument_admins`, `instrument_operators`, `instrument_faculty_admins`
+Junction tables. `(user_id, instrument_id)` primary key on each.
+`assigned_instrument_ids(user)` reads all three with a `UNION`,
+result cached in Flask `g` per request.
 
-### instrument_operators
-`user_id`, `instrument_id`. Primary key (user_id, instrument_id). Junction table for operator assignments. Foreign keys on both sides with CASCADE delete.
+### `sample_requests`
+The big one — 30+ columns. Every captured field about a request:
+identifiers (`request_no`, `sample_ref`), people (`requester_id`,
+`created_by_user_id`, `received_by_operator_id`,
+`assigned_operator_id`), classification (`title`, `sample_name`,
+`sample_count`, `sample_origin` internal/external, `material`,
+`sample_nature`, `safety_flag`, `data_format`, `guide_name`),
+finance (`receipt_number`, `amount_due`, `amount_paid`,
+`finance_status`), workflow state (`status`, `priority`,
+`completion_locked`, the 5 timestamp columns from
+`submitted_to_lab_at` through `completed_at`), and free-text
+(`description`, `originator_note`, `sample_dropoff_note`, `remarks`,
+`results_summary`).
 
-### instrument_faculty_admins
-`user_id`, `instrument_id`. Primary key (user_id, instrument_id). Junction table for faculty oversight. Foreign keys on both sides with CASCADE delete.
+### `approval_steps`
+`id`, `sample_request_id`, `step_order`, `approver_role`
+(`finance` | `professor` | `operator`), `approver_user_id`,
+`status` (`pending` | `approved` | `rejected`), `remarks`, `acted_at`.
 
-### sample_requests
-`id` (PK), `request_no` (UNIQUE), `sample_ref` (UNIQUE), `requester_id` (FK users), `created_by_user_id` (FK users), `originator_note`, `instrument_id` (FK instruments), `title`, `sample_name`, `sample_count`, `description`, `sample_origin` (internal|external), `receipt_number`, `amount_due` (REAL), `amount_paid` (REAL), `finance_status`, `priority` (normal|urgent), `status`, `submitted_to_lab_at`, `sample_submitted_at`, `sample_received_at`, `sample_dropoff_note`, `received_by_operator_id` (FK users), `assigned_operator_id` (FK users), `scheduled_for`, `remarks`, `results_summary`, `result_email_status`, `result_email_sent_at`, `completion_locked` (0|1), `created_at`, `updated_at`, `completed_at`.
+### `audit_logs`
+`id`, `entity_type`, `entity_id`, `action`, `actor_id`,
+`payload_json`, `prev_hash`, `entry_hash`, `created_at`.
 
-### approval_steps
-`id` (PK), `sample_request_id` (FK sample_requests, CASCADE), `step_order`, `approver_role` (finance|professor|operator), `approver_user_id` (FK users), `status` (pending|approved|rejected), `remarks`, `acted_at`.
+SHA-256 hash chain: each entry's `entry_hash` covers
+`prev_hash | entity_type | entity_id | action | payload`.
+`verify_audit_chain(entity_type, entity_id)` walks the chain and
+returns False if any link is broken. The chain is the load-bearing
+proof of immutability.
 
-### request_messages
-`id` (PK), `request_id` (FK sample_requests, CASCADE), `sender_user_id` (FK users), `note_kind` (requester_note|lab_reply|operator_note|final_note), `message_body`, `created_at`, `is_active` (0|1).
+### `request_attachments`
+File uploads. `id`, `request_id`, `user_id`, `instrument_id`,
+`original_filename`, `stored_filename`, `relative_path`,
+`file_extension`, `mime_type`, `file_size`, `uploaded_by_user_id`,
+`uploaded_at`, `attachment_type` (`request_document` | `sample_slip`
+| `result_document` | `invoice` | `other`), `note`, `is_active`,
+`request_message_id`.
 
-### request_attachments
-`id` (PK), `request_id` (FK sample_requests, CASCADE), `user_id` (FK users), `instrument_id` (FK instruments), `original_filename`, `stored_filename`, `relative_path`, `file_extension`, `mime_type`, `file_size`, `uploaded_by_user_id` (FK users), `uploaded_at`, `attachment_type` (request_document|sample_slip|result_document|invoice|other), `note`, `is_active` (0|1), `request_message_id` (FK request_messages).
+### `request_messages`
+Communication thread. `id`, `request_id`, `sender_user_id`,
+`note_kind` (`requester_note` | `lab_reply` | `operator_note` |
+`final_note`), `message_body`, `created_at`, `is_active`.
 
-### request_issues
-`id` (PK), `request_id` (FK sample_requests, CASCADE), `created_by_user_id` (FK users), `issue_message`, `response_message`, `status` (open|responded|resolved), `created_at`, `responded_at`, `responded_by_user_id` (FK users), `resolved_at`, `resolved_by_user_id` (FK users).
+### `request_issues`
+Flag → respond → resolve cycle. `id`, `request_id`,
+`created_by_user_id`, `issue_message`, `response_message`,
+`status` (`open` | `responded` | `resolved`), and the matching
+actor / timestamp columns.
 
-### instrument_downtime
-`id` (PK), `instrument_id` (FK instruments, CASCADE), `start_time`, `end_time`, `reason`, `created_by_user_id` (FK users), `created_at`, `is_active` (0|1).
+### `instrument_downtime`
+`id`, `instrument_id`, `start_time`, `end_time`, `reason`,
+`created_by_user_id`, `created_at`, `is_active`. Drives the
+calendar maintenance overlay and the dashboard upcoming-downtime
+tile.
 
-### generated_exports
-`id` (PK), `filename` (UNIQUE), `created_by_user_id` (FK users), `created_at`, `scope_label`.
+### `instrument_approval_config`
+`id`, `instrument_id`, `step_order`, `approver_role`,
+`approver_user_id`. Per-instrument override of the default
+Finance → Professor → Operator chain.
 
-### instrument_approval_config
-`id` (PK), `instrument_id` (FK instruments, CASCADE), `step_order`, `approver_role`, `approver_user_id` (FK users). Unique constraint (instrument_id, step_order).
+### `generated_exports`
+`id`, `filename`, `created_by_user_id`, `created_at`, `scope_label`.
+Records every Excel export generated by `/visualizations/export`
+so users can re-download recent reports.
 
-### audit_logs
-`id` (PK), `entity_type`, `entity_id`, `action`, `actor_id` (FK users), `payload_json`, `prev_hash`, `entry_hash`, `created_at`.
-
-SHA-256 hash chain: each entry's `entry_hash` covers `prev_hash|entity_type|entity_id|action|payload`. The function `verify_audit_chain()` validates integrity.
-
-### announcements
-`id` (PK), `title`, `body`, `priority` (info|warning|error), `created_by_user_id` (FK users), `created_at`, `is_active` (0|1).
-
----
-
-## 6. Routes (41 total)
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/` | Dashboard: stats, instrument queues, recent jobs |
-| GET | `/instruments` | List all instruments by category |
-| POST | `/instruments` | Create new instrument |
-| GET | `/instruments/<int:instrument_id>` | Instrument detail: info, queue, stats, admin panel |
-| POST | `/instruments/<int:instrument_id>` | Update instrument settings |
-| GET | `/instruments/<int:instrument_id>/history` | Redirect to `/schedule?instrument_id=...` |
-| GET | `/instruments/<int:instrument_id>/calendar` | Redirect to `/calendar?instrument_id=...` |
-| GET | `/schedule` | **The Queue** — master list of all requests, sorted, filterable |
-| POST | `/schedule/actions` | Quick inline actions from queue (approve, reject, assign, etc.) |
-| GET | `/requests/new` | New request form |
-| POST | `/requests/new` | Submit new request |
-| GET | `/requests/<int:request_id>` | Full request card: metadata, approvals, files, messages, actions |
-| POST | `/requests/<int:request_id>` | Card actions (approve, reject, mark received, complete, etc.) |
-| GET | `/requests/<int:request_id>/duplicate` | Duplicate request (copy fields, clear status) |
-| POST | `/requests/<int:request_id>/quick-receive` | Quick operator receive sample action |
-| GET | `/requests/<int:request_id>/calendar-card` | Calendar event details popup |
-| GET | `/calendar` | FullCalendar view (week/month, scheduled requests + downtime) |
-| POST | `/calendar` | Create instrument downtime |
-| GET | `/calendar/events` | JSON feed: scheduled requests + downtime events |
-| GET | `/stats` | Statistics dashboard: volume, throughput, instrument load |
-| GET | `/visualizations` | Data visualization view with grouping and filters |
-| POST | `/visualizations/export` | Generate Excel export |
-| GET | `/visualizations/group/<path:group_name>` | Visualize requests grouped by (instrument/requester/status) |
-| GET | `/visualizations/instrument/<int:instrument_id>` | Visualize requests for single instrument |
-| GET | `/me` | Redirect to own user profile |
-| GET | `/users/<int:user_id>` | User profile: name, email, role, recent activity |
-| POST | `/users/<int:user_id>` | Update user profile (password change, etc.) |
-| GET | `/users/<int:user_id>/history` | Redirect to `/schedule?requester_id=...` |
-| GET | `/profile/change-password` | Password change form |
-| POST | `/profile/change-password` | Update password |
-| GET | `/admin/users` | User management: list, invite, elevate roles |
-| POST | `/admin/users` | Create user, invite, change role |
-| GET | `/attachments/<int:attachment_id>/download` | Download attachment file |
-| GET | `/attachments/<int:attachment_id>/view` | View attachment inline (PDF, image, etc.) |
-| POST | `/attachments/<int:attachment_id>/delete` | Delete attachment |
-| GET | `/sitemap` | Navigation/settings hub (Apple-style sidebar + panels) |
-| GET | `/docs` | Documentation viewer (markdown → HTML) |
-| GET | `/login` | Login form |
-| POST | `/login` | Authenticate user (session creation) |
-| GET | `/logout` | Logout (session destruction) |
-| GET | `/activate` | Invitation activation form |
-| POST | `/activate` | Accept invitation, set password |
-| GET | `/demo/switch/<role_key>` | Dev-only: switch demo role (disabled in production) |
-| GET | `/prism/log` | Dev-only: view PRISM command buffer |
-| POST | `/prism/save` | Dev-only: save PRISM session |
-| POST | `/prism/clear` | Dev-only: clear PRISM buffer |
-| GET | `/api/health-check` | Health check endpoint (no auth required) |
-| GET | `/exports/<path:filename>` | Download generated Excel export file |
-| GET | `/history/processed` | Legacy: processed request history (redirect to `/schedule?status=completed`) |
-| GET | `/my/history` | Redirect to own request history |
+### `announcements`
+`id`, `title`, `body`, `priority`, `created_by_user_id`,
+`created_at`, `is_active`. Site-wide notices on the dashboard.
 
 ---
 
-## 7. Template System & Macros
-
-### Macro Library: _page_macros.html
-
-Reusable macros for page layout and components.
-
-#### paginated_pane(pane_id, page_size=10, max_height='28rem', css_class='')
-
-Wraps a `<table>` with paginated controls. The table must have `id="{pane_id}Body"`.
-
-- `pane_id` — Unique ID for pagination state and JS hooks
-- `page_size` — Rows per page (default 10)
-- `max_height` — CSS height for scroll container (default '28rem', use 'none' for no scroll)
-- `css_class` — Optional CSS classes to add
-
-Generated elements:
-- `#{pane_id}Scroll` — Scrollable container
-- `#{pane_id}Controls` — Previous/Next buttons and page label
-- `#{pane_id}Prev`, `#{pane_id}Next` — Navigation buttons
-- `#{pane_id}Label` — Current page indicator
-
-Used in: dashboard, instruments, schedule, instrument_detail, request_detail, stats, visualizations.
-
-#### page_intro(kicker, title, hint='')
-
-Page header with optional section kicker, title, subtitle, and actions.
-
-- `kicker` — Small text above title
-- `title` — Page/section heading
-- `hint` — Optional explanatory text
-- `caller()` — Action buttons in section-actions div
-
-Example: `{% call page_intro('Data', 'Request Statistics') %}[buttons]{% endcall %}`
-
-#### stat_blob(value, label, href='#', tone='', dark=False, sub='')
-
-Clickable statistics tile.
-
-- `value` — Large number/metric
-- `label` — Short description
-- `href` — Link target
-- `tone` — CSS tone class (wait, active, open, week-jobs, week-samples, month-jobs, month-samples, completed, samples)
-- `dark` — Boolean to apply `.dark-stat` filled background
-- `sub` — Optional small note/subtext
-
-Example: `{{ stat_blob(45, 'Pending', tone='wait') }}`
-
-#### chart_bar(label, value, width_pct, dark=False)
-
-Horizontal bar row for visual metrics.
-
-- `label` — Left-side label
-- `value` — Right-side value (number)
-- `width_pct` — Bar width as percentage (0–100)
-- `dark` — Boolean for filled bar styling
-
-Example: `{{ chart_bar('FESEM', 18, 75) }}`
-
-#### input_dialog(form_action, action_name, placeholder='Write a message...', submit_label='Send', note_types=[], allow_file=True, allow_routing=False, routing_options=[])
-
-Universal form widget for text input + optional file + routing.
-
-- `form_action` — POST endpoint
-- `action_name` — Hidden "action" field value
-- `placeholder` — Textarea placeholder
-- `submit_label` — Button text
-- `note_types` — List of `(value, label)` tuples for message type dropdown (e.g., requester_note, lab_reply)
-- `allow_file` — Show file input
-- `allow_routing` — Show routing selector dropdown
-- `routing_options` — List of `(value, label)` tuples for routing choices
-
-Example: `{% call input_dialog('/requests/1', 'add_note', 'Reply...', 'Send', [('lab_reply', 'Lab Reply')], true) %}{% endcall %}`
-
-#### card_heading(kicker, title, hint='')
-
-Card/section header (same as page_intro, used for card details).
-
-### Macro Library: _request_macros.html
-
-Macros for request card display and field rendering.
-
-#### request_identity(row, compact=False)
-
-Render request number, sample name, sample ref.
-
-- `row` — Request record from database
-- `compact` — Boolean for single-line layout
-
-Shows: Request link, sample count badge (if > 1), sample name, sample_ref.
-
-#### instrument_name_link(row)
-
-Render instrument name as link (if user can access instrument_detail).
-
-- `row` — Request record (needs `instrument_id`, `instrument_name`)
-
-Returns: Link or plain text depending on permissions.
-
-#### person_name_link(user_id, name)
-
-Render person name as link (if user can view profile).
-
-- `user_id` — User ID
-- `name` — Display name
-
-Returns: User profile link or plain text; "-" if no user_id.
-
-#### requester_block(row, show_originator=False, show_email=False)
-
-Render requester identity with optional originator and email.
-
-- `row` — Request record
-- `show_originator` — Show "Originator: " line
-- `show_email` — Show requester email
-
-Checks: `request_card_can_view_field(row, 'requester_identity')`. Returns "Restricted" if not visible.
-
-#### operator_block(row)
-
-Render assigned operator name.
-
-- `row` — Request record (needs `assigned_operator_id`, `operator_name`)
-
-Checks: `request_card_can_view_field(row, 'operator_identity')`.
-
-#### status_block(row, show_group=True, show_summary=False, link=True)
-
-Render request status badge with optional group and summary.
-
-- `row` — Request record
-- `show_group` — Show status group (e.g., "Awaiting Approval")
-- `show_summary` — Show dynamic status text
-- `link` — Make badge clickable to request_detail
-
-Example: `{{ status_block(row, show_group=True) }}`
-
-#### meta_link(row, value, fallback='-')
-
-Render clickable value that links to request_detail.
-
-- `row` — Request record
-- `value` — Display value
-- `fallback` — Fallback if value is empty
-
-#### attachment_list(row, attachment_map, count_first=False, limit=None)
-
-Render list of attached files with download links.
-
-- `row` — Request record (needs `id` for key lookup)
-- `attachment_map` — Dict of `{request_id: [attachments]}`
-- `count_first` — Show count before list
-- `limit` — Max files to show (shows "+N more" link if exceeded)
-
-Example: `{{ attachment_list(row, attachment_map, limit=2) }}`
-
-### Macro Library: _stream_macros.html
-
-Macros for stream/list pages and filtering.
-
-#### stream_header(title, back_url='', back_label='Back')
-
-Page header with optional back link.
-
-- `title` — Page title (currently unused, for future)
-- `back_url` — URL for back button
-- `back_label` — Text for back button (default "Back")
-
-#### quick_filter_strip(strip_id, items, active_key='all', key_attr='data-slice-key')
-
-Filter button strip for quick slicing.
-
-- `strip_id` — ID for JS hooks
-- `items` — List of `(key, label, tone, count)` tuples
-  - `key` — Filter key (e.g., 'submitted', 'approved')
-  - `label` — Display text
-  - `tone` — CSS class (bucket-wait, bucket-active, bucket-open, etc.)
-  - `count` — Number badge
-- `active_key` — Which item is currently selected (gets `.bucket-active` class)
-- `key_attr` — HTML attribute name to store key (default `data-slice-key`)
-
-Example: `{{ quick_filter_strip('statusFilter', [('all', 'All', 'open', 23), ('pending', 'Pending', 'wait', 5)]) }}`
-
-### Data Visualization System
-
-The `V` variable centralizes role visibility:
-
-```python
-V = [
-    'requester', 'finance_admin', 'professor_approver',
-    'faculty_in_charge', 'operator', 'instrument_admin',
-    'site_admin', 'super_admin', 'owner'
-]
-```
-
-Subset variables for restricted elements:
-- `VA` — Approver roles (finance_admin, professor_approver, operator)
-- `VOP` — Operator-only roles (operator, instrument_admin, site_admin, super_admin)
-- `VLAB` — Lab staff roles (finance_admin, professor_approver, faculty_in_charge, operator, instrument_admin, site_admin, super_admin)
-
-Templates use `{% if user.role in V %}` or subset variables to gate element visibility. Client-side data-vis (`data-vis` attributes) serve as a secondary safety net but are not the primary access control.
-
-### CSS Component Architecture
-
-See CSS_COMPONENT_MAP.md for comprehensive component catalog. Core components:
-
-- `.card` — Container for content sections (with `.card.compact` variant)
-- `.paginated-pane` — Table wrapper with pagination controls
-- `.stat-blob` — Statistics tile
-- `.status-badge` — Status indicator
-- `.action-button` — Clickable action button
-- `.input-dialog` — Modal/panel for text input + attachment
-
-All repeated UI elements use these components to maintain consistency.
+## 6. Page Map
+
+| Route                                       | Template                  | Auth         | Purpose                                       |
+|---------------------------------------------|---------------------------|--------------|-----------------------------------------------|
+| `GET /`                                     | `dashboard.html`          | login        | Home: KPIs, instrument tiles, upcoming        |
+| `GET /instruments`                          | `instruments.html`        | login        | List instruments                              |
+| `POST /instruments`                         | —                         | admin        | Create instrument                             |
+| `GET/POST /instruments/<id>`                | `instrument_detail.html`  | login        | 10-tile instrument page                       |
+| `GET /instruments/<id>/history`             | redirect → `/schedule`    | view         | Queue filtered by instrument                  |
+| `GET /instruments/<id>/calendar`            | redirect → `/calendar`    | view         | Calendar filtered by instrument               |
+| `GET /schedule`                             | `schedule.html`           | login        | **The Queue** — central working page          |
+| `POST /schedule/actions`                    | —                         | varies       | Per-row queue actions                         |
+| `POST /schedule/bulk`                       | —                         | varies       | Bulk-action tile (W5.2)                       |
+| `GET /requests/new`                         | `new_request.html`        | login        | Submit new request                            |
+| `GET/POST /requests/<id>`                   | `request_detail.html`     | login        | Full card view + 14 actions                   |
+| `POST /requests/<id>/quick-receive`         | JSON                      | operator     | Operator fast-track sample receive            |
+| `GET /requests/<id>/duplicate`              | redirect                  | login        | "Submit similar" pre-fill                     |
+| `GET /requests/<id>/calendar-card`          | partial                   | login        | Hover tooltip on calendar                     |
+| `GET /calendar`                             | `calendar.html`           | login        | FullCalendar with drag-drop                   |
+| `GET /calendar/events`                      | JSON                      | login        | Calendar event feed                           |
+| `GET /stats`                                | `stats.html`              | login        | Statistics dashboard                          |
+| `GET /visualizations`                       | `visualization.html`      | login        | Data view with export                         |
+| `POST /visualizations/export`               | —                         | login        | Generate Excel report                         |
+| `GET /visualizations/instrument/<id>`       | `visualization.html`      | view         | Per-instrument visualization                  |
+| `GET /visualizations/group/<group>`         | `visualization.html`      | login        | Per-group visualization                       |
+| `GET /history/processed`                    | redirect → `/schedule`    | login        | Legacy → completed bucket                     |
+| `GET /my/history`                           | redirect → `/schedule`    | login        | Legacy → own requests                         |
+| `GET /me`                                   | redirect                  | login        | Own profile                                   |
+| `GET /users/<id>`                           | `user_detail.html`        | login        | User profile                                  |
+| `GET /users/<id>/history`                   | redirect → `/schedule`    | super_admin  | Queue filtered by requester                   |
+| `GET/POST /admin/users`                     | `users.html`              | super_admin  | User management                               |
+| `POST /profile/change-password`             | —                         | login        | Self-service password change                  |
+| `GET /sitemap`                              | `sitemap.html`            | login        | Settings + nav map                            |
+| `GET /docs`                                 | `docs.html`               | login        | In-app project doc viewer                     |
+| `GET /login`, `POST /login`                 | `login.html`              | public       | Sign in                                       |
+| `GET /logout`                               | redirect                  | login        | Sign out                                      |
+| `GET /activate`                             | `activate.html`           | public       | Invitation activation                         |
+| `GET /attachments/<id>/download`            | file                      | login        | Download attachment                           |
+| `GET /attachments/<id>/view`                | file                      | login        | View attachment inline                        |
+| `POST /attachments/<id>/delete`             | —                         | varies       | Soft-delete attachment                        |
+| `GET /exports/<filename>`                   | file                      | login        | Download generated Excel                      |
+| `POST /exports/generate`                    | —                         | login        | Trigger Excel generation                      |
+| `GET /api/health-check`                     | JSON                      | public       | Liveness probe                                |
+| `GET /demo/switch/<role>`                   | redirect                  | login + DEMO | Role impersonation (gated by `DEMO_MODE`)     |
+| `GET/POST /prism/save`, `/prism/log`, `/prism/clear` | JSON             | login        | Crawler agent endpoints                       |
+
+42 routes total. Auth column: **login** = `@login_required`,
+**view/manage/operate** = `@instrument_access_required(level)`,
+**admin** = role check inside the handler, **super_admin** =
+`@role_required("super_admin")`, **DEMO** = gated by `LAB_SCHEDULER_DEMO_MODE`.
 
 ---
 
-## 8. File Structure
+## 7. File Structure
 
 ```
 Main/
-├── app.py                          Single application file
-├── lab_scheduler.db                SQLite database (git-ignored, auto-created)
-├── PROJECT.md                      This file (formal specification)
-├── README.md                        Quick start guide + progress bar
-├── TODO_AI.txt                     Active tasks (legacy, content absorbed into this file)
-├── CRAWL_PLAN.md                   Role-based access testing plan
-├── CSS_COMPONENT_MAP.md            CSS components and usage
-├── SECURITY_TODO.md                Security hardening checklist
-├── ROLE_VISIBILITY_MATRIX.md       Role-to-page access matrix
+├── app.py                       Single application file (~6,750 lines)
+├── lab_scheduler.db             SQLite database (git-ignored, auto-created)
+├── README.md                    Quick start, phase progress, workflow patterns
+├── PROJECT.md                   This file — architecture spec
+├── TODO_AI.txt                  Active plan (next waves only)
+├── SECURITY_TODO.md             Hardening checklist + HTTPS migration
+├── CRAWL_PLAN.md                Test strategy reference
+├── ROLE_VISIBILITY_MATRIX.md    Visibility audit reference
+├── CSS_COMPONENT_MAP.md         CSS class catalog
+├── start.sh                     Auto-restart server launcher with logs
+├── view_readme.py               Local README web viewer (port 5088)
+├── requirements.txt             Python dependencies
 ├── .gitignore
+│
+├── crawlers/                    Pluggable test strategy package
+│   ├── __init__.py
+│   ├── __main__.py              `python -m crawlers list|run|wave …`
+│   ├── core/
+│   └── strategies/              Each strategy is one .py file
+│       ├── visibility.py        8 roles × 12 pages
+│       ├── role_behavior.py     Behavioural RBAC
+│       ├── lifecycle.py         End-to-end request lifecycle
+│       ├── dead_link.py         BFS href harvest
+│       ├── performance.py       p50/p95/max budgets
+│       ├── random_walk.py       MCMC walk over (role × route)
+│       ├── contrast_audit.py    WCAG AA palette check
+│       ├── color_improvement.py Palette drift hunter
+│       ├── architecture.py      Handler / template / CSS budgets
+│       ├── philosophy.py        Tile / vis / deprecated-class audit
+│       ├── css_orphan.py        Unused selector scan
+│       ├── cleanup.py           Dead Python / template hunter
+│       └── smoke.py             Pre-push sanity
+│
+├── reports/                     Crawler output (JSON + plain-text)
+├── logs/                        Server logs (start.sh writes here)
+│
 ├── static/
-│   ├── styles.css                  All CSS (light + dark themes)
+│   ├── styles.css               All CSS (~7,150 lines, light + dark themes)
+│   ├── grid-overlay.js          Dev-only grid debug overlay
+│   ├── manifest.json            PWA manifest
+│   ├── favicon.ico
 │   ├── instrument-placeholder.svg
-│   └── instrument_images/          Uploaded instrument photos
-├── templates/
-│   ├── base.html                   Layout: topbar, nav, theme toggle, JS
-│   ├── _page_macros.html           Shared macros: paginated_pane, page_intro, stat_blob, chart_bar, card_heading, input_dialog
-│   ├── _request_macros.html        Card display macros: status_block, approval_chain, attachment_list, note_thread, finance_block
-│   ├── _stream_macros.html         Streaming/real-time macros (if applicable)
+│   ├── mitwpu-logo.webp
+│   ├── instrument_images/       Uploaded instrument photos
+│   └── vendor/                  Pinned vendor assets
+│
+├── templates/                   27 .html files
+│   ├── base.html                Layout: topbar, nav, theme toggle, CSRF, toasts
+│   ├── _page_macros.html        8 widget macros
+│   ├── _request_macros.html     Card display macros
 │   ├── dashboard.html
 │   ├── instruments.html
-│   ├── instrument_detail.html
-│   ├── schedule.html               The Queue
+│   ├── instrument_detail.html   Reference 10-tile architecture
+│   ├── instrument_config.html
+│   ├── schedule.html            The Queue
 │   ├── new_request.html
-│   ├── request_detail.html         The Card
+│   ├── request_detail.html      The Card
 │   ├── calendar.html
+│   ├── calendar_card.html
 │   ├── stats.html
 │   ├── visualization.html
 │   ├── user_detail.html
 │   ├── users.html
+│   ├── pending.html
+│   ├── finance.html
+│   ├── notifications.html
 │   ├── login.html
 │   ├── activate.html
+│   ├── change_password.html
 │   ├── sitemap.html
-│   ├── error.html
-│   └── docs.html                   Documentation viewer
-├── uploads/                        Request files (git-ignored)
+│   ├── docs.html
+│   └── error.html
+│
+├── uploads/                     Request files (git-ignored)
 │   └── users/<uid>/requests/<req>/attachments/
-└── exports/                        Generated Excel reports (git-ignored)
+└── exports/                     Generated Excel reports (git-ignored)
 ```
 
 ---
 
-## 9. File Upload System
+## 8. File Upload System
 
 Each request gets a folder:
 `uploads/users/<user_id>/requests/req_<id>_<request_no>/attachments/`
 
-Allowed extensions: pdf, png, jpg, jpeg, xlsx, csv, txt.
-Maximum upload: 100 MB per file.
-Files are served through Flask, not as direct static files.
+- **Allowed extensions:** pdf, png, jpg, jpeg, xlsx, csv, txt
+- **Max upload:** 100 MB per file (`MAX_CONTENT_LENGTH` config)
+- **Served through Flask**, never as direct static files (audit + access control)
 
-A sample slip PDF is auto-generated on request creation and stored as `attachment_type=sample_slip`.
+A sample slip PDF is auto-generated on request creation and stored
+as `attachment_type=sample_slip`.
 
-A `request_metadata.json` snapshot is written to the request folder after every meaningful state change. It contains the complete card state and serves as an offline backup.
+A `request_metadata.json` snapshot is written to the request folder
+after every meaningful state change. It contains the complete card
+state and serves as an offline backup if the SQLite database is
+ever lost.
 
 ---
 
-## 10. Communication
+## 9. Communication
 
 Four note types on each card:
 
-| Type             | Author          | Visible to     |
-|------------------|-----------------|----------------|
-| `requester_note` | Requester       | Lab staff      |
-| `lab_reply`      | Lab staff       | Requester      |
-| `operator_note`  | Operator/admin  | Lab staff only |
-| `final_note`     | Operator/admin  | Requester      |
+| Type             | Author         | Visible to     |
+|------------------|----------------|----------------|
+| `requester_note` | Requester      | Lab staff      |
+| `lab_reply`      | Lab staff      | Requester      |
+| `operator_note`  | Operator/admin | Lab staff only |
+| `final_note`     | Operator/admin | Requester      |
 
-Issue tracking: flag → respond → resolve cycle, tracked in `request_issues`.
-
----
-
-## 11. Security
-
-- Session-based authentication, 12-hour lifetime, HttpOnly cookies.
-- Passwords hashed with pbkdf2:sha256.
-- All SQL uses parameterized queries.
-- File uploads validated against extension whitelist.
-- Immutable audit log with SHA-256 hash chain.
-- Role checks on every route via `login_required` and `role_required` decorators.
-- Field-level and action-level visibility via `card_policy`.
-- CSRF protection via flask-wtf: all POST forms include CSRF tokens, fetch() calls send `X-CSRFToken` header.
-
-See SECURITY_TODO.md for ongoing hardening work.
+Issue tracking is a separate flag → respond → resolve cycle stored
+in `request_issues` (open / responded / resolved).
 
 ---
 
-## 12. Git and Development
+## 10. Security
 
-| Setting          | Value                                           |
-|------------------|-------------------------------------------------|
-| VCS              | Git — open source, no proprietary services      |
-| Working repo     | `Main/`                                         |
-| Local remote     | `../lab-scheduler.git` (bare repo)              |
-| Default branch   | `master`                                        |
-| Git user.name    | AAAA                                            |
-| Git user.email   | general.goje@gmail.com                          |
+### Current state
 
-Push after every commit: `git push origin master`.
-Commit messages: imperative mood, ≤ 72 chars first line.
-Append `Co-Authored-By:` line.
-Never force-push.
+- **Session auth.** 12-hour lifetime, HttpOnly cookies, `SameSite=Lax`,
+  `Secure` toggled by `LAB_SCHEDULER_COOKIE_SECURE` env var for HTTPS
+  deployments.
+- **Password hashing.** `werkzeug.security.generate_password_hash`
+  with pbkdf2:sha256.
+- **Parameterized SQL everywhere.** No string concatenation in any
+  query.
+- **File upload whitelist.** Extension check via `allowed_file()`
+  before any file touches disk.
+- **Immutable audit log.** SHA-256 hash chain over every state
+  change. `verify_audit_chain()` walks the chain.
+- **Two-layer authorization.** Server-side `request_card_policy()`
+  + `request_scope_sql()` is the security boundary; client-side
+  `data-vis` is visual uniformity, never trusted.
+- **CSRF token machinery in place** via Flask-WTF `CSRFProtect`.
+  Enforcement gated by `LAB_SCHEDULER_CSRF=1`. base.html emits the
+  meta tag and a JS shim auto-injects the token into form submits
+  and `fetch()` calls.
+- **XSS-safe templates.** Jinja auto-escape is on globally.
+  `metadata_grid` escapes string values; HTML must be wrapped in a
+  `{% set var %}...{% endset %}` block (produces `Markup`).
+- **Login rate limit.** 10 attempts per 5 minutes per IP, in-memory.
+- **`@instrument_access_required(level)`** decorator gates every
+  route that takes `<int:instrument_id>`. Returns 404 if missing,
+  403 if denied.
+- **`DEMO_MODE` flag** gates `/demo/switch/*` and `seed_data()` —
+  flip via `LAB_SCHEDULER_DEMO_MODE=0` for production.
+- **PWA + accessibility polish.** Manifest, theme-color light/dark,
+  apple-touch-icon, skip-nav link, ARIA on the instrument dropdown.
+- See `SECURITY_TODO.md` for the deployment / hardening checklist.
 
-To run: `cd Main/ && pip install flask && python app.py`
-(starts on `http://127.0.0.1:5055`).
+### Architecture: two-layer authorization
 
-Debug mode: controlled at the bottom of `app.py`. Set `True` while developing, `False` before committing.
+**Layer 1 — Server-side (mandatory, enforces security).**
+Every route in `app.py` checks the session user against
+`ROLE_ACCESS_PRESETS` and `request_card_policy()`. The server never
+renders or returns data the user is not authorised to see. Jinja
+`{% if %}` blocks gate template sections. This layer is the security
+boundary.
 
-Editor: VS Code. No linter enforced.
-
-To add a cloud remote later:
-`git remote add github https://github.com/<user>/lab-scheduler.git`
-
----
-
-## 13. Roadmap
-
-### Completed Waves (A–D)
-
-**Wave A: Foundation & Polish ✅ (2026-02-15 → 2026-03-01)**
-
-- [x] A1 — Graceful 403/404/500 error pages + SVG icons + CSS
-- [x] A2 — Template cleanup: data-vis="all" → {{ V }} (176 occurrences, 4 files)
-- [x] A3 — Fix bounded_pane → paginated_pane (9 calls, 6 files)
-- [x] A4 — Remove redundant V declarations
-- [x] A5 — README benchmark update
-
-**Wave B: Settings & Navigation ✅ (2026-03-01 → 2026-03-15)**
-
-- [x] B1 — Redesign sitemap → Apple Settings (sticky sidebar + right panel)
-- [x] B2 — Settings sections: Core, Operations, Reporting, Admin
-- [x] B3 — Instrument nav hover dropdown + status dots (green/yellow/red)
-- [x] B4 — Mobile touch support for nav dropdown
-
-**Wave C: Panels & Dialog ✅ (2026-03-15 → 2026-03-31)**
-
-- [x] C1 — Universal input_dialog macro (text + file + routing + note types)
-- [x] C2 — Instrument detail → 5-panel CSS grid (Info, Stats, Queue, Admin, Activity)
-- [x] C3 — Responsive layout: 2-col desktop, 1-col mobile
-
-**Wave D: Calendar Integration ✅ (2026-03-31 → 2026-04-07)**
-
-- [x] D1 — instrument_downtime DB table + model
-- [x] D2 — POST /calendar downtime creation + validation
-- [x] D3 — GET /calendar/events JSON API (downtime + requests)
-- [x] D4 — Calendar UI: downtime modal, time-range select, orange blocks
-- [x] D5 — Cross-page calendar: dashboard + instrument detail downtime
-
-### In Progress: Wave E (2026-04-10)
-
-**Wave E: Demo Data & Documentation 🔄**
-
-- [ ] E1 — Full demo populator (25 instruments, 15 faculty, 10 operators, 500 reqs)
-- [x] E2 — Rewrite PROJECT.md (current schema, routes, macros, changelog) — **IN PROGRESS**
-- [ ] E3 — Document all macros (_page_macros, _request_macros, _stream_macros) — **IN PROGRESS**
-- [ ] E4 — Apply chart_bar macro to dashboard weekly/monthly charts
-
-### Planned: Wave F
-
-**Wave F: Final Verification 🔲**
-
-- [ ] F1 — Full crawl: all 9 roles × all 41 routes
-- [ ] F2 — Cross-page consistency check (counters, queue slices)
-- [ ] F3 — Smoke test + tag release v1.0
-
-### Architecture Notes (Preserved)
-
-Philosophy preserved:
-- One queue, one request card as source of truth
-- Sliced visibility per role
-- LAN-first simplicity
-- Blobs within blobs (tiles containing widgets)
-- No scroll panes; paginated view panes only
-- Apple UX / Johnny Ive design sensibility
-
-Data-vis decision: Keep data-vis as defense-in-depth. Server-side rendering is primary gate; client-side data-vis JS is secondary safety net. V includes all roles for elements that are visible to everyone; use subset variables (VA, VOP, VLAB) for restricted elements.
-
-Component system: Enforce macros over ad-hoc markup. All stat blobs, card headings, paginated panes, status badges, and chart bars use shared macros.
+**Layer 2 — Client-side `data-vis` (visual uniformity, not security).**
+Every HTML element carries a `data-vis="role1 role2 …"` attribute
+that declares which roles may see it. A JS engine on page load
+hides elements whose roles do not match. This gives uniform visual
+structure (the "blobs-within-blobs" philosophy). It is never
+trusted as a security mechanism — a user who inspects the DOM will
+only find data the server already authorised them to have.
 
 ---
 
-## 14. Changelog
+## 11. Reusable abstractions
 
-<!-- AI agents: newest entry first.
-     Format:
-     ### YYYY-MM-DD | Agent Name | Status: STARTED/COMPLETED
-     **Intent:** …
-     **Result:** …
-     **Files:** …
-     **Git commit:** …
--->
+These are the load-bearing helpers in `app.py`. Every new wave
+should pick the relevant one off this list rather than inventing
+a parallel approach.
 
-### 2026-04-10 | Claude Haiku 4.5 | Status: COMPLETED
-**Intent:** Update PROJECT.md with current system state: 15 tables, 41 routes, all 9 roles, complete macro documentation.
-**Result:** Updated Database Schema (15 tables with full columns), Routes section (41 routes listed), User Roles with full permission matrix, Template System with all macros from _page_macros.html, _request_macros.html, _stream_macros.html fully documented with parameters and usage.
-**Files:** PROJECT.md
-**Git commit:** (pending)
+### Data access
 
-### 2026-04-09 | Claude Haiku 4.5 | Status: COMPLETED
-**Intent:** Consolidate README.md, TODO_AI.txt, PROJECT.md into 2 well-structured files. README focused on quick start + progress. PROJECT.md absorbs roadmap.
-**Result:** README.md now slim with progress bar and quick start (Waves A-D complete, 71% overall). PROJECT.md now comprehensive spec with Roadmap section, Template System section documenting macros, expanded File Structure. Two files form complete rebuild source.
-**Files:** README.md, PROJECT.md
-**Git commit:** (pending)
+- **`query_one(sql, params)`**, **`query_all(sql, params)`**,
+  **`execute(sql, params)`** — thin wrappers around the request-scoped
+  SQLite connection in Flask `g`.
+- **`get_db()`** — returns the request-scoped `sqlite3.Connection`
+  with `row_factory = Row` and `PRAGMA foreign_keys = ON`.
+- **`REQUEST_DETAIL_JOINS`**, **`REQUEST_ATTACHMENTS_JOIN`** — string
+  constants holding the canonical 6-line FROM/JOIN block. Aliases
+  `sr / i / r / c / op / recv` are load-bearing across every caller.
 
-### 2026-04-07 | Claude Opus 4.6 (Cowork) | Status: COMPLETED
-**Intent:** Fix visual layout issues on request detail + queue row sizing + set up local git remote
-**Result:** Fixed request detail blank space, queue row natural height, added local bare repo at ../lab-scheduler.git as origin. CSS and template updates for consistency.
-**Files:** PROJECT.md, static/styles.css, templates/request_detail.html
-**Git commit:** fa8bfcf (remote setup)
+### Authorization & scope
 
-### 2026-04-07 | Claude Opus 4.6 (Cowork) | Status: COMPLETED
-**Intent:** Consolidate all history views into single Queue page
-**Result:** Replaced user_history, instrument_history, processed_history routes with redirects to /schedule. Deleted 3 legacy templates. −910 lines.
-**Files:** app.py, templates/ (deleted history.html, instrument_history.html, processed_history.html), user_detail.html
-**Git commit:** e503a2d
+- **`request_scope_sql(user, alias="sr")`** — returns
+  `(clauses: list[str], params: list)` to filter `sample_requests`
+  by the user's role. Always called with an alias.
+- **`assigned_instrument_ids(user)`** — list of instrument IDs the
+  user has any role on. Cached in Flask `g` per request.
+- **`can_view_request(user, sample_request)`**,
+  **`can_manage_instrument(user_id, instrument_id, role)`**,
+  **`can_operate_instrument(...)`**,
+  **`can_view_instrument_history(...)`**,
+  **`can_open_instrument_detail(...)`** — permission predicates.
+- **`request_card_policy(user, sample_request)`** — returns the
+  `fields` and `actions` sets that templates use to render the card.
+- **`@instrument_access_required(level)`** — decorator that fetches
+  the instrument, runs the permission check, returns 404 / 403, and
+  injects `instrument` into the view.
+- **`@login_required`**, **`@role_required(*roles)`**,
+  **`@owner_required`** — decorators for the simpler gates.
+- **`@rate_limit(max=N, window=S)`** — generic per-IP rate limit.
 
-### 2026-04-07 | Claude Opus 4.6 (Cowork) | Status: COMPLETED
-**Intent:** Fix two crashing bugs (missing table, missing macro import)
-**Result:** Replaced query against nonexistent `request_events` table with `audit_logs`. Added missing macro import in `instrument_detail.html`.
-**Files:** app.py, templates/instrument_detail.html
-**Git commit:** 401cefa
+### State machine
 
-### 2026-03-31 to 2026-04-07 | Wave D: Calendar Integration | Status: COMPLETED
-**Intent:** Add instrument downtime calendar, event feed, cross-page downtime display
-**Result:** Added `instrument_downtime` table. POST /calendar for downtime creation. GET /calendar/events JSON API. Calendar UI with downtime modal. Dashboard + instrument detail show next downtime. Full FullCalendar integration.
-**Files:** app.py, templates/calendar.html, templates/dashboard.html, templates/instrument_detail.html, static/styles.css
-**Git commit:** c538dcd
+- **`REQUEST_STATUS_TRANSITIONS`** — dict mapping current → set of
+  legal targets. Single source of truth.
+- **`assert_status_transition(current, target, force=False)`** — raises
+  `InvalidStatusTransition` if the move is illegal. Admin overrides
+  pass `force=True`.
+- **`InvalidStatusTransition`** — registered as an error handler that
+  flashes the message and redirects to the referrer.
+- **`build_request_status(db, request_id)`** — recomputes the
+  canonical status from the approval steps + sample timestamps.
 
-### 2026-03-15 to 2026-03-31 | Wave C: Panels & Dialog | Status: COMPLETED
-**Intent:** Build universal input_dialog macro, redesign instrument detail to 5-panel CSS grid
-**Result:** Implemented `input_dialog` macro (text + file + routing + note types). Instrument detail: 5-panel grid (Info, Stats, Queue, Admin, Activity). Responsive 2-col desktop / 1-col mobile layout.
-**Files:** templates/_page_macros.html, templates/instrument_detail.html, static/styles.css
-**Git commit:** (Wave C completed)
+### Audit
 
-### 2026-03-01 to 2026-03-15 | Wave B: Settings & Navigation | Status: COMPLETED
-**Intent:** Redesign sitemap to Apple Settings style. Add instrument nav dropdown with status dots.
-**Result:** Sitemap → Settings with sticky sidebar + right panel. Sections: Core, Operations, Reporting, Admin. Instrument nav dropdown with green/yellow/red status dots. Mobile touch support.
-**Files:** templates/sitemap.html, templates/base.html, static/styles.css
-**Git commit:** 9bc6d03
+- **`log_action(actor_id, entity_type, entity_id, action, payload)`**,
+  **`log_action_at(..., created_at)`** — append to the audit chain.
+  Every state change must call this.
+- **`verify_audit_chain(entity_type, entity_id)`** — walk the chain
+  and return False if any link is broken.
 
-### 2026-02-15 to 2026-03-01 | Wave A: Foundation & Polish | Status: COMPLETED
-**Intent:** Add error pages, standardize data-vis, rename bounded_pane → paginated_pane
-**Result:** Added 403/404/500 error pages with SVG icons. Replaced 176 data-vis="all" with {{ V }}. Fixed 9 bounded_pane calls → paginated_pane. Cleaned up redundant V declarations.
-**Files:** app.py, templates/, static/styles.css
-**Git commit:** a2f2e84
+### Stats
 
----
+- **`facility_stats_stream()`** — per-request cached aggregator for
+  facility-wide metrics. Computed once, cached in Flask `g`. All
+  pages read from this stream.
+- **`stats_payload_for_scope(user, filters, instrument_id=None, group_name=None)`**
+  — scope-aware version that powers `/stats`,
+  `/visualizations/instrument/<id>`, and `/visualizations/group/<group>`.
 
-## 15. Known Bugs & TODO
+### Demo / dev gating
 
-### Bugs
-- **Queue page title** — Always says "Jobs"; consider showing instrument name in subtitle when pre-filtered via `?instrument_id=`
-- **Template caching** — Production deploys (`debug=False`) cache templates. Template-only changes require server restart.
-- **Row serialization** — Stats route converts SQLite Row objects to dicts for JSON. New stats queries must also use `dict(r)`.
-- **Server restart** — Recent template changes require Flask restart to take full effect. Run `python3 app.py` or use `start.sh`.
-- **Image missing** — Instrument detail broken image icon when `machine_photo_url` points to missing file
-- **Sample count** — Not validated server-side (can be 0 or negative)
-- **File extension crash** — Uploaded filename with no extension causes crash
-- **Null checks** — Missing on some optional fields in card display
+- **`DEMO_MODE`** — module-level constant, set from
+  `LAB_SCHEDULER_DEMO_MODE`. Used by `/demo/switch` and `seed_data()`.
 
-### Work in Progress
-- **Request detail layout** — Left column events + right column response (template restructured, needs restart verification)
-- **Queue row sizing** — Natural height instead of fixed 3.4rem
-- **Scroll panels** — Consistent max-height, text overflow handling
+### Templates (in `_page_macros.html`)
 
-### Needed
-- **Input sanitisation** — XSS prevention for stored text
-- **Rate limiting** — On login route
-- **HTTPS migration** — See SECURITY_TODO.md
-
----
-
-## 16. Reference Documents
-
-This project uses multiple supporting documentation files:
-
-| File | Purpose |
-|------|---------|
-| `README.md` | Quick start, demo accounts, progress bar |
-| `CRAWL_PLAN.md` | Role-based access testing plan, test account matrix |
-| `CSS_COMPONENT_MAP.md` | CSS classes, component patterns, template usage |
-| `SECURITY_TODO.md` | Security hardening checklist, HTTPS migration tracker, bug fixes log |
-| `ROLE_VISIBILITY_MATRIX.md` | Every page and UI element mapped to accessible roles |
+- **`card_heading(prefix, title)`** — uniform tile header.
+- **`paginated_pane(id, page_size, max_height, css_class)`** —
+  every long list. Never use `overflow: auto`.
+- **`metadata_grid(items, compact=False)`** — `<dl>` grid for
+  label/value pairs. Auto-escapes strings; wrap HTML in
+  `{% set var %}...{% endset %}` for `Markup`.
+- **`kpi_grid(items, variant)`** — KPI counter row.
+- **`status_pills_row(pills, active, on_change)`** — filter pill bar.
+- **`queue_action_stack(row, operators, can_accept, can_assign)`** —
+  per-row Accept Sample + Quick Assign forms.
+- **`person_chip(name, user_id, size, link)`** — avatar + name.
+- **`approval_action_form(step, allow_file, allow_note)`** —
+  approve / reject form for one approval step.
+- **`activity_feed(entries, pane_id, page_size, threaded)`** —
+  timeline pattern.
+- **`empty_state(...)`** — every list / table needs an empty branch.
 
 ---
 
-## Task Execution
+## 12. Testing
 
-### Source of Truth
+Three regression gates that block a merge:
 
-All active work is defined in this file's **Roadmap** section (previously TODO_AI.txt).
+1. **`venv/bin/python test_visibility_audit.py`** — 8 roles × ~12
+   pages access matrix. **171/171 baseline**, must stay green.
+2. **`venv/bin/python test_populate_crawl.py`** — 500 actions
+   end-to-end starting from a blank database. 0 5xx, 0 exceptions.
+3. **`venv/bin/python -m crawlers wave <name>`** — strategy-specific
+   waves (smoke, philosophy, dead-link, …) for pre-push sanity.
 
-Workflow:
-1. Read the Roadmap section first.
-2. Execute tasks in order (each wave sequentially, items within waves can parallelize).
-3. Do not invent new architecture unless required.
-4. After completing work, update the Roadmap section: move completed items to COMPLETED ITEMS, mark active items with checkbox status.
+A wave is not "done" until 1 + 2 are still green.
 
-### AI Agent Workflow
+The `crawlers/` package is the test infrastructure. Each strategy
+is one Python file registered against an aspect (visibility,
+lifecycle, coverage, performance, accessibility, dead_links,
+css_hygiene, regression, data_integrity). Drop in a new file,
+import it in `crawlers/strategies/__init__.py`, and the CLI picks
+it up automatically. Every run writes a JSON log + plain-text
+summary under `reports/`.
 
-1. **Always commit before starting** a new task.
-2. **Write the plan** (update Roadmap section) before coding.
-3. **Break work into <5 min tasks**. Use parallel agents where possible.
-4. **Commit after finishing** each task. Never leave uncommitted work.
-5. If the last job wasn't completed, revert via git, re-read the Roadmap, complete it, then move on.
-6. **Before starting**: Read this file, add CHANGELOG entry (Status: STARTED), commit.
-7. **After finishing**: Update CHANGELOG entry (Status: COMPLETED), update Roadmap, commit, push.
+---
+
+## 13. Environment variables
+
+| Variable                       | Default                  | Purpose                                                  |
+|--------------------------------|--------------------------|----------------------------------------------------------|
+| `LAB_SCHEDULER_SECRET_KEY`     | dev secret               | Flask session signing key. Set in production.            |
+| `LAB_SCHEDULER_COOKIE_SECURE`  | off                      | Set to `1` when serving HTTPS so cookies get `Secure`.   |
+| `LAB_SCHEDULER_HTTPS`          | off                      | Used by `start.sh --https` to enable TLS.                |
+| `LAB_SCHEDULER_DEBUG`          | off                      | Flask debug mode + auto-reload.                          |
+| `LAB_SCHEDULER_CSRF`           | off                      | Enable CSRF enforcement (machinery is always present).   |
+| `LAB_SCHEDULER_DEMO_MODE`      | on                       | Demo accounts + `/demo/switch`. Set to `0` in prod.      |
+| `OWNER_EMAILS`                 | `admin@lab.local`        | Comma-separated emails granted owner status.             |
+| `SMTP_HOST`, `SMTP_PORT`       | `localhost`, `25`        | Outbound mail (currently used for completion emails).    |
+
+`start.sh` reads `LAB_SCHEDULER_DEBUG` and `LAB_SCHEDULER_HTTPS` and
+exports the rest from environment as-is.
+
+---
+
+## 14. Running
+
+```bash
+cd Main
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
+
+# Development
+./start.sh
+
+# Production HTTPS
+./start.sh --https
+
+# Trust the self-signed cert (one-time, needs sudo)
+./start.sh --trust
+```
+
+`start.sh` auto-restarts on crash with exponential backoff, kills
+any stale process on port 5055 first, and writes everything to
+`logs/server.log` with timestamps.
+
+Open `http://127.0.0.1:5055`. Demo password for the seeded accounts
+is `SimplePass123` (only present when `DEMO_MODE` is on).

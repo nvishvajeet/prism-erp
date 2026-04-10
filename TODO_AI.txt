@@ -3,22 +3,42 @@ PRISM — Active Plan
 
 Read this before starting work. It is intent, not contract.
 
+Forward-looking only. Phase 5 (widget propagation) and Phase 6
+W6.1-W6.9 (foundation hardening) are done — see README.md for the
+progress panels and `git log` for the per-wave commits. The
+architecture spec lives in PROJECT.md. The list below is what
+the next agent should pick up.
+
+----------------------------------------------------------------------
 Guidelines for AI agents
-------------------------
+----------------------------------------------------------------------
+
 1. Verify state before acting. Items may already be done.
 2. Fix root causes, not symptoms.
-3. If you find bugs not listed here, fix them and note them.
-4. Don't force architectural changes unless they unblock the current task.
+3. If you find bugs not listed here, fix them and note them in the
+   commit message.
+4. Don't force architectural changes unless they unblock the current
+   task.
 5. Commit and push every ~2 minutes. Never leave changes hanging.
    - Default rhythm is: pull → work → commit → push.
    - Commit each file change as it lands unless a single logical unit
-     genuinely spans multiple files. Small, focused commits > large ones.
+     genuinely spans multiple files. Small, focused commits > large.
    - `git push` is mandatory after every commit. No local-only commits.
    - If you are mid-refactor and something breaks, commit the WIP under
      a `wip:` prefix and push — never sit on broken work.
 6. Keep the visibility audit + populate crawl green before every push.
-   `crawler_suite.py` (see `crawlers/` module) exposes `run all` for
+   The `crawlers/` package exposes `python -m crawlers run all` for
    batched verification.
+7. **Batch terminal permissions up front.** At the start of a task,
+   front-load bash operations into long combined commands
+   (`mkdir && write && test && git add/commit/push`) rather than
+   drip-feeding one-call-at-a-time. The user should see a predictable
+   small number of terminal approvals, not a cascade. When you can
+   reasonably anticipate every command you'll need, list them at the
+   top of the task reply so the user can authorize in one pass.
+8. Read PROJECT.md sections 11 (Reusable abstractions) and 12 (Testing)
+   before adding new code. Every new wave should pick the right helper
+   off that list rather than inventing a parallel approach.
 
 ----------------------------------------------------------------------
 DESIGN PHILOSOPHY (load-bearing — read every session)
@@ -38,179 +58,219 @@ Apple / Jony Ive / Ferrari. Every element earns its place.
     net, not the gate.
   - **Empty space is content.** Cramped is the failure mode, not bold.
 
-Reference implementation: `templates/instrument_detail.html` — 10 tiles
-on a 6-column fluid grid. CSS at `static/styles.css` under "INSTRUMENT
-DETAIL — TILE ARCHITECTURE". This is the gold standard. Match its rhythm.
+Reference implementation: `templates/instrument_detail.html` — 10
+tiles on a 6-column fluid grid. CSS at `static/styles.css` under
+"INSTRUMENT DETAIL — TILE ARCHITECTURE". This is the gold standard.
+Match its rhythm.
 
 ----------------------------------------------------------------------
-PHASE 5 — WIDGET PROPAGATION (current focus)
+TWO TRACKS GOING FORWARD
 ----------------------------------------------------------------------
 
-Goal: every user-facing page reaches the polish level of
-instrument_detail.html. Extract recurring widgets to macros so the
-codebase teaches itself the pattern.
+Track A — strengthening current architecture (no new features).
+Lower risk per wave, regression-tested by the visibility audit and
+populate crawl. Finish Phase 6 first.
 
-Order matters: extract macros first, then convert pages, so each page
-benefits from the macros built before it.
+Track B — extensions (new features). Higher risk because they
+introduce code paths the audit doesn't yet cover.
 
-Effort sizing (relative — S/M/L/XL — not hours):
+Recommended order: finish Track A, then take Track B items by user
+demand.
 
-  W5.1  M    DONE   shared widget macros + CSS
-  W5.2  L    NEXT   schedule.html
-  W5.3  XL          request_detail.html (handler split deferred to P6)
-  W5.4  L           dashboard.html (kills .instrument-carousel)
-  W5.5  M           stats.html (chart wrapping + KPI adoption)
-  W5.6  L           secondary pages bundle (6 pages)
-  W5.7  M    ROLL   CSS hygiene — runs alongside W5.2-W5.6, not solo
+======================================================================
+TRACK A — STRENGTHENING (finish Phase 6 + harden the foundation)
+======================================================================
 
-W5.1  Shared widget macros (foundation — do these first)
-  Each macro lives in `_page_macros.html` unless noted.
+W6.10  Split request_detail() into action handlers      XL  NEXT
+  The 682-line request_detail() Python handler is the largest single
+  function in the codebase. It handles 14 actions: approve_step,
+  reject_step, schedule, admin_schedule_override, start, complete,
+  admin_complete_override, reject, mark_sample_submitted,
+  mark_sample_received, cancel, reassign_operator, etc.
 
-  - status_pills_row(pills, active, on_change)
-      Unifies .stream-pill (schedule), .role-toggle (calendar),
-      .warroom-pill (stats) into one filter pill component.
-      Canonical class: .filter-pill. Deprecate the others in the same
-      pass.
+  Plan:
+    - Extract one private function per action: _action_approve_step,
+      _action_schedule, _action_complete, ...
+    - Each takes (user, sample_request, request_form_data) and returns
+      a (flash_message, flash_category, redirect_url) tuple.
+    - The dispatch lives in request_detail(): a small dict mapping
+      action name -> handler function.
+    - All status writes already go through assert_status_transition()
+      (W6.5), so no new state machine work needed.
+    - Permission checks (can_manage, can_operate, completion_locked)
+      stay at the top of request_detail() before dispatch, not in each
+      handler.
+    - Tests: visibility audit + populate crawl + the new
+      test_status_transitions.py from W6.17 (when it lands).
 
-  - queue_action_stack(row, operators, can_accept, can_assign)
-      The Accept Sample + Quick Assign forms currently inlined into
-      schedule.html, instrument_detail.html, and dashboard.html.
-      Three call sites become one.
+  Files: app.py only.
 
-  - person_chip(user, link=True, avatar=True, size='md')
-      Avatar circle + name (+ optional link). Replaces ad-hoc team
-      lists in instrument_detail, request_detail, dashboard, stats.
+W6.11  Flip CSRF enforcement on                          M
+  W6.6 shipped the machinery but gated it behind LAB_SCHEDULER_CSRF=1
+  so the existing forms / tests / demo agents don't break. Rolling
+  enforcement out:
+    1. Add `<input type="hidden" name="csrf_token"
+       value="{{ csrf_token() }}">` to every <form method="post"> in
+       templates (~30 forms).
+    2. Update test_visibility_audit.py, test_populate_crawl.py,
+       smoke_test.py to fetch the meta tag and send the token.
+    3. Default LAB_SCHEDULER_CSRF=1 in start.sh.
+    4. Re-run all three test scripts.
 
-  - activity_feed(entries, pane_id, page_size=6, threaded=False)
-      Wraps the timeline pattern. `threaded=True` enables left/right
-      message alignment for request_detail conversation view.
+  Files: every template with a POST form, the three test scripts,
+  start.sh, app.py (default).
 
-  - metadata_grid(items, compact=False)
-      <dl> grid for label/value pairs. Replaces .detail-grid,
-      .compact-detail-grid, .tile-info-meta with one canonical list.
+W6.12  Extend scope helpers to remaining query patterns  M
+  W6.3 only touched the verbatim REQUEST_DETAIL_JOINS sites. The real
+  surface area is the 20+ COUNT/SUM/GROUP queries scattered across
+  facility_stats_stream(), the finance dashboard, and the
+  visualization routes. Identify the 2-3 sub-shapes and extract them.
 
-  - kpi_grid(items, variant='card')
-      KPI counters. Replaces .stats-kpi-row (finance),
-      .grid-auto-stats (stats), and stat blob clusters on dashboard.
+  Don't force them through one constant if they genuinely diverge —
+  the rule is: if 3+ callers share the exact same FROM/JOIN/GROUP
+  block, extract it.
 
-  - approval_action_form(step, allow_file=False, allow_note=True)
-      Approve/Reject form for one approval step. Currently lives only
-      inside request_detail.html; extract so other pages can host it.
+  Files: app.py only.
 
-  - toggleable_form(form_id, trigger_label, body)
-      One disclosure pattern to replace ad-hoc <details>, jQuery
-      toggles, and modal divs.
+W6.13  Server-side input validation everywhere           M
+  Wrap every `int(request.form[…])` and `request.form["…"].strip()`
+  in safe_int() / safe_float() / safe_str(). Reject malformed input
+  with a clean toast instead of a 500.
 
-W5.2  schedule.html — `/schedule` (highest-touch page)
-  Tiles:
-    - filter-bar tile (search, instrument, date range, sort)
-    - status-pills tile (uses W5.1 status_pills_row)
-    - queue-table tile (paginated, action stack via W5.1)
-    - bulk-actions tile (visible when ≥1 row selected)
-  Anti-patterns to kill:
-    - .stream-page-header with mixed title + view toggle
-    - inline action forms tightly coupled to <td> cells
-    - JS filtering logic that duplicates pill state
+  The toast system from W6.8 makes the surfacing cheap. The pattern
+  to follow is the sample_count check from the recent fix:
+    raw = request.form.get(field)
+    val = safe_int(raw, minimum=1, maximum=99)
+    if val is None: flash(...); return redirect(...)
 
-W5.3  request_detail.html — `/request/<id>`
-  Tiles:
-    - request-summary tile (lifecycle, status, metadata via metadata_grid)
-    - response tile (approval action form, reassign, status change —
-      currently a fragile sticky right column)
-    - files tile (paginated)
-    - activity tile (uses W5.1 activity_feed in threaded mode)
-    - notes tile (input_dialog, already a macro)
-  Anti-patterns to kill:
-    - .request-workspace 2-col layout — replace with grid
-    - .event-left / .event-right / .event-center awkward chat hybrid
-    - duplicated approve/reject forms — collapse via approval_action_form
-    - 682-line request_detail() Python handler — break into actions
-      (deferred to Phase 6 unless blocking)
+  Sites that still need it: every form handler in app.py. There's
+  ~30. Audit by grepping for `int(request.form` and
+  `float(request.form`.
 
-W5.4  dashboard.html — `/`
-  Tiles:
-    - this-week tile (uses kpi_grid + chart_bar)
-    - this-month tile (same)
-    - quick-intake tile (paginated, uses queue_action_stack)
-    - instrument-queues tile (replaces bespoke .instrument-carousel
-      with the standard tile grid; preview top 9)
-    - upcoming-downtime tile (already mostly done)
-  Anti-patterns to kill:
-    - .grid-two layout
-    - .collapsible-body custom toggle (use toggleable_form)
-    - .instrument-carousel horizontal scroll
+W6.14  log_action() completeness audit                   S
+  Every state change must write to the audit chain. Some don't.
+  Audit by listing every UPDATE/INSERT in app.py and verifying a
+  log_action() call within ~5 lines. Add the missing ones.
 
-W5.5  stats.html — `/stats`
-  Tiles:
-    - kpi tile (uses kpi_grid)
-    - instrument-status-board tile (canonical .tile pattern, drop
-      .warroom-inst-tile)
-    - throughput-trend chart tile
-    - instrument-throughput chart tile
-    - turnaround chart tile
-    - revenue chart tile (if data exists)
-  Anti-patterns to kill:
-    - .warroom-* class family (rename or absorb into tile system)
-    - bare <canvas> with no error/loading state
+  Then write tests/test_audit_completeness.py: a static analysis
+  script that walks app.py with the ast module, finds every
+  `execute("UPDATE …")` / `execute("INSERT …")` call, and asserts
+  there's a `log_action(` within 10 lines after it. Adds it as a
+  pre-push gate alongside visibility audit.
 
-W5.6  Secondary pages — small, mostly cosmetic
-  - calendar.html: unify filter pills with W5.1; extract modal macro
-  - instruments.html: extract create_panel macro for add-instrument toggle
-  - pending.html: tiles for the dual-list approval view
-  - users.html: extract user_table macro to kill 3-table duplication
-  - user_detail.html: adopt .tile classes for metadata sections
-  - finance.html: KPI row uses kpi_grid
+W6.15  Database backup + restore script                  S
+  LAN deployment has no backup story. SQLite makes this trivial:
+    tools/backup.sh   — shutil.copy2 to backups/<timestamp>.db
+    tools/restore.sh  — pick a backup, swap it in
+  Wire to a manual button on the admin sitemap. Log every backup as
+  an audit event.
 
-W5.7  CSS hygiene pass (do alongside the page conversions)
-  Retire / consolidate:
-    - .inst-detail-* legacy class family (already partially gone)
-    - .compact-* density modifiers — fold into tile spacing
-    - .form-grid + .new-request-* — unify into one form grid system
-    - .stream-pill / .role-toggle / .warroom-pill → .filter-pill
-    - .warroom-* aesthetic classes → .tile-*
-  Keep: .tile-*, .section-*, .meta-*, .paginated-pane-*, .stat,
-        .card, .grid-two/three/four (non-tile content layouts)
+W6.16  Replace Werkzeug dev server with waitress         S
+  start.sh --https currently uses the Werkzeug dev server, which
+  prints a "do not use in production" warning every start. Add
+  waitress to requirements.txt and switch the production path:
+    waitress-serve --host 0.0.0.0 --port 5055 app:app
+  Dev mode (`./start.sh` without --https) keeps the Flask debug
+  server with auto-reload.
 
-----------------------------------------------------------------------
-PHASE 6 — FOUNDATION HARDENING (deferred — do after Phase 5)
-----------------------------------------------------------------------
+W6.17  test_status_transitions.py                        S
+  The 13-case smoke test from the W6.5 commit only ran once.
+  Persist it as a real test file. Exhaustively check every legal
+  pair from REQUEST_STATUS_TRANSITIONS plus a sample of illegal
+  pairs. Add to the regression gates.
 
-These are not blocking the user's design vision. Park them until the
-tile propagation is complete on every page.
+W6.18  Structured logging                                S
+  logging.getLogger(__name__) per module, JSON-formatted, written to
+  logs/server.log alongside the existing tail. Replace ad-hoc
+  print() calls. Trace IDs would be nice but not required.
 
-  - Database indexes (sample_requests.status,
-    sample_requests(instrument_id, status), approval_steps,
-    request_attachments, instrument_operators, audit_logs)
+W6.19  .env.example                                      S
+  The env surface has grown — SECRET_KEY, OWNER_EMAILS,
+  COOKIE_SECURE, HTTPS, DEBUG, CSRF, DEMO_MODE, SMTP_*. Nobody can
+  deploy this without reading the source. Generate the file from
+  the table in PROJECT.md section 13.
 
-  - Permission decorator @instrument_access_required to eliminate
-    the 12+ duplicated access-control patterns in routes
+W6.20  init_db() idempotency smoke test                  S
+  Schema migrations are best-effort. Write a test that runs
+  init_db() twice on a fresh database and once on a populated one,
+  and asserts no exception + no data loss + the audit chain still
+  verifies.
 
-  - RequestQueryBuilder to centralize the 6 near-identical
-    "SELECT sr.*, i.name FROM sample_requests JOIN instruments..."
-    patterns
+======================================================================
+TRACK B — EXTENSIONS (new features, after Track A is clean)
+======================================================================
 
-  - Cache assigned_instrument_ids() in Flask `g` (3 table queries
-    per page load currently)
+W7.1  Bulk operations on the queue                       M
+  The W5.2 bulk-actions tile exists but is empty. Wire actions: bulk
+  approve (advance approval step), bulk assign operator, bulk
+  schedule, bulk reject, bulk export. The first tangible payoff
+  from the tile architecture.
 
-  - Break request_detail() (682 lines) into action handler classes
-    once W5.3 is done (template + handler refactor in same pass)
+W7.2  Per-instrument custom request form fields          L
+  Each instrument defines its own field schema (label, type,
+  required, choices) stored as JSON; new_request.html renders them
+  dynamically. Currently every sample uses one global form. Real
+  labs have FESEM-specific vs ICP-MS-specific intake fields.
+  Needs a small admin UI on instrument_config.html.
 
-  - Request status state machine — TRANSITIONS dict, reject invalid
-    status changes server-side
+W7.3  Email notifications                                L
+  SMTP send on key transitions: status change, approval needed,
+  results ready. Templates per event type. Optional global toggle
+  + per-user opt-out. Needs SMTP infra decision (relay vs Gmail
+  app password vs SES). Adds an external dependency.
 
-  - CSRF protection on all POST routes (Flask-WTF)
+W7.4  Cost / grant tracking + invoice generation         XL
+  Per-instrument internal/external cost rates, optional grant codes
+  per request, monthly invoice PDF per requester or PI. Touches
+  finance reporting end-to-end. Needs the per-instrument cost
+  model first.
 
-  - Gate /demo/switch/ behind DEMO_MODE env flag; stop seeding demo
-    users on init_db() in production
+W7.5  Recurring / templated requests                     M
+  A researcher runs the same XRD workflow weekly; let them save a
+  template and submit-with-one-click. Big quality-of-life win for
+  power users.
 
-  - Toast notification system to replace flash messages that need
-    scroll-to-top
+W7.6  Mobile breakpoint pass                             M
+  The tile architecture is desktop-first. Add @media (max-width:
+  720px) rules so the schedule queue and dashboard collapse cleanly
+  to a single column. The lab uses iPads on the bench. Currently
+  usable but cramped.
 
-  - PWA polish: theme-color meta, apple-touch-icon, manifest.json,
-    skip-nav link, ARIA on dropdowns
+W7.7  Approval delegation                                M
+  Finance / professor can delegate their approval slot to a backup
+  user during travel. Time-bounded. Currently a single absent
+  approver blocks the whole queue.
 
-  - Rewrite PROJECT.md and document all macros once Phase 5 settles
-    (no point documenting macros that will be extracted next week)
+W7.8  Search across requests                             M
+  Full-text over sample_name, description, request_no, requester
+  name. Currently you can only filter by structured fields. SQLite
+  FTS5 is built in; the cost is a single virtual table + a search
+  box.
+
+W7.9  /api/v1 read-only JSON blueprint                   M
+  List + detail endpoints for requests, instruments, schedule.
+  Token auth. Unblocks everything downstream — dashboards,
+  integrations, the eventual mobile app.
+
+W7.10 Per-user dashboard customization                   L
+  Pin/unpin tiles, reorder, hide. Stored in users.dashboard_layout
+  JSON. Different roles want different default views; the "Apple"
+  philosophy says the system should adapt.
+
+W7.11 Audit log viewer page                              M
+  Searchable, filterable, exportable. The SHA-256 chain exists but
+  you can't actually look at it as a user. Surface it. Compliance
+  requirement for the production deployment.
+
+W7.12 OAuth2 / SAML SSO                                  XL
+  Replace the local password story for the production deployment.
+  Couple to MIT-WPU's identity provider. Big effect on the auth
+  code path.
+
+W7.13 Multi-tenant support                               XL
+  Let the same instance serve multiple labs with isolated queues,
+  instruments, users. Architectural change. Would need a tenant_id
+  column on every table and a tenant scope in request_scope_sql().
 
 ----------------------------------------------------------------------
 NOT DOING (yet)
@@ -218,27 +278,31 @@ NOT DOING (yet)
 
 Listed here so future agents don't spin them up speculatively.
 
-  - /api/v1 JSON blueprint + OpenAPI — no consumer for it yet
-  - Per-instrument custom request form fields — needs UX design first
-  - Notification emails — needs SMTP infra decision
-  - Cost/grant tracking + invoice generation — separate product
-  - Bulk operations on queue — wait until W5.2 tile is in place
+  - Python 2 compatibility — no.
+  - Server-side rendering of charts — Chart.js is fine.
+  - Migrations framework (alembic / yoyo) — init_db() handles
+    schema evolution adequately for SQLite.
+  - Background job queue (celery / rq) — no async work justifies
+    the dependency yet.
+  - WebSockets — polling at the existing intervals is fine.
 
 ----------------------------------------------------------------------
-HISTORY (collapsed — see git log for detail)
+HISTORY (collapsed — see git log + README for detail)
 ----------------------------------------------------------------------
 
-Phase 1-4 are done. Highlights:
+Phase 1-4: foundation cleanup, settings + nav, calendar + downtime,
+visibility audit (171/171), populate crawl (500/0/0), UI declutter,
+empty_state macro, instrument_detail.html rebuilt as the 10-tile
+reference architecture.
 
-  - Foundation: data-vis cleanup, paginated_pane migration, error pages
-  - Settings + nav: Apple-style sitemap, instrument hover dropdown
-  - Calendar: downtime model + UI, cross-page integration
-  - Verification: 171/171 visibility audit, 500-action populate crawl
-    (0 5xx, 0 exceptions)
-  - UI declutter: redundant buttons removed, ambiguous labels renamed,
-    empty_state macro, large-dataset constraints (nav cap 15, dashboard
-    carousel cap 9)
-  - **instrument_detail.html rebuilt as 10-tile architecture (the
-    pattern Phase 5 propagates).**
+Phase 5: every user-facing page converted to the tile pattern. CSS
+hygiene retired ~870 lines of orphaned selectors. The 8 widget
+macros in _page_macros.html became the canonical building blocks.
 
-Last verified clean: commit 91a8cc5.
+Phase 6 W6.1-W6.9: foundation hardening. Database indexes (22),
+@instrument_access_required decorator, REQUEST_DETAIL_JOINS
+constant, assigned_instrument_ids() cached in g, the request status
+state machine, CSRF token machinery (gated), DEMO_MODE flag, toast
+system, PWA polish.
+
+Last verified clean: see latest commit on master.

@@ -675,61 +675,35 @@ adding a new schema table, a new role, a new helper in §11, a new
 macro in `_page_macros.html`, or a new layer in §10 (Security).
 Patch bumps cover wording fixes and clarifications.
 
-`README.md` carries the **release version** (currently 1.2.0). The
+`README.md` carries the **release version** (currently 1.3.0). The
 two versions usually move in lockstep but are tracked separately so
 documentation work can ship without a code release.
 
+---
 
+## 16. Operator runtime policy (v1.3.0+)
 
-## Operator runtime policy
+See `DEPLOY.md` for the full deployment specification. The summary:
 
-Default Ollama session window is 120 minutes when no arguments are passed.
+- **MacBook Pro** is the development machine. All editing, all
+  testing, all crawler work runs here. `master` is the source of
+  truth.
+- **Mac mini** (`vishwajeet@100.115.176.118`, reachable via
+  Tailscale) is the **production host**. It runs PRISM 24×7 and
+  serves the website to every machine on the lab's Tailscale
+  network. It does not run background jobs, cron, or any compute
+  offload — it only hosts.
+- Git is the only sync layer between the two machines. There is
+  no live shared folder.
+- Production deploys are atomic: `git pull` → smoke test →
+  `launchctl kickstart`. Never interrupts live users. See
+  `PHILOSOPHY.md` §3 — the website stays up.
 
-Remote usage:
-- Use remote Ollama when you want Mac mini compute.
-- Start remote chat and then pass prompts directly in the terminal.
-- Responses are shown immediately and logged.
+Required commit loop on the MacBook:
 
-Local usage:
-- Use local Ollama when you want MacBook-only compute.
-- Start local chat and then pass prompts directly in the terminal.
-- Responses are shown immediately and logged.
-
-Operational note:
-- If the MacBook sleeps, local chat stops.
-- If the MacBook sleeps, the SSH tunnel to the Mac mini stops.
-- The Mac mini Ollama server itself continues running in tmux once started.
-
-Git policy:
-- All agents use the same Git remote.
-- No long-lived uncommitted work.
-- Commit every few minutes or after each landed file.
-- Push after every commit.
-
-
-## Operator sync policy
-
-Claude and Ollama both work through the same Git remote.
-
-MacBook:
-- normal development
-- review
-- smoke testing
-- final pushes
-
-Mac mini:
-- remote Ollama compute
-- same repo cloned separately
-- pulls before work
-- pushes after bounded tasks if instructed
-
-All useful progress must land in Git quickly.
-
-Required loop:
-1. git pull --rebase
+1. `git pull --rebase`
 2. work
-3. smoke test
+3. `.venv/bin/python smoke_test.py`
 4. commit
 5. push
-
-Default Ollama session length is 120 minutes if no argument is passed.
+6. (optional) deploy to the mini per `DEPLOY.md` §3

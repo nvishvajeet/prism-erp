@@ -1,125 +1,120 @@
 PRISM — Active Plan
 ====================
 
-Forward-looking only. The current release is **v1.2.0**; the
-roadmap below covers v1.3.0 → v1.5.0 plus the held backlog.
-For the architecture spec read PROJECT.md, for the version
-history read CHANGELOG.md, for the release overview read
-README.md, for the commit-level history read `git log`.
+Forward-looking only. The current release is **v1.3.0** — the
+first stable release. The roadmap below covers v1.4.0 → v1.5.0
+plus the held backlog and the in-flight UX polish stream.
+
+For THE PHILOSOPHY read PHILOSOPHY.md (load-bearing, read every
+session).
+For the architecture spec read PROJECT.md.
+For the version history read CHANGELOG.md.
+For production deployment read DEPLOY.md.
+For the commit-level history read `git log`.
 
 ----------------------------------------------------------------------
 GUIDELINES FOR AI AGENTS
 ----------------------------------------------------------------------
 
-1. Verify state before acting. Items may already be done.
-2. Fix root causes, not symptoms.
-3. If you find bugs not listed here, fix them and note them in the
-   commit message.
-4. Don't force architectural changes unless they unblock the current
-   task.
-5. Pull → work → commit → push is the default rhythm.
+1. Read PHILOSOPHY.md first, every session. It is load-bearing.
+   Reject any change that violates it.
+2. Verify state before acting. Items may already be done.
+3. Fix root causes, not symptoms.
+4. Hard attributes are locked (PHILOSOPHY.md §2). Changes to the
+   data model, routes, roles, audit chain, or tile architecture
+   require a major version bump and a `### Changed (BREAKING)`
+   entry in CHANGELOG.md. Soft attributes (copy, placement,
+   colours) drift freely between patch releases.
+5. Every release on master is stable (PHILOSOPHY.md §3). No WIP
+   on master. Experimental work lives on short-lived branches and
+   merges only after `wave sanity` passes.
+6. The website stays up. Deploys to the Mac mini are atomic:
+   pull → smoke → `launchctl kickstart`. Never interrupt live
+   users. See DEPLOY.md.
+7. Pull → work → commit → push is the default rhythm.
    - Commit each file change as it lands unless a single logical
      unit genuinely spans multiple files.
    - `git push` after every commit. No local-only commits.
    - If you are mid-refactor and something breaks, commit the WIP
-     under a `wip:` prefix and push — never sit on broken work.
-6. Run `python smoke_test.py` (~5 s) before every commit. Run
-   `python -m crawlers wave sanity` for the slightly stronger gate.
-   Full `python -m crawlers wave all` only at release boundaries —
-   running it between every commit wastes minutes on output that
-   does not change.
-7. Batch terminal permissions up front. Front-load shell operations
+     under a `wip:` prefix on a branch — never sit on broken work
+     on master.
+8. Run `.venv/bin/python smoke_test.py` (~5 s) before every commit.
+   Run `python -m crawlers wave sanity` for the slightly stronger
+   gate. Full `wave all` only at release boundaries.
+9. Batch terminal permissions up front. Front-load shell operations
    into long combined commands rather than drip-feeding many small
    calls. List every command you will need at the top of the reply
    when the plan is predictable.
-8. Read PROJECT.md §11 (Reusable abstractions) and §12 (Testing)
-   before adding new code. Pick the right helper off that list
-   rather than inventing a parallel approach.
-9. Claude vs. Ollama: Claude handles planning, architecture, risky
-   debugging, auth/permissions, multi-file refactors, and schema
-   decisions. Ollama is for small bounded tasks (single-file edits,
-   boilerplate, repetitive cleanup, summaries, first-pass drafts).
-   Ollama must NEVER touch security-critical logic, the permission
-   model, or do broad stateful refactors. See OLLAMA_DEV_PLAN.md
-   for the full bridge contract: branch sandbox, task spec format,
-   acceptance criteria, Claude resume protocol. Items in the
-   roadmap below tagged `[O]` are Ollama-shaped.
+10. Read PROJECT.md §11 (Reusable abstractions) and §12 (Testing)
+    before adding new code. Pick the right helper off that list
+    rather than inventing a parallel approach.
+11. Demo data is never operational data (PHILOSOPHY.md §4). Demo
+    only runs when `LAB_SCHEDULER_DEMO_MODE=1`. Production deploys
+    on the Mac mini ship with it set to 0.
+12. Any agent must be able to pick up where you left off from this
+    file alone. No tribal knowledge.
 
 ----------------------------------------------------------------------
 DESIGN PHILOSOPHY (load-bearing — read every session)
 ----------------------------------------------------------------------
 
-Apple / Jony Ive / Ferrari. Every element earns its place.
+See PHILOSOPHY.md for the full text. The load-bearing sentences:
 
-  - **Tiles, not pages.** Each concern is a self-contained widget
-    tile on a fluid grid. No mixed concerns inside one card.
-  - **Pagination, never scroll.** Long lists use `paginated_pane`.
-    No `overflow: auto` inside content panes.
-  - **Macros over markup.** If a pattern shows up twice, it becomes
-    a macro. Templates compose; they do not duplicate.
-  - **One queue, one card.** A request is the same object everywhere
-    it appears — same identity, same status block, same actions.
-  - **Visibility is sliced server-side first.** `data-vis` is a
-    safety net, not the gate.
-  - **Empty space is content.** Cramped is the failure mode, not
-    bold.
+1. Give the user what they want, exactly, and stop.
+2. Hard attributes are locked. Soft attributes are free.
+3. Every release on master is stable.
+4. Demo and operational data are physically separate.
+5. The website stays up.
+6. Tiles, macros, events — always.
+7. Another agent must be able to pick up from this file.
 
 Reference implementation: `templates/instrument_detail.html` — 10
 tiles on a 6-column fluid grid. CSS at `static/styles.css` under
-"INSTRUMENT DETAIL — TILE ARCHITECTURE". This is the gold standard.
-Match its rhythm.
+"INSTRUMENT DETAIL — TILE ARCHITECTURE". Match its rhythm.
 
 ======================================================================
-v1.3.0 — HARDENING (in progress)
+v1.3.0 — STABLE RELEASE (shipped)
 ======================================================================
 
-Three changes that close the security / correctness story. None of
-them touch the user-visible feature set; they make the existing
-features unbreakable. The compressed plan: leverage the crawler
-suite as the regression gate, lean on Ollama for the mechanical
-wraps, and let Claude focus on judgment calls.
+First stable release. Hard attributes are now locked. Contents:
 
-NOTE: 1.3.0-d (state-transition test) is **done** — see
-tests/test_status_transitions.py and commit 397d963.
+  - CSRF enforcement on by default (LAB_SCHEDULER_CSRF=1).
+  - State-transition test persisted
+    (tests/test_status_transitions.py).
+  - Owner-only /admin/dev_panel (progress, roadmap, doc viewer,
+    recent commits).
+  - Tile architecture formalised. Nine canonical macros lock the
+    widget set.
+  - Event stream commitment: every in-place edit on machine /
+    request / job / user appends to the object's event stream.
+  - Mac mini production host (DEPLOY.md). The website is
+    reachable from every Tailscale peer at 100.115.176.118:5055.
+  - Hard / soft attribute contract (PHILOSOPHY.md §2).
+  - Demo / operational data separation (PHILOSOPHY.md §4).
 
-NOTE: the originally-planned 1.3.0-a request_detail() handler
-split is **dropped**. The state machine + tests/test_status_transitions.py
-already lock every status write, so the 685-line function is ugly
-but not unsafe. Splitting it is cosmetic, costs hours, and risks
-regressions for zero user value. Revisit if it grows past ~900 lines.
+Deferred out of 1.3.0 and into the 1.3.x patch stream:
+  - safe_int() / safe_float() wrap across every unwrapped
+    `int(request.form[…])` / `float(request.form[…])` site.
+    Roughly ~30 sites. Ships as 1.3.1.
+  - request_detail() handler split. The state machine +
+    tests/test_status_transitions.py already lock every status
+    write, so the 685-line function is ugly but not unsafe.
+    Revisit if it grows past ~900 lines.
 
-----------------------------------------------------------------------
-1.3.0-b  Flip CSRF enforcement on                              M  [O]
-----------------------------------------------------------------------
+======================================================================
+v1.3.x PATCH STREAM — soft-attribute polish
+======================================================================
 
-The Flask-WTF machinery is in place but `WTF_CSRF_ENABLED` defaults
-to off so the existing forms / tests / demo agents don't break.
-Rolling enforcement out:
-
-  1. Add `<input type="hidden" name="csrf_token"
-     value="{{ csrf_token() }}">` to every `<form method="post">`
-     in templates (~30 forms).
-  2. Update test_visibility_audit.py, test_populate_crawl.py,
-     smoke_test.py to fetch the meta tag and send the token.
-  3. Default `LAB_SCHEDULER_CSRF=1` in start.sh.
-  4. Re-run all three test scripts + `python -m crawlers wave sanity`.
-
-Files: every template with a POST form, the three test scripts,
-start.sh, app.py (default).
-
-[O] Step 1 is Ollama-shaped: pure mechanical insertion behind a
-grep-able acceptance criterion. See ollama_tasks/csrf_inputs.md
-for the spec when ready. Steps 2-4 stay with Claude (test rig
-edits + env defaults).
+Patch releases. Hard attributes untouched. Each item ships as a
+separate patch release (1.3.1, 1.3.2, …) gated by `wave sanity`.
 
 ----------------------------------------------------------------------
-1.3.0-c  Server-side input validation everywhere               M  [O]
+1.3.1  safe_int / safe_float wrap                              M
 ----------------------------------------------------------------------
 
 Wrap every `int(request.form[…])` and `float(request.form[…])` in
 `safe_int()` / `safe_float()`. Reject malformed input with a clean
-toast instead of a 500. The toast system from v1.2.0 makes the
-surfacing cheap. The pattern:
+toast instead of a 500. The pattern:
 
     raw = request.form.get(field)
     val = safe_int(raw, minimum=1, maximum=99)
@@ -132,21 +127,55 @@ Roughly ~30 sites.
 
 Files: `app.py` only.
 
-[O] This is the cleanest Ollama task in the roadmap. Spec at
-ollama_tasks/safe_int_wrap.md when ready. Acceptance: the grep
-count of unwrapped `int(request.form` / `float(request.form`
-goes to zero and `python -m crawlers wave sanity` exits clean.
-
 ----------------------------------------------------------------------
-1.3.0-d  test_status_transitions.py                            DONE
+1.3.2  Instrument page polish (Jony Ive / give the user what they
+       want)                                                    M
 ----------------------------------------------------------------------
 
-Done. See tests/test_status_transitions.py and commit 397d963.
-Exhaustively walks `REQUEST_STATUS_TRANSITIONS`: 21 legal pairs +
-70 illegal pairs + terminal lock + idempotent self-transitions +
-admin force override + unknown current statuses + the
-awaiting_sample_submission → sample_received fast-track. Wired
-into the pre-push gate alongside smoke_test.py.
+The instrument page is the gold standard. This patch sharpens the
+remaining soft attributes.
+
+  a. Remove visual-only header elements. Metadata lives in the
+     metadata_grid tile, not duplicated in a decorative pane.
+  b. L1 / D1 demo back-hover button. A margin hover affordance on
+     the request detail page that returns the user to the page
+     they came from (referrer-aware, falls back to /schedule).
+  c. Accept / reject blob on the request info tile. Actions live
+     where the user is looking — no tab nav, no modal.
+  d. In-place metadata edit on the instrument page. Click a field,
+     edit, blur → POST, append one entry to the instrument's
+     event stream. No form dialog.
+  e. Similar event panes for machines and jobs (currently only
+     requests have a full activity_feed).
+  f. Form control panel on the machine page: edit how the machine's
+     request form travels through the system. Which faculty /
+     operator group receives it, which metadata fields are
+     required vs optional, which optional fields the admin can
+     force.
+  g. Sample approval explainer pane — default text mentioning how
+     a sample travels through the approval pipeline, editable by
+     admins, visible to every new user. Inline, not buried in a
+     wiki.
+
+Files: `templates/instrument_detail.html`,
+`templates/request_detail.html`, `static/styles.css`, `app.py`
+(new routes for in-place edit + event stream append).
+
+----------------------------------------------------------------------
+1.3.3  Demo / operational directory split                      M
+----------------------------------------------------------------------
+
+Carve out the `demo/` and `backend/` subdirectories described in
+PHILOSOPHY.md §4. Move the scattered files in. The hard attribute
+is the directory boundary — the exact file list inside each is
+soft and may evolve.
+
+  - demo/lab_demo.db, demo/populate_demo.py, demo/README.md
+  - backend/start.sh, backend/start_server.sh,
+    backend/deploy_macmini.sh, backend/Caddyfile,
+    backend/launchd/local.prism.plist
+
+Files: reorganisation only, no behaviour change.
 
 ======================================================================
 v1.4.0 — BULK OPERATIONS
@@ -196,8 +225,8 @@ user asks.
     has chosen its mail story.
   - **Cost / grant tracking + invoicing** — biggest item in the
     backlog and needs a per-instrument cost model first. No user yet.
-  - **Per-instrument custom request fields** — speculative; nobody
-    has asked. Build the second time someone hits the limit.
+  - **Per-instrument custom request fields** — partially addressed
+    in 1.3.2-f. Full per-instrument catalog waits for a real user ask.
   - **Recurring / templated requests** — nice-to-have after search
     exists. v1.5.0 first.
   - **Mobile breakpoint pass** — desktop use is 95% of the load.
@@ -227,6 +256,8 @@ Listed here so future agents do not spin them up speculatively.
   - WebSockets — polling at the existing intervals is fine.
   - Build step / bundler / transpiler — vanilla JS + a single CSS
     file is the design rule.
+  - Ollama / local LLM offload — dropped at v1.3.0. The Mac mini
+    is a production host, not a compute bridge.
 
 ----------------------------------------------------------------------
-Last verified clean: see latest commit on master.
+Last verified clean: v1.3.0 stable release.

@@ -10,7 +10,11 @@ from werkzeug.security import generate_password_hash
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "lab_scheduler.db"
+
+# Honour the same data/ split that app.py uses so `populate_live_demo`
+# writes into data/demo/lab_scheduler.db (never operational).
+import app as _app  # noqa: E402  (local import avoids circular work at top)
+DB_PATH = _app.DB_PATH
 DEFAULT_PASSWORD = "SimplePass123"
 
 

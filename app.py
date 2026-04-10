@@ -27,9 +27,24 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "lab_scheduler.db"
-EXPORT_DIR = BASE_DIR / "exports"
-UPLOAD_DIR = BASE_DIR / "uploads"
+
+# ── Data layout (v1.3.0) ────────────────────────────────────────────────
+# Operational data (the real lab DB, uploads, exports) and demo data
+# (fake users/requests for local dev) live under separate folders so
+# demo runs can never corrupt a real deployment. The mode is chosen at
+# boot by LAB_SCHEDULER_DEMO_MODE — "1"/"true" → demo; else operational.
+DATA_DIR = BASE_DIR / "data"
+DATA_OPERATIONAL_DIR = DATA_DIR / "operational"
+DATA_DEMO_DIR = DATA_DIR / "demo"
+
+_DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
+DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
+_ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
+_ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = _ACTIVE_DATA_DIR / "lab_scheduler.db"
+EXPORT_DIR = _ACTIVE_DATA_DIR / "exports"
+UPLOAD_DIR = _ACTIVE_DATA_DIR / "uploads"
 STATIC_DIR = BASE_DIR / "static"
 INSTRUMENT_IMAGE_DIR = STATIC_DIR / "instrument_images"
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "xlsx", "csv", "txt"}
@@ -5436,25 +5451,29 @@ def request_detail(request_id: int):
 
 
 # ─────────────────────────────────────────────────────────────
-# Development Control Panel
+# Development Control Panel (v1.3.0+)
 # ─────────────────────────────────────────────────────────────
 #
 # Owner-only admin page that surfaces:
-#   - project progress (parsed from CHANGELOG / TODO_AI / git)
-#   - Ollama bridge status (local + remote endpoints)
-#   - one-shot Ollama task firing on local / remote / dual
-#   - in-page README viewer
-#   - chat with either Ollama machine
+#   - project progress (git branch, ahead/behind, dirty, commits)
+#   - roadmap (version blocks parsed from TODO_AI.txt, rendered as
+#     chart_bar meters)
+#   - current release (parsed from CHANGELOG.md)
+#   - in-page document viewer (README / PHILOSOPHY / DEPLOY /
+#     PROJECT / TODO_AI / CHANGELOG)
 #
-# All routes are gated by `@owner_required`. The Ollama
-# endpoints are best-effort: if a machine is unreachable, the
-# UI surfaces a friendly error rather than 5xx.
+# All routes are gated by `@owner_required`. No external
+# dependencies, no compute offload. The panel is pure
+# read-only introspection of the repository state.
 
-DEV_PANEL_LOCAL_OLLAMA = os.environ.get("DEV_PANEL_LOCAL_OLLAMA", "http://127.0.0.1:11435")
-DEV_PANEL_REMOTE_OLLAMA = os.environ.get("DEV_PANEL_REMOTE_OLLAMA", "http://127.0.0.1:11434")
-DEV_PANEL_OLLAMA_MODEL = os.environ.get("DEV_PANEL_OLLAMA_MODEL", "llama3")
-DEV_PANEL_DOC_FILES = ("README.md", "PROJECT.md", "TODO_AI.txt", "CHANGELOG.md", "OLLAMA_DEV_PLAN.md", "ollama_qc_log.md")
-DEV_PANEL_RUNS_DIR = BASE_DIR / "ollama_outputs" / "dev_panel_runs"
+DEV_PANEL_DOC_FILES = (
+    "README.md",
+    "PHILOSOPHY.md",
+    "DEPLOY.md",
+    "PROJECT.md",
+    "TODO_AI.txt",
+    "CHANGELOG.md",
+)
 
 
 def _dev_panel_git(*args: str) -> str:
@@ -5535,64 +5554,6 @@ def _dev_panel_progress() -> dict:
     }
 
 
-def _dev_panel_endpoint(target: str) -> str:
-    if target == "local":
-        return DEV_PANEL_LOCAL_OLLAMA
-    if target == "remote":
-        return DEV_PANEL_REMOTE_OLLAMA
-    raise ValueError(f"unknown target: {target!r}")
-
-
-def _dev_panel_ollama_ping(target: str) -> dict:
-    """Best-effort reachability check. Returns dict with status + models."""
-    try:
-        endpoint = _dev_panel_endpoint(target)
-    except ValueError as exc:
-        return {"target": target, "ok": False, "error": str(exc), "models": []}
-    try:
-        req = urllib.request.Request(f"{endpoint}/api/tags")
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-        models = [m.get("name", "?") for m in payload.get("models", [])]
-        return {"target": target, "ok": True, "endpoint": endpoint, "models": models}
-    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
-        return {"target": target, "ok": False, "endpoint": endpoint, "error": str(exc), "models": []}
-
-
-def _dev_panel_ollama_call(target: str, prompt: str, model: str | None = None, timeout: int = 60) -> dict:
-    """Single one-shot call to an Ollama generate endpoint."""
-    try:
-        endpoint = _dev_panel_endpoint(target)
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc), "response": ""}
-    body = json.dumps({
-        "model": model or DEV_PANEL_OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{endpoint}/api/generate",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-        return {
-            "ok": True,
-            "target": target,
-            "response": payload.get("response", "") or payload.get("error", ""),
-        }
-    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
-        return {"ok": False, "target": target, "error": str(exc), "response": ""}
-
-
-def _dev_panel_run_dir() -> Path:
-    DEV_PANEL_RUNS_DIR.mkdir(parents=True, exist_ok=True)
-    return DEV_PANEL_RUNS_DIR
-
-
 def _dev_panel_safe_doc_name(name: str) -> str | None:
     """Return the doc name if it is in the allowlist, else None."""
     return name if name in DEV_PANEL_DOC_FILES else None
@@ -5603,15 +5564,10 @@ def _dev_panel_safe_doc_name(name: str) -> str | None:
 def dev_panel():
     """Owner-only development control panel."""
     progress = _dev_panel_progress()
-    local_status = _dev_panel_ollama_ping("local")
-    remote_status = _dev_panel_ollama_ping("remote")
     return render_template(
         "dev_panel.html",
         progress=progress,
-        local_status=local_status,
-        remote_status=remote_status,
         doc_files=DEV_PANEL_DOC_FILES,
-        ollama_model=DEV_PANEL_OLLAMA_MODEL,
     )
 
 
@@ -5631,95 +5587,6 @@ def dev_panel_doc():
     except OSError as exc:
         return jsonify({"name": safe, "content": f"(error reading {safe}: {exc})"}), 200
     return jsonify({"name": safe, "content": text})
-
-
-@app.route("/admin/dev_panel/ping")
-@owner_required
-def dev_panel_ping():
-    """Re-ping the local + remote Ollama endpoints (no caching)."""
-    return jsonify({
-        "local": _dev_panel_ollama_ping("local"),
-        "remote": _dev_panel_ollama_ping("remote"),
-    })
-
-
-@app.route("/admin/dev_panel/chat", methods=["POST"])
-@owner_required
-def dev_panel_chat():
-    """Send a single chat prompt to local / remote / dual Ollama."""
-    target = (request.form.get("target") or "remote").strip().lower()
-    prompt = (request.form.get("prompt") or "").strip()
-    if not prompt:
-        return jsonify({"ok": False, "error": "empty prompt"}), 400
-    if target not in {"local", "remote", "dual"}:
-        return jsonify({"ok": False, "error": "target must be local|remote|dual"}), 400
-    if target == "dual":
-        return jsonify({
-            "ok": True,
-            "target": "dual",
-            "responses": [
-                _dev_panel_ollama_call("local", prompt),
-                _dev_panel_ollama_call("remote", prompt),
-            ],
-        })
-    return jsonify(_dev_panel_ollama_call(target, prompt))
-
-
-@app.route("/admin/dev_panel/fire", methods=["POST"])
-@owner_required
-def dev_panel_fire():
-    """Fire a longer-form Ollama task and stream the result into a run log.
-
-    Synchronous for now: the call blocks until Ollama responds, then writes
-    the run log to disk and returns the run id. The page polls /log/<run_id>
-    afterwards. Unattended async runs go through `run_ollama_task.sh` from
-    the shell, not this endpoint.
-    """
-    target = (request.form.get("target") or "remote").strip().lower()
-    instruction = (request.form.get("instruction") or "").strip()
-    if not instruction:
-        return jsonify({"ok": False, "error": "empty instruction"}), 400
-    if target not in {"local", "remote", "dual"}:
-        return jsonify({"ok": False, "error": "target must be local|remote|dual"}), 400
-
-    run_dir = _dev_panel_run_dir()
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_path = run_dir / f"run-{run_id}.log"
-
-    header = (
-        f"# dev panel run {run_id}\n"
-        f"# target: {target}\n"
-        f"# model:  {DEV_PANEL_OLLAMA_MODEL}\n\n"
-        f"## INSTRUCTION\n{instruction}\n\n## OUTPUT\n"
-    )
-    log_path.write_text(header)
-
-    targets = ["local", "remote"] if target == "dual" else [target]
-    results = []
-    for t in targets:
-        result = _dev_panel_ollama_call(t, instruction, timeout=120)
-        results.append(result)
-        with log_path.open("a") as fh:
-            fh.write(f"\n--- {t} ---\n")
-            if result.get("ok"):
-                fh.write(result.get("response", "") or "(empty)")
-            else:
-                fh.write(f"ERROR: {result.get('error', 'unknown')}")
-            fh.write("\n")
-
-    return jsonify({"ok": True, "run_id": run_id, "log": log_path.name, "results": results})
-
-
-@app.route("/admin/dev_panel/log/<run_id>")
-@owner_required
-def dev_panel_log(run_id: str):
-    """Return the contents of a fire-run log for polling."""
-    if not run_id.replace("-", "").isalnum():
-        abort(404)
-    log_path = _dev_panel_run_dir() / f"run-{run_id}.log"
-    if not log_path.exists():
-        return jsonify({"ok": False, "content": "(log not found)"}), 404
-    return jsonify({"ok": True, "content": log_path.read_text(errors="replace")})
 
 
 @app.route("/requests/<int:request_id>/duplicate")

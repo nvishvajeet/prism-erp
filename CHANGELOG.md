@@ -13,29 +13,83 @@ detail.
 
 Forward plan lives in `TODO_AI.txt`. Headline:
 
-- **v1.3.0** — CSRF enforcement on, input validation everywhere,
-  persisted state-transition test (done). The originally-planned
-  `request_detail()` handler split is dropped — the state machine
-  + `tests/test_status_transitions.py` already lock every status
-  write, so the 685-line function is ugly but not unsafe.
+- **v1.3.x patch stream** — `safe_int`/`safe_float` wrap (1.3.1),
+  instrument-page polish under the Jony Ive / Apple / Ferrari
+  philosophy (1.3.2), demo / operational directory split (1.3.3).
 - **v1.4.0** — bulk operations on the queue tile.
 - **v1.5.0** — SQLite FTS5 full-text search.
 
-### Added (in flight)
+## [1.3.0] — 2026-04-10
 
+**First stable release.** Hard attributes (data model, routes,
+roles, audit chain, tile architecture, event stream) are now
+locked. See `PHILOSOPHY.md` for the full hard-vs-soft contract.
+From this point forward every release on `master` is stable.
+
+### Added
+
+- **`PHILOSOPHY.md`** — THE PHILOSOPHY. Jony Ive / Apple / Ferrari
+  design creed as the load-bearing document. Hard-attribute
+  contract (data model / routes / roles / audit chain / tile
+  architecture / event stream are locked), soft-attribute freedom
+  (copy / placement / colours drift between patch releases),
+  stable-release discipline (every master release is shippable),
+  demo-vs-operational data separation (physically distinct paths,
+  `LAB_SCHEDULER_DEMO_MODE=0` mandatory on the production host).
+- **`DEPLOY.md`** — Mac mini production deployment. The mini at
+  `100.115.176.118` is the canonical production host, reachable
+  from every Tailscale peer. Atomic deploys: `git pull` → smoke →
+  `launchctl kickstart`. Never interrupts live users.
+- **Owner-only `/admin/dev_panel`** — development console for the
+  owner role only. Surfaces project progress (git branch, ahead /
+  behind, dirty count, recent commits), roadmap (parsed version
+  blocks from TODO_AI.txt rendered as `chart_bar` progress meters),
+  and an in-page document viewer (README, PHILOSOPHY, PROJECT,
+  TODO_AI, CHANGELOG, DEPLOY). No external dependencies.
+- **CSRF enforcement on by default.** `LAB_SCHEDULER_CSRF=1`. Every
+  `<form method="post">` carries a `csrf_token` hidden input; the
+  base-template JS shim auto-injects the token into `fetch()` calls.
 - **`tests/test_status_transitions.py`** — exhaustive walk of
   `REQUEST_STATUS_TRANSITIONS`: 21 legal pairs, 70 illegal pairs,
   terminal lock, idempotent self-transitions, admin force-override
   bypass, fast-track. Wired into the pre-push gate next to
-  `smoke_test.py`. (v1.3.0-d)
-- **Ollama bridge** — `OLLAMA_DEV_PLAN.md` (the contract),
-  `setup_remote.command` (interactive Mac mini setup including
-  the `usekeychain` typo fix), and a clean rewrite of
-  `run_ollama_task.sh` (sandboxed `ollama-work` branch, refuses
-  to run on master/main with `--commit`, three modes: local /
-  remote / dual). Gives the project an unattended-task lane for
-  mechanical work (CSRF inputs, `safe_int` wraps) while Claude
-  handles judgment calls.
+  `smoke_test.py`.
+- **`chart_bar` macro usage across the dev panel** — replaces the
+  ad-hoc badge / detail rows on the progress, bridge, and roadmap
+  tiles with the canonical bar widget.
+
+### Removed
+
+- **Ollama bridge** — the v1.2.x Ollama offload plan is retired.
+  The Mac mini is now a production host, not a compute bridge.
+  Deleted: `OLLAMA_DEV_PLAN.md`, `run_ollama_task.sh`,
+  `review_ollama_commits.sh`, `ollama_qc_log.md`,
+  `ollama_observations.md`, `crawlers/strategies/ollama_observer.py`,
+  the four `.command` launcher files, and every Ollama reference
+  in the dev panel, README, TODO_AI.txt, and CHANGELOG.md.
+  Rationale: the production host requirement supersedes the
+  background-compute experiment and the empirical results
+  (v1.2.x dispatches hallucinated diffs) did not justify the
+  maintenance cost.
+
+### Changed
+
+- **README.md** — rewritten for the 1.3.0 stable-release posture.
+  Roadmap collapses to "v1.4.0 bulk ops, v1.5.0 search" — the
+  hardening story is closed.
+- **TODO_AI.txt** — v1.3.0 entries moved into the "shipped"
+  section; new `v1.3.x patch stream` captures the soft-attribute
+  polish queue (safe_int wrap, instrument-page polish, demo /
+  backend directory split). Guideline #1 now points at
+  `PHILOSOPHY.md`.
+
+### Deferred
+
+- **`safe_int` / `safe_float` wrap** — ~30 sites. Ships as 1.3.1.
+- **`request_detail()` handler split** — dropped permanently
+  unless the function grows past ~900 lines. The state machine +
+  `tests/test_status_transitions.py` already lock every status
+  write.
 
 ## [1.2.0] — 2026-04-10
 

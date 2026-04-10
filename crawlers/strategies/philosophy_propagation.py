@@ -34,7 +34,7 @@ from ..harness import Harness
 
 EXEMPT_PREFIXES = ("_", "base.html", "error_", "login.html",
                    "logout.html", "onboard", "accept_invite",
-                   "password_reset")
+                   "password_reset", "calendar_card")
 
 DEPRECATED_CLASSES = [
     "grid-two", "grid-auto-stats", "stream-pill", "stream-filter-strip",

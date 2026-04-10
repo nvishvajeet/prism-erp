@@ -28,6 +28,15 @@ Thumbs.db
 uploads/
 exports/
 
+# Data directory — demo DB, operational DB, their uploads/exports.
+# Everything under data/ is regenerable runtime state, never code.
+data/demo/lab_scheduler.db
+data/demo/uploads/
+data/demo/exports/
+data/operational/lab_scheduler.db
+data/operational/uploads/
+data/operational/exports/
+
 # Environment variables
 .env
 .env.local
@@ -35,5 +44,3 @@ venv_310/
 
 # Crawler reports (generated every run)
 reports/
-ollama_chats/
-ollama_outputs/

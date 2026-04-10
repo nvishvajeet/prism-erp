@@ -19,4 +19,3 @@ from . import philosophy_propagation   # noqa: F401
 from . import role_behavior            # noqa: F401
 from . import color_improvement        # noqa: F401
 from . import cleanup                  # noqa: F401
-from . import ollama_observer          # noqa: F401 (opt-in probe, run explicitly)

@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, paginated_pane, input_dialog, metadata_grid, person_chip, approval_action_form, empty_state with context %}
-{% block hover_back %}<a href="{{ url_for('schedule') }}" class="hover-back-btn" title="Back to Queue">←</a>{% endblock %}
+{% block hover_back %}
+{# Referrer-aware back-hover button. Falls back to /schedule if the referrer
+   is missing, off-site, or pointing at this same detail page. (v1.3.0) #}
+{%- set _ref = request.referrer or '' -%}
+{%- set _here = request.url -%}
+{%- set _root = request.host_url.rstrip('/') -%}
+{%- if _ref and _ref.startswith(_root) and _ref != _here -%}
+  {%- set _back_url = _ref -%}
+  {%- set _back_title = 'Back to where you came from' -%}
+{%- else -%}
+  {%- set _back_url = url_for('schedule') -%}
+  {%- set _back_title = 'Back to Queue' -%}
+{%- endif -%}
+<a href="{{ _back_url }}" class="hover-back-btn" title="{{ _back_title }}">←</a>
+{% endblock %}
 {% block content %}
 
 <section data-vis="{{ V }}">
@@ -302,6 +316,23 @@
       ) }}
     </div>
     {% endif %}
+  </article>
+
+  {# ── TILE: sample-approval explainer — static default text, editable in a future patch ── #}
+  <article class="card tile tile-request-explainer" data-vis="{{ V }}">
+    {{ card_heading("", "How does sample approval work?") }}
+    <details class="explainer-details" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Show the full pipeline</summary>
+      <ol class="explainer-steps" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong>Submitted.</strong> The requester creates the request and the lifecycle strip above shows it on the left. Nothing is approved yet.</li>
+        <li data-vis="{{ V }}"><strong>Finance review.</strong> The finance admin confirms the grant / account code. If the instrument is charged per use, the rate is locked at this step.</li>
+        <li data-vis="{{ V }}"><strong>Professor approval.</strong> The requester's supervising professor signs off on the scientific intent. This step can be skipped if the requester already holds operator-level access.</li>
+        <li data-vis="{{ V }}"><strong>Instrument admin schedule.</strong> The operator group owning the instrument picks a slot, marks the sample received, and queues the job. Only users in the operator group for this instrument see this step.</li>
+        <li data-vis="{{ V }}"><strong>Run + results.</strong> The operator runs the sample, attaches result files to the Activity tile above, and marks the request complete. The audit chain is updated and the queue advances.</li>
+        <li data-vis="{{ V }}"><strong>Completed.</strong> Requester, professor, finance, and operators can all see the result files. A completed request is immutable except for a flagged re-open by the owner role.</li>
+      </ol>
+      <p class="hint" data-vis="{{ V }}">This default text is editable by admins in a later patch (v1.3.2). For now, it is the canonical description of how a sample travels through the system.</p>
+    </details>
   </article>
 
 </section>

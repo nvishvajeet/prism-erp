@@ -14,6 +14,7 @@ allowlist of self-healing endpoints.
 """
 from __future__ import annotations
 
+import os
 import random
 from collections import Counter
 
@@ -40,7 +41,7 @@ ROUTE_POOL = [
     ("GET", "/visualizations/instrument/1", "viz-inst-1"),
 ]
 
-DEFAULT_STEPS = 800
+DEFAULT_STEPS = int(os.environ.get("CRAWLER_RANDOM_WALK_STEPS", "800"))
 
 
 class RandomWalkStrategy(CrawlerStrategy):

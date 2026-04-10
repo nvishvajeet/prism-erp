@@ -139,3 +139,215 @@
   {% endif %}
 </div>
 {%- endmacro %}
+
+{# =========================================================================
+   W5.1 — SHARED WIDGET MACROS
+   Canonical widget primitives. Use these instead of re-implementing the
+   pattern inline. Each macro aims for one responsibility and composes with
+   the tile architecture.
+   ========================================================================= #}
+
+{#
+  status_pills_row(pills, active='', row_id='', data_attr='bucket')
+  Unified filter pill row. Replaces .stream-pill / .role-toggle / .warroom-pill.
+  - pills: list of (value, label, count) tuples (count may be None)
+  - active: value that starts active
+  - row_id: optional id on the container (for JS bindings)
+  - data_attr: name of the data-* attribute on each button (default "bucket")
+  Canonical class: .filter-pill inside .filter-pill-row.
+#}
+{% macro status_pills_row(pills, active='', row_id='', data_attr='bucket') -%}
+<div class="filter-pill-row"{% if row_id %} id="{{ row_id }}"{% endif %} data-vis="{{ V }}">
+  {% for pill in pills %}
+  {% set value = pill[0] %}
+  {% set label = pill[1] %}
+  {% set count = pill[2] if pill|length > 2 else None %}
+  <button type="button" class="filter-pill{% if value == active %} is-active{% endif %}" data-{{ data_attr }}="{{ value }}" data-vis="{{ V }}">
+    <span class="filter-pill-label" data-vis="{{ V }}">{{ label }}</span>
+    {% if count is not none %}<span class="filter-pill-count" data-vis="{{ V }}">{{ count }}</span>{% endif %}
+  </button>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{#
+  person_chip(name, user_id=None, link=True, avatar=True, size='md', subtitle='', href='')
+  Canonical avatar + name chip used in team lists, assignee slots, queue rows.
+  - name: display name (required)
+  - user_id: numeric id; if set and link=True, chip links to /user/<id>
+  - link: whether to render as an <a> (requires user_id or href)
+  - avatar: whether to render the initials circle
+  - size: 'sm' | 'md' | 'lg'
+  - subtitle: optional second line (role, status)
+  - href: explicit href override
+#}
+{% macro person_chip(name, user_id=None, link=True, avatar=True, size='md', subtitle='', href='') -%}
+{% set initials = (name or '?')[:1]|upper %}
+{% set final_href = href if href else ('/user/' ~ user_id if user_id else '') %}
+{% set is_link = link and final_href %}
+{% set tag = 'a' if is_link else 'span' %}
+<{{ tag }} class="person-chip person-chip-{{ size }}"{% if is_link %} href="{{ final_href }}"{% endif %} data-vis="{{ V }}">
+  {% if avatar %}<span class="person-chip-avatar" data-vis="{{ V }}">{{ initials }}</span>{% endif %}
+  <span class="person-chip-body" data-vis="{{ V }}">
+    <span class="person-chip-name" data-vis="{{ V }}">{{ name }}</span>
+    {% if subtitle %}<span class="person-chip-sub" data-vis="{{ V }}">{{ subtitle }}</span>{% endif %}
+  </span>
+</{{ tag }}>
+{%- endmacro %}
+
+{#
+  metadata_grid(items, compact=False)
+  <dl> grid for label/value pairs. Replaces .detail-grid, .compact-detail-grid,
+  .tile-info-meta ad-hoc layouts.
+  - items: list of (label, value) tuples OR (label, value, css_class) triples
+  - compact: tightens row spacing when True
+  Values are rendered |safe so callers can pass formatted HTML.
+#}
+{% macro metadata_grid(items, compact=False) -%}
+<dl class="meta-grid{% if compact %} meta-grid-compact{% endif %}" data-vis="{{ V }}">
+  {% for item in items %}
+  {% set label = item[0] %}
+  {% set value = item[1] %}
+  {% set extra = item[2] if item|length > 2 else '' %}
+  <div class="meta-grid-row{% if extra %} {{ extra }}{% endif %}" data-vis="{{ V }}">
+    <dt data-vis="{{ V }}">{{ label }}</dt>
+    <dd data-vis="{{ V }}">{{ value|safe if value is string else value }}</dd>
+  </div>
+  {% endfor %}
+</dl>
+{%- endmacro %}
+
+{#
+  kpi_grid(items, variant='card')
+  Grid of KPI counters. Wraps stat_blob in a consistent container. Replaces
+  .stats-kpi-row, .grid-auto-stats, ad-hoc stat clusters.
+  - items: list of dicts {value, label, href?, tone?, dark?, sub?}
+  - variant: 'card' (bordered), 'bare' (no border), 'dense' (compact)
+#}
+{% macro kpi_grid(items, variant='card') -%}
+<div class="kpi-grid kpi-grid-{{ variant }}" data-vis="{{ V }}">
+  {% for it in items %}
+  {{ stat_blob(it.value, it.label, it.href|default('#'), it.tone|default(''), it.dark|default(False), it.sub|default('')) }}
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{#
+  approval_action_form(step, allow_file=False, allow_note=True)
+  Approve/Reject forms for one approval step. step must expose:
+    step.id, step.step_order, step.approver_role (or approver_role_label)
+  Renders two forms inside one .approval-action-block so the caller can
+  drop this into any tile that hosts actionable approvals.
+#}
+{% macro approval_action_form(step, allow_file=False, allow_note=True) -%}
+{% set role_label = step.approver_role_label if step.approver_role_label is defined else step.approver_role %}
+<div class="approval-action-block" data-vis="{{ V }}">
+  <p class="approval-action-heading" data-vis="{{ V }}">Step {{ step.step_order }} · {{ role_label }}</p>
+  <form method="post" enctype="multipart/form-data" class="approval-action-form approve" data-vis="{{ V }}">
+    <input type="hidden" name="action" value="approve_step">
+    <input type="hidden" name="step_id" value="{{ step.id }}">
+    {% if allow_note %}<textarea name="note" rows="2" placeholder="Optional note…" data-vis="{{ V }}"></textarea>{% endif %}
+    {% if allow_file %}
+    <label class="approval-action-file" data-vis="{{ V }}">
+      <input type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt">
+      <span data-vis="{{ V }}">📎 Attach</span>
+    </label>
+    {% endif %}
+    <button type="submit" class="approval-action-approve" data-vis="{{ V }}">Approve</button>
+  </form>
+  <form method="post" class="approval-action-form reject" data-vis="{{ V }}">
+    <input type="hidden" name="action" value="reject_step">
+    <input type="hidden" name="step_id" value="{{ step.id }}">
+    {% if allow_note %}<textarea name="note" rows="2" placeholder="Reason for rejection…" data-vis="{{ V }}"></textarea>{% endif %}
+    <button type="submit" class="approval-action-reject" data-vis="{{ V }}">Reject</button>
+  </form>
+</div>
+{%- endmacro %}
+
+{#
+  queue_action_stack(row, operators, post_action, can_accept=True, can_assign=True, hidden_inputs={})
+  The Accept Sample + Quick Assign forms that currently live inlined in
+  schedule.html, instrument_detail.html, and dashboard.html queue tables.
+  - row: sqlite Row with .id (request id)
+  - operators: iterable of rows with .id and .display_name (or .username)
+  - post_action: form action URL (usually url_for('request_detail', ...))
+  - can_accept: show the "Accept Sample" form (mark_received)
+  - can_assign: show the "Assign Operator" form (quick_assign)
+  - hidden_inputs: dict of extra hidden fields to preserve filter state
+                   (bucket, q, instrument_id, date_from, date_to, back, source_label)
+#}
+{% macro queue_action_stack(row, operators, post_action, can_accept=True, can_assign=True, hidden_inputs={}) -%}
+<div class="queue-action-stack" data-vis="{{ V }}">
+  {% if can_accept %}
+  <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-accept" data-vis="{{ V }}">
+    <input type="hidden" name="action" value="mark_received">
+    {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <button type="submit" class="queue-action-btn accept" data-vis="{{ V }}">Accept Sample</button>
+  </form>
+  {% endif %}
+  {% if can_assign %}
+  <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-assign" data-vis="{{ V }}">
+    <input type="hidden" name="action" value="quick_assign">
+    {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <select name="operator_id" class="queue-action-operator" data-vis="{{ V }}">
+      <option value="" data-vis="{{ V }}">Assign operator…</option>
+      {% for op in operators %}
+      <option value="{{ op.id }}" data-vis="{{ V }}">{{ op.display_name if op.display_name is defined else op.username }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="queue-action-btn assign" data-vis="{{ V }}">Assign</button>
+  </form>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{#
+  activity_feed(entries, pane_id, page_size=6, threaded=False)
+  Timeline of activity entries inside a paginated_pane. Each entry is a dict:
+    { kind, author, body, timestamp, side, icon }
+  - threaded=True enables left/right message alignment for request_detail
+    conversation view (entry.side = 'left' | 'right' | 'center')
+  - kind is rendered as .activity-entry-{kind} for per-type styling
+#}
+{% macro activity_feed(entries, pane_id, page_size=6, threaded=False) -%}
+{% call paginated_pane(pane_id, page_size=page_size, css_class='activity-feed-pane') %}
+<div class="activity-feed{% if threaded %} activity-feed-threaded{% endif %}" id="{{ pane_id }}Body" data-vis="{{ V }}">
+  {% for e in entries %}
+  {% set side = e.side|default('left') %}
+  <div class="activity-entry activity-entry-{{ e.kind|default('note') }}{% if threaded %} side-{{ side }}{% endif %}" data-vis="{{ V }}">
+    {% if e.icon %}<span class="activity-entry-icon" data-vis="{{ V }}">{{ e.icon }}</span>{% endif %}
+    <div class="activity-entry-body" data-vis="{{ V }}">
+      {% if e.author or e.timestamp %}
+      <div class="activity-entry-meta" data-vis="{{ V }}">
+        {% if e.author %}<strong data-vis="{{ V }}">{{ e.author }}</strong>{% endif %}
+        {% if e.timestamp %}<span class="activity-entry-time" data-vis="{{ V }}">{{ e.timestamp }}</span>{% endif %}
+      </div>
+      {% endif %}
+      <div class="activity-entry-text" data-vis="{{ V }}">{{ e.body|safe }}</div>
+    </div>
+  </div>
+  {% else %}
+  {{ empty_state('No activity yet.') }}
+  {% endfor %}
+</div>
+{% endcall %}
+{%- endmacro %}
+
+{#
+  toggleable_form(form_id, trigger_label, open=False, variant='default')
+  Disclosure pattern wrapping arbitrary content. Replaces ad-hoc <details>,
+  custom jQuery toggles, and stray modal divs.
+  - form_id: unique id for the details element
+  - trigger_label: the summary text shown when closed
+  - open: initial state
+  - variant: 'default' | 'danger' | 'edit' — controls accent colour
+  Block macro — use with {% call toggleable_form(...) %}body HTML{% endcall %}
+#}
+{% macro toggleable_form(form_id, trigger_label, open=False, variant='default') -%}
+<details class="toggleable-form toggleable-form-{{ variant }}" id="{{ form_id }}"{% if open %} open{% endif %} data-vis="{{ V }}">
+  <summary class="toggleable-form-trigger" data-vis="{{ V }}">{{ trigger_label }}</summary>
+  <div class="toggleable-form-body" data-vis="{{ V }}">
+    {{ caller() }}
+  </div>
+</details>
+{%- endmacro %}

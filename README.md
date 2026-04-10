@@ -50,6 +50,36 @@ CSRF, and the request_detail() handler refactor.
 
 ---
 
+## Phase 5 Progress
+
+| Step | Scope | State |
+|---|---|---|
+| W5.1 | Shared widget macros (8 primitives + CSS) | Done |
+| W5.2 | `schedule.html` tile conversion | Not started |
+| W5.3 | `request_detail.html` tile conversion | Not started |
+| W5.4 | `dashboard.html` tile conversion | Not started |
+| W5.5 | `stats.html` tile conversion | Not started |
+| W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | Not started |
+| W5.7 | CSS hygiene pass (retire legacy class families) | Not started |
+
+**W5.1 macro checklist** (`templates/_page_macros.html`):
+
+- [x] `status_pills_row` — unifies stream-pill / role-toggle / warroom-pill
+- [x] `person_chip` — avatar + name, composes with permission checks
+- [x] `metadata_grid` — canonical `<dl>` for label/value pairs
+- [x] `kpi_grid` — KPI counter grid wrapping `stat_blob`
+- [x] `approval_action_form` — approve/reject forms for one approval step
+- [x] `queue_action_stack` — accept sample + quick assign forms
+- [x] `activity_feed` — timeline with optional chat threading
+- [x] `toggleable_form` — disclosure pattern for inline editors
+- [x] Validation: adopt 3 macros in `instrument_detail.html` (metadata_grid, person_chip, status_pills_row)
+- [x] Crawls green (`test_visibility_audit.py` 171/171, `test_populate_crawl.py` 500 actions, 0 5xx)
+
+Update this block as steps land. The source of truth for task detail
+lives in `TODO_AI.txt`; this panel is a progress mirror.
+
+---
+
 ## What's Done
 
 | Area | State |

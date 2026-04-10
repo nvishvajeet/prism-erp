@@ -370,6 +370,32 @@
     })();
   </script>
   <script>
+    /* ── Generic click-to-reveal toggle ──
+       Wire any element carrying `data-toggle-target="#id"` so that clicking it
+       shows/hides the referenced element and keeps aria-expanded in sync. The
+       button text swaps between its initial label and the value of
+       `data-toggle-alt` (defaults to "Hide"). Used by every admin "Edit"
+       button that reveals an in-place metadata form — one handler, all
+       tiles, no bespoke IIFE per page. */
+    (function () {
+      var toggles = document.querySelectorAll('[data-toggle-target]');
+      toggles.forEach(function (btn) {
+        var sel = btn.getAttribute('data-toggle-target');
+        var target = sel ? document.querySelector(sel) : null;
+        if (!target) return;
+        var labelOpen = btn.textContent.trim();
+        var labelClose = btn.getAttribute('data-toggle-alt') || 'Hide';
+        btn.setAttribute('aria-expanded', target.hidden ? 'false' : 'true');
+        btn.addEventListener('click', function () {
+          var nowOpen = target.hidden;
+          target.hidden = !nowOpen;
+          btn.setAttribute('aria-expanded', String(nowOpen));
+          btn.textContent = nowOpen ? labelClose : labelOpen;
+        });
+      });
+    })();
+  </script>
+  <script>
     /* ── Keyboard shortcuts ── */
     document.addEventListener('keydown', function (e) {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;

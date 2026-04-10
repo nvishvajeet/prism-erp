@@ -308,7 +308,7 @@
   {% if can_edit %}
   <section class="card tile tile-edit" id="metaEditTile" data-vis="{{ V }}">
     {% call card_heading("", "Metadata") %}
-      <button type="button" class="link-button" id="toggleMetaEdit" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+      <button type="button" class="link-button" id="toggleMetaEdit" data-toggle-target="#metaEditForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
     {% endcall %}
     <p class="tile-lead" data-vis="{{ V }}">Edit instrument details, photo, and team assignments.</p>
     <form method="post" enctype="multipart/form-data" class="meta-edit-form" id="metaEditForm" hidden data-vis="{{ V }}">
@@ -353,7 +353,7 @@
   {% if can_archive_instrument or can_restore_instrument %}
   <section class="card tile tile-danger" data-vis="{{ V }}">
     {% call card_heading("", "Danger Zone") %}
-      <button type="button" class="link-button danger-toggle-btn" id="toggleDanger" aria-expanded="false" data-vis="{{ V }}">Show</button>
+      <button type="button" class="link-button danger-toggle-btn" id="toggleDanger" data-toggle-target="#dangerBody" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Show</button>
     {% endcall %}
     <div class="danger-body" id="dangerBody" hidden data-vis="{{ V }}">
       {% if can_archive_instrument and instrument["status"] != "archived" %}
@@ -407,30 +407,7 @@
     form.addEventListener('submit', function () { var b = form.querySelector('button[type="submit"]'); if (b) b.disabled = true; });
   })();
 
-  /* Metadata edit toggle */
-  (function () {
-    var btn = document.getElementById('toggleMetaEdit');
-    var form = document.getElementById('metaEditForm');
-    if (!btn || !form) return;
-    btn.addEventListener('click', function () {
-      var open = !form.hidden;
-      form.hidden = open;
-      btn.textContent = open ? 'Edit' : 'Hide';
-      btn.setAttribute('aria-expanded', String(!open));
-    });
-  })();
-
-  /* Danger zone toggle */
-  (function () {
-    var btn = document.getElementById('toggleDanger');
-    var body = document.getElementById('dangerBody');
-    if (!btn || !body) return;
-    btn.addEventListener('click', function () {
-      var open = !body.hidden;
-      body.hidden = open;
-      btn.textContent = open ? 'Show' : 'Hide';
-      btn.setAttribute('aria-expanded', String(!open));
-    });
-  })();
+  /* Metadata + Danger toggles are wired by the generic data-toggle-target
+     handler in base.html — no page-local IIFE needed. */
 </script>
 {% endblock %}

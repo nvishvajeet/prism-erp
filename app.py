@@ -597,6 +597,7 @@ def timeline_action_label(action: str) -> str:
         "admin_schedule_override": "Admin schedule override",
         "admin_complete_override": "Admin completion override",
         "status_changed": "Status changed",
+        "request_metadata_updated": "Details edited by admin",
     }
     return labels.get(action, action.replace("_", " ").title())
 
@@ -642,6 +643,15 @@ def request_timeline_entries(
             detail = " · ".join(parts)
             if note_text:
                 detail = f"{detail}\n{note_text}".strip()
+        elif log["action"] == "request_metadata_updated":
+            parts = []
+            if payload.get("title"):
+                parts.append(f"title: {payload['title']}")
+            if payload.get("sample_name"):
+                parts.append(f"sample: {payload['sample_name']} ({payload.get('sample_count', '?')})")
+            if payload.get("remarks_preview"):
+                parts.append(payload["remarks_preview"])
+            detail = " · ".join(parts)
         elif log["action"] in {"scheduled", "taken_up_from_board"} and payload.get("scheduled_for"):
             detail = f"Scheduled for {format_dt(payload['scheduled_for'])}"
         elif payload.get("remarks"):
@@ -4866,6 +4876,48 @@ def request_detail(request_id: int):
                 flash(str(exc), "error")
             return redirect(url_for("request_detail", request_id=request_id))
 
+        if action == "update_request_metadata" and can_manage:
+            # In-place edit of user-editable request fields by lab admins.
+            # Limited to fields a manager would legitimately correct: sample
+            # title, sample name, sample count, and the working remark. All
+            # other lifecycle / status moves go through admin_set_status.
+            # Writes an audit-log event so the change lands in the request
+            # timeline like any other admin action. Completed jobs are
+            # blocked below by the completion_locked gate.
+            if sample_request["completion_locked"]:
+                flash("Completed jobs are locked and cannot be edited.", "error")
+                return redirect(url_for("request_detail", request_id=request_id))
+            new_title = (request.form.get("title") or sample_request["title"]).strip() or sample_request["title"]
+            new_sample_name = (request.form.get("sample_name") or sample_request["sample_name"]).strip() or sample_request["sample_name"]
+            try:
+                new_sample_count = max(1, int(request.form.get("sample_count") or sample_request["sample_count"]))
+            except (TypeError, ValueError):
+                new_sample_count = sample_request["sample_count"]
+            new_remarks = (request.form.get("remarks") or sample_request["remarks"] or "").strip()
+            execute(
+                """
+                UPDATE sample_requests
+                SET title = ?, sample_name = ?, sample_count = ?, remarks = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (new_title, new_sample_name, new_sample_count, new_remarks, now_iso(), request_id),
+            )
+            log_action(
+                user["id"],
+                "sample_request",
+                request_id,
+                "request_metadata_updated",
+                {
+                    "title": new_title,
+                    "sample_name": new_sample_name,
+                    "sample_count": new_sample_count,
+                    "remarks_preview": new_remarks[:160],
+                },
+            )
+            write_request_metadata_snapshot(request_id)
+            flash("Request details updated.", "success")
+            return redirect(url_for("request_detail", request_id=request_id))
+
         if action == "admin_set_status" and can_manage:
             new_status = request.form.get("new_status", "").strip()
             remarks = request.form.get("remarks", "").strip()
@@ -5617,6 +5669,7 @@ def _portfolio_state() -> dict:
     analysis = _portfolio_load_json("analysis_state.json") or {}
     simulation = _portfolio_load_json("simulation_results.json") or {}
     snap = _portfolio_load_json("market_snapshot.json") or {}
+    commentary = _portfolio_load_json("commentary_state.json") or {}
     orders = _portfolio_load_orders()
 
     history = _portfolio_load_nav_history(max_days=365)
@@ -5668,6 +5721,7 @@ def _portfolio_state() -> dict:
         "mtd_progress": mtd_progress,
         "value_series": value_series,
         "fund_labels": fund_labels,
+        "commentary": commentary,
     }
 
 
@@ -6347,6 +6401,41 @@ def user_profile(user_id: int):
             log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
             flash(f"Access removed for {target_user['email']}.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
+        if action == "update_user_metadata":
+            # In-place admin edit of a user's profile. Shown behind the
+            # "Edit" toggle on the User Metadata tile; same pattern as the
+            # instrument metadata tile. Only members-managers can save —
+            # non-super_admins cannot touch a super_admin or owner row,
+            # and no one can demote themselves via this form.
+            if not can_manage_members(viewer):
+                abort(403)
+            if is_owner(target_user) and not is_owner(viewer):
+                abort(403)
+            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+                abort(403)
+            new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
+            new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
+            new_active = 1 if request.form.get("active") == "on" else 0
+            if target_user["id"] == viewer["id"]:
+                # Never let an admin deactivate themselves by accident.
+                new_active = 1
+            execute(
+                "UPDATE users SET name = ?, member_code = ?, active = ? WHERE id = ?",
+                (new_name, new_member_code, new_active, user_id),
+            )
+            log_action(
+                viewer["id"],
+                "user",
+                user_id,
+                "user_metadata_updated",
+                {
+                    "name": new_name,
+                    "member_code": new_member_code,
+                    "active": new_active,
+                },
+            )
+            flash(f"Profile updated for {new_name}.", "success")
+            return redirect(url_for("user_profile", user_id=user_id))
 
     scope_clauses, scope_params = request_scope_sql(viewer, "sr")
     rows = query_all(
@@ -6417,6 +6506,11 @@ def user_profile(user_id: int):
         originated_count=originated_count,
         is_self=viewer["id"] == target_user["id"],
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
+        can_edit_user=(
+            can_manage_members(viewer)
+            and (not is_owner(target_user) or is_owner(viewer))
+            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+        ),
     )
 
 

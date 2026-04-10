@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, operator_block, status_block, meta_link with context %}
-{% from "_page_macros.html" import page_intro with context %}
+{% from "_page_macros.html" import page_intro, card_heading with context %}
 {% block hover_back %}<a href="javascript:history.back()" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
 {% call page_intro("", target_user["name"]) %}
@@ -12,7 +12,11 @@
 
 <section class="user-detail-tiles" data-vis="{{ V }}">
   <div class="card tile tile-user-meta" data-vis="{{ V }}">
-    <h2 data-vis="{{ V }}">User Metadata</h2>
+    {% call card_heading("", "User Metadata") %}
+      {% if can_edit_user %}
+      <button type="button" class="link-button" id="toggleUserMetaEdit" data-toggle-target="#userMetaEditForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+      {% endif %}
+    {% endcall %}
     <div class="meta-stack" data-vis="{{ V }}">
       <section class="meta-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Identity</h3>
@@ -31,6 +35,22 @@
         </dl>
       </section>
     </div>
+    {% if can_edit_user %}
+    <form method="post" class="meta-edit-form" id="userMetaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="action" value="update_user_metadata">
+      <div class="meta-edit-grid" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Name<input type="text" name="name" value="{{ target_user['name'] }}" required></label>
+        <label data-vis="{{ V }}">Member Code<input type="text" name="member_code" value="{{ target_user['member_code'] or '' }}" placeholder="Lab code"></label>
+      </div>
+      <label class="check-option top-gap" data-vis="{{ V }}">
+        <input type="checkbox" name="active" {% if target_user['active'] %}checked{% endif %}{% if is_self %} disabled{% endif %}>
+        <span data-vis="{{ V }}">Account active</span>
+      </label>
+      <div class="meta-edit-actions" data-vis="{{ V }}">
+        <button type="submit" data-vis="{{ V }}">Save Changes</button>
+      </div>
+    </form>
+    {% endif %}
   </div>
 
   <div class="card tile tile-user-work" data-vis="{{ V }}">

@@ -80,8 +80,26 @@
 
   {# ── TILE 2: details — metadata + remarks + results ── #}
   <article class="card tile tile-request-meta" data-vis="{{ V }}">
-    {{ card_heading("", "Details") }}
+    {% call card_heading("", "Details") %}
+      {% if can_manage and not sample_request["completion_locked"] %}
+      <button type="button" class="link-button" id="toggleRequestMetaEdit" data-toggle-target="#requestMetaEditForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+      {% endif %}
+    {% endcall %}
     {{ metadata_grid(_meta_items) }}
+    {% if can_manage and not sample_request["completion_locked"] %}
+    <form method="post" class="meta-edit-form top-gap" id="requestMetaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="action" value="update_request_metadata">
+      <div class="meta-edit-grid" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Title<input type="text" name="title" value="{{ sample_request['title'] }}" required></label>
+        <label data-vis="{{ V }}">Sample Name<input type="text" name="sample_name" value="{{ sample_request['sample_name'] }}" required></label>
+        <label data-vis="{{ V }}">Sample Count<input type="number" name="sample_count" value="{{ sample_request['sample_count'] }}" min="1" required></label>
+      </div>
+      <label class="meta-edit-notes" data-vis="{{ V }}">Working Remark<textarea name="remarks" rows="2">{{ sample_request['remarks'] or '' }}</textarea></label>
+      <div class="meta-edit-actions" data-vis="{{ V }}">
+        <button type="submit" data-vis="{{ V }}">Save Changes</button>
+      </div>
+    </form>
+    {% endif %}
     {% if card_policy.fields.remarks and sample_request["remarks"] and sample_request["status"] != "completed" %}
     <div class="tile-request-note-block current-remark" data-vis="{{ V }}">
       <strong data-vis="{{ V }}">Current Remark</strong>{% if remarks_author %}<span class="hint" data-vis="{{ V }}"> — {{ remarks_author }}</span>{% endif %}

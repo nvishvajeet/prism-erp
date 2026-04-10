@@ -2779,6 +2779,30 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
     return [row["instrument_id"] for row in rows]
 
 
+def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.Row]:
+    """Return users eligible to be assigned as the operator on a request.
+
+    Eligibility = anyone who can operate the request's instrument
+    (instrument_operators ∪ instrument_admins for that instrument).
+    Used by quick_assign and bulk_assign on /schedule.
+    """
+    instrument_id = sample_request["instrument_id"]
+    return query_all(
+        """
+        SELECT u.id, u.name
+        FROM users u
+        JOIN (
+            SELECT user_id FROM instrument_operators WHERE instrument_id = ?
+            UNION
+            SELECT user_id FROM instrument_admins   WHERE instrument_id = ?
+        ) eligible ON eligible.user_id = u.id
+        WHERE u.active = 1
+        ORDER BY u.name COLLATE NOCASE
+        """,
+        (instrument_id, instrument_id),
+    )
+
+
 def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) -> list[sqlite3.Row]:
     role = user["role"]
     status_clause = "WHERE status = 'active'" if active_only else ""
@@ -5285,6 +5309,89 @@ def schedule():
         queue_source_label=queue_source_label,
         can_operate_queue=can_operate_queue,
     )
+
+
+@app.route("/schedule/bulk", methods=["POST"])
+@login_required
+def schedule_bulk_actions():
+    """Apply one action across many selected rows on /schedule.
+
+    Currently supports a single action: ``bulk_assign`` — assigns a chosen
+    operator to every selected request. Skips rows the caller cannot
+    operate or where the target operator is not a candidate for that
+    instrument. Reports applied/skipped counts via flash.
+    """
+    user = current_user()
+    if not can_access_schedule(user):
+        abort(403)
+    raw_ids = (request.form.get("request_ids") or "").strip()
+    if not raw_ids:
+        flash("Select at least one job.", "error")
+        return redirect(url_for("schedule"))
+    try:
+        request_ids = [int(x) for x in raw_ids.split(",") if x.strip()]
+    except ValueError:
+        flash("Invalid selection.", "error")
+        return redirect(url_for("schedule"))
+
+    action = (request.form.get("action") or "").strip()
+    back_value = (request.form.get("back") or "").strip()
+
+    if action == "bulk_assign":
+        operator_id = int(request.form.get("assigned_operator_id") or 0)
+        if not operator_id:
+            flash("Choose an operator.", "error")
+            return redirect(back_value or url_for("schedule"))
+        applied = 0
+        skipped_perm = 0
+        skipped_status = 0
+        skipped_candidate = 0
+        for rid in request_ids:
+            sr = query_one(
+                "SELECT * FROM sample_requests WHERE id = ?",
+                (rid,),
+            )
+            if sr is None:
+                skipped_perm += 1
+                continue
+            if not (
+                can_manage_instrument(user["id"], sr["instrument_id"], user["role"])
+                or can_operate_instrument(user["id"], sr["instrument_id"], user["role"])
+            ):
+                skipped_perm += 1
+                continue
+            if sr["status"] in {"completed", "rejected", "submitted"}:
+                skipped_status += 1
+                continue
+            candidate_ids = {row["id"] for row in request_assignment_candidates(sr)}
+            if operator_id not in candidate_ids:
+                skipped_candidate += 1
+                continue
+            execute(
+                "UPDATE sample_requests SET assigned_operator_id = ?, updated_at = ? WHERE id = ?",
+                (operator_id, now_iso(), rid),
+            )
+            log_action(
+                user["id"],
+                "sample_request",
+                rid,
+                "reassigned",
+                {"assigned_operator_id": operator_id, "remarks": "Bulk assign from queue"},
+            )
+            write_request_metadata_snapshot(rid)
+            applied += 1
+        parts = [f"{applied} assigned"]
+        if skipped_status:
+            parts.append(f"{skipped_status} locked")
+        if skipped_candidate:
+            parts.append(f"{skipped_candidate} not eligible")
+        if skipped_perm:
+            parts.append(f"{skipped_perm} no access")
+        flash(" · ".join(parts), "success" if applied else "error")
+        return redirect(back_value or url_for("schedule"))
+
+    flash("Unknown bulk action.", "error")
+    return redirect(back_value or url_for("schedule"))
 
 
 @app.route("/schedule/actions", methods=["POST"])

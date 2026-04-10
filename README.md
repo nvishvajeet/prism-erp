@@ -21,8 +21,8 @@ No hour estimates; the surprise budget for each page varies too much.
 | Step | Scope | Effort | State |
 |---|---|---|---|
 | W5.1 | Shared widget macros (8 primitives + CSS) | M | **Done** (24f4308) |
-| W5.2 | `schedule.html` tile conversion | L | Next |
-| W5.3 | `request_detail.html` tile conversion | XL | Not started |
+| W5.2 | `schedule.html` tile conversion + bulk-actions tile | L | **Done** |
+| W5.3 | `request_detail.html` tile conversion | XL | Next |
 | W5.4 | `dashboard.html` tile conversion | L | Not started |
 | W5.5 | `stats.html` tile conversion | M | Not started |
 | W5.6 | Secondary pages (calendar, instruments, pending, users, finance) | L | Not started |
@@ -56,6 +56,17 @@ No hour estimates; the surprise budget for each page varies too much.
 - [x] `toggleable_form` — disclosure pattern for inline editors
 - [x] Validation: adopt 3 macros in `instrument_detail.html` (metadata_grid, person_chip, status_pills_row)
 - [x] Crawls green (`test_visibility_audit.py` 171/171, `test_populate_crawl.py` 500 actions, 0 5xx)
+
+**W5.2 deliverables** (`templates/schedule.html`):
+
+- [x] Four tiles: filter / status pills / bulk actions / queue
+- [x] `status_pills_row` adopted (`.filter-pill` JS replaces `.stream-pill`)
+- [x] `queue_action_stack` adopted in both `schedule.html` and `instrument_detail.html`
+- [x] Bulk-actions tile with select-all + per-row checkboxes + animated reveal
+- [x] New `/schedule/bulk` route (`schedule_bulk_actions`) with permission-aware skip-and-report
+- [x] Latent bug fix: `request_assignment_candidates` was called from `quick_assign` but never defined — would have 500'd on first use
+- [x] View toggle (Detailed/Compact) moved into queue tile's section-actions slot — kills `.stream-page-header`
+- [x] Crawls green (171/171 visibility, 500 actions, 0 5xx, 0 exceptions)
 
 After Phase 5 settles, **Phase 6 — Foundation Hardening** picks up DB
 indexes, the permission decorator, the request status state machine,

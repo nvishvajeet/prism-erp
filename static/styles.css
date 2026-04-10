@@ -6668,3 +6668,243 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 
 .toggleable-form-edit { border-color: var(--line, #e4e4e9); }
 
+/* =========================================================================
+   W5.2 — SCHEDULE PAGE TILE ARCHITECTURE
+   Tile grid for /schedule. Mirrors .inst-tiles rhythm but every tile is
+   full-width (the schedule queue table is the dominant concern, so the
+   filter/pills/bulk tiles stack above it rather than fight for column
+   space).
+   ========================================================================= */
+
+.schedule-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.25rem;
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 0 0.5rem;
+}
+
+.schedule-tiles > .tile {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-tiles .tile > .section-head {
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- .tile-filters ------------------------------------------------- */
+.tile-filters-body {
+  display: grid;
+  grid-template-columns: minmax(14rem, 2fr) repeat(4, minmax(8rem, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: end;
+}
+
+.tile-filters-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--ink, #1a1a1f);
+  min-width: 0;
+}
+
+.tile-filters-body label .hint {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted, #6e6e76);
+  font-weight: 600;
+}
+
+.tile-filters-body input[type="text"],
+.tile-filters-body input[type="date"],
+.tile-filters-body select {
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface, #fff);
+  font: inherit;
+  font-size: 0.85rem;
+  min-width: 0;
+  transition: border-color 120ms ease;
+}
+
+.tile-filters-body input:focus,
+.tile-filters-body select:focus {
+  outline: none;
+  border-color: var(--ink, #1a1a1f);
+}
+
+.tile-filters-body .queue-search { grid-column: 1 / 2; }
+
+@media (max-width: 1100px) {
+  .tile-filters-body {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tile-filters-body .queue-search { grid-column: 1 / -1; }
+}
+
+/* ---------- .tile-pills ---------------------------------------------------- */
+.tile-pills {
+  /* The filter-pill-row inside breathes naturally; tile just gives padding */
+}
+
+/* ---------- .tile-bulk ---------------------------------------------------- */
+.tile-bulk {
+  border-color: #1a1a1f;
+  box-shadow: 0 2px 12px rgba(26, 26, 31, 0.08);
+  animation: tile-bulk-in 200ms ease;
+}
+
+@keyframes tile-bulk-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.tile-bulk-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink, #1a1a1f);
+  background: var(--surface-alt, #f5f5f7);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+}
+
+.tile-bulk-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.tile-bulk-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.tile-bulk-body label .hint {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted, #6e6e76);
+  font-weight: 600;
+}
+
+.tile-bulk-body select {
+  border: 1px solid var(--line, #e4e4e9);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--surface, #fff);
+}
+
+.tile-bulk-body button {
+  align-self: end;
+  white-space: nowrap;
+}
+
+/* ---------- .tile-queue-schedule ------------------------------------------ */
+.tile-queue-schedule .view-toggle-group {
+  display: inline-flex;
+  background: var(--surface-alt, #f5f5f7);
+  border-radius: 999px;
+  padding: 0.2rem;
+  gap: 0.15rem;
+}
+
+.tile-queue-schedule .view-toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted, #6e6e76);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tile-queue-schedule .view-toggle:hover { color: var(--ink, #1a1a1f); }
+
+.tile-queue-schedule .view-toggle-active {
+  background: var(--surface, #fff);
+  color: var(--ink, #1a1a1f);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tile-queue-schedule .col-select-head,
+.tile-queue-schedule .col-select-cell {
+  width: 2rem;
+  text-align: center;
+  padding-left: 0.5rem;
+  padding-right: 0;
+}
+
+.tile-queue-schedule .col-select-cell input[type="checkbox"],
+.tile-queue-schedule .col-select-head input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  accent-color: #1a1a1f;
+}
+
+.tile-queue-schedule #centralQueueTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.tile-queue-schedule #centralQueueTable thead th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted, #6e6e76);
+  font-weight: 600;
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--line, #e4e4e9);
+}
+
+.tile-queue-schedule #centralQueueTable tbody td {
+  padding: 0.7rem 0.6rem;
+  border-bottom: 1px solid var(--line-soft, #ececf0);
+  vertical-align: top;
+}
+
+.tile-queue-schedule #centralQueueTable tbody tr:hover td {
+  background: var(--surface-alt, #f5f5f7);
+}
+
+.tile-queue-schedule #centralQueueTable tbody tr.queue-row-focus td {
+  background: rgba(10, 122, 63, 0.06);
+  border-left: 3px solid #0a7a3f;
+}
+
+.tile-queue-schedule .queue-compact tbody td {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 1200px) {
+  .schedule-tiles { grid-template-columns: repeat(4, 1fr); }
+  .schedule-tiles > .tile { grid-column: span 4; }
+}
+
+@media (max-width: 760px) {
+  .schedule-tiles { grid-template-columns: 1fr; padding: 0; }
+  .schedule-tiles > .tile { grid-column: span 1; }
+  .tile-queue-schedule #centralQueueTable thead { display: none; }
+  .tile-queue-schedule #centralQueueTable tbody td { padding: 0.5rem 0.4rem; }
+}
+

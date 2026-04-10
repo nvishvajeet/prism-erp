@@ -1,92 +1,138 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, requester_block, operator_block, status_block, meta_link, attachment_list with context %}
-{% from "_page_macros.html" import paginated_pane with context %}
+{% from "_page_macros.html" import paginated_pane, card_heading, status_pills_row, queue_action_stack, empty_state with context %}
 {% block content %}
 
-<div class="stream-page-header" data-vis="{{ V }}">
-  <h2 class="stream-title" data-vis="{{ V }}">
-    Jobs
-  </h2>
-  <div class="view-toggle-group" data-vis="{{ V }}">
-    <button class="view-toggle view-toggle-active" id="viewDetailed" data-view="detailed" data-vis="{{ V }}">Detailed</button>
-    <button class="view-toggle" id="viewCompact" data-view="compact" data-vis="{{ V }}">Compact</button>
-  </div>
-</div>
+{# Filter state preserved on every per-row action post #}
+{% set queue_hidden = {
+  'bucket': filters.bucket,
+  'q': filters.q,
+  'instrument_id': filters.instrument_id,
+  'date_from': filters.date_from,
+  'date_to': filters.date_to,
+  'back': queue_back_url,
+  'source_label': queue_source_label,
+} %}
 
-{# ── Controls blob ── #}
-<section class="card compact queue-controls-card" data-vis="{{ V }}">
+<div class="schedule-tiles" data-vis="{{ V }}">
 
-  {# Status pills #}
-  <div class="stream-pill-row" id="streamPills" data-vis="{{ V }}">
-    <button class="stream-pill" data-bucket="" data-vis="{{ V }}">All</button>
-    <button class="stream-pill stream-pill-pending" data-bucket="pending" data-vis="{{ V }}">Pending</button>
-    <button class="stream-pill" data-bucket="approvals" data-vis="{{ V }}">Approvals</button>
-    <button class="stream-pill" data-bucket="pending_receipt" data-vis="{{ V }}">Pending Receipt</button>
-    <button class="stream-pill" data-bucket="ready" data-vis="{{ V }}">Ready</button>
-    <button class="stream-pill" data-bucket="active" data-vis="{{ V }}">Active</button>
-    <button class="stream-pill stream-pill-done" data-bucket="completed" data-vis="{{ V }}">Completed</button>
-    <button class="stream-pill stream-pill-rejected" data-bucket="rejected" data-vis="{{ V }}">Rejected</button>
-    {% if can_access_schedule_user %}
-    <button class="stream-pill stream-pill-unsubmitted" data-bucket="unsubmitted" id="showUnsubmittedPill" title="Jobs created but not yet submitted to the queue" data-vis="{{ V }}">Unsubmitted</button>
-    {% endif %}
-  </div>
+  {# ── Tile: Filters ── #}
+  <section class="card tile tile-filters" data-vis="{{ V }}">
+    {{ card_heading("", "Filter") }}
+    <div class="tile-filters-body" data-vis="{{ V }}">
+      <label class="queue-search" data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Search</span>
+        <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator" data-vis="{{ V }}">
+      </label>
+      {% if instrument_selector_enabled %}
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Instrument</span>
+        <select id="queueInstrumentFilter" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All instruments</option>
+          {% for instrument in instruments %}
+          <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %} data-vis="{{ V }}">{{ instrument["name"] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% elif instruments %}
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Instrument</span>
+        <input type="text" value="{{ instruments[0]['name'] }}" disabled data-vis="{{ V }}">
+      </label>
+      {% endif %}
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">From</span>
+        <input type="date" id="queueDateFrom" value="{{ filters.date_from }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">To</span>
+        <input type="date" id="queueDateTo" value="{{ filters.date_to }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Sort</span>
+        <select id="queueSort" data-vis="{{ V }}">
+          <option value="time_desc" data-vis="{{ V }}">Newest first</option>
+          <option value="time_asc" data-vis="{{ V }}">Oldest first</option>
+          <option value="status_asc" data-vis="{{ V }}">By status</option>
+          <option value="instrument_asc" data-vis="{{ V }}">By instrument</option>
+        </select>
+      </label>
+    </div>
+  </section>
 
-  {# Search + filters #}
-  <div class="queue-control-strip" data-vis="{{ V }}">
-    <label class="queue-search" data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Search</span>
-      <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator" data-vis="{{ V }}">
-    </label>
-    {% if instrument_selector_enabled %}
-    <label data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Instrument</span>
-      <select id="queueInstrumentFilter" data-vis="{{ V }}">
-        <option value="" data-vis="{{ V }}">All instruments</option>
-        {% for instrument in instruments %}
-        <option value="{{ instrument['id'] }}" {% if filters.instrument_id == instrument['id']|string %}selected{% endif %} data-vis="{{ V }}">{{ instrument["name"] }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% elif instruments %}
-    <label data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Instrument</span>
-      <input type="text" value="{{ instruments[0]['name'] }}" disabled data-vis="{{ V }}">
-    </label>
-    {% endif %}
-    <label data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">From</span>
-      <input type="date" id="queueDateFrom" value="{{ filters.date_from }}" data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">To</span>
-      <input type="date" id="queueDateTo" value="{{ filters.date_to }}" data-vis="{{ V }}">
-    </label>
-    <label data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Sort</span>
-      <select id="queueSort" data-vis="{{ V }}">
-        <option value="time_desc" data-vis="{{ V }}">Newest first</option>
-        <option value="time_asc" data-vis="{{ V }}">Oldest first</option>
-        <option value="status_asc" data-vis="{{ V }}">By status</option>
-        <option value="instrument_asc" data-vis="{{ V }}">By instrument</option>
-      </select>
-    </label>
-  </div>
-</section>
+  {# ── Tile: Status Pills ── #}
+  <section class="card tile tile-pills" data-vis="{{ V }}">
+    {{ card_heading("", "Status") }}
+    {% set pill_list = [
+      ('', 'All'),
+      ('pending', 'Pending'),
+      ('approvals', 'Approvals'),
+      ('pending_receipt', 'Pending Receipt'),
+      ('ready', 'Ready'),
+      ('active', 'Active'),
+      ('completed', 'Completed'),
+      ('rejected', 'Rejected'),
+    ] %}
+    {% if can_access_schedule_user %}{% set pill_list = pill_list + [('unsubmitted', 'Unsubmitted')] %}{% endif %}
+    {{ status_pills_row(pills=pill_list, active=filters.bucket, row_id='streamPills') }}
+  </section>
 
-{# ── Stream table ── #}
-<section class="card queue-table-card" data-vis="{{ V }}">
-  {% call paginated_pane('centralQueue', page_size=25, max_height='none', css_class='queue-table-shell') %}
-    <table id="centralQueueTable" data-vis="{{ V }}">
+  {# ── Tile: Bulk Actions (hidden until ≥1 row selected) ── #}
+  {% if can_operate_queue %}
+  <section class="card tile tile-bulk" id="bulkTile" hidden data-vis="{{ V }}">
+    {% call card_heading("", "Bulk Actions") %}
+      <span class="tile-bulk-count" id="bulkCount" data-vis="{{ V }}">0 selected</span>
+    {% endcall %}
+    <form method="post" action="{{ url_for('schedule_bulk_actions') }}" class="tile-bulk-body" id="bulkForm" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="bulk_assign">
+      <input type="hidden" name="request_ids" id="bulkRequestIds" value="">
+      <input type="hidden" name="back" value="{{ queue_back_url }}">
+      <label data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Assign to operator</span>
+        <select name="assigned_operator_id" required data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Choose operator…</option>
+          {% for operator in operators %}
+          <option value="{{ operator['id'] }}" data-vis="{{ V }}">{{ operator["name"] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Apply to Selection</button>
+      <button type="button" class="small-button" id="bulkClear" data-vis="{{ V }}">Clear</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {# ── Tile: Queue ── #}
+  <section class="card tile tile-queue tile-queue-schedule" data-vis="{{ V }}">
+    {% call card_heading("", "Queue") %}
+      <div class="view-toggle-group" data-vis="{{ V }}">
+        <button type="button" class="view-toggle view-toggle-active" id="viewDetailed" data-view="detailed" data-vis="{{ V }}">Detailed</button>
+        <button type="button" class="view-toggle" id="viewCompact" data-view="compact" data-vis="{{ V }}">Compact</button>
+      </div>
+    {% endcall %}
+
+    {% call paginated_pane('centralQueue', page_size=25, max_height='none', css_class='queue-table-shell') %}
+    <table id="centralQueueTable" class="tile-queue-table" data-vis="{{ V }}">
       <colgroup>
+        {% if can_operate_queue %}<col class="col-select">{% endif %}
         <col class="col-request"><col class="col-instrument"><col class="col-status">
-        <col class="col-requester"><col class="col-time">
-        <col class="col-files">{% if can_operate_queue %}<col class="col-action">{% endif %}
+        <col class="col-requester"><col class="col-time"><col class="col-files">
+        {% if can_operate_queue %}<col class="col-action">{% endif %}
       </colgroup>
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Instrument</th><th data-vis="{{ V }}">Status</th>
-          <th data-vis="{{ V }}">Requester</th><th data-vis="{{ V }}">Time</th>
-          <th data-vis="{{ V }}">File</th>{% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}
+          {% if can_operate_queue %}
+          <th class="col-select-head" data-vis="{{ V }}">
+            <input type="checkbox" id="bulkSelectAll" aria-label="Select all rows">
+          </th>
+          {% endif %}
+          <th data-vis="{{ V }}">Request</th>
+          <th data-vis="{{ V }}">Instrument</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Requester</th>
+          <th data-vis="{{ V }}">Time</th>
+          <th data-vis="{{ V }}">File</th>
+          {% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}
         </tr>
       </thead>
       <tbody id="centralQueueBody" data-vis="{{ V }}">
@@ -115,6 +161,11 @@
             data-time="{{ row_time_value or '' }}"
             data-search="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or '') ~ ' ' ~ (row['operator_name'] or '') ~ ' ' ~ (row['instrument_name'] or ''))|lower }}"
             data-vis="{{ V }}">
+          {% if can_operate_queue %}
+          <td class="col-select-cell" data-vis="{{ V }}">
+            <input type="checkbox" class="bulk-row-check" value="{{ row['id'] }}" aria-label="Select request {{ row['request_no'] }}">
+          </td>
+          {% endif %}
           <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
           <td data-vis="{{ V }}">{{ instrument_name_link(row) }}</td>
           <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=True) }}</td>
@@ -135,52 +186,30 @@
           <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map, limit=3) }}</td>
           {% if can_operate_queue %}
           <td data-vis="{{ V }}">
-            <div class="queue-action-stack" data-vis="{{ V }}">
-            {% if row["status"] == "sample_submitted" %}
-            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
-              <input type="hidden" name="action" value="mark_received">
-              <input type="hidden" name="request_id" value="{{ row['id'] }}">
-              <input type="hidden" name="bucket" value="{{ filters.bucket }}">
-              <input type="hidden" name="q" value="{{ filters.q }}">
-              <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
-              <input type="hidden" name="date_from" value="{{ filters.date_from }}">
-              <input type="hidden" name="date_to" value="{{ filters.date_to }}">
-              <button type="submit" class="small-button primary-action" data-vis="{{ V }}">Accept Sample</button>
-            </form>
-            {% endif %}
-            {% if row["status"] not in ["completed", "rejected", "submitted"] %}
-            <form method="post" action="{{ url_for('schedule_actions') }}" class="inline-action-stack" data-vis="{{ V }}">
-              <input type="hidden" name="action" value="quick_assign">
-              <input type="hidden" name="request_id" value="{{ row['id'] }}">
-              <input type="hidden" name="bucket" value="{{ filters.bucket }}">
-              <input type="hidden" name="q" value="{{ filters.q }}">
-              <input type="hidden" name="instrument_id" value="{{ filters.instrument_id }}">
-              <input type="hidden" name="date_from" value="{{ filters.date_from }}">
-              <input type="hidden" name="date_to" value="{{ filters.date_to }}">
-              <input type="hidden" name="back" value="{{ queue_back_url }}">
-              <input type="hidden" name="source_label" value="{{ queue_source_label }}">
-              <select name="assigned_operator_id" data-vis="{{ V }}">
-                <option value="" data-vis="{{ V }}">Assign</option>
-                {% for operator in operators %}
-                <option value="{{ operator['id'] }}" {% if row['assigned_operator_id'] == operator['id'] %}selected{% endif %} data-vis="{{ V }}">{{ operator["name"] }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit" class="small-button" data-vis="{{ V }}">Assign</button>
-            </form>
-            {% endif %}
-            </div>
+            {{ queue_action_stack(
+              row=row,
+              operators=operators,
+              post_action=url_for('schedule_actions'),
+              can_accept=(row['status'] == 'sample_submitted'),
+              can_assign=(row['status'] not in ['completed','rejected','submitted']),
+              hidden_inputs=queue_hidden
+            ) }}
           </td>
           {% endif %}
         </tr>
         {% else %}
-        <tr data-vis="{{ V }}"><td colspan="{{ 7 if can_operate_queue else 6 }}" data-vis="{{ V }}"><div class="empty-state" data-vis="{{ V }}"><p class="empty-state-message" data-vis="{{ V }}">No jobs found</p><p class="empty-state-hint" data-vis="{{ V }}">Try adjusting filters or submit a new request.</p></div></td></tr>
+        {% set empty_colspan = 8 if can_operate_queue else 6 %}
+        <tr data-vis="{{ V }}"><td colspan="{{ empty_colspan }}" data-vis="{{ V }}">{{ empty_state("No jobs found", "Try adjusting filters or submit a new request.") }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
-  {% endcall %}
-</section>
+    {% endcall %}
+  </section>
+
+</div>
 
 <script>
+  /* ── Queue filtering / pill sync / sorting ── */
   (function () {
     const body = document.getElementById("centralQueueBody");
     const search = document.getElementById("queueSearch");
@@ -188,16 +217,13 @@
     const dateFrom = document.getElementById("queueDateFrom");
     const dateTo = document.getElementById("queueDateTo");
     const sortEl = document.getElementById("queueSort");
-    const pills = Array.from(document.querySelectorAll("#streamPills .stream-pill"));
+    const pills = Array.from(document.querySelectorAll("#streamPills .filter-pill"));
     if (!body) return;
     const rows = Array.from(body.querySelectorAll("tr[data-bucket]"));
 
-    // Seed bucket from URL param
     let activeBucket = {{ filters.bucket|tojson }};
-    // Unsubmitted rows are hidden from view unless explicitly selected
     const isScheduleUser = {{ 'true' if can_access_schedule_user else 'false' }};
 
-    // Pre-select instrument from URL
     const initialInstrument = {{ filters.instrument_id|tojson }};
     if (instrumentEl && initialInstrument) instrumentEl.value = initialInstrument;
 
@@ -209,7 +235,7 @@
 
     function syncPills() {
       pills.forEach(function (pill) {
-        pill.classList.toggle("stream-pill-active", pill.dataset.bucket === activeBucket);
+        pill.classList.toggle("is-active", pill.dataset.bucket === activeBucket);
       });
     }
 
@@ -224,11 +250,11 @@
       });
       pills.forEach(function (pill) {
         const n = counts[pill.dataset.bucket] || 0;
-        const existing = pill.querySelector(".pill-count");
+        const existing = pill.querySelector(".filter-pill-count");
         if (existing) existing.remove();
         if (n > 0) {
           const span = document.createElement("span");
-          span.className = "pill-count";
+          span.className = "filter-pill-count";
           span.textContent = n;
           pill.appendChild(span);
         }
@@ -253,7 +279,6 @@
     function applyFilters() {
       rows.forEach(function (row) {
         const bucket = row.dataset.bucket;
-        // Unsubmitted always hidden unless explicitly selected (mods only)
         if (bucket === "unsubmitted" && activeBucket !== "unsubmitted") {
           row.hidden = true;
           return;
@@ -270,6 +295,7 @@
       });
       updatePillCounts();
       if (window.PaginatedPane) window.PaginatedPane.refresh('centralQueue');
+      if (window.__schedulePruneBulkSelection) window.__schedulePruneBulkSelection();
     }
 
     function sortRows() {
@@ -280,7 +306,7 @@
         if (selected === "time_asc") return aTime.localeCompare(bTime);
         if (selected === "status_asc") return (statusRank[a.dataset.status] || 99) - (statusRank[b.dataset.status] || 99) || bTime.localeCompare(aTime);
         if (selected === "instrument_asc") return (a.dataset.instrumentName || "").localeCompare(b.dataset.instrumentName || "") || bTime.localeCompare(aTime);
-        return bTime.localeCompare(aTime); // time_desc default
+        return bTime.localeCompare(aTime);
       });
       ordered.forEach(function (row) { body.appendChild(row); });
     }
@@ -288,7 +314,7 @@
     pills.forEach(function (pill) {
       pill.addEventListener("click", function () {
         const clicked = pill.dataset.bucket;
-        activeBucket = (activeBucket === clicked) ? "" : clicked; // toggle off on re-click
+        activeBucket = (activeBucket === clicked) ? "" : clicked;
         syncPills();
         applyFilters();
       });
@@ -303,6 +329,63 @@
     syncPills();
     sortRows();
     applyFilters();
+  })();
+
+  /* ── Bulk selection + bulk tile reveal ── */
+  (function () {
+    const tile = document.getElementById('bulkTile');
+    if (!tile) return;
+    const form = document.getElementById('bulkForm');
+    const idsField = document.getElementById('bulkRequestIds');
+    const countLabel = document.getElementById('bulkCount');
+    const clearBtn = document.getElementById('bulkClear');
+    const selectAll = document.getElementById('bulkSelectAll');
+    const body = document.getElementById('centralQueueBody');
+    if (!body) return;
+    const boxes = Array.from(body.querySelectorAll('.bulk-row-check'));
+
+    function visibleBoxes() { return boxes.filter(function (b) { return !b.closest('tr').hidden; }); }
+    function selected() { return boxes.filter(function (b) { return b.checked && !b.closest('tr').hidden; }); }
+
+    function sync() {
+      const chosen = selected();
+      const count = chosen.length;
+      tile.hidden = count === 0;
+      countLabel.textContent = count + (count === 1 ? ' selected' : ' selected');
+      idsField.value = chosen.map(function (b) { return b.value; }).join(',');
+      if (selectAll) {
+        const vis = visibleBoxes();
+        selectAll.checked = vis.length > 0 && chosen.length === vis.length;
+        selectAll.indeterminate = chosen.length > 0 && chosen.length < vis.length;
+      }
+    }
+
+    boxes.forEach(function (b) { b.addEventListener('change', sync); });
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        const target = selectAll.checked;
+        visibleBoxes().forEach(function (b) { b.checked = target; });
+        sync();
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        boxes.forEach(function (b) { b.checked = false; });
+        sync();
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        if (!idsField.value) { e.preventDefault(); return; }
+      });
+    }
+
+    // Expose so the filter handler can drop hidden rows from selection
+    window.__schedulePruneBulkSelection = sync;
+    sync();
   })();
 
   /* ── View toggle (compact / detailed) ── */

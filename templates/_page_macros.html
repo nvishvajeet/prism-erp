@@ -266,21 +266,26 @@
 
 {#
   queue_action_stack(row, operators, post_action, can_accept=True, can_assign=True, hidden_inputs={})
-  The Accept Sample + Quick Assign forms that currently live inlined in
-  schedule.html, instrument_detail.html, and dashboard.html queue tables.
-  - row: sqlite Row with .id (request id)
-  - operators: iterable of rows with .id and .display_name (or .username)
-  - post_action: form action URL (usually url_for('request_detail', ...))
-  - can_accept: show the "Accept Sample" form (mark_received)
-  - can_assign: show the "Assign Operator" form (quick_assign)
+  The Accept Sample + Quick Assign forms that live inlined in schedule.html,
+  instrument_detail.html, and dashboard.html queue tables.
+  - row: sqlite Row with ['id'] (request id) and optional ['assigned_operator_id']
+  - operators: iterable of rows with ['id'] and ['name']
+  - post_action: form action URL (e.g. url_for('schedule_actions'))
+  - can_accept: show the "Accept Sample" form (mark_received). Caller
+                decides the gating — usually only for sample_submitted rows.
+  - can_assign: show the quick-assign dropdown (quick_assign)
   - hidden_inputs: dict of extra hidden fields to preserve filter state
                    (bucket, q, instrument_id, date_from, date_to, back, source_label)
+  The request_id hidden input is emitted automatically from row['id'].
 #}
 {% macro queue_action_stack(row, operators, post_action, can_accept=True, can_assign=True, hidden_inputs={}) -%}
+{% set row_id = row['id'] %}
+{% set current_op = row['assigned_operator_id'] if 'assigned_operator_id' in row.keys() else None %}
 <div class="queue-action-stack" data-vis="{{ V }}">
   {% if can_accept %}
   <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-accept" data-vis="{{ V }}">
     <input type="hidden" name="action" value="mark_received">
+    <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
     <button type="submit" class="queue-action-btn accept" data-vis="{{ V }}">Accept Sample</button>
   </form>
@@ -288,11 +293,12 @@
   {% if can_assign %}
   <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-assign" data-vis="{{ V }}">
     <input type="hidden" name="action" value="quick_assign">
+    <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-    <select name="operator_id" class="queue-action-operator" data-vis="{{ V }}">
-      <option value="" data-vis="{{ V }}">Assign operator…</option>
+    <select name="assigned_operator_id" class="queue-action-operator" data-vis="{{ V }}">
+      <option value="" data-vis="{{ V }}">Assign…</option>
       {% for op in operators %}
-      <option value="{{ op.id }}" data-vis="{{ V }}">{{ op.display_name if op.display_name is defined else op.username }}</option>
+      <option value="{{ op['id'] }}"{% if current_op == op['id'] %} selected{% endif %} data-vis="{{ V }}">{{ op['name'] }}</option>
       {% endfor %}
     </select>
     <button type="submit" class="queue-action-btn assign" data-vis="{{ V }}">Assign</button>

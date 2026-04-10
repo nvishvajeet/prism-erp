@@ -162,23 +162,30 @@ Blacklist (auto-reject on review, regardless of acceptance):
 
 ## 8. Claude's resume protocol
 
-Pseudo-script that Claude runs at the top of any session that
-might have been preceded by an unattended Ollama run:
+At the top of any Claude session that might have been preceded
+by an unattended Ollama run, the very first action is:
 
 ```
-git fetch --all --tags
-LAST=$(git tag -l claude_last_seen --format='%(objectname)')
-NEW=$(git log $LAST..ollama-work --oneline | wc -l)
-if [ "$NEW" -gt 0 ]; then
-  git log $LAST..ollama-work --oneline
-  # for each commit:
-  #   spawn verification subagent
-  #   if approved: git cherry-pick <sha> onto master
-  #   if rejected: leave on ollama-work, log reason
-  git tag -f claude_last_seen ollama-work
-  git push --force-with-lease origin refs/tags/claude_last_seen
-fi
+./review_ollama_commits.sh
 ```
+
+That script fetches, lists every commit on `ollama-work` since
+the `claude_last_seen` tag, runs the regression suite against
+each, and appends a structured block to `ollama_qc_log.md` with
+an auto-suggestion (APPROVE / REJECT / NEEDS-REWORK) per commit.
+
+Claude then:
+
+1. Reads the new block in `ollama_qc_log.md`.
+2. Spawns one verification subagent per non-trivial commit
+   (the simple wraps may be approved at sight).
+3. Writes the final decision (APPROVE / REJECT / DEFER /
+   NEEDS-REWORK) into the QC log entry's "Claude decision" line.
+4. Cherry-picks every APPROVE commit onto `master` in order.
+5. Advances `claude_last_seen` to the latest reviewed commit,
+   pushes `master:main` and the tag.
+6. Commits the updated `ollama_qc_log.md` so the audit trail
+   travels with the repo.
 
 The verification subagent prompt is:
 
@@ -186,11 +193,12 @@ The verification subagent prompt is:
 > branch. The task spec is at `ollama_tasks/<spec>.md`. Verify:
 > (1) only files listed in `Files in scope` were touched,
 > (2) no files in `Forbidden files` were touched,
-> (3) acceptance criteria still pass,
+> (3) acceptance criteria still pass (re-run them),
 > (4) the diff is mechanically what the spec asked for — no
 > unrelated edits, no comments removed, no whitespace churn,
 > (5) the change matches PRISM conventions (read PROJECT.md §11).
-> Return APPROVE or REJECT plus a one-line reason.
+> Return APPROVE or REJECT plus a one-line reason that is safe
+> to paste into ollama_qc_log.md.
 
 ## 9. The compressed v1.3.0–v1.5.0 plan
 
@@ -246,6 +254,8 @@ session end     git push origin master:main    keep running
 | `OLLAMA_DEV_PLAN.md`          | This file. The contract.                |
 | `setup_remote.command`        | One-time interactive setup of Mac mini  |
 | `run_ollama_task.sh`          | The driver. Sandboxed, commits, rolls back |
+| `review_ollama_commits.sh`    | Claude's session-start QC gate          |
+| `ollama_qc_log.md`            | Claude's audit trail of Ollama commits  |
 | `Remote Ollama Chat.command`  | Interactive chat (already exists)       |
 | `ollama_tasks/`               | Task specs, one Markdown per task       |
 | `ollama_outputs/`             | Raw Ollama responses, gitignored        |
@@ -266,3 +276,58 @@ For PRISM specifically the realistic Ollama wins are 1.3.0-b
 and 1.3.0-c. Everything else in the roadmap is Claude-shaped.
 That is fine — the bridge is built to make the small wins
 unattended, not to replace the hard work.
+
+## 13. The QC log (`ollama_qc_log.md`)
+
+`ollama_qc_log.md` is the audit trail. It is a checked-in
+Markdown file with one block per Claude review session, one
+sub-entry per Ollama commit. The schema:
+
+```markdown
+## Session qc-YYYYMMDD-HHMMSS (timestamp)
+
+- Commits found: N
+- Range: `<old-sha>..<new-sha>`
+
+### <short-sha> — <commit subject>
+
+- Author: <name>
+- Files (N): `path1 path2 …`
+- Diff: +X / -Y
+- smoke_test.py: `PASS|FAIL|SKIP`
+- test_status_transitions.py: `PASS|FAIL|SKIP`
+- Auto-suggestion: **APPROVE | REJECT | NEEDS-REWORK**
+- Reason: …
+- Claude decision: APPROVE | REJECT | DEFER | NEEDS-REWORK
+- Notes: …
+
+### Session summary
+- Auto-passed: N
+- Auto-flagged: N
+```
+
+`review_ollama_commits.sh` writes everything except the
+**Claude decision** and **Notes** lines. Claude fills those in,
+commits the updated log, then cherry-picks the APPROVE commits.
+
+Auto-flag rules implemented today:
+
+| Trigger                                       | Suggestion     |
+|-----------------------------------------------|----------------|
+| Touched any file in §7 blacklist              | NEEDS-REWORK   |
+| Touched `app.py` (soft block — needs review)  | NEEDS-REWORK   |
+| `smoke_test.py` failed                        | REJECT         |
+| `tests/test_status_transitions.py` failed     | REJECT         |
+| Diff touched > 5 files                        | NEEDS-REWORK   |
+| Diff added > 200 lines                        | NEEDS-REWORK   |
+| Otherwise                                     | APPROVE        |
+
+These are heuristics, not gates. Claude has the final word and
+writes it into the **Claude decision** line. The QC log file is
+the single source of truth for "what did Ollama do, what did we
+keep, and why."
+
+The log is intentionally checked into the repo (not gitignored)
+so the audit trail travels with the code. If three Ollama commits
+in a row get rejected for the same reason, that is a signal to
+rewrite the task spec, not to keep running it.

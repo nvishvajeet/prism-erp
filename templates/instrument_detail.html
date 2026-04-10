@@ -28,7 +28,10 @@
     {{ card_heading("", "Instrument") }}
     <div class="tile-info-body" data-vis="{{ V }}">
       <div class="tile-info-photo" data-vis="{{ V }}">
-        <img src="{{ instrument_photo_src(instrument['machine_photo_url']) }}" alt="{{ instrument['name'] }}" data-vis="{{ V }}">
+        <img src="{{ instrument_photo_src(instrument['machine_photo_url']) }}"
+             alt="{{ instrument['name'] }}"
+             onerror="this.onerror=null; this.src='{{ url_for('static', filename='instrument-placeholder.svg') }}';"
+             data-vis="{{ V }}">
       </div>
       {% set info_items = [
         ('Code', '<code class="inline-code">' ~ instrument["code"] ~ '</code>'),

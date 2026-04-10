@@ -10,9 +10,9 @@ LAN-first. Single-binary deploy. SQLite. No build step.
 
 ## Phase 5 Progress & Schedule
 
-Current focus: **Phase 5 — Widget Propagation.** Extract recurring
-widgets to macros, then convert every user-facing page to the tile
-pattern set by `templates/instrument_detail.html`.
+**Status: complete.** Every user-facing page now matches the tile
+pattern set by `templates/instrument_detail.html`. The shared widget
+macros, the page conversions, and the CSS hygiene pass all landed.
 
 Effort sizing is **relative** (S / M / L / XL) — small = isolated
 edits, XL = multi-session rewrite with template + handler refactor.
@@ -194,6 +194,103 @@ tiles on a 6-column fluid grid. Match its rhythm everywhere else.
 
 ---
 
+## Workflow Patterns
+
+Every wave landed in Phase 5 + Phase 6 left behind a reusable pattern.
+New code should pick the relevant one off this list rather than
+inventing a parallel approach.
+
+### Database & queries
+
+- **`assert_status_transition(current, target, force=False)`** —
+  every site that mutates `sample_requests.status` must call this
+  first. Admin overrides pass `force=True`. The `REQUEST_STATUS_TRANSITIONS`
+  dict in `app.py` is the single source of truth for legal moves.
+
+- **`REQUEST_DETAIL_JOINS` constant** — when a query joins
+  `sample_requests` to instruments + requester + originator + assigned
+  operator + received_by operator, use the constant. Aliases sr / i /
+  r / c / op / recv are load-bearing.
+
+- **`assigned_instrument_ids(user)`** — cached in Flask `g` per
+  request. Free to call as many times as you need within one render.
+
+- **`@instrument_access_required("view"|"open"|"manage"|"operate")`** —
+  decorator for any route that takes `<int:instrument_id>` and needs
+  permission gating. Fetches the instrument, hands it to the view as
+  a kwarg, returns 404 if missing or 403 if denied.
+
+- **Database indexes are in `init_db()`.** When you add a new query
+  pattern that filters by a non-indexed column, add the index to the
+  `cur.executescript("CREATE INDEX IF NOT EXISTS ...")` block.
+
+- **`log_action(actor_id, entity_type, entity_id, action, payload)`** —
+  every state change writes to the audit chain. SHA-256 link → tamper-
+  evident.
+
+- **CSRF token machinery is in place but enforcement is gated.**
+  `LAB_SCHEDULER_CSRF=1` flips it on once every form template carries
+  the hidden `csrf_token()` input. The base.html JS shim auto-injects
+  the token into form submits and `fetch()` calls.
+
+- **`DEMO_MODE` (env: `LAB_SCHEDULER_DEMO_MODE=0` to disable)** —
+  gates `/demo/switch/*` and `seed_data()` so production doesn't ship
+  with the role-impersonation route or the demo accounts.
+
+### Templates
+
+- **Tiles compose, never overlap.** Every page is a `*-tiles` grid
+  container with `card tile tile-{name}` children.
+
+- **`paginated_pane(id, page_size, ...)`** — every long list. Never
+  use `overflow: auto`.
+
+- **`metadata_grid(items)`** — auto-escapes string values. Pass HTML
+  via a `{% set var %}<a>...</a>{% endset %}` block, which produces a
+  `Markup` object. Never concatenate HTML strings with `~` and pass
+  them in — they'll be escaped.
+
+- **`empty_state(...)`** — every list/table needs an empty-state
+  branch. The macro lives in `_page_macros.html`.
+
+- **8 widget macros in `_page_macros.html`** — `card_heading`,
+  `paginated_pane`, `metadata_grid`, `kpi_grid`, `status_pills_row`,
+  `queue_action_stack`, `person_chip`, `approval_action_form`,
+  `activity_feed`. If you find yourself building one of these
+  inline, stop and use the macro.
+
+- **`data-vis="{{ V }}"` on every visible element.** It's a safety
+  net for the server-side scope filter, not the gate. Tested by the
+  visibility audit (`crawlers/strategies/visibility.py`).
+
+### Backend
+
+- **`safe_int()` / `safe_float()`** for any user-supplied number. Bare
+  `int(request.form[…])` is a 500 waiting to happen.
+
+- **Toasts replace inline flash panels.** Use `flash(msg, "success" |
+  "error" | "info")` and the `.toast-stack` in `base.html` will render
+  it. Errors stay until dismissed; success/info auto-fade in 5 s.
+
+- **`@rate_limit(max=N, window=S)`** decorator (W6.6 era) for write
+  endpoints that could be flooded.
+
+### Verification
+
+Every meaningful change runs through three regression gates before
+landing on master:
+
+1. `venv/bin/python test_visibility_audit.py` — 8 roles × ~12 pages
+   matrix, 171/171 baseline.
+2. `venv/bin/python test_populate_crawl.py` — 500 actions end-to-end,
+   0 5xx baseline.
+3. `venv/bin/python -m crawlers wave <relevant>` — strategy-specific
+   waves (smoke, philosophy, dead-link, etc.) for pre-push sanity.
+
+A wave is not "done" until 1 + 2 are still green.
+
+---
+
 ## What's Done
 
 | Area | State |
@@ -208,6 +305,14 @@ tiles on a 6-column fluid grid. Match its rhythm everywhere else.
 | Empty-state macro | Done |
 | Nav / dashboard large-dataset caps | Done |
 | **instrument_detail.html — 10-tile architecture** | Done (reference) |
+| Phase 5 — every page on the tile pattern | Done |
+| Phase 6 W6.1-W6.9 — foundation hardening | Done (W6.10 deferred) |
+| Database indexes (22) on hot query paths | Done |
+| `@instrument_access_required` decorator | Done |
+| Request status state machine | Done |
+| CSRF token machinery (gated by env flag) | Done |
+| Toast notification system | Done |
+| PWA polish — manifest + ARIA + skip-nav | Done |
 
 ---
 
@@ -215,11 +320,11 @@ tiles on a 6-column fluid grid. Match its rhythm everywhere else.
 
 | Metric | Value |
 |---|---|
-| `app.py` | ~6,400 lines |
-| Routes | 41 |
+| `app.py` | ~6,750 lines |
+| Routes | 42 |
 | DB tables | 15 |
-| Templates | 28 |
-| `static/styles.css` | ~5,800 lines |
+| Templates | 27 |
+| `static/styles.css` | ~7,150 lines |
 | Roles | 9 (`ROLE_ACCESS_PRESETS`) |
 
 ---

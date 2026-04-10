@@ -32,7 +32,18 @@ from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
 PY_DEF_RE = re.compile(r"^def (\w+)\(", re.MULTILINE)
-ROUTE_RE = re.compile(r'@app\.route\(')
+# Any decorator that registers a function with Flask's dispatch machinery
+# makes the function live-by-reference even if its name is never written
+# out in Python code again. Missing any of these produces false
+# "dead function" positives (the pre-tuning crawler flagged close_db,
+# inject_globals, handle_forbidden, handle_not_found, handle_server_error,
+# handle_large_upload, handle_invalid_status_transition).
+HOOK_DECORATOR_RE = re.compile(
+    r'@app\.(route|errorhandler|context_processor|'
+    r'teardown_appcontext|teardown_request|before_request|'
+    r'after_request|before_first_request|template_filter|'
+    r'template_global|template_test|cli\.command)'
+)
 IMPORT_RE = re.compile(r"^(?:from [\w.]+ )?import [\w, ]+", re.MULTILINE)
 RENDER_TEMPLATE_RE = re.compile(r'render_template\(\s*["\']([^"\']+)["\']')
 EXTENDS_RE = re.compile(r'{%\s*extends\s*["\']([^"\']+)["\']')
@@ -91,13 +102,16 @@ class CleanupStrategy(CrawlerStrategy):
             return []
         text = app_py.read_text(encoding="utf-8", errors="ignore")
 
-        # Map function name → True if it's a route (skip route dead check)
+        # Map function name → True if it's a Flask-hook-decorated function
+        # (route, errorhandler, context_processor, teardown, etc.). These
+        # are live-by-registration even if never called by name.
         routes: set[str] = set()
         lines = text.splitlines()
         i = 0
         while i < len(lines):
-            if ROUTE_RE.match(lines[i].strip()):
-                # scan forward for def
+            stripped = lines[i].strip()
+            if HOOK_DECORATOR_RE.match(stripped):
+                # scan forward for def (may be multiple decorators deep)
                 for j in range(i, min(i + 8, len(lines))):
                     m = PY_DEF_RE.match(lines[j])
                     if m:

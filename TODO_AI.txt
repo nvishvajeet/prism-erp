@@ -1,265 +1,225 @@
-AI_INSTRUCTION:
+PRISM — Active Plan
+====================
 
-This file contains active tasks and user-reported issues. Treat this file as
-high priority guidance, not as a rigid or mandatory script.
+Read this before starting work. It is intent, not contract.
 
-Guidelines for AI agents:
+Guidelines for AI agents
+------------------------
+1. Verify state before acting. Items may already be done.
+2. Fix root causes, not symptoms.
+3. If you find bugs not listed here, fix them and note them.
+4. Don't force architectural changes unless they unblock the current task.
+5. Commit and push after every meaningful change.
 
-1. Read this file before starting work and use it to understand current priorities.
-2. Do not blindly execute everything. Verify system state first.
-3. If parts are outdated or already implemented, clean them up or ignore them.
-4. Prefer fixing root causes over mechanical changes.
-5. If you detect bugs not listed here, fix them and note them below.
-6. Do not force architectural changes unless clearly necessary.
-7. This to-do list is a guide to intent, not a strict contract.
+----------------------------------------------------------------------
+DESIGN PHILOSOPHY (load-bearing — read every session)
+----------------------------------------------------------------------
 
----
+Apple / Jony Ive / Ferrari. Every element earns its place.
 
-COMPLETED ITEMS (1-13)
+  - **Tiles, not pages.** Each concern is a self-contained widget tile
+    on a fluid grid. No mixed concerns inside one card.
+  - **Pagination, never scroll.** Long lists use `paginated_pane`. No
+    `overflow: auto` inside content panes.
+  - **Macros over markup.** If a pattern shows up twice, it becomes a
+    macro. Templates compose; they do not duplicate.
+  - **One queue, one card.** A request is the same object everywhere
+    it appears — same identity, same status block, same actions.
+  - **Visibility is sliced server-side first.** `data-vis` is a safety
+    net, not the gate.
+  - **Empty space is content.** Cramped is the failure mode, not bold.
 
-All items below were implemented across sessions on 2026-04-09.
+Reference implementation: `templates/instrument_detail.html` — 10 tiles
+on a 6-column fluid grid. CSS at `static/styles.css` under "INSTRUMENT
+DETAIL — TILE ARCHITECTURE". This is the gold standard. Match its rhythm.
 
- #  | Summary                                    | Execution note
-----|--------------------------------------------|-------------------------------------------------
- 1  | Instruments table: distinct columns        | 7-col table: Name, Status, Avg Return, Operator, Faculty, Location, Links
- 2  | Dashboard quick-intake panel               | page_size=3, max_height=none, inline Assign+Accept
- 3  | Instrument queue blocks (flex-wrap grid)    | Up to 9 cards, 5 samples each, overflow link
- 4  | Queue page columns                         | Request, Instrument, Status, Requester, Time, File, Action (op-only)
- 5  | Stats war room                             | All counters clickable, tiles link to detail
- 6  | (duplicate of #1)                          | —
- 7  | Hover back button                          | Fixed circle in left margin on sub-pages
- 8  | Instrument detail: 3-block layout          | Machine + queue + control; "Create New Request" button
- 9  | Instrument detail: left/right split        | Machine 1/3, queue+control 2/3
-10  | No scroll panes                            | All paginated_pane max_height='none'
-11  | Role-based crawl                           | See ROLE_VISIBILITY_MATRIX.md; 4 bugs fixed
-12  | Random-walk stress crawl (300 steps)        | POST /requests/new 500 fixed; comment 403 was crawler artifact
-13  | Centralize UI macros                        | stat_blob, chart_bar macros; V hardcodes replaced in instrument_detail
+----------------------------------------------------------------------
+PHASE 5 — WIDGET PROPAGATION (current focus)
+----------------------------------------------------------------------
 
-Bugs fixed:
-  - Instruments page crash: sqlite3.Row.get() replaced with bracket access
-  - Dashboard Assign/Accept hidden from non-operator roles (gated by can_operate_queue)
-  - faculty_in_charge role added to ROLE_ACCESS_PRESETS + dropdown options
-  - POST /requests/new: bare request.form["field"] → request.form.get() with validation
-  - instrument_detail.html: 100+ hardcoded role strings → {{ V }}
-  - stats.html: removed redundant V redefinition
+Goal: every user-facing page reaches the polish level of
+instrument_detail.html. Extract recurring widgets to macros so the
+codebase teaches itself the pattern.
 
----
+Order matters: extract macros first, then convert pages, so each page
+benefits from the macros built before it.
 
-ACTIVE — Phase 3: Full Simulation + Architecture Polish
+W5.1  Shared widget macros (foundation — do these first)
+  Each macro lives in `_page_macros.html` unless noted.
 
-Execution order: attack in waves, parallelize where possible.
+  - status_pills_row(pills, active, on_change)
+      Unifies .stream-pill (schedule), .role-toggle (calendar),
+      .warroom-pill (stats) into one filter pill component.
+      Canonical class: .filter-pill. Deprecate the others in the same
+      pass.
 
-WAVE 1: Full Demo Population
-  14. Build populate_full_demo.py
-      - 25 instruments across 5 categories (Spectroscopy, Microscopy, Chromatography, Thermal, Surface)
-      - 15 faculty members (professor_approver + faculty_in_charge roles)
-      - 10 operators (some handling multiple instruments)
-      - ~40 requester accounts (internal + external)
-      - Secretary Kondhalkar as finance_admin exercising budgeting rights
-      - 500 sample requests spread over 6 months (Oct 2025 – Apr 2026)
-      - Realistic lifecycle: submitted → approved → received → scheduled → completed
-      - Grant-based event log: track funding sources per request
-      - Finance pane data: amounts, payment statuses, receipt numbers
-      - Cross-instrument user permissions (requesters assigned to submit to specific instruments)
+  - queue_action_stack(row, operators, can_accept, can_assign)
+      The Accept Sample + Quick Assign forms currently inlined into
+      schedule.html, instrument_detail.html, and dashboard.html.
+      Three call sites become one.
 
-WAVE 2: Admin/Settings Page Redesign
-  15. Redesign sitemap.html → settings.html (Apple Settings philosophy)
-      - Left sidebar: section selector buttons (Core, Operations, Reporting, Admin)
-      - Right panel: forms, toggles, and info for selected section
-      - Remove useless/dead links; keep only functional navigation
-      - Each section shows relevant controls (not just links)
-      - Toggle buttons for quick settings where applicable
+  - person_chip(user, link=True, avatar=True, size='md')
+      Avatar circle + name (+ optional link). Replaces ad-hoc team
+      lists in instrument_detail, request_detail, dashboard, stats.
 
-WAVE 3: Navigation + Widget Improvements
-  16. Instrument hover navigation pane
-      - Under nav "Instruments" link, show dropdown/hover pane listing all accessible instruments
-      - Click to jump directly to that instrument's detail page
-      - Show instrument code + status dot for quick identification
+  - activity_feed(entries, pane_id, page_size=6, threaded=False)
+      Wraps the timeline pattern. `threaded=True` enables left/right
+      message alignment for request_detail conversation view.
 
-  17. Universal dialog/input widget
-      - Reusable search-type panel widget
-      - Text box input + optional file attachment
-      - Message routing selector (choose person, role, or channel)
-      - Use in: request comments, instrument events, issue flagging
-      - Future: internal messaging about issues across the system
+  - metadata_grid(items, compact=False)
+      <dl> grid for label/value pairs. Replaces .detail-grid,
+      .compact-detail-grid, .tile-info-meta with one canonical list.
 
-  18. Instrument control panel improvement
-      - One stats panel (current metrics)
-      - One queue panel (slice of global queue)
-      - One admin form panel (metadata editing)
-      - One info panel (read-only instrument details)
-      - One form control panel (customize request form for this instrument)
-      - Apply same panel philosophy to other feature pages
+  - kpi_grid(items, variant='card')
+      KPI counters. Replaces .stats-kpi-row (finance),
+      .grid-auto-stats (stats), and stat blob clusters on dashboard.
 
-WAVE 4: Calendar Integration
-  19. Link instrument downtime to calendar
-      - Downtime blocks appear on calendar view
-      - Calendar filters show/hide downtime by instrument
-      - Calendar events clickable → navigate to instrument detail
-      - Instrument detail shows upcoming downtime from calendar
-      - Cross-page calendar presence: dashboard shows next downtime, queue shows scheduling conflicts
+  - approval_action_form(step, allow_file=False, allow_note=True)
+      Approve/Reject form for one approval step. Currently lives only
+      inside request_detail.html; extract so other pages can host it.
 
-WAVE 5: Final Template Centralization
-  20. Apply chart_bar macro to dashboard weekly/monthly charts
-  21. Audit all remaining templates for ad-hoc patterns
-  22. Ensure all role visibility uses {{ V }} or proper subset variables
-  23. Document all macros in _page_macros.html, _request_macros.html, _stream_macros.html
+  - toggleable_form(form_id, trigger_label, body)
+      One disclosure pattern to replace ad-hoc <details>, jQuery
+      toggles, and modal divs.
 
-WAVE 6: Documentation Rewrite
-  24. Rewrite README.md
-      - Progress pane showing what's done vs. planned
-      - Clear distinction: README = quickstart + progress; PROJECT.md = formal spec
-      - Any AI agent or human reading README + PROJECT.md can rebuild the system from scratch
-      - Formal project documentation: every route, every template, every macro, every role
+W5.2  schedule.html — `/schedule` (highest-touch page)
+  Tiles:
+    - filter-bar tile (search, instrument, date range, sort)
+    - status-pills tile (uses W5.1 status_pills_row)
+    - queue-table tile (paginated, action stack via W5.1)
+    - bulk-actions tile (visible when ≥1 row selected)
+  Anti-patterns to kill:
+    - .stream-page-header with mixed title + view toggle
+    - inline action forms tightly coupled to <td> cells
+    - JS filtering logic that duplicates pill state
 
-  25. Update PROJECT.md
-      - Add new macros (stat_blob, chart_bar) to file structure
-      - Add new roles/presets documentation
-      - Update changelog with all Phase 2-3 work
-      - Update TODO section
-      - Ensure schema section matches current DB
+W5.3  request_detail.html — `/request/<id>`
+  Tiles:
+    - request-summary tile (lifecycle, status, metadata via metadata_grid)
+    - response tile (approval action form, reassign, status change —
+      currently a fragile sticky right column)
+    - files tile (paginated)
+    - activity tile (uses W5.1 activity_feed in threaded mode)
+    - notes tile (input_dialog, already a macro)
+  Anti-patterns to kill:
+    - .request-workspace 2-col layout — replace with grid
+    - .event-left / .event-right / .event-center awkward chat hybrid
+    - duplicated approve/reject forms — collapse via approval_action_form
+    - 682-line request_detail() Python handler — break into actions
+      (deferred to Phase 6 unless blocking)
 
-WAVE 7: Verification ✅ (completed 2026-04-10)
-  26. ✅ Visibility audit: 171/171 pass, 0 fail (8 roles × 12 pages)
-  27. ✅ 500-action populate crawl: 0 server errors, 0 exceptions
-  28. ✅ Fixed sitemap TypeError (dict.items → group.entries)
-  29. ✅ Updated test matrix: finance_admin full access
+W5.4  dashboard.html — `/`
+  Tiles:
+    - this-week tile (uses kpi_grid + chart_bar)
+    - this-month tile (same)
+    - quick-intake tile (paginated, uses queue_action_stack)
+    - instrument-queues tile (replaces bespoke .instrument-carousel
+      with the standard tile grid; preview top 9)
+    - upcoming-downtime tile (already mostly done)
+  Anti-patterns to kill:
+    - .grid-two layout
+    - .collapsible-body custom toggle (use toggleable_form)
+    - .instrument-carousel horizontal scroll
 
----
+W5.5  stats.html — `/stats`
+  Tiles:
+    - kpi tile (uses kpi_grid)
+    - instrument-status-board tile (canonical .tile pattern, drop
+      .warroom-inst-tile)
+    - throughput-trend chart tile
+    - instrument-throughput chart tile
+    - turnaround chart tile
+    - revenue chart tile (if data exists)
+  Anti-patterns to kill:
+    - .warroom-* class family (rename or absorb into tile system)
+    - bare <canvas> with no error/loading state
 
-ARCHITECTURE_NOTES (from previous discussion — kept for reference):
+W5.6  Secondary pages — small, mostly cosmetic
+  - calendar.html: unify filter pills with W5.1; extract modal macro
+  - instruments.html: extract create_panel macro for add-instrument toggle
+  - pending.html: tiles for the dual-list approval view
+  - users.html: extract user_table macro to kill 3-table duplication
+  - user_detail.html: adopt .tile classes for metadata sections
+  - finance.html: KPI row uses kpi_grid
 
-Philosophy preserved:
-- One queue, one request card as source of truth
-- Sliced visibility per role
-- LAN-first simplicity
-- Blobs within blobs (tiles containing widgets)
-- No scroll panes; paginated view panes only
-- Apple UX / Johnny Ive design sensibility
+W5.7  CSS hygiene pass (do alongside the page conversions)
+  Retire / consolidate:
+    - .inst-detail-* legacy class family (already partially gone)
+    - .compact-* density modifiers — fold into tile spacing
+    - .form-grid + .new-request-* — unify into one form grid system
+    - .stream-pill / .role-toggle / .warroom-pill → .filter-pill
+    - .warroom-* aesthetic classes → .tile-*
+  Keep: .tile-*, .section-*, .meta-*, .paginated-pane-*, .stat,
+        .card, .grid-two/three/four (non-tile content layouts)
 
-data-vis decision: Keep data-vis as defense-in-depth. Server-side rendering is primary
-gate; client-side data-vis JS is secondary safety net. V includes all roles for elements
-that are visible to everyone; use subset variables (VA, etc.) for restricted elements.
+----------------------------------------------------------------------
+PHASE 6 — FOUNDATION HARDENING (deferred — do after Phase 5)
+----------------------------------------------------------------------
 
-Component system: Enforce macros over ad-hoc markup. All stat blobs, card headings,
-paginated panes, status badges, and chart bars use shared macros.
+These are not blocking the user's design vision. Park them until the
+tile propagation is complete on every page.
 
-===================================================================
-PHASE 4: ARCHITECTURAL IMPROVEMENT PLAN
-===================================================================
+  - Database indexes (sample_requests.status,
+    sample_requests(instrument_id, status), approval_steps,
+    request_attachments, instrument_operators, audit_logs)
 
-Full crawl audit performed 2026-04-10 across all templates, CSS,
-app.py, and JS/static assets. Findings organized by Apple/Ive/Ferrari
-design philosophy: every element earns its place.
+  - Permission decorator @instrument_access_required to eliminate
+    the 12+ duplicated access-control patterns in routes
 
-Execution order: attack in waves, parallelize where possible.
+  - RequestQueryBuilder to centralize the 6 near-identical
+    "SELECT sr.*, i.name FROM sample_requests JOIN instruments..."
+    patterns
 
-WAVE G: Breathing Room & Visual Density (Jony Ive Spacing)
-  30. Increase card padding (1rem → 1.5rem) and table cell padding
-      (0.5rem → 1rem). Tables are the #1 visual density problem.
-  31. Reduce table columns from 7 to 4-5 max on:
-      - Queue: merge Request+Instrument, hide Files column
-      - Instruments: move Avg Return + Location to detail view
-      - Finance revenue: collapse Paid/Free into single column
-  32. Add section-level spacing (2rem gap between major sections).
-      Currently sections touch each other — cramped, not Apple.
-  33. Empty state component: replace all "No data" strings with
-      centered icon + message + action link macro.
-  34. Action button clarity: rename ambiguous verbs:
-      - "Accept" → "Accept Sample"
-      - "Take Up" → "Schedule Job"
-      - "Assign" → "Assign to Operator"
+  - Cache assigned_instrument_ids() in Flask `g` (3 table queries
+    per page load currently)
 
-WAVE H: CSS Architecture Cleanup
-  35. Consolidate 3 duplicate button definitions (lines 2450, 2462,
-      5186) into single .btn base with BEM modifiers.
-  36. Extract 50+ hardcoded colors to CSS variables:
-      - .operation-status (#f4f6f7) → var(--panel)
-      - .operation-dot colors → var(--tone-active), etc.
-      - .nav-menu hover (#eef5fb) → var(--panel-hover)
-      - Input borders (#cbd7e3) → var(--line)
-  37. Remove 14 !important instances from Prism grid system.
-      Rebuild with BEM: .prism-grid__button--active
-  38. Standardize breakpoints to 3: 640px, 900px, 1280px.
-      Currently 12 different breakpoints scattered.
-  39. Add light theme input :focus state (currently invisible).
-      Add :disabled state for buttons (opacity 0.5, cursor: not-allowed).
-  40. Create shadow scale: --shadow-sm, --shadow-md, --shadow-lg.
-      Currently 8+ hardcoded shadow values.
-  41. Move DayPilot vendor CSS (lines 2935-3032) to separate file
-      or remove entirely (DayPilot JS is unused).
-  42. Add z-index scale: --z-dropdown: 30, --z-sticky: 40,
-      --z-modal: 50, --z-tooltip: 60. Currently 4 scattered values.
+  - Break request_detail() (682 lines) into action handler classes
+    once W5.3 is done (template + handler refactor in same pass)
 
-WAVE I: App Architecture & Code Quality
-  43. Add database indexes (HIGH IMPACT, LOW EFFORT):
-      - sample_requests(status)
-      - sample_requests(instrument_id, status)
-      - approval_steps(sample_request_id, status)
-      - request_attachments(request_id, is_active)
-      - instrument_operators(instrument_id, user_id)
-      - audit_logs(entity_type, entity_id, created_at)
-  44. Extract permission check decorator to eliminate 12+ duplicated
-      access control patterns across routes:
-      @instrument_access_required("manage_or_operate")
-  45. Create RequestQueryBuilder to centralize the 6 near-identical
-      SELECT sr.*, i.name ... JOIN patterns.
-  46. Cache assigned_instrument_ids() in Flask g context.
-      Currently queries 3 tables per page load per user.
-  47. Break up request_detail() (682 lines!) into action handler
-      classes: ApproveStepAction, MarkReceivedAction, etc.
-  48. Add request status state machine:
-      TRANSITIONS = { "submitted": ["under_review", "rejected"], ... }
-      Enforce valid transitions; reject invalid status changes.
+  - Request status state machine — TRANSITIONS dict, reject invalid
+    status changes server-side
 
-WAVE J: Accessibility & PWA (Apple-Quality Polish)
-  49. Add ARIA attributes:
-      - role="navigation" on nav dropdowns
-      - aria-label on all interactive elements
-      - aria-hidden="true" on data-vis hidden elements
-      - Focus trap on modal dialogs (Tab key containment)
-  50. Add skip navigation link for screen readers.
-  51. Add meta tags for Apple polish:
-      - <meta name="theme-color"> (matches --accent)
-      - <meta name="apple-mobile-web-app-capable" content="yes">
-      - <link rel="apple-touch-icon"> (192px + 512px)
-  52. Create manifest.json for PWA installability.
-  53. Add toast notification system (bottom-right, auto-dismiss 3s)
-      to replace flash messages that require scroll-to-top.
-  54. Add client-side form validation with inline error states.
-      Currently all validation is server-side with page reload.
+  - CSRF protection on all POST routes (Flask-WTF)
 
-WAVE K: Missing Production Features
-  55. Per-instrument custom request form fields:
-      - XRD needs crystal_system, ICP-MS needs sample_matrix
-      - Admin UI to define fields per instrument
-      - Dynamic form rendering on /requests/new
-  56. Bulk operations on queue page:
-      - Checkbox select multiple requests
-      - Bulk approve, bulk assign, bulk download
-  57. Notification system:
-      - Approval request emails (approve by deadline)
-      - Sample dropoff reminders (N days overdue)
-      - Status change notifications
-  58. Cost/grant tracking:
-      - Grant/account code per request
-      - Invoice generation
-      - Payment reconciliation UI
-  59. Approval chain customization UI:
-      - Admin can reorder/skip approval steps per instrument
-      - Default approver selection
-  60. Remove demo mode from production:
-      - Gate /demo/switch/ behind DEMO_MODE env flag
-      - Don't seed demo users on init_db() in production
-  61. Add Flask-WTF CSRF protection on all POST routes.
+  - Gate /demo/switch/ behind DEMO_MODE env flag; stop seeding demo
+    users on init_db() in production
 
-WAVE L: Documentation & API
-  62. Create /api/v1 blueprint with JSON endpoints:
-      - GET /api/v1/requests — list with filters
-      - GET /api/v1/requests/:id — detail
-      - GET /api/v1/instruments — list
-      - POST /api/v1/requests/:id/actions/:action — state changes
-  63. Add OpenAPI/Swagger documentation.
-  64. Create .env.example with all required environment variables.
-  65. Create config.py with environment-specific defaults
-      (DevelopmentConfig, ProductionConfig).
+  - Toast notification system to replace flash messages that need
+    scroll-to-top
+
+  - PWA polish: theme-color meta, apple-touch-icon, manifest.json,
+    skip-nav link, ARIA on dropdowns
+
+  - Rewrite PROJECT.md and document all macros once Phase 5 settles
+    (no point documenting macros that will be extracted next week)
+
+----------------------------------------------------------------------
+NOT DOING (yet)
+----------------------------------------------------------------------
+
+Listed here so future agents don't spin them up speculatively.
+
+  - /api/v1 JSON blueprint + OpenAPI — no consumer for it yet
+  - Per-instrument custom request form fields — needs UX design first
+  - Notification emails — needs SMTP infra decision
+  - Cost/grant tracking + invoice generation — separate product
+  - Bulk operations on queue — wait until W5.2 tile is in place
+
+----------------------------------------------------------------------
+HISTORY (collapsed — see git log for detail)
+----------------------------------------------------------------------
+
+Phase 1-4 are done. Highlights:
+
+  - Foundation: data-vis cleanup, paginated_pane migration, error pages
+  - Settings + nav: Apple-style sitemap, instrument hover dropdown
+  - Calendar: downtime model + UI, cross-page integration
+  - Verification: 171/171 visibility audit, 500-action populate crawl
+    (0 5xx, 0 exceptions)
+  - UI declutter: redundant buttons removed, ambiguous labels renamed,
+    empty_state macro, large-dataset constraints (nav cap 15, dashboard
+    carousel cap 9)
+  - **instrument_detail.html rebuilt as 10-tile architecture (the
+    pattern Phase 5 propagates).**
+
+Last verified clean: commit 91a8cc5.

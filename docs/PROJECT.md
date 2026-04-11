@@ -15,6 +15,16 @@ commit-level history. The roadmap does not live here.
 A competent developer reading this file alongside `app.py` should
 be able to understand every architectural decision.
 
+**AI agents: start with `AGENTS.md`.** The project-root `AGENTS.md`
+file is the vendor-neutral onboarding contract for any AI coding
+agent (Claude, Codex, Gemini, Cursor, Continue, Aider, Copilot,
+Windsurf). It covers topology, commit rhythm, the pre-commit gate,
+the hard/soft attribute contract, demo/operational separation,
+security invariants, and the docs manifest. This file (`PROJECT.md`)
+is the deeper architecture spec that `AGENTS.md` §9 points at for
+schema, page map, helper catalog, state machine, and security
+model detail.
+
 ---
 
 ## 1. Philosophy
@@ -343,19 +353,26 @@ Main/
 │   ├── __main__.py              `python -m crawlers list|run|wave …`
 │   ├── core/
 │   └── strategies/              Each strategy is one .py file
-│       ├── visibility.py        8 roles × 12 pages
-│       ├── role_behavior.py     Behavioural RBAC
+│       ├── visibility.py        8 roles × 12 pages access matrix
+│       ├── role_landing.py      Role-hint badge on dashboard + sitemap
+│       ├── role_behavior.py     Behavioural RBAC (each role's defining action)
+│       ├── topbar_badges.py     Topbar count badges only when role has pending items
+│       ├── empty_states.py     Empty tables render shared empty-state card + CTA
+│       ├── dev_panel_readability.py Dev console hero tile + hot-wave + reports freshness
 │       ├── lifecycle.py         End-to-end request lifecycle
-│       ├── dead_link.py         BFS href harvest
-│       ├── performance.py       p50/p95/max budgets
-│       ├── random_walk.py       MCMC walk over (role × route)
-│       ├── contrast_audit.py    WCAG AA palette check
-│       ├── color_improvement.py Palette drift hunter
-│       ├── architecture.py      Handler / template / CSS budgets
-│       ├── philosophy.py        Tile / vis / deprecated-class audit
+│       ├── dead_link.py         BFS href harvest across 4 roles
+│       ├── random_walk.py       MCMC walk over (role × route), ~800 steps
+│       ├── performance.py       p50/p95/max budgets on hot routes
+│       ├── slow_queries.py      Per-SQL timing (50ms warn, 250ms fail)
+│       ├── contrast_audit.py    WCAG AA palette check (light + dark)
+│       ├── color_improvement.py Palette / contrast drift hunter
+│       ├── architecture.py      Handler / template / decorator budgets
+│       ├── philosophy_propagation.py Tile / vis / deprecated-class audit
 │       ├── css_orphan.py        Unused selector scan
-│       ├── cleanup.py           Dead Python / template hunter
-│       └── smoke.py             Pre-push sanity
+│       ├── cleanup.py           Dead Python / template / file hunter
+│       ├── approver_pools.py    Round-robin approver assignment integrity
+│       ├── smoke.py             Pre-push regression (critical paths × 3 roles)
+│       └── deploy_smoke.py      Probe PRISM_DEPLOY_URL for /login + /sitemap
 │
 ├── reports/                     Crawler output (JSON + plain-text)
 ├── logs/                        Server logs (start.sh writes here)
@@ -606,6 +623,16 @@ css_hygiene, regression, data_integrity). Drop in a new file,
 import it in `crawlers/strategies/__init__.py`, and the CLI picks
 it up automatically. Every run writes a JSON log + plain-text
 summary under `reports/`.
+
+Run `.venv/bin/python -m crawlers list` for the authoritative
+inventory. As of v1.3.0 the suite has 20 strategies. The
+`visibility` aspect in particular has grown to cover the whole
+role-aware chrome: `visibility` (access matrix), `role_landing`
+(dashboard/sitemap role badges), `role_behavior` (each role's
+defining action), `topbar_badges` (pending-item counts only render
+when the role has work), `empty_states` (empty tables use the
+shared card + primary CTA), and `dev_panel_readability` (dev
+console hero tile, hot-wave callout, reports freshness).
 
 ---
 

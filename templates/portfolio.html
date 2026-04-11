@@ -89,6 +89,37 @@
 </section>
 {% endif %}
 
+{# ─── Daily REDEEM recommendation (paired with the BUY recommendation below) ── #}
+{% set r = (pf.daily.today.redeem if pf.daily and pf.daily.today else None) %}
+{% if r %}
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("REDEEM", "Today's debt redemption — funds the equity buy 2 trading days from now (T+2 settlement)") }}
+  {% if r.amount and r.amount > 0 %}
+  <div class="inst-tiles" data-vis="{{ V }}">
+    <div class="tile" data-vis="{{ V }}">
+      <div class="tile-stats" data-vis="{{ V }}">
+        {{ stat_blob("Redeem today", "₹" ~ "{:,}".format(r.amount)) }}
+        {{ stat_blob("Funds buy on", r.target_buy_date or "—") }}
+        {{ stat_blob("Target buy ₹", "₹" ~ "{:,}".format(r.target_buy_total or 0)) }}
+        {{ stat_blob("Corpus left", "₹" ~ "{:,}".format(r.remaining_corpus or 0)) }}
+        {{ stat_blob("Days at this rate", (r.approx_trading_days_left or 0) | string) }}
+        {{ stat_blob("Phase", r.phase or "—") }}
+      </div>
+    </div>
+  </div>
+  <p class="hint" data-vis="{{ V }}" style="margin-top:10px">
+    <strong>Source fund:</strong> {{ r.source_fund or "—" }}.
+    Redeem on Coin before 12:30 IST for next-day debt-MF NAV. Cash settles in
+    2 trading days and lands just in time for the equity buy on
+    <strong>{{ r.target_buy_date }}</strong>. Tata Money Market Fund (the
+    protected ₹25 L debt floor) is never the source.
+  </p>
+  {% else %}
+  {{ empty_state("No redemption needed today.", r.note or "") }}
+  {% endif %}
+</section>
+{% endif %}
+
 {# ─── Today's recommendation table + MTD bars ────────── #}
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000) — click a row to log it as bought") }}

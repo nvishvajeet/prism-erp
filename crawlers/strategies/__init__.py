@@ -30,3 +30,4 @@ from . import xhr_contracts            # noqa: F401
 from . import agents_md_contract       # noqa: F401
 from . import parallel_claims          # noqa: F401
 from . import ui_uniformity            # noqa: F401
+from . import future_fixes_placeholder  # noqa: F401

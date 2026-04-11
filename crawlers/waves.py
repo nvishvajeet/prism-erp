@@ -49,7 +49,7 @@ WAVES: dict[str, Wave] = {
     "behavioral": Wave(
         name="behavioral",
         description="Behavioral RBAC — each role performs its signature action",
-        strategies=("role_behavior", "visibility", "role_landing", "ui_uniformity"),
+        strategies=("role_behavior", "visibility", "role_landing", "ui_uniformity", "future_fixes_placeholder"),
         stop_on_fail=False,
     ),
     "lifecycle": Wave(

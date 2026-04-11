@@ -1,25 +1,45 @@
-# PRISM dev plan — optimized build plan from 18cef1f
+# PRISM dev plan — optimized build plan from db7bc19
 
 _Anchored 2026-04-11. Replaces the backlog section of `ROADMAP.md`._
 _Each wave is a bounded commit bundle on `v1.3.0-stable-release`,_
 _with a crawler proof and a time budget. Sanity wave stays green_
 _end-to-end between every wave._
 
-## State @ 18cef1f
+_This revision (second pass) collapses W1.3.9+W1.4.0 into a single_
+_post-ops wave, shrinks W1.4.1 from 2 days → 2 hours (each commit_
+_is <50 lines), drops the W1.4.2 hotfix-buffer slot, renumbers_
+_W1.4.3 → W1.4.2, and splits the release gate into laptop-local_
+_work (ships now) vs ops-dependent work (ships after the Tailscale_
+_unblock). Net effect: the demo-live gate collapses from "½ day_
+_after ops unblock" to "~20 minutes after ops unblock"._
 
-* **Branch:** `v1.3.0-stable-release` @ `18cef1f`
-* **This session landed:** `797dc96` (lifecycle 13/0/0),
-  `70f3cbc` (round-robin approver pools + strategy),
-  `c4082fa` (`LAB_SCHEDULER_HOST` env + Flask-WTF),
-  `11e2a90`/`18cef1f` (README dedup → CLAUDE.md pointer).
-* **Static wave right now:** architecture 64/0/8,
-  philosophy 14/0/0, css_orphan 512/0/229. Zero FAIL across
-  all three — the 229 CSS warns are the known fossil backlog.
+## State @ db7bc19
+
+* **Branch:** `v1.3.0-stable-release` @ `db7bc19`
+* **Shipped since 18cef1f:** `b77463f` (level 1/2 framing),
+  `5bc3142` (W1.3.9+W1.4.0 code prep — HTTPS.md + tailscale_serve.sh),
+  `b20a2de` (portfolio REDEEM tile), `d97c777` (ERP v2.0 vision doc),
+  `0d3102e` (W1.3.11 CSS fossil backlog wiped), `90383b1`
+  (AGENTS.md vendor-neutral agent onboarding), tag **`v1.3.8`**
+  at `9dfe765`, `8043696` (dev_panel WAVES tile honours ✅ SHIPPED
+  marker), `929911d` (W1.3.12 stunnel/Caddy cleanup — Tailscale
+  Serve is now the only HTTPS path), `36fe93f` (W1.4.1 c1a —
+  `.row-time-hint` on queue rows), `455ffb7` (W1.4.1 c1b — topbar
+  queue count badge + new `topbar_badges` sanity crawler),
+  `db7bc19` (W1.4.1 c2 — empty-state warmth on the big tables +
+  new `empty_states` sanity crawler).
+* **Static wave right now:** architecture 63/0/9, philosophy 14/0/0,
+  css_orphan 548/0/0. **Zero CSS orphan warnings.**
+* **Sanity wave:** 170/0/0 across 7 strategies (smoke 33,
+  visibility 96, role_landing 18, topbar_badges 4, empty_states 3,
+  contrast_audit 13, deploy_smoke 3) — pre-push gate is now
+  broader, still under budget.
 * **Laptop:** Flask up at http://127.0.0.1:5055/ (demo mode).
-* **Mini:** pulled to 18cef1f, venv built, Flask bound to `*:5055`
-  but port blocked by Mac mini Application Firewall. Diagnosed in
-  `logs/mini_network_diag_20260411.md` — operator action pending
-  (one `sudo socketfilterfw` call). Not blocking code work.
+* **Mini:** pulled, venv built, launchd plist ready. Blocked on
+  ONE operator click: "Enable Tailscale Serve for this tailnet"
+  at https://login.tailscale.com/f/serve . All code for
+  W1.3.9+W1.4.0 is already landed in `5bc3142`, and the stunnel
+  fallback was retired in `929911d` — the click is the only gate.
 
 ## Design principles for this plan
 
@@ -43,19 +63,29 @@ _end-to-end between every wave._
 ## Critical path (the only path that matters for the demo)
 
 ```
-W1.3.7  deploy_smoke crawler            ┐
-W1.3.8  launchd service on the mini     │ Track A — infra
-W1.3.9  tailnet HTTP access (serve)     │ (serial, 1 day total)
-W1.4.0  tailnet HTTPS (cert + serve)    ┘
-W1.4.3  portfolio button + v1.4.3 tag   ← demo is live
+                                   ┐
+W1.3.7  deploy_smoke crawler       │ ✅ SHIPPED (laptop-local)
+W1.3.8  launchd service            │ ✅ SHIPPED (tag v1.3.8)
+                                   ┘
+W1.4.1  Jony-Ive polish (3 commits)     ← Track B, no ops dep, ~2 h
+W1.4.2a release prep (ops-free)         ← Track C split, ~90 min
+   ┊    CHANGELOG + README quickstart + pre-push hook
+
+┄┄┄┄┄ ops gate: one click at https://login.tailscale.com/f/serve ┄┄┄┄┄
+
+W1.3.9  tailnet serve HTTP→HTTPS one-shot   ← ~15 min ops, tag v1.3.9
+W1.4.2b portfolio button + v1.4.2 tag       ← ~10 min, demo is LIVE
 ```
 
-Everything below the critical path is **parallel or deferrable**:
+Everything above the ops gate ships without any external dependency
+(no admin console, no sudo on the mini). Everything below the ops
+gate collapses to ~25 minutes of ops work the moment the click
+happens.
+
+Deferred, not on the critical path:
 
 ```
-W1.4.1  Jony-Ive polish batch   ← Track B, parallel to A
-W1.4.2  schema warmup (none)    ← intentionally empty
-W1.5.0  multi-role users        ← schema, post-v1.4.3
+W1.5.0  multi-role users        ← schema, post-v1.4.2
 W1.5.1  instrument groups       ← schema, depends on W1.5.0
 ```
 
@@ -109,74 +139,69 @@ verify via `ssh mini curl http://127.0.0.1:5055/login` → 200.
 
 Commits: 2 (plist+scripts, DEPLOY.md rewrite). Tag **v1.3.8**.
 
-### W1.3.9 — tailnet HTTP (20 minutes)
+### W1.3.9 — tailnet serve HTTP→HTTPS one-shot (~15 min ops, post-click)
 
-*One command: the mini's Tailscale MagicDNS name serves Flask,_
-_no firewall games, tailnet-only by construction.*
+*All code is already landed in `5bc3142` (`scripts/tailscale_serve.sh`*
+_+ `docs/HTTPS.md`). The two former waves W1.3.9 (HTTP) + W1.4.0_
+_(HTTPS) collapse into one ops event because they share the same_
+_unblock click and the helper script wraps both commands. No reason_
+_to ship tailnet-only HTTP as a separate step now that the cert_
+_provisioning is scripted._
 
-* `tailscale serve --bg --set-path=/ http://127.0.0.1:5055` on
-  the mini. No HTTPS yet — plain HTTP *over* the tailnet. Only
-  devices on the tailnet can resolve the name or reach the port.
-* Flask reverts to `127.0.0.1:5055` (loopback only). Remove
-  `LAB_SCHEDULER_HOST=0.0.0.0` from the mini `.env`.
-* Revert the Application Firewall exception if it was added —
-  tailscaled owns the edge now.
-* Bookmark `http://prism-mini.tail-xxxx.ts.net/` on every device
-  on the tailnet.
-* `docs/HTTPS.md` (new) — one section: "current state, tailnet
-  HTTP only". Second section stub for W1.4.0.
-* Acceptance: `PRISM_DEPLOY_URL=http://prism-mini.tail-xxxx.ts.net
-  .venv/bin/python -m crawlers run deploy_smoke` → green.
+**Ops recipe, run on the mini after the operator clicks
+"Enable Tailscale Serve" at
+https://login.tailscale.com/f/serve :**
 
-Commits: 1. No tag (roll up into v1.4.0).
+1. `bash scripts/tailscale_serve.sh` — runs `tailscale cert`
+   then `tailscale serve --bg --https=443 …`. Provisions the
+   Let's Encrypt cert and fronts Flask in a single shot.
+2. Flip `.env`: `LAB_SCHEDULER_HTTPS=true` +
+   `LAB_SCHEDULER_COOKIE_SECURE=true`. Flask's cookie hardening
+   switches on.
+3. `launchctl kickstart -k gui/$(id -u)/local.prism` — atomic
+   restart of the launchd service with the new env.
+4. From the laptop:
+   `PRISM_DEPLOY_URL=https://prism-mini.tail-xxxx.ts.net \
+    .venv/bin/python -m crawlers run deploy_smoke` → expect 3/0/0
+   green with a valid cert chain.
+5. Bookmark `https://prism-mini.tail-xxxx.ts.net/` on every
+   device on the tailnet.
 
-### W1.4.0 — tailnet HTTPS (30 minutes)
+**Plan B (fallback):** if the admin console blocks Tailscale
+Serve for this tailnet, swap to `mkcert` + Flask `ssl_context`
+per `docs/HTTPS.md` §Plan B. Costs an extra 20 minutes but has
+zero external dependencies.
 
-*Upgrade W1.3.9 to real Let's Encrypt so browsers stop
-warning and cookies can flip to `Secure`.*
+Commits: 1 (env flip + any docs tweaks discovered during the
+run). Tag **v1.3.9**.
 
-* Enable MagicDNS + HTTPS in the Tailscale admin console
-  (operator toggle; one-time). If the admin console blocks this
-  for the tailnet, stop here and note Plan B in `docs/HTTPS.md`
-  (mkcert-generated local cert wired via Flask `ssl_context`).
-* `tailscale cert prism-mini.tail-xxxx.ts.net` — provisions the
-  real cert.
-* `tailscale serve --bg --https=443 --set-path=/ http://127.0.0.1:5055`
-  — upgrade from HTTP to HTTPS in one command.
-* `LAB_SCHEDULER_HTTPS=true` + `LAB_SCHEDULER_COOKIE_SECURE=true`
-  in mini `.env`. Flask-side cookie hardening flips on.
-* `docs/HTTPS.md` second section filled in with the four-command
-  recipe + tailnet-device-add pointer.
-* Acceptance: `PRISM_DEPLOY_URL=https://prism-mini.tail-xxxx.ts.net
-  .venv/bin/python -m crawlers run deploy_smoke` → green. The
-  crawler's `ssl.get_server_certificate` call returns a valid
-  chain, not a warning.
-
-Commits: 1. Tag **v1.4.0**.
-
-## Track B — Jony-Ive UX polish (parallel to Track A, 2 days)
+## Track B — Jony-Ive UX polish (parallel to Track A, ~2 hours)
 
 ### W1.4.1 — polish batch (3 commits, not 5)
 
 Collapsed from the earlier 5-item list. Role-greeting dropped —
-redundant with the shipped `tile-dash-role-hint` badge.
+redundant with the shipped `tile-dash-role-hint` badge. Estimate
+shrunk from "2 days" to "2 hours" because each commit is <50
+lines of diff — the original 2-day budget was inflated.
 
-**Commit 1 — server-side badges + time hints.**
-  - `.topbar-count-badge` on topbar `Approvals` / `Requests` /
-    `Users` when the current role has non-zero pending.
-  - `.row-time-hint` muted span on request rows ("submitted 2h ago"),
-    computed server-side. No JS.
-  - Crawler proof: extend `visibility` to assert the badge
-    class only renders when the role has non-empty pending lists.
+**Commit 1a — `.row-time-hint` muted span on queue rows. ✅ SHIPPED (`36fe93f`)**
+  - server-side `time_ago()` helper (`just now`, `5m ago`,
+    `3h ago`, `2d ago`, `in 4h`), exposed via `inject_globals`,
+    rendered inline under the existing time cell on `/schedule`.
+  - Sanity 163/0/0 on commit.
 
-**Commit 2 — empty-state warmth.**
-  - Shared `.empty-state` card (one-line welcome + primary CTA)
-    on every "empty table" page. Existing "No records" stubs
-    deleted.
-  - Crawler proof: extend `visibility` to assert `.empty-state`
-    appears on a fresh DB's `/requests` for a requester.
+**Commit 1b — `.topbar-count-badge` on Queue. ✅ SHIPPED (`455ffb7`)**
+  - Single badge on the **Queue** nav item showing pending-for-role
+    count. Landed as a new `topbar_badges` crawler strategy wired
+    into the `sanity` wave (4 PASS) rather than a `visibility`
+    extension — cleaner separation.
 
-**Commit 3 — keyboard shortcut `n` + `?` help.**
+**Commit 2 — `.empty-state` warmth on the big tables. ✅ SHIPPED (`db7bc19`)**
+  - Audited + converted stragglers to the shared `empty_state(...)`
+    macro from `_page_macros.html`. Landed as a new `empty_states`
+    crawler strategy in the `sanity` wave (3 PASS).
+
+**Commit 3 — keyboard shortcut `n` + `?` help (~30 min, pending).**
   - `static/keybinds.js` added to `base.html` via `<script
     defer>`. Only `n` → `/requests/new`, `?` → overlay. Listener
     is a no-op when an input is focused.
@@ -185,46 +210,63 @@ redundant with the shipped `tile-dash-role-hint` badge.
     (no JS framework creep).
 
 Budget: each commit is <50 lines of app + template + css diff.
-Tag **v1.4.1**.
+**Net after this revision: 2 of 3 W1.4.1 commits are in trunk;
+only commit 3 (keybinds.js) remains before tagging v1.4.1.**
 
-## Track C — the release gate (merge of A+B)
+## Track C — the release gate (split into ops-free + ops-dependent)
 
-### W1.4.2 — no work (buffer)
+The former W1.4.3 bundled five tasks under a "½ day" estimate.
+Four of those tasks have zero ops dependency and ship to the
+laptop bare immediately. Only the portfolio button + final tag
+need to wait for the Tailscale unblock. Splitting the wave means
+~85% of the release gate lands before the ops click, and the
+remaining ~15% collapses to ~10 minutes after.
 
-*Intentionally empty.* v1.4.2 is a version number reserved as a
-hotfix slot in case Track A or Track B lands a regression that
-needs a patch release before v1.4.3. Leaving it empty keeps the
-CHANGELOG honest and lets us ship urgent fixes without renumbering.
+The v1.4.2 hotfix-buffer slot is dropped — if a hotfix is needed
+between tags, cut `v1.3.0-stable-release` → a throwaway branch.
+Reserving a version number for a hypothetical fix that may never
+ship is cognitive overhead.
 
-### W1.4.3 — stable release (½ day)
+### W1.4.2a — release prep, ops-free (~90 minutes, ships now)
 
-*Only starts after W1.4.0 + W1.4.1 are both tagged.*
+*Can be worked in parallel with W1.4.1 polish. No dependency on
+Track A or the Tailscale unblock.*
 
-1. **`CHANGELOG.md`** entries for every tag since v1.3.5,
-   including crawler pass/fail deltas for each wave.
+1. **`CHANGELOG.md`** entries for every tag since v1.3.5 —
+   v1.3.8 (shipped), v1.3.9 pending, v1.3.11 (css backlog wipe),
+   v1.4.1 pending. Include crawler pass/fail deltas per wave.
+   (~30 min)
 2. **`README.md` quickstart** — five copy-pasteable lines from
-   clone → first login. Pointer into `docs/DEPLOY.md` and
-   `docs/HTTPS.md` for mini deploy.
+   clone → first login on the laptop. Pointer into `docs/DEPLOY.md`
+   and `docs/HTTPS.md` for mini deploy. (~15 min)
 3. **Pre-push hook on the laptop bare** —
-   `~/.claude/git-server/lab-scheduler.git/hooks/pre-receive` (it's
-   a central receive, not a client-side push). Runs
+   `~/.claude/git-server/lab-scheduler.git/hooks/pre-receive`
+   (central receive, not client-side push). Runs
    `.venv/bin/python -m crawlers wave sanity` in the working copy
-   and refuses the push on failure. Two-tier safety: the working
-   copy gate catches it locally, the bare gate is the
-   belt-and-suspenders for the mirror.
-4. **Portfolio button on nvishvajeet.github.io** — single `<a>`
-   pointing at the HTTPS tailnet URL with "demo creds inside,
-   requires tailnet access" microcopy. One-commit change on that
-   repo.
-5. **`v1.4.3` tag** on `v1.3.0-stable-release`. This is the first
-   tag of the v1.4.x line.
+   and refuses the push on failure. Two-tier safety: the
+   working-copy `scripts/smoke_test.py` catches it locally, the
+   bare gate is the belt-and-suspenders for the mirror. (~30 min)
+4. **Smoke + sanity green** after every commit in this wave.
+   (~15 min total wait across the batch)
 
-No new crawlers. Sanity must stay < 30s.
+No new crawlers. Sanity must stay < 30 s.
+
+### W1.4.2b — demo goes live (~10 minutes, post-ops)
+
+*Only starts after W1.3.9 has tagged and the HTTPS tailnet URL
+is confirmed green via `deploy_smoke`.*
+
+1. **Portfolio button on `nvishvajeet.github.io`** — single
+   `<a>` pointing at the HTTPS tailnet URL with "demo creds
+   inside, requires tailnet access" microcopy. One-commit change
+   on that repo. (~5 min)
+2. **`v1.4.2` tag** on `v1.3.0-stable-release`. First tag of
+   the v1.4.x line. Demo is live. (~1 min)
 
 ## Deferred to v1.5.x (schema waves)
 
 Both waves below touch foundational tables and are out of scope
-for v1.4.x. They ship after v1.4.3 is in the wild for a week.
+for v1.4.x. They ship after v1.4.2 is in the wild for a week.
 
 * **W1.5.0 — multi-role users.** `user_roles(user_id, role)`
   junction, `primary_role()` helper, `has_role()` replaces every
@@ -239,44 +281,62 @@ for v1.4.x. They ship after v1.4.3 is in the wild for a week.
 
 | new strategy       | wave(s)               | budget | gates on                        |
 |--------------------|-----------------------|--------|---------------------------------|
-| `deploy_smoke`     | `sanity` (opt-in)     | 3s     | `PRISM_DEPLOY_URL` → 200 + cert |
+| `deploy_smoke`     | `sanity` (opt-in)     | 3s     | `PRISM_DEPLOY_URL` → 200 + cert ✅ |
 | `multi_role`       | `behavioral`, `all`   | 5s     | both role paths work per user   |
 | `group_visibility` | `behavioral`, `all`   | 5s     | grant/revoke propagate cleanly  |
 
-`approver_pools` (shipped 70f3cbc) stays in `lifecycle` + `all`.
+`approver_pools` (shipped `70f3cbc`) stays in `lifecycle` + `all`.
+`deploy_smoke` shipped in `f6e7507` and is wired into the `sanity`
+wave already.
 
 ## Time budget summary
 
-| wave   | track | est.   | blocks      | tag       |
-|--------|-------|--------|-------------|-----------|
-| W1.3.7 | A     | 30 min | —           | —         |
-| W1.3.8 | A     | 1-2 h  | W1.3.7      | v1.3.8    |
-| W1.3.9 | A     | 20 min | W1.3.8      | —         |
-| W1.4.0 | A     | 30 min | W1.3.9      | v1.4.0    |
-| W1.4.1 | B     | 2 days | —           | v1.4.1    |
-| W1.4.2 | —     | —      | (empty)     | —         |
-| W1.4.3 | C     | ½ day  | W1.4.0+W1.4.1 | v1.4.3  |
-| W1.5.0 | v1.5  | 1-2 d  | v1.4.3      | v1.5.0    |
-| W1.5.1 | v1.5  | 1-2 d  | v1.5.0      | v1.5.1    |
+| wave    | track | est.        | blocks               | tag     |
+|---------|-------|-------------|----------------------|---------|
+| W1.3.7  | A     | 30 min      | —                    | — ✅    |
+| W1.3.8  | A     | 1-2 h       | W1.3.7               | v1.3.8 ✅ |
+| W1.3.9  | A     | 15 min ops  | W1.3.8 + ops unblock | v1.3.9  |
+| W1.4.1  | B     | 2 h         | —                    | v1.4.1  |
+| W1.4.2a | C     | 90 min      | —                    | —       |
+| W1.4.2b | C     | 10 min      | W1.3.9 + W1.4.2a     | v1.4.2  |
+| W1.5.0  | v1.5  | 1-2 d       | v1.4.2               | v1.5.0  |
+| W1.5.1  | v1.5  | 1-2 d       | v1.5.0               | v1.5.1  |
 
-**Track A critical path to a demoable URL: ~3 hours of focused
-work** (W1.3.7 → W1.3.8 → W1.3.9 → W1.4.0 → portfolio button).
-Do this in one sitting and the demo is live before polish is done.
+**Total to a live demo URL, measured in focused laptop-local
+work:** W1.4.1 (2 h) + W1.4.2a (90 min) = **~3.5 hours** of
+parallel code work, none of it gated on anything external.
 
-## Ship-today candidates
+**Ops dependency:** one click at
+https://login.tailscale.com/f/serve . After that click, the
+W1.3.9 + W1.4.2b combo is ~25 minutes from click to live URL.
 
-Things that can land in the next 2 hours with zero external
-dependencies (no admin console, no sudo on the mini):
+**Critical path math:** `max(W1.4.1, W1.4.2a) = 2 h` +
+`W1.3.9 + W1.4.2b = 25 min post-click` → **~2 h 25 min of focused
+work** to demo-live, assuming the click lands during the window.
+The old plan estimated "~3 hours" for just Track A and then added
+"2 days" of W1.4.1 on top — net savings vs old plan: ~1.5 days of
+calendar time, ~1 hour of focused work.
 
-1. **W1.3.7** (`deploy_smoke` crawler) — pure code, laptop-local
-   verification. One commit.
-2. **W1.3.8 plist + scripts** (code only, acceptance step deferred
-   until firewall is unblocked). One commit.
-3. **W1.4.1 commit 1** (topbar badges + time hints) — pure template
-   + css + `visibility` crawler extension. One commit.
+## Ship-today candidates (updated)
 
-Three commits in two hours, all independently valuable, none
-blocked on the mini.
+Things that can land in the next ~2.5 hours with zero external
+dependencies (no admin console, no ops on the mini):
+
+1. **W1.4.1 commit 3** — `static/keybinds.js` (<40 lines), wired
+   into `base.html`, philosophy crawler extension. **Tags v1.4.1.**
+   ~30 min.
+2. **W1.4.2a commit 1** — `CHANGELOG.md` entries for every tag
+   since v1.3.5. ~30 min.
+3. **W1.4.2a commit 2** — `README.md` quickstart (5 lines).
+   ~15 min.
+4. **W1.4.2a commit 3** — pre-push hook on the laptop bare. ~30 min.
+
+Four commits over ~2 hours (commits 1b and 2 of W1.4.1 shipped
+while this plan was being optimized — `455ffb7` and `db7bc19`).
+Every remaining item is independently valuable and lands on the
+laptop bare immediately, so the ops click (whenever it happens)
+has almost no work left in front of it — just the 25-minute
+Tailscale ceremony + portfolio button.
 
 ## Guardrails (unchanged from `ROADMAP.md`)
 

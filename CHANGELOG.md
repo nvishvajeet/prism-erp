@@ -15,6 +15,82 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [1.4.8] — 2026-04-11
+
+**Sitemap tile graduation + v1.5.0 progress counter.** Eighth
+iOS-cadence patch. Two parallel-agent wins landing the last
+canonical-page exemption and a new behavioral crawler.
+
+### Added
+
+- **`future_fixes_placeholder` crawler** (`4ded600`) — new
+  behavioral-wave strategy that counts remaining
+  `# TODO [v1.5.0 multi-role]` markers across `app.py` + templates.
+  First run: 106 markers, top file `app.py` (106). Reports via
+  `result.metrics.total_markers / by_release / by_file / top_files`
+  so the dev panel can eventually show 'unreleased multi-role work'
+  as a progress signal. Wired into behavioral (not sanity),
+  aspect=regression.
+- **Sitemap graduated onto `.sitemap-tiles` pattern** (`4203fd9`) —
+  `sitemap.html` was the only canonical page still exempt from the
+  tile-architecture rule (ui_uniformity flagged it earlier this
+  session). Graduated onto a new 6-column grid mirroring
+  `.new-request-tiles`, exemption removed from both ui_uniformity
+  and the canonical-tile crawlers.
+
+## [1.4.7] — 2026-04-11
+
+**Public cloudflared tunnel + rotate helper + ship.sh absorption
+fix.** Seventh iOS-cadence patch. Bundles the demo-goes-public work
+and one protocol bug-fix surfaced by parallel agents.
+
+### Added
+
+- **`scripts/rotate_demo_tunnel.sh`** (`f48ef12`) — one-command
+  cloudflared rotation + github.io push. 7-step flow: pre-check
+  Flask, kill old tunnel, start fresh, poll log for URL, verify
+  `/login?demo=1` prefill, rewrite `_config.yml` `url`+`base`,
+  commit+push both remotes. Demo now reachable from the public
+  internet via `https://<subdomain>.trycloudflare.com` proxying
+  laptop `:5055`.
+
+### Changed
+
+- **`scripts/ship.sh` no longer absorbs concurrent agents' untracked
+  files** (`47dc29a`) — stages modified-tracked only by default,
+  bails with a hint if untracked files exist and the caller did not
+  list them explicitly. Closes the `a40d845` absorption bug where
+  agent G's `ui_uniformity.py` got pulled into an unrelated commit.
+
+## [1.4.6] — 2026-04-11
+
+**Demo card + ship.sh velocity + v1.5.0 pre-seed + CHANGELOG
+backfill.** Sixth iOS-cadence patch. Six real-work commits since
+v1.4.5 shipped under the 5-min-block cadence.
+
+### Added
+
+- **`scripts/seed_fixes.py` + 106 v1.5.0 TODO markers** (`d9297e6`) —
+  pre-seeds multi-role TODO markers at every `user['role']` call
+  site so the future v1.5.0 agent finds context directly in the
+  code. 106 markers across `app.py` + templates.
+- **`scripts/ship.sh` velocity helper** (`4ea2560`) — one-command
+  `stage → smoke → commit → rebase → push` flow. Also pins
+  `LAB_SCHEDULER_AUTORELOAD=0` in the laptop launchd plist.
+- **`admin/12345` credential + `/login?demo=1` prefill** (`a40d845`,
+  `a1fb4be`) — public demo card gets an auto-filled email +
+  password for first-time visitors; crawler harness login made
+  password-aware.
+
+### Changed
+
+- **Unified seed passwords on `12345` + role-named persona emails**
+  (`f773e1c`) — `operator@`, `requester@`, `approver@`, etc.
+  coexisting with legacy named personas at stable IDs.
+- **CHANGELOG backfill for [1.4.1]–[1.4.5]** (`773e8a6`) — retro
+  sections written after the fact to catch the file up with the
+  tag stream.
+
 ## [1.4.5] — 2026-04-11
 
 **Dev-panel deep fixes + Flask auto-reload.** Four bundled commits

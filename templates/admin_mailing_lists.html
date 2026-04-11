@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Mailing Lists</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ lists|length }} list{{ "s" if lists|length != 1 else "" }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('admin_mailing_lists_new') }}" data-vis="{{ V }}">+ New list</a>
+  </div>
+</header>
+
+<section class="mailing-list-tiles" data-vis="{{ V }}">
+
+  {% if compose_mode %}
+  <article class="card tile tile-mailing-compose" data-vis="{{ V }}">
+    {{ card_heading("NEW LIST", "Create a mailing list") }}
+    <form method="post" action="{{ url_for('admin_mailing_lists_new') }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Name
+        <input type="text" name="name" maxlength="120" required
+               placeholder="Talks 2026, Alumni Announcements, Faculty Board…" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Description (optional)
+        <textarea name="description" rows="3"
+                  placeholder="What this list is for. Who should be on it. One paragraph." data-vis="{{ V }}"></textarea>
+      </label>
+      <div class="top-gap" data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Create list</button>
+        <a class="text-link" href="{{ url_for('admin_mailing_lists') }}" data-vis="{{ V }}">Cancel</a>
+      </div>
+    </form>
+  </article>
+  {% endif %}
+
+  <article class="card tile tile-mailing-inventory" data-vis="{{ V }}">
+    {{ card_heading("LISTS", "Click any list to manage members and compose") }}
+    {% if lists %}
+    <ul class="mailing-list-rows" data-vis="{{ V }}">
+      {% for ml in lists %}
+      <li class="mailing-list-row{% if ml.archived_at %} mailing-list-row-archived{% endif %}" data-vis="{{ V }}">
+        <a href="{{ url_for('admin_mailing_list_detail', list_id=ml.id) }}" class="mailing-list-link" data-vis="{{ V }}">
+          <div class="mailing-list-row-head" data-vis="{{ V }}">
+            <strong class="mailing-list-row-title" data-vis="{{ V }}">{{ ml.name }}</strong>
+            {% if ml.archived_at %}<span class="mailing-list-badge mailing-list-badge-archived" data-vis="{{ V }}">ARCHIVED</span>{% endif %}
+            <span class="hint mailing-list-counts" data-vis="{{ V }}">
+              {{ ml.member_count }} member{{ "s" if ml.member_count != 1 else "" }}
+              · {{ ml.send_count }} send{{ "s" if ml.send_count != 1 else "" }}
+              {% if ml.last_send_at %}· last {{ ml.last_send_at[:10] }}{% endif %}
+            </span>
+          </div>
+          {% if ml.description %}
+          <p class="mailing-list-row-desc hint" data-vis="{{ V }}">{{ ml.description }}</p>
+          {% endif %}
+          <p class="hint mailing-list-row-meta" data-vis="{{ V }}">
+            Created {{ ml.created_at[:10] }}{% if ml.created_by_name %} by {{ ml.created_by_name }}{% endif %}
+          </p>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No mailing lists yet. Create one above to get started.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

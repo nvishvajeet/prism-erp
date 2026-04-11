@@ -75,6 +75,20 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
 app.config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "25"))
+# v1.8.0 — mailing list config. PRISM does not talk to outside mail
+# servers. Every send has two faces:
+#   internal — a feed post visible on the list's in-app blackboard
+#              to every PRISM user subscribed to the list
+#   external — a downloadable .eml file the admin can open in their
+#              own mail client and manually send to the external
+#              members of the list
+# The feed post is canonical; the .eml is a derivative artifact.
+app.config["MAILING_LIST_MAX_RECIPIENTS"] = int(
+    os.environ.get("MAILING_LIST_MAX_RECIPIENTS", "500")
+)
+app.config["MAILING_LIST_MAX_ATTACHMENT_BYTES"] = int(
+    os.environ.get("MAILING_LIST_MAX_ATTACHMENT_BYTES", str(10 * 1024 * 1024))
+)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -370,6 +384,199 @@ def send_completion_email(sample_request: sqlite3.Row, results_summary: str) -> 
         return True, "Email sent"
     except Exception as exc:
         return False, f"Email not sent: {exc}"
+
+
+# ── v1.8.0 mailing-list subsystem ────────────────────────────────────
+# Audit-first architecture: every send is frozen at send time (subject,
+# body, attachment, recipient list) and hashed. Delivery is a pluggable
+# backend that writes events against the frozen send row. State is
+# derived by replaying events — no mutable status column that could
+# drift. Same philosophy as the v2.0 finance mitosis.
+
+MAILING_LIST_STORAGE_DIR = UPLOAD_DIR / "mailing_lists" / "sends"
+
+
+def _mailing_list_admin_gate(user: sqlite3.Row | None) -> bool:
+    """v1.8.0 — gate for the mailing-list subsystem. Admin + super_admin
+    + site_admin + owner. Deliberately broader than the notices gate so
+    professor_approvers can't post notices but admins who should be
+    sending talk announcements definitely can."""
+    if not user:
+        return False
+    try:
+        roles = user_role_set(user)
+    except NameError:
+        # user_role_set is defined lower in the file; fall back to the
+        # primary role column if this helper is called before that
+        # function is reachable (should not happen at runtime).
+        roles = frozenset({user["role"]})
+    return bool(roles & {"super_admin", "site_admin"}) or is_owner(user) or user["role"] == "admin"
+
+
+def normalize_email_body_to_html(raw_body: str) -> str:
+    """Turn a plain-text body (what the admin typed in the textarea)
+    into a minimal, email-client-safe HTML document.
+
+    Detection rule: if the body contains any '<' character we treat it
+    as already-authored HTML and wrap it verbatim. Otherwise we escape
+    every HTML special char and convert paragraph breaks (blank lines)
+    to <p> blocks and single newlines inside a paragraph to <br>.
+
+    The wrapping template is intentionally minimal — no tracking
+    pixels, no CSS framework, no hosted assets. It's a plain letter
+    rendered as responsive HTML.
+    """
+    raw = (raw_body or "").strip()
+    if "<" in raw:
+        inner = raw
+    else:
+        import html as html_mod
+        paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+        escaped_parts = []
+        for p in paragraphs:
+            escaped = html_mod.escape(p).replace("\n", "<br>")
+            escaped_parts.append(f"<p>{escaped}</p>")
+        inner = "\n".join(escaped_parts) if escaped_parts else "<p></p>"
+    return (
+        "<!doctype html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "  <meta charset=\"utf-8\">\n"
+        "  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+        "</head>\n"
+        "<body style=\"margin:0;padding:0;background:#f6f5f1;\">\n"
+        "  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f6f5f1;\"><tr><td align=\"center\">\n"
+        "    <table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:640px;margin:24px;background:#ffffff;border:1px solid #e5e1d8;\"><tr><td style=\"padding:32px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;line-height:1.55;font-size:15px;\">\n"
+        f"      {inner}\n"
+        "      <hr style=\"margin-top:32px;border:0;border-top:1px solid #e5e1d8;\">\n"
+        "      <p style=\"font-size:11px;color:#8a8580;margin-top:12px;\">Sent via PRISM Lab Scheduler \u00b7 MIT-WPU shared instrument facility.</p>\n"
+        "    </td></tr></table>\n"
+        "  </td></tr></table>\n"
+        "</body>\n"
+        "</html>"
+    )
+
+
+def hash_content(value: str | bytes) -> str:
+    """SHA-256 hex digest. Used as the merkle receipt for send audit
+    rows — if anyone ever asks 'what exactly did PRISM say went out',
+    the hash + the stored .eml file answer the question."""
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+    return hashlib.sha256(value).hexdigest()
+
+
+def build_send_eml(
+    *,
+    subject: str,
+    body_html: str,
+    from_address: str,
+    to_address: str,
+    bcc_addresses: list[str],
+    reply_to: str,
+    attachment_filename: str,
+    attachment_bytes: bytes,
+) -> bytes:
+    """Build a full RFC5322 message as bytes. Used both as the payload
+    for the .eml download backend and as the canonical archive written
+    to disk for audit.
+
+    Design choices:
+      - ``Bcc`` is set so recipients don't see each other's addresses.
+      - ``To`` is the sender itself — mailing-list convention — so the
+        message is valid RFC5322 (every email needs a To) without
+        exposing a shared address.
+      - ``Reply-To`` optional; when set, replies go to the real lab
+        admin's inbox instead of back to the mailing sender.
+      - Attachment is always application/pdf in v1.8.0 (the user form
+        only accepts PDFs); if a future tag wants other types, detect
+        from filename extension.
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_address
+    msg["To"] = to_address
+    if bcc_addresses:
+        msg["Bcc"] = ", ".join(bcc_addresses)
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    msg["Date"] = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+    # Plain-text fallback is just the stripped body so clients that
+    # don't render HTML still see something readable.
+    import re as _re
+    text_fallback = _re.sub(r"<[^>]+>", "", body_html)
+    text_fallback = _re.sub(r"\n{3,}", "\n\n", text_fallback).strip()
+    msg.set_content(text_fallback or "(see HTML version)")
+    msg.add_alternative(body_html, subtype="html")
+
+    if attachment_filename and attachment_bytes:
+        msg.add_attachment(
+            attachment_bytes,
+            maintype="application",
+            subtype="pdf",
+            filename=attachment_filename,
+        )
+
+    return bytes(msg)
+
+
+def active_mailing_list_members(list_id: int) -> list[sqlite3.Row]:
+    """Members not tombstoned. Used both by the send flow (to freeze
+    the recipient snapshot) and the detail page (to show the active
+    roster)."""
+    return query_all(
+        """
+        SELECT m.id, m.email, m.display_name, m.user_id, m.added_at,
+               u.name AS user_name
+          FROM mailing_list_members m
+          LEFT JOIN users u ON u.id = m.user_id
+         WHERE m.list_id = ? AND m.removed_at IS NULL
+         ORDER BY m.added_at DESC, m.id DESC
+        """,
+        (list_id,),
+    )
+
+
+def mailing_list_send_history(list_id: int, limit: int = 50) -> list[sqlite3.Row]:
+    """Every send ever attempted against this list, newest first. The
+    audit history view on the list detail page reads from this."""
+    return query_all(
+        """
+        SELECT s.id, s.subject, s.body_hash, s.attachment_filename,
+               s.attachment_hash, s.recipient_count, s.backend,
+               s.initiated_at, u.name AS initiated_by_name,
+               (SELECT event_type FROM mailing_list_send_events
+                 WHERE send_id = s.id
+                 ORDER BY event_at DESC LIMIT 1) AS latest_event
+          FROM mailing_list_sends s
+          LEFT JOIN users u ON u.id = s.initiated_by_user_id
+         WHERE s.list_id = ?
+         ORDER BY s.initiated_at DESC, s.id DESC
+         LIMIT ?
+        """,
+        (list_id, limit),
+    )
+
+
+def log_mailing_send_event(
+    db: sqlite3.Connection,
+    send_id: int,
+    event_type: str,
+    *,
+    user_id: int | None = None,
+    details: str = "",
+) -> None:
+    """Append-only. Never update a prior event, always add a new row.
+    This is the core of the audit-first contract."""
+    db.execute(
+        """
+        INSERT INTO mailing_list_send_events
+            (send_id, event_type, event_at, event_by_user_id, details)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (send_id, event_type, now_iso(), user_id, details),
+    )
 
 
 def build_request_status(db: sqlite3.Connection, request_id: int) -> str:
@@ -3638,6 +3845,106 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status);
             CREATE INDEX IF NOT EXISTS idx_grants_pi     ON grants(pi_user_id);
+
+            -- v1.8.0 — Mailing lists with audit-first send architecture.
+            -- Philosophy: same as the finance mitosis — events, not
+            -- mutable state. Every send is frozen at send time, hashed,
+            -- logged, and never rewritten. Retroactive delivery info
+            -- lands as a new event, not an update on the send row.
+            -- Send backends (eml_download / resend_api / future gmail
+            -- api / future smtp) all plug into the same schema by
+            -- appending events. State of a send at any point is
+            -- derived by replaying events — no denormalized status
+            -- column that could drift.
+            CREATE TABLE IF NOT EXISTS mailing_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_by_user_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                archived_at TEXT,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mailing_lists_archived ON mailing_lists(archived_at);
+
+            CREATE TABLE IF NOT EXISTS mailing_list_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                list_id INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                display_name TEXT NOT NULL DEFAULT '',
+                user_id INTEGER,
+                added_at TEXT NOT NULL DEFAULT '',
+                added_by_user_id INTEGER,
+                removed_at TEXT,
+                removed_by_user_id INTEGER,
+                FOREIGN KEY (list_id) REFERENCES mailing_lists(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (added_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (removed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mailing_members_list   ON mailing_list_members(list_id);
+            CREATE INDEX IF NOT EXISTS idx_mailing_members_active ON mailing_list_members(list_id, removed_at);
+
+            -- The immutable receipt — one row per send event, INSERT
+            -- once, never UPDATE. This row is the legal document that
+            -- says "PRISM told me this content went to this many
+            -- recipients at this time with this hash." The actual
+            -- recipient list is frozen in mailing_list_send_recipients
+            -- so membership changes after the send don't rewrite
+            -- history.
+            CREATE TABLE IF NOT EXISTS mailing_list_sends (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                list_id INTEGER NOT NULL,
+                subject TEXT NOT NULL,
+                body_html TEXT NOT NULL,
+                body_hash TEXT NOT NULL,
+                attachment_filename TEXT NOT NULL DEFAULT '',
+                attachment_hash TEXT NOT NULL DEFAULT '',
+                attachment_bytes INTEGER NOT NULL DEFAULT 0,
+                recipient_count INTEGER NOT NULL DEFAULT 0,
+                backend TEXT NOT NULL DEFAULT 'eml_download',
+                reply_to TEXT NOT NULL DEFAULT '',
+                initiated_by_user_id INTEGER,
+                initiated_at TEXT NOT NULL DEFAULT '',
+                eml_relpath TEXT NOT NULL DEFAULT '',
+                attachment_relpath TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (list_id) REFERENCES mailing_lists(id) ON DELETE CASCADE,
+                FOREIGN KEY (initiated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mailing_sends_list ON mailing_list_sends(list_id, initiated_at);
+
+            -- Frozen recipient snapshot — one row per (send, member) at
+            -- the instant of send. If a member is later removed from
+            -- the list, this row still stands.
+            CREATE TABLE IF NOT EXISTS mailing_list_send_recipients (
+                send_id INTEGER NOT NULL,
+                row_index INTEGER NOT NULL,
+                email TEXT NOT NULL,
+                display_name TEXT NOT NULL DEFAULT '',
+                member_id INTEGER,
+                PRIMARY KEY (send_id, row_index),
+                FOREIGN KEY (send_id) REFERENCES mailing_list_sends(id) ON DELETE CASCADE,
+                FOREIGN KEY (member_id) REFERENCES mailing_list_members(id) ON DELETE SET NULL
+            );
+
+            -- Append-only event log. Backends write events; state is
+            -- derived by replaying them. Event types in use today:
+            --   drafted, eml_generated, eml_downloaded,
+            --   user_confirmed_sent, resend_api_accepted,
+            --   resend_api_rejected
+            -- Future backends add their own event types without
+            -- touching this schema.
+            CREATE TABLE IF NOT EXISTS mailing_list_send_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                send_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                event_at TEXT NOT NULL DEFAULT '',
+                event_by_user_id INTEGER,
+                details TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (send_id) REFERENCES mailing_list_sends(id) ON DELETE CASCADE,
+                FOREIGN KEY (event_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mailing_events_send ON mailing_list_send_events(send_id, event_at);
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -4891,6 +5198,566 @@ def admin_notices_delete(notice_id: int):
     execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     flash(f"Notice #{notice_id} removed.", "success")
     return redirect(url_for("admin_notices"))
+
+
+# ─── v1.8.0 Mailing lists — internal feed + .eml download ─────────────
+# Every list has TWO faces:
+#   Internal feed   — always on. Every send posts to the list's
+#                     blackboard page inside PRISM. Subscribers (members
+#                     with user_id) can read it live. Event-widget
+#                     styled like the request/instrument event panes,
+#                     with sent/read timestamps and no deletes.
+#   External .eml   — admin clicks Download .eml; PRISM hands them a
+#                     full RFC5322 message with the HTML body and PDF
+#                     attachment. Admin opens it in their own mail
+#                     client and hits send. PRISM never talks to any
+#                     outside SMTP or API.
+# Both share the same immutable send row; the feed post IS the canonical
+# record, the .eml is a derivative for external delivery. Admin can
+# mark "confirmed sent externally" after they hit send in their client
+# — that writes a user_confirmed_sent event.
+#
+# Audit philosophy (same as the v2.0 finance mitosis): events, not
+# mutable state. Every send is frozen at send time and hashed; state
+# is derived by replaying events. Future backends (gmail_api, smtp)
+# plug in by writing their own event types against the same schema.
+
+
+@app.route("/admin/mailing-lists", methods=["GET"])
+@login_required
+def admin_mailing_lists():
+    """Inventory of every mailing list, with last-send timestamp and
+    active member count. Admin gate enforced."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    rows = query_all(
+        """
+        SELECT ml.id, ml.name, ml.description, ml.created_at, ml.archived_at,
+               u.name AS created_by_name,
+               (SELECT COUNT(*) FROM mailing_list_members m
+                 WHERE m.list_id = ml.id AND m.removed_at IS NULL) AS member_count,
+               (SELECT MAX(s.initiated_at) FROM mailing_list_sends s
+                 WHERE s.list_id = ml.id) AS last_send_at,
+               (SELECT COUNT(*) FROM mailing_list_sends s
+                 WHERE s.list_id = ml.id) AS send_count
+          FROM mailing_lists ml
+          LEFT JOIN users u ON u.id = ml.created_by_user_id
+         ORDER BY
+            CASE WHEN ml.archived_at IS NULL THEN 0 ELSE 1 END,
+            ml.created_at DESC
+        """
+    )
+    return render_template(
+        "admin_mailing_lists.html",
+        lists=rows,
+    )
+
+
+@app.route("/admin/mailing-lists/new", methods=["GET", "POST"])
+@login_required
+def admin_mailing_lists_new():
+    """Create a new mailing list. Admin gate."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        if not name:
+            flash("List name is required.", "error")
+            return redirect(url_for("admin_mailing_lists_new"))
+        list_id = execute(
+            """
+            INSERT INTO mailing_lists (name, description, created_by_user_id, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, description, user["id"], now_iso()),
+        )
+        log_action(user["id"], "mailing_list", list_id, "created", {"name": name})
+        flash(f"Created mailing list “{name}”.", "success")
+        return redirect(url_for("admin_mailing_list_detail", list_id=list_id))
+    return render_template("admin_mailing_lists.html",
+                           lists=[],
+                           compose_mode=True)
+
+
+@app.route("/admin/mailing-lists/<int:list_id>", methods=["GET"])
+@login_required
+def admin_mailing_list_detail(list_id: int):
+    """List drill-down: members + send history + quick compose link."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    ml = query_one("SELECT * FROM mailing_lists WHERE id = ?", (list_id,))
+    if not ml:
+        abort(404)
+    members = active_mailing_list_members(list_id)
+    sends = mailing_list_send_history(list_id)
+    return render_template(
+        "admin_mailing_list_detail.html",
+        ml=ml,
+        members=members,
+        sends=sends,
+    )
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/members", methods=["POST"])
+@login_required
+def admin_mailing_list_add_members(list_id: int):
+    """Add members. Accepts a textarea with one address per line, each
+    optionally followed by a display name in 'email, Name' or
+    'Name <email>' format. Duplicates silently ignored (active members
+    of the same list are not re-added)."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    ml = query_one("SELECT id FROM mailing_lists WHERE id = ?", (list_id,))
+    if not ml:
+        abort(404)
+    raw = request.form.get("members_blob", "")
+    import re as _re
+    added = 0
+    skipped = 0
+    for line in raw.splitlines():
+        line = line.strip().strip(",;")
+        if not line:
+            continue
+        # 'Name <email>' form
+        m = _re.match(r"^\s*(.+?)\s*<\s*([^>]+?)\s*>\s*$", line)
+        if m:
+            display_name = m.group(1).strip()
+            email = m.group(2).strip()
+        else:
+            # 'email, Name' or bare 'email'
+            parts = [p.strip() for p in line.split(",", 1)]
+            email = parts[0]
+            display_name = parts[1] if len(parts) > 1 else ""
+        if "@" not in email:
+            skipped += 1
+            continue
+        existing = query_one(
+            """
+            SELECT id FROM mailing_list_members
+             WHERE list_id = ? AND LOWER(email) = LOWER(?) AND removed_at IS NULL
+            """,
+            (list_id, email),
+        )
+        if existing:
+            skipped += 1
+            continue
+        user_row = query_one("SELECT id FROM users WHERE LOWER(email) = LOWER(?)", (email,))
+        execute(
+            """
+            INSERT INTO mailing_list_members
+                (list_id, email, display_name, user_id, added_at, added_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (list_id, email, display_name, user_row["id"] if user_row else None,
+             now_iso(), user["id"]),
+        )
+        added += 1
+    log_action(user["id"], "mailing_list", list_id, "members_added",
+               {"added": added, "skipped": skipped})
+    flash(f"Added {added} member{'s' if added != 1 else ''}."
+          + (f" {skipped} skipped (already present or invalid)." if skipped else ""),
+          "success" if added else "info")
+    return redirect(url_for("admin_mailing_list_detail", list_id=list_id))
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/members/<int:member_id>/remove", methods=["POST"])
+@login_required
+def admin_mailing_list_remove_member(list_id: int, member_id: int):
+    """Soft-remove a member. Audit trail preserved."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    execute(
+        """
+        UPDATE mailing_list_members
+           SET removed_at = ?, removed_by_user_id = ?
+         WHERE id = ? AND list_id = ? AND removed_at IS NULL
+        """,
+        (now_iso(), user["id"], member_id, list_id),
+    )
+    log_action(user["id"], "mailing_list", list_id, "member_removed", {"member_id": member_id})
+    flash("Member removed.", "success")
+    return redirect(url_for("admin_mailing_list_detail", list_id=list_id))
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/send", methods=["GET", "POST"])
+@login_required
+def admin_mailing_list_send(list_id: int):
+    """Compose + post. GET shows the form; POST freezes the recipient
+    roster, hashes content, writes the immutable send row + recipient
+    snapshot + events, persists the .eml to disk for audit, and
+    redirects to the send drill-down where the admin can download the
+    .eml, view the feed post, and later confirm they sent it externally.
+
+    This is the single audit-first path. No external send — PRISM
+    never talks to SMTP or an email API. The .eml is a derivative
+    artifact the admin opens in their own mail client.
+    """
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    ml = query_one("SELECT * FROM mailing_lists WHERE id = ?", (list_id,))
+    if not ml:
+        abort(404)
+    members = active_mailing_list_members(list_id)
+    max_recipients = app.config["MAILING_LIST_MAX_RECIPIENTS"]
+
+    if request.method == "GET":
+        return render_template(
+            "admin_mailing_list_compose.html",
+            ml=ml,
+            members=members,
+            max_recipients=max_recipients,
+        )
+
+    # ── POST branch — freeze and store ──────────────────────────
+    subject = (request.form.get("subject") or "").strip()
+    raw_body = request.form.get("body") or ""
+    reply_to = (request.form.get("reply_to") or "").strip()
+    attachment_file = request.files.get("attachment")
+
+    if not subject:
+        flash("Subject is required.", "error")
+        return redirect(url_for("admin_mailing_list_send", list_id=list_id))
+    if not raw_body.strip():
+        flash("Body is required.", "error")
+        return redirect(url_for("admin_mailing_list_send", list_id=list_id))
+    if not members:
+        flash("This list has no active members. Add some before composing.", "error")
+        return redirect(url_for("admin_mailing_list_detail", list_id=list_id))
+    if len(members) > max_recipients:
+        flash(
+            f"This list has {len(members)} active members — the cap is "
+            f"{max_recipients}. Split the list or raise MAILING_LIST_MAX_RECIPIENTS.",
+            "error",
+        )
+        return redirect(url_for("admin_mailing_list_detail", list_id=list_id))
+
+    # Attachment (optional, PDF only)
+    attachment_filename = ""
+    attachment_bytes = b""
+    if attachment_file and attachment_file.filename:
+        name = secure_filename(attachment_file.filename)
+        if not name.lower().endswith(".pdf"):
+            flash("Attachment must be a PDF.", "error")
+            return redirect(url_for("admin_mailing_list_send", list_id=list_id))
+        attachment_bytes = attachment_file.read()
+        max_bytes = app.config["MAILING_LIST_MAX_ATTACHMENT_BYTES"]
+        if len(attachment_bytes) > max_bytes:
+            flash(
+                f"Attachment is {len(attachment_bytes)} bytes — max is {max_bytes}.",
+                "error",
+            )
+            return redirect(url_for("admin_mailing_list_send", list_id=list_id))
+        attachment_filename = name
+
+    body_html = normalize_email_body_to_html(raw_body)
+    body_hash = hash_content(subject + "\n\n" + body_html)
+    attachment_hash = hash_content(attachment_bytes) if attachment_bytes else ""
+
+    from_address = f"PRISM Lab <{user['email']}>"
+    to_address = from_address  # convention: send to self, BCC the list
+    bcc_addresses = [m["email"] for m in members]
+    recipient_count = len(bcc_addresses)
+
+    # ── Write the immutable send row ────────────────────────────
+    initiated_at = now_iso()
+    send_id = execute(
+        """
+        INSERT INTO mailing_list_sends
+            (list_id, subject, body_html, body_hash,
+             attachment_filename, attachment_hash, attachment_bytes,
+             recipient_count, backend, reply_to,
+             initiated_by_user_id, initiated_at,
+             eml_relpath, attachment_relpath)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'eml_download', ?, ?, ?, '', '')
+        """,
+        (
+            list_id, subject, body_html, body_hash,
+            attachment_filename, attachment_hash, len(attachment_bytes),
+            recipient_count, reply_to,
+            user["id"], initiated_at,
+        ),
+    )
+
+    # Freeze recipient snapshot
+    db = get_db()
+    for idx, m in enumerate(members):
+        db.execute(
+            """
+            INSERT INTO mailing_list_send_recipients
+                (send_id, row_index, email, display_name, member_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (send_id, idx, m["email"], m["display_name"] or "", m["id"]),
+        )
+    log_mailing_send_event(db, send_id, "drafted", user_id=user["id"],
+                           details=json.dumps({"recipients": recipient_count}))
+    db.commit()
+
+    # Build the .eml and persist it to disk — this is the paper receipt.
+    # It stays available for re-download from the send drill-down forever.
+    eml_bytes = build_send_eml(
+        subject=subject,
+        body_html=body_html,
+        from_address=from_address,
+        to_address=to_address,
+        bcc_addresses=bcc_addresses,
+        reply_to=reply_to,
+        attachment_filename=attachment_filename,
+        attachment_bytes=attachment_bytes,
+    )
+    send_dir = MAILING_LIST_STORAGE_DIR / str(send_id)
+    send_dir.mkdir(parents=True, exist_ok=True)
+    (send_dir / "message.eml").write_bytes(eml_bytes)
+    attachment_relpath = ""
+    if attachment_bytes and attachment_filename:
+        (send_dir / attachment_filename).write_bytes(attachment_bytes)
+        attachment_relpath = str(Path("mailing_lists/sends") / str(send_id) / attachment_filename)
+    eml_relpath = str(Path("mailing_lists/sends") / str(send_id) / "message.eml")
+    execute(
+        "UPDATE mailing_list_sends SET eml_relpath = ?, attachment_relpath = ? WHERE id = ?",
+        (eml_relpath, attachment_relpath, send_id),
+    )
+    log_mailing_send_event(get_db(), send_id, "eml_generated", user_id=user["id"],
+                           details=json.dumps({"bytes": len(eml_bytes)}))
+    # The feed post goes live immediately — internal subscribers see it
+    # the moment they next load their feed page.
+    log_mailing_send_event(get_db(), send_id, "feed_posted", user_id=user["id"])
+    get_db().commit()
+
+    flash(
+        f"Posted to the list feed. Download the .eml and send it from your mail client "
+        f"for the {recipient_count} external recipient{'s' if recipient_count != 1 else ''}.",
+        "success",
+    )
+    return redirect(url_for("admin_mailing_list_send_drill", list_id=list_id, send_id=send_id))
+
+
+@app.route("/lists", methods=["GET"])
+@login_required
+def mailing_lists_my():
+    """User-facing inventory: lists I'm subscribed to. A PRISM user is
+    subscribed to a list when their user_id appears in
+    mailing_list_members with removed_at NULL. Admins see every list."""
+    user = current_user()
+    is_admin = _mailing_list_admin_gate(user)
+    if is_admin:
+        rows = query_all(
+            """
+            SELECT ml.id, ml.name, ml.description, ml.created_at, ml.archived_at,
+                   (SELECT COUNT(*) FROM mailing_list_members m
+                     WHERE m.list_id = ml.id AND m.removed_at IS NULL) AS member_count,
+                   (SELECT COUNT(*) FROM mailing_list_sends s WHERE s.list_id = ml.id) AS send_count,
+                   (SELECT MAX(s.initiated_at) FROM mailing_list_sends s WHERE s.list_id = ml.id) AS last_send_at
+              FROM mailing_lists ml
+             ORDER BY
+               CASE WHEN ml.archived_at IS NULL THEN 0 ELSE 1 END,
+               ml.created_at DESC
+            """
+        )
+    else:
+        rows = query_all(
+            """
+            SELECT ml.id, ml.name, ml.description, ml.created_at, ml.archived_at,
+                   (SELECT COUNT(*) FROM mailing_list_members m
+                     WHERE m.list_id = ml.id AND m.removed_at IS NULL) AS member_count,
+                   (SELECT COUNT(*) FROM mailing_list_sends s WHERE s.list_id = ml.id) AS send_count,
+                   (SELECT MAX(s.initiated_at) FROM mailing_list_sends s WHERE s.list_id = ml.id) AS last_send_at
+              FROM mailing_lists ml
+              JOIN mailing_list_members m ON m.list_id = ml.id
+             WHERE m.user_id = ? AND m.removed_at IS NULL AND ml.archived_at IS NULL
+             GROUP BY ml.id
+             ORDER BY last_send_at DESC, ml.name
+            """,
+            (user["id"],),
+        )
+    return render_template("mailing_lists_my.html", lists=rows, is_admin=is_admin)
+
+
+@app.route("/lists/<int:list_id>", methods=["GET"])
+@login_required
+def mailing_list_feed(list_id: int):
+    """User-facing feed view — the blackboard for a single list. Shows
+    every post ever made, newest first, styled as an event widget
+    consistent with the request/instrument event panes. Members can
+    read the full history of the list. Admins always have access;
+    regular users must be active subscribers.
+
+    Every post shows:
+      - subject + body (full, not truncated)
+      - timestamp + author (who hit send)
+      - recipient count (how many people it went to)
+      - attachment download link (if any)
+      - every event in the audit log (drafted, eml_generated,
+        feed_posted, eml_downloaded, user_confirmed_sent, ...)
+    """
+    user = current_user()
+    ml = query_one("SELECT * FROM mailing_lists WHERE id = ?", (list_id,))
+    if not ml:
+        abort(404)
+    is_admin = _mailing_list_admin_gate(user)
+    if not is_admin:
+        sub = query_one(
+            """
+            SELECT id FROM mailing_list_members
+             WHERE list_id = ? AND user_id = ? AND removed_at IS NULL
+            """,
+            (list_id, user["id"]),
+        )
+        if not sub:
+            abort(403)
+    sends = query_all(
+        """
+        SELECT s.id, s.subject, s.body_html, s.body_hash,
+               s.attachment_filename, s.attachment_hash, s.attachment_bytes,
+               s.recipient_count, s.initiated_at, s.eml_relpath, s.attachment_relpath,
+               u.name AS initiated_by_name, u.email AS initiated_by_email,
+               (SELECT event_type FROM mailing_list_send_events
+                 WHERE send_id = s.id ORDER BY event_at DESC LIMIT 1) AS latest_event
+          FROM mailing_list_sends s
+          LEFT JOIN users u ON u.id = s.initiated_by_user_id
+         WHERE s.list_id = ?
+         ORDER BY s.initiated_at DESC, s.id DESC
+         LIMIT 100
+        """,
+        (list_id,),
+    )
+    members = active_mailing_list_members(list_id) if is_admin else []
+    return render_template(
+        "mailing_list_feed.html",
+        ml=ml,
+        sends=sends,
+        members=members,
+        is_admin=is_admin,
+    )
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/sends/<int:send_id>", methods=["GET"])
+@login_required
+def admin_mailing_list_send_drill(list_id: int, send_id: int):
+    """Per-send drill-down: subject, body preview, hashes, full frozen
+    recipient roster, every event, re-download links for the .eml and
+    the attachment."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    ml = query_one("SELECT * FROM mailing_lists WHERE id = ?", (list_id,))
+    send_row = query_one(
+        """
+        SELECT s.*, u.name AS initiated_by_name, u.email AS initiated_by_email
+          FROM mailing_list_sends s
+          LEFT JOIN users u ON u.id = s.initiated_by_user_id
+         WHERE s.id = ? AND s.list_id = ?
+        """,
+        (send_id, list_id),
+    )
+    if not ml or not send_row:
+        abort(404)
+    recipients = query_all(
+        """
+        SELECT row_index, email, display_name, member_id
+          FROM mailing_list_send_recipients
+         WHERE send_id = ?
+         ORDER BY row_index
+        """,
+        (send_id,),
+    )
+    events = query_all(
+        """
+        SELECT e.id, e.event_type, e.event_at, e.details,
+               u.name AS event_by_name
+          FROM mailing_list_send_events e
+          LEFT JOIN users u ON u.id = e.event_by_user_id
+         WHERE e.send_id = ?
+         ORDER BY e.event_at ASC, e.id ASC
+        """,
+        (send_id,),
+    )
+    return render_template(
+        "admin_mailing_list_send_detail.html",
+        ml=ml,
+        send=send_row,
+        recipients=recipients,
+        events=events,
+    )
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/sends/<int:send_id>/download", methods=["GET"])
+@login_required
+def admin_mailing_list_send_download(list_id: int, send_id: int):
+    """Re-download the archived .eml for a historical send."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    send_row = query_one(
+        "SELECT eml_relpath FROM mailing_list_sends WHERE id = ? AND list_id = ?",
+        (send_id, list_id),
+    )
+    if not send_row or not send_row["eml_relpath"]:
+        abort(404)
+    full_path = UPLOAD_DIR / send_row["eml_relpath"]
+    if not full_path.exists():
+        abort(404)
+    log_mailing_send_event(get_db(), send_id, "eml_redownloaded", user_id=user["id"])
+    get_db().commit()
+    return send_file(
+        str(full_path),
+        mimetype="message/rfc822",
+        as_attachment=True,
+        download_name=f"mailing-list-{list_id}-send-{send_id}.eml",
+    )
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/sends/<int:send_id>/attachment", methods=["GET"])
+@login_required
+def admin_mailing_list_send_attachment(list_id: int, send_id: int):
+    """Re-download the PDF attachment that went out in a historical send."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    send_row = query_one(
+        "SELECT attachment_relpath, attachment_filename FROM mailing_list_sends WHERE id = ? AND list_id = ?",
+        (send_id, list_id),
+    )
+    if not send_row or not send_row["attachment_relpath"]:
+        abort(404)
+    full_path = UPLOAD_DIR / send_row["attachment_relpath"]
+    if not full_path.exists():
+        abort(404)
+    return send_file(
+        str(full_path),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=send_row["attachment_filename"] or "attachment.pdf",
+    )
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/sends/<int:send_id>/confirm", methods=["POST"])
+@login_required
+def admin_mailing_list_send_confirm(list_id: int, send_id: int):
+    """Admin confirms they actually hit send in their mail client. Writes
+    a user_confirmed_sent event — advisory only, does not change the
+    send row. This is how the eml_download backend gets a real
+    delivery confirmation."""
+    user = current_user()
+    if not _mailing_list_admin_gate(user):
+        abort(403)
+    send_row = query_one(
+        "SELECT id FROM mailing_list_sends WHERE id = ? AND list_id = ?",
+        (send_id, list_id),
+    )
+    if not send_row:
+        abort(404)
+    log_mailing_send_event(get_db(), send_id, "user_confirmed_sent", user_id=user["id"])
+    get_db().commit()
+    flash("Thanks — logged that you confirmed sending.", "success")
+    return redirect(url_for("admin_mailing_list_send_drill", list_id=list_id, send_id=send_id))
 
 
 # ─── v1.6.2 User-to-user messaging routes ─────────────────────────────

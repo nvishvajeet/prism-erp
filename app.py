@@ -7819,7 +7819,13 @@ if __name__ == "__main__":
     # use_reloader watches .py files and auto-restarts on code changes
     # Set LAB_SCHEDULER_DEBUG=1 for verbose Flask debug toolbar
     is_debug = os.environ.get("LAB_SCHEDULER_DEBUG", "0") == "1"
-    app.run(debug=True, use_reloader=True, port=5055,
+    # LAB_SCHEDULER_HOST controls the bind address. Default is loopback
+    # (127.0.0.1) so `python app.py` on a laptop does not accidentally
+    # expose the dev server to the LAN. On the Mac mini production
+    # host, set LAB_SCHEDULER_HOST=0.0.0.0 in .env so Tailscale and LAN
+    # devices can reach it at http://<host>:5055/.
+    bind_host = os.environ.get("LAB_SCHEDULER_HOST", "127.0.0.1")
+    app.run(debug=True, use_reloader=True, host=bind_host, port=5055,
             extra_files=[
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),

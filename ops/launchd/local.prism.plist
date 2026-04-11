@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PRISM / lab-scheduler — LaunchAgent for the Mac mini deploy.
+
+  Install:
+    cp ops/launchd/local.prism.plist ~/Library/LaunchAgents/local.prism.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.prism.plist
+    launchctl kickstart -k gui/$(id -u)/local.prism
+
+  Uninstall:
+    launchctl bootout gui/$(id -u)/local.prism
+    rm ~/Library/LaunchAgents/local.prism.plist
+
+  Tail logs:
+    tail -f ~/Scheduler/Main/logs/server.log
+
+  Notes:
+    * WorkingDirectory is hard-coded to ~/Scheduler/Main on the mini. If you
+      move the working copy (e.g. into ~/Claude/lab-scheduler per the
+      CLAUDE.md migration plan), update the path here and re-bootstrap.
+    * StandardOutPath / StandardErrorPath both point at logs/server.log so
+      one file captures both streams in order, making `tail -f` useful.
+    * KeepAlive=true restarts the process on any exit. Throttle limits
+      a crash loop to at most once every 10 seconds.
+    * RunAtLoad=true starts the service at user login (launchd parlance),
+      which on the mini happens at boot because the user is auto-logged-in.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.prism</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vishwajeet/Scheduler/Main/scripts/start.sh</string>
+        <string>--service</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishwajeet/Scheduler/Main</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

@@ -36,16 +36,22 @@ Primary entry point: `app.py` (≈7,000 lines). This is the product.
 
 ## 2. Topology
 
+PRISM is the only project on this laptop with a Level-2 mini
+mirror — because the mini actually **runs** PRISM in production.
+The post-receive hook on the Level 1 bare force-mirrors every
+push to the mini so the mini's `~/git/lab-scheduler.git` stays
+current; the mini then does `git pull` + `launchctl kickstart`
+to deploy atomically.
+
 | Thing | Path |
 |---|---|
-| LOCAL bare (canonical origin) | `~/.claude/git-server/lab-scheduler.git` |
-| Working copy | `~/Library/CloudStorage/Dropbox/Scheduler/Main/` *(pending migration to `~/Claude/lab-scheduler/`)* |
+| Level 1 bare (canonical origin) | `~/.claude/git-server/lab-scheduler.git` |
+| Working copy | `~/Documents/Scheduler/Main/` *(moved out of Dropbox on 2026-04-11 to avoid pack-file corruption)* |
 | Default branch | `v1.3.0-stable-release` |
-| Mirror target | `prism-mini:~/git/lab-scheduler.git` (automatic, post-receive hook) |
-| GLOBAL remotes | **none** — LOCAL + mini only |
+| Level 2 upstream | **`mini`** — auto-mirror via post-receive hook. Target: `prism-mini:~/git/lab-scheduler.git`. Reason: mini runs PRISM in production. |
 
-Push to `origin` only. The hook mirrors to the mini. No GitHub, no
-Bitbucket — PRISM is private.
+Push to `origin` only. The Level 1 bare's hook mirrors to the
+mini. No GitHub, no Bitbucket — PRISM is private.
 
 ## 3. PRISM-specific rules
 

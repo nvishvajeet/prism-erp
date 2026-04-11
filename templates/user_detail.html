@@ -108,6 +108,41 @@
 </section>
 {% endif %}
 
+{% if can_edit_user and layered_role_choices %}
+<section class="card tile tile-user-extra-roles" data-vis="{{ V }}">
+  {% call card_heading("", "Additional Roles") %}
+    <button type="button" class="link-button" data-toggle-target="#userExtraRolesForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+  {% endcall %}
+  <p class="tile-lead" data-vis="{{ V }}">
+    Primary role: <strong>{{ role_display_name(target_user['role']) }}</strong>.
+    {% set _extras = target_role_set | reject('equalto', target_user['role']) | list %}
+    {% if _extras %}
+      Also holds: {% for r in _extras %}<span class="role-chip" data-vis="{{ V }}">{{ role_display_name(r) }}</span>{% endfor %}
+    {% else %}
+      No additional roles.
+    {% endif %}
+  </p>
+  <form method="post" class="meta-edit-form top-gap" id="userExtraRolesForm" hidden data-vis="{{ V }}">
+    <input type="hidden" name="action" value="update_user_role_set">
+    <p class="hint" data-vis="{{ V }}">Tick a box to layer another role on top of the primary role. The primary role is controlled by the "Change Role" tile above.</p>
+    <div class="extra-role-grid" data-vis="{{ V }}">
+      {% for value, label in layered_role_choices %}
+      <label class="extra-role-chip" data-vis="{{ V }}">
+        <input type="checkbox" name="extra_roles" value="{{ value }}"
+               {% if value in target_role_set %}checked{% endif %}
+               {% if value == target_user['role'] %}disabled checked{% endif %}>
+        {{ label }}
+        {% if value == target_user['role'] %}<small class="hint" data-vis="{{ V }}">(primary)</small>{% endif %}
+      </label>
+      {% endfor %}
+    </div>
+    <div class="meta-edit-actions" data-vis="{{ V }}">
+      <button type="submit" data-vis="{{ V }}">Save Roles</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
 {% if can_edit_user and instrument_roster %}
 <section class="card tile tile-user-instruments" data-vis="{{ V }}">
   {% call card_heading("", "Instrument Access") %}
@@ -120,6 +155,25 @@
   <form method="post" class="meta-edit-form top-gap" id="userInstrumentsForm" hidden data-vis="{{ V }}">
     <input type="hidden" name="action" value="update_user_instruments">
     <p class="hint" data-vis="{{ V }}">Select the lane(s) for each instrument. Use the category quick-grant buttons to assign a whole group at once.</p>
+    {% if instrument_groups %}
+    <div class="group-quick-grant" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Quick-grant a whole group:</span>
+      {% for grp in instrument_groups %}
+      {% set _ids = [] %}
+      {% for inst in instrument_roster %}
+        {% if (inst['category'] or 'Uncategorized') == grp['name'] %}
+          {% set _ = _ids.append(inst['id']) %}
+        {% endif %}
+      {% endfor %}
+      <button type="button" class="link-button group-grant"
+              data-group-ids="{{ _ids|tojson }}"
+              data-group-lane="operator_ids"
+              data-vis="{{ V }}">
+        {{ grp['name'] }} → Operator
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
     <table class="assignment-matrix" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -190,6 +244,30 @@
             var box = row.querySelector('input[name="' + lane + '"]');
             if (box) box.checked = true;
           }
+        });
+      });
+    });
+  })();
+
+  /* W1.3.6 — group quick-grant buttons. Each button carries a JSON
+     list of instrument ids; clicking it checks the given lane for
+     every matching row. */
+  (function () {
+    var groupBtns = document.querySelectorAll('.group-grant');
+    if (!groupBtns.length) return;
+    groupBtns.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var lane = btn.getAttribute('data-group-lane');
+        var ids = [];
+        try {
+          ids = JSON.parse(btn.getAttribute('data-group-ids') || '[]');
+        } catch (err) { return; }
+        ids.forEach(function (id) {
+          var box = document.querySelector(
+            'input[name="' + lane + '"][value="' + id + '"]'
+          );
+          if (box) box.checked = true;
         });
       });
     });

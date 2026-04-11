@@ -6689,7 +6689,44 @@ def user_profile(user_id: int):
                 viewer["id"], "user", user_id, "user_role_changed",
                 {"from_role": target_user["role"], "to_role": new_role, "email": target_user["email"]},
             )
+            # Make sure the new primary role is also in the role set.
+            grant_user_role(user_id, new_role, viewer["id"])
             flash(f"Role updated to {role_display_name(new_role)}.", "success")
+            return redirect(url_for("user_profile", user_id=user_id))
+        if action == "update_user_role_set":
+            # W1.3.7 — layer additional roles on top of users.role.
+            # The primary role (users.role) is controlled by
+            # change_role above; this form only manipulates the
+            # additional-role junction table. Checked roles are
+            # granted, unchecked are revoked. The primary role is
+            # always force-granted so the set never goes below the
+            # single-role baseline the rest of the app expects.
+            if not can_manage_members(viewer):
+                abort(403)
+            if is_owner(target_user) and not is_owner(viewer):
+                abort(403)
+            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+                abort(403)
+            checked = set(request.form.getlist("extra_roles"))
+            layered_roles = {
+                "operator", "instrument_admin", "faculty_in_charge",
+                "professor_approver", "finance_admin",
+            }
+            # site_admin / super_admin can only be granted by a super_admin
+            if viewer["role"] == "super_admin":
+                layered_roles |= {"site_admin"}
+            # Force-grant the primary role; sync the rest from checked.
+            grant_user_role(user_id, target_user["role"], viewer["id"])
+            for r in layered_roles:
+                if r in checked:
+                    grant_user_role(user_id, r, viewer["id"])
+                elif r != target_user["role"]:
+                    revoke_user_role(user_id, r)
+            log_action(
+                viewer["id"], "user", user_id, "user_role_set_updated",
+                {"roles": sorted(checked), "email": target_user["email"]},
+            )
+            flash("Additional roles updated.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
         if action == "update_user_instruments":
             # Bulk per-instrument assignment across the three lanes
@@ -6867,6 +6904,18 @@ def user_profile(user_id: int):
         assigned_operator_ids=assigned_operator_ids,
         assigned_faculty_ids=assigned_faculty_ids,
         role_choices=role_choices,
+        target_role_set=user_role_set(target_user),
+        layered_role_choices=[
+            ("operator", "Operator"),
+            ("instrument_admin", "Instrument Admin"),
+            ("faculty_in_charge", "Faculty in Charge"),
+            ("professor_approver", "Professor Approver"),
+            ("finance_admin", "Finance Admin"),
+        ] + (
+            [("site_admin", "Site Admin")]
+            if viewer["role"] == "super_admin" else []
+        ),
+        instrument_groups=instrument_groups_all(),
     )
 
 

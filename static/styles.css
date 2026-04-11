@@ -5495,7 +5495,54 @@ img.instrument-photo:not([src]) {
 
 /* ── Per-user role + instrument assignment tiles ── */
 .tile-user-role,
+.tile-user-extra-roles,
 .tile-user-instruments { grid-column: 1 / -1; }
+
+/* W1.3.7 — layered roles chip grid + inline chips */
+.extra-role-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.extra-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-2, #f5f5f5);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.extra-role-chip input[type="checkbox"] {
+  margin: 0;
+}
+.extra-role-chip input[disabled] + { opacity: 0.6; }
+.role-chip {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  margin: 0 0.2rem;
+  border-radius: 999px;
+  background: rgba(80, 120, 220, 0.15);
+  color: rgba(30, 50, 120, 1);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* W1.3.6 — group-quick-grant row above the assignment matrix */
+.group-quick-grant {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.5rem 0.6rem;
+  background: color-mix(in srgb, var(--bg-2, #f5f5f5) 60%, transparent);
+  border-radius: 6px;
+}
+.group-quick-grant .hint { margin-right: 0.3rem; }
 
 .assignment-matrix {
   width: 100%;

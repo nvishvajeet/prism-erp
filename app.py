@@ -9381,15 +9381,43 @@ def admin_users():
             log_action(user["id"], "user", member_id, "member_elevated", {"email": member["email"], "new_role": new_role})
             flash(f"{member['email']} elevated to {new_role.replace('_', ' ')}.", "success")
         return redirect(url_for("admin_users"))
-    rows = query_all("SELECT id, name, email, role, invite_status, active, member_code FROM users ORDER BY role, name")
-    owners = [row for row in rows if row["email"].strip().lower() in OWNER_EMAILS]
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    members = [row for row in rows if row["role"] == "requester"]
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    admins = [row for row in rows if row["role"] != "requester" and row["email"].strip().lower() not in OWNER_EMAILS]
+    # 5000-user scaling fix: admins + owners are always small sets
+    # (< ~100 combined) so an unbounded query is fine. Members
+    # (canonical role = requester) can grow to thousands — cap at
+    # 200 + expose a ?q=<search> param for finding anyone past the
+    # first page. Total count is surfaced in the template so the
+    # admin knows how many aren't being shown.
+    MEMBERS_CAP = 200
+    member_q = (request.args.get("q") or "").strip()
+    admin_rows = query_all(
+        "SELECT id, name, email, role, invite_status, active, member_code "
+        "FROM users "
+        "WHERE role != 'requester' "
+        "ORDER BY role, name"
+    )
+    owners = [row for row in admin_rows if row["email"].strip().lower() in OWNER_EMAILS]
+    admins = [row for row in admin_rows if row["email"].strip().lower() not in OWNER_EMAILS]
+    member_where = "WHERE role = 'requester'"
+    member_params: list = []
+    if member_q:
+        member_where += " AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(COALESCE(member_code, '')) LIKE ?)"
+        like = f"%{member_q.lower()}%"
+        member_params.extend([like, like, like])
+    members_total = query_one(
+        f"SELECT COUNT(*) AS c FROM users {member_where}",
+        tuple(member_params),
+    )["c"]
+    members = query_all(
+        f"SELECT id, name, email, role, invite_status, active, member_code "
+        f"FROM users {member_where} ORDER BY name LIMIT ?",
+        tuple(member_params) + (MEMBERS_CAP,),
+    )
     return render_template(
         "users.html",
         members=members,
+        members_total=members_total,
+        members_cap=MEMBERS_CAP,
+        members_query=member_q,
         admins=admins,
         owners=owners,
         can_create_users=can_create_users,

@@ -1,5 +1,12 @@
 # PRISM / Lab Scheduler — Agent Workflow
 
+> **Non-Claude agents:** read `AGENTS.md` at the project root
+> first — it is the vendor-neutral, self-contained entry point
+> and requires nothing outside this repository. This file
+> (`WORKFLOW.md`) is the Claude-specific Level-2 layer and
+> references the laptop-wide Level-1 kernel at
+> `~/.claude/CLAUDE.md`, which only Claude Code auto-loads.
+
 > **This laptop is an operating system for AI agents.** Kernel + user
 > space + audit log. Rules are hierarchical, non-contradictory, and
 > optimized for token economy.

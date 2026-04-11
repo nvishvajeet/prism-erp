@@ -314,12 +314,17 @@ repo root.
 
 ## AI agent access & workflow
 
-The laptop-wide agent policy is the single source of truth for
-topology, SSH key, commit rhythm, and cross-project rules. It is
-auto-loaded into every Claude Code session on this MacBook, so
-there is nothing to paste. Other agents on other machines: read
-`~/.claude/CLAUDE.md` first; consult `~/.claude/AGENT_POLICY.md`
-and `~/.claude/git-server/README.md` only for specific recipes.
+**Any AI coding agent — Claude, ChatGPT / Codex, Gemini, Cursor,
+Copilot, Aider, Continue — reads `AGENTS.md` at the project root
+first.** That file is the vendor-neutral entry point and is
+self-contained: topology, commit rhythm, pre-commit gate, hard/
+soft contract, demo/operational separation, docs manifest. No
+machine-specific kernel file is required to onboard.
+
+The laptop-wide policy at `~/.claude/CLAUDE.md` layers an
+additional Claude-specific set of rules on top of `AGENTS.md`
+when the agent is Claude Code running on this MacBook. Other
+agents do not need to read it.
 
 ### PRISM-specific deltas on top of `~/.claude/CLAUDE.md`
 

@@ -11,60 +11,148 @@ detail.
 
 ## [Unreleased]
 
-Forward plan lives in `docs/NEXT_WAVES.md`. The active line is
-the `v1.3.0-stable-release` branch; the first tag of the v1.4.x
-line is **v1.4.2** once Tailscale Serve is unblocked.
+Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
+cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
+see the per-tag sections below for what shipped.
 
-**Shipped on trunk since v1.3.8, pending the next tag:**
+## [1.4.5] — 2026-04-11
+
+**Dev-panel deep fixes + Flask auto-reload.** Four bundled commits
+landing the dev panel's "what's the stable version?" answer and
+unblocking laptop hot-reload.
 
 ### Added
 
-- **W1.3.9/W1.4.0 code prep** (`5bc3142`) — `scripts/tailscale_serve.sh`
-  one-shot helper + `docs/HTTPS.md`. Lands the laptop-side
-  deliverables for tailnet HTTPS. Execution blocks on one operator
-  click at https://login.tailscale.com/f/serve . Plan B (mkcert
-  local cert via Flask `ssl_context`) documented as the fallback.
-- **W1.4.1 c1a — `.row-time-hint`** (`36fe93f`) — server-side
-  `time_ago()` helper renders a muted "just now / 5m ago / 2d ago
-  / in 4h" hint under every queue row's exact timestamp. No JS.
-- **W1.4.1 c1b — topbar queue count badge** (`455ffb7`) — pending-
-  for-role count on the Queue nav item, computed once in
-  `inject_globals`. New `topbar_badges` crawler in the sanity wave.
-- **W1.4.1 c2 — empty-state warmth** (`db7bc19`) — shared
-  `empty_state(...)` macro applied to the big table pages; stray
-  "No records" stubs retired. New `empty_states` crawler in the
-  sanity wave.
-- **W1.4.1 c3 — bare-key shortcuts** (`bcd3990`) — `static/keybinds.js`
-  (≤40 lines, vanilla JS, zero framework creep). `n` → new
-  request, `?` → toggle help overlay, `Esc` → close. No-op while
-  a form input / textarea / contenteditable is focused.
-  Philosophy crawler extended with a rule that enforces the
-  40-line budget and base.html reference. **Completes W1.4.1;
-  v1.4.1 is ready to tag.**
-- **AGENTS.md at project root** (`90383b1`) — vendor-neutral
-  onboarding for any AI coding agent (Claude, Codex, Gemini,
-  Cursor, Continue, Aider, Copilot). Self-contained: topology,
-  commit rhythm, pre-commit gate, hard/soft contract, demo/
-  operational separation, docs manifest.
-- **Dev panel WAVES tile honours `✅ SHIPPED` marker** (`8043696`)
-  — `_dev_panel_waves()` now treats any section header with the
-  marker in `docs/NEXT_WAVES.md` as shipped, not just git-tagged
-  waves. Unblocks reflecting state for waves the plan explicitly
-  leaves untagged.
+- **Parallelism budget codified** (`8474506`) — `docs/PARALLEL.md`
+  gains a soft 5%/1min + hard 10%/2min merge-overhead rule with a
+  3-agent concurrency cap and a pre-firing estimation checklist.
 
 ### Changed
 
-- **CSS fossil backlog wiped** (`0d3102e`) — W1.3.11 retired 231
-  orphaned selectors from `static/styles.css`. `css_orphan`
-  crawler went from 512/0/229 → 548/0/0.
-- **Stunnel / Caddy fallback retired** (`929911d`) — W1.3.12
-  Tailscale Serve is now the only HTTPS path. Simpler state to
-  reason about, one fewer moving piece.
-- **`docs/NEXT_WAVES.md` second-pass optimization** (`6f2b543`) —
-  collapsed W1.3.9+W1.4.0 into one post-ops wave, dropped the
-  W1.4.2 hotfix-buffer slot, split the release gate into ops-free
-  W1.4.2a + post-ops W1.4.2b. Net: critical path to demo-live
-  dropped from ~4 days calendar to ~2.5 h focused work.
+- **ROADMAP tile now reads from git tags** (`6e79194`) — retired the
+  stale `TODO_AI.txt` parse ("v1.4.0 BULK OPERATIONS") in favour
+  of grouping semver tags by major.minor line. WAVES tile Time
+  budget table caught up to W1.4.15.
+- **`ahead_behind` targets real upstream** (`6e79194`) — was
+  hardcoded to `origin/main`, now resolves `@{upstream}`.
+- **Flask auto-reload decoupled from debug toolbar** (`984acaa`) —
+  `use_reloader` now defaults ON for loopback binds, OFF for
+  LAN-facing. New `LAB_SCHEDULER_AUTORELOAD` env-var override
+  for explicit opt-in/out. Laptop `.py` edits hot-reload without
+  manual restart.
+
+## [1.4.4] — 2026-04-11
+
+**Dev panel three-panel answer.** Stale-oracle drift surfaced in
+user screenshots; fixed at the source.
+
+### Added
+
+- **Dev panel Stable Release tile** (`e9c7c2c`) — big accent-blue
+  `vX.Y.Z` headline with sha + tagged-at + commits-since-tag depth
+  hint. Reads from `git tag --list`, not CHANGELOG.md.
+- **Dev panel Latest Shipped tile** (`e9c7c2c`) — HEAD commit
+  headline + author + cross-reference to stable tag depth.
+
+### Changed
+
+- **`_dev_panel_progress.current_release` now reads git tags**
+  (`e9c7c2c`) — CHANGELOG.md was lying (stopped at [1.3.12] while
+  origin had v1.4.3 tagged). Tags are the authoritative oracle.
+
+## [1.4.3] — 2026-04-11
+
+**iOS-cadence philosophy + Future technology bets reframing.**
+
+### Added
+
+- **`docs/PHILOSOPHY.md` §3.1 — iOS patch cadence** (`81d4c13`) —
+  explicit schema (MAJOR / MINOR / PATCH semantics), 4-point
+  "ready to tag" checklist, tagging protocol (no checkout
+  needed), and the v1.4.2 proof point.
+
+### Changed
+
+- **`docs/NEXT_WAVES.md` "Future technology bets" section**
+  (`81d4c13`) — reframes HTTPS / multi-role / instrument-groups
+  / ERP-2.0 as strategic operator decisions, not routine
+  task-board rows. HTTPS explicitly "a goal, not a todo."
+
+## [1.4.2] — 2026-04-11
+
+**First iOS-cadence patch release.** ~15 commits since v1.4.1
+captured under one tag after the cadence policy was adopted.
+
+### Added
+
+- **Parallel agent work protocol** (`37f3623`, `5709104`) —
+  `CLAIMS.md` live lock board at repo root, `docs/PARALLEL.md`
+  full spec (3 safety layers, 12-step lifecycle, lane taxonomy,
+  abort protocol), `WORKFLOW.md` §3.7 minimum-rules summary.
+  Hardened with 10 non-negotiable git hygiene rules after
+  production runs.
+- **`new_request.html` graduated onto tile pattern** (`a9825b8`) —
+  full-width form, sample intake summary as horizontal tile,
+  zero wasted whitespace. Mirrors `instrument_detail.html`.
+- **Inline XHR approve/reject toggle** (`200f491`) — replaces the
+  twin-form approve/reject block on request_detail's Approvals
+  tile with single-tap approve + 2-tap-armed reject.
+- **Inline intake-mode toggle** (`e3157c1`) — instrument operators
+  can flip between "accepting" / "hold" / "maintenance" without
+  leaving the detail page. 2-tap safety.
+- **Dev panel "Now Shipping" hero** (`597640a`) — 4-cell hero tile
+  (release / hot wave / commits today / crawlers last ran).
+- **Requester dashboard pulse tile** (`64c01b5`).
+- **New crawlers**: `xhr_contracts` (`b90a83a`), `agents_md_contract`
+  (`391e7ae`), `parallel_claims` (new behavioral-wave check),
+  `dev_panel_readability` (`94849ae`).
+- **Launchd newsyslog rotation** (`be38a6f`) — `server.log` gets
+  daily rotation keeping 7 compressed archives. Opt-in via
+  `scripts/install_launchd.sh`.
+- **Portfolio action-first dashboard** (`9d682a4`).
+
+### Changed
+
+- **Grid-overlay unhooked from main site** (`02cb7ce`) — the
+  always-on floating grid button removed from `base.html`;
+  `static/grid-overlay.js` preserved for a future dev-mode wave
+  (see `docs/NEXT_WAVES.md` § "Deferred — dev mode overlay").
+- **PROJECT.md §11 documents the tile-family pattern**
+  (`b33240b`) — `.inst-tiles` / `.request-tiles` /
+  `.new-request-tiles` as a reusable abstraction.
+
+## [1.4.1] — 2026-04-11
+
+**UX polish batch — time hints, topbar badges, empty-state warmth,
+keyboard shortcuts.** First tag on the v1.4.x line.
+
+### Added
+
+- **`.row-time-hint`** (`36fe93f`) — server-side `time_ago()` helper
+  renders "just now / 5m ago / 3h ago / 2d ago / in 4h" under every
+  queue row's exact timestamp.
+- **Topbar queue count badge** (`455ffb7`) — pending-for-role count
+  on the Queue nav item. New `topbar_badges` sanity crawler.
+- **Empty-state warmth** (`db7bc19`) — shared `empty_state(...)`
+  macro applied to all big tables. New `empty_states` sanity
+  crawler.
+- **Bare-key shortcuts `n` + `?`** (`bcd3990`) — `static/keybinds.js`
+  (≤40 lines, vanilla JS). `n` → `/requests/new`, `?` → help
+  overlay. Philosophy crawler extended with rule 8 enforcing the
+  40-line budget and base.html reference.
+- **AGENTS.md at project root** (`90383b1`) — vendor-neutral agent
+  onboarding covering topology, commit rhythm, pre-commit gate,
+  hard/soft contract, demo/operational separation.
+
+### Changed
+
+- **CSS fossil backlog wiped** (`0d3102e`) — 231 orphaned selectors
+  retired. `css_orphan` went 512/0/229 → 548/0/0.
+- **Stunnel / Caddy fallback retired** (`929911d`) — Tailscale Serve
+  is now the only HTTPS path.
+- **`docs/NEXT_WAVES.md` optimized** (`6f2b543`) — collapsed
+  W1.3.9+W1.4.0 into one post-ops wave, critical path to
+  demo-live dropped from ~4 days to ~2.5 h focused work.
 
 ## [1.3.12] — 2026-04-11
 

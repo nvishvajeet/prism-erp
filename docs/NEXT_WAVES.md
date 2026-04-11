@@ -227,29 +227,29 @@ between tags, cut `v1.3.0-stable-release` → a throwaway branch.
 Reserving a version number for a hypothetical fix that may never
 ship is cognitive overhead.
 
-### W1.4.2a — release prep, ops-free (~90 minutes, ships now)
+### W1.4.2a — release prep, ops-free (~90 minutes, ships now) ✅ SHIPPED
 
-*Can be worked in parallel with W1.4.1 polish. No dependency on
-Track A or the Tailscale unblock.*
+*Shipped as three commits in a single session, in parallel with
+the W1.4.1 polish batch:*
 
-1. **`CHANGELOG.md`** entries for every tag since v1.3.5 —
-   v1.3.8 (shipped), v1.3.9 pending, v1.3.11 (css backlog wipe),
-   v1.4.1 pending. Include crawler pass/fail deltas per wave.
-   (~30 min)
-2. **`README.md` quickstart** — five copy-pasteable lines from
-   clone → first login on the laptop. Pointer into `docs/DEPLOY.md`
-   and `docs/HTTPS.md` for mini deploy. (~15 min)
-3. **Pre-push hook on the laptop bare** —
-   `~/.claude/git-server/lab-scheduler.git/hooks/pre-receive`
-   (central receive, not client-side push). Runs
-   `.venv/bin/python -m crawlers wave sanity` in the working copy
-   and refuses the push on failure. Two-tier safety: the
-   working-copy `scripts/smoke_test.py` catches it locally, the
-   bare gate is the belt-and-suspenders for the mirror. (~30 min)
-4. **Smoke + sanity green** after every commit in this wave.
-   (~15 min total wait across the batch)
+1. **`CHANGELOG.md`** — `61c45b9` filled the [Unreleased] block
+   with every shipped-since-v1.3.8 wave (grouped Added/Changed/
+   Deferred per Keep-a-Changelog) and added a new [1.3.8]
+   section for the launchd shipment. Older per-version sections
+   (v1.3.1–v1.3.7) deferred to a later archaeology pass.
+2. **`README.md` quickstart** — `741742b` added a tight
+   five-line quickstart block (clone → cd → venv → pip install
+   → start.sh) followed by the demo-mode URL + seeded creds.
+3. **Pre-push hook on the laptop bare** — `424bf9c` landed
+   `ops/git-hooks/pre-receive` + `ops/git-hooks/install.sh` in
+   the working tree for reproducibility, and the hook is
+   installed at `~/.claude/git-server/lab-scheduler.git/hooks/pre-receive`
+   on the laptop (verified: ran during the `v1.4.1` tag push and
+   reported "sanity green — push accepted" on the remote side).
+   Two-tier safety is now live: working-copy `scripts/smoke_test.py`
+   before commit, central-bare sanity wave on every push.
 
-No new crawlers. Sanity must stay < 30 s.
+No new crawlers. Sanity stays under 17 s across 7 strategies.
 
 ### W1.4.2b — demo goes live (~10 minutes, post-ops)
 

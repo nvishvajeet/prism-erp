@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| claude-devpanel-three-panels | feat/dev-panel-stable-git-shipped-trio | 2026-04-11T13:05+02:00 | `app.py` (_dev_panel_progress + helpers), `templates/dev_panel.html`, `static/styles.css` | feat(dev_panel): three panels — stable release · git state · latest shipped |
 
 ## Stale-claim recovery
 

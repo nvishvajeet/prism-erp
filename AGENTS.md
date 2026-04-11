@@ -191,16 +191,31 @@ git pull origin v1.3.0-stable-release
 
 # make changes…
 
-# verify
+# verify (tier 1: working-copy smoke, ~5 s)
 .venv/bin/python scripts/smoke_test.py
 
-# commit (imperative subject ≤ 70 chars)
+# commit (imperative subject ≤ 70 chars, body explains *why*)
 git add -p
 git commit -m "<subject>"
 
-# push — mirror happens automatically via the bare's post-receive hook
+# push — the central bare runs the full sanity wave (tier 2,
+# ~17 s across 7 strategies) via a pre-receive hook before
+# accepting any ref update, and rejects the push on any failure.
+# If you see '[pre-receive] SANITY FAILED' the commit is fine
+# locally but the push was refused — fix and retry.
 git push origin v1.3.0-stable-release
 ```
+
+**Two-tier safety net.** Tier 1 is the working-copy smoke test
+before commit. Tier 2 is the bare-side `crawlers wave sanity`
+run from `ops/git-hooks/pre-receive`, installed on the laptop
+via `./ops/git-hooks/install.sh`. The hook is idempotent and
+ships in-tree for reproducibility. You do not need to
+re-install it on a fresh clone unless the bare is recreated.
+
+**Post-receive mirror.** The bare's existing `post-receive` hook
+mirrors every accepted ref to the production host automatically.
+Agents push to `origin` only — they never touch the mirror.
 
 ## 12. Agent-specific notes
 

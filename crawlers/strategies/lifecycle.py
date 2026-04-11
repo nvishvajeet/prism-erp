@@ -41,9 +41,11 @@ class LifecycleStrategy(CrawlerStrategy):
 
             form = {
                 "instrument_id": "1",
+                "title": "Lifecycle crawl — TiO2",
                 "sample_name": "TiO2 Nanoparticles",
                 "sample_count": "3",
                 "description": "Characterize morphology and particle size.",
+                "sample_origin": "internal",
                 "priority": "normal",
             }
             resp = harness.post("/requests/new", data=form, follow_redirects=True)
@@ -63,7 +65,11 @@ class LifecycleStrategy(CrawlerStrategy):
         # step_id (sample_requests have a chain of approval_steps,
         # one per approver role). Look up the pending finance step,
         # approve it, then repeat for professor.
-        finance_step = self._pending_step_for_role(harness, request_id, "finance_admin")
+        # approval_steps.approver_role stores short names ("finance",
+        # "professor", "operator"), NOT the user-level users.role values
+        # ("finance_admin", "professor_approver"). See app.py
+        # create_approval_chain() — the short name is the key.
+        finance_step = self._pending_step_for_role(harness, request_id, "finance")
         if finance_step is None:
             result.warnings += 1
             result.details.append("no pending finance step on new request")
@@ -80,7 +86,7 @@ class LifecycleStrategy(CrawlerStrategy):
                             "finance approval", f"finance → {resp.status_code}")
 
         # ---- Step 3: professor approve ------------------------------
-        prof_step = self._pending_step_for_role(harness, request_id, "professor_approver")
+        prof_step = self._pending_step_for_role(harness, request_id, "professor")
         if prof_step is None:
             result.warnings += 1
             result.details.append("no pending professor step after finance")
@@ -96,29 +102,66 @@ class LifecycleStrategy(CrawlerStrategy):
                 self._check(result, resp.status_code < 400,
                             "professor approval", f"professor → {resp.status_code}")
 
-        # ---- Step 4: operator accept → start -----------------------
-        # Order matters: the requester follow-up (Step 5) has to
-        # happen before `complete_job` flips completion_locked=1,
-        # because can_edit_request_note blocks requester notes on
-        # locked requests. So we split operator progress into
-        # (accept + start) now and (complete) later.
-        with harness.logged_in("anika@lab.local"):
-            for action, label in [
-                ("accept_sample", "operator accept"),
-                ("start_now", "operator start"),
-            ]:
+        # ---- Step 3b: operator signoff (3rd step of the chain) -----
+        # create_approval_chain() seeds a 3-step chain by default:
+        # finance → professor → operator. The "operator" step is the
+        # chain signoff by the assigned lab operator; distinct from
+        # the physical "mark sample received" action on the board.
+        op_step = self._pending_step_for_role(harness, request_id, "operator")
+        if op_step is None:
+            result.warnings += 1
+            result.details.append("no pending operator step after professor")
+        else:
+            with harness.logged_in("anika@lab.local"):
                 resp = harness.post(
                     f"/requests/{request_id}",
-                    data={"action": action},
+                    data={"action": "approve_step",
+                          "step_id": str(op_step),
+                          "remarks": "operator accepted the job"},
                     follow_redirects=True,
                 )
-                if resp.status_code < 400:
-                    result.passed += 1
-                else:
-                    result.warnings += 1
-                    result.details.append(f"{label} → {resp.status_code}")
+                self._check(result, resp.status_code < 400,
+                            "operator approval", f"operator → {resp.status_code}")
 
-        # ---- Step 5: requester posts a follow-up (before lock) ------
+        # ---- Step 4: status advanced to awaiting_sample_submission ---
+        # After finance + professor approvals the request state
+        # machine (see app.py build_request_status) drops the row
+        # into `awaiting_sample_submission` — that's the point at
+        # which the requester is expected to physically drop the
+        # sample at the lab.
+        status = self._request_status(harness, request_id)
+        self._check(
+            result,
+            status == "awaiting_sample_submission",
+            "post-approval status",
+            f"expected awaiting_sample_submission, got {status!r}",
+        )
+
+        # ---- Step 5: requester marks the physical sample submitted --
+        # Uses the real request_detail POST action. `mark_sample_submitted`
+        # is the requester-initiated transition; it requires the
+        # instrument to be accepting samples (demo seed default).
+        with harness.logged_in("shah@lab.local"):
+            resp = harness.post(
+                f"/requests/{request_id}",
+                data={"action": "mark_sample_submitted",
+                      "sample_dropoff_note": "Dropped off at reception."},
+                follow_redirects=True,
+            )
+            self._check(result, resp.status_code < 400, "mark sample submitted",
+                        f"mark_sample_submitted → {resp.status_code}")
+
+        status = self._request_status(harness, request_id)
+        self._check(
+            result,
+            status == "sample_submitted",
+            "sample-submitted state",
+            f"expected sample_submitted, got {status!r}",
+        )
+
+        # ---- Step 6: requester follow-up message --------------------
+        # Requester can post_message at any time pre-completion; this
+        # exercises the note-edit policy + the audit chain.
         with harness.logged_in("shah@lab.local"):
             resp = harness.post(
                 f"/requests/{request_id}",
@@ -129,20 +172,12 @@ class LifecycleStrategy(CrawlerStrategy):
             self._check(result, resp.status_code < 400, "requester follow-up",
                         f"reply → {resp.status_code}")
 
-        # ---- Step 6: operator completes (locks the request) --------
-        with harness.logged_in("anika@lab.local"):
-            resp = harness.post(
-                f"/requests/{request_id}",
-                data={"action": "complete_job"},
-                follow_redirects=True,
-            )
-            if resp.status_code < 400:
-                result.passed += 1
-            else:
-                result.warnings += 1
-                result.details.append(f"operator complete → {resp.status_code}")
-
-        # ---- Step 7: admin views history + detail ------------------
+        # ---- Step 7: admin history + detail views -------------------
+        # The operator "mark_received → start_now → finish_now" leg
+        # goes through the `/schedule/actions` planner board, which
+        # needs a planner_date + slot setup that's out of scope for
+        # this in-process lifecycle crawler. A future
+        # `lifecycle_operator_board` strategy will pick that up.
         with harness.logged_in("admin@lab.local"):
             for path in [f"/requests/{request_id}", "/schedule",
                          "/instruments/1/history", "/stats"]:
@@ -167,14 +202,36 @@ class LifecycleStrategy(CrawlerStrategy):
             result.failed += 1
             result.details.append(f"{label}: {detail}")
 
-    def _first_request_id(self, harness: Harness) -> int | None:
+    def _request_status(self, harness: Harness, request_id: int) -> str | None:
+        """Return the live status value for `request_id` from the temp DB."""
         import sqlite3
         if not harness.temp_db_path:
             return None
         conn = sqlite3.connect(str(harness.temp_db_path))
         try:
             row = conn.execute(
-                "SELECT id FROM sample_requests ORDER BY id LIMIT 1"
+                "SELECT status FROM sample_requests WHERE id = ?",
+                (request_id,),
+            ).fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    def _first_request_id(self, harness: Harness) -> int | None:
+        """Return the id of the request we just submitted.
+
+        The harness bootstrap may pre-seed demo data (so request id=1
+        already exists before the crawler runs), which is why this
+        picks the **newest** row — the one shah@lab.local just posted
+        — rather than ORDER BY id ASC.
+        """
+        import sqlite3
+        if not harness.temp_db_path:
+            return None
+        conn = sqlite3.connect(str(harness.temp_db_path))
+        try:
+            row = conn.execute(
+                "SELECT id FROM sample_requests ORDER BY id DESC LIMIT 1"
             ).fetchone()
             return row[0] if row else None
         finally:

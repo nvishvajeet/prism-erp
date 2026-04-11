@@ -119,6 +119,91 @@ PRISM v1.3.0 is the first **stable release**. From this point:
 If the pre-push gate (`wave sanity`) fails, the release does not
 ship. Period.
 
+### 3.1  Release numbering and the iOS-style patch cadence
+
+PRISM tags follow a three-segment scheme: `vMAJOR.MINOR.PATCH`.
+The semantics are borrowed from iOS more than strict semver — the
+**patch segment is bumped often**, not hoarded.
+
+- **MAJOR (`1.x`, `2.x`)** — paradigm shift. `v1.3.0` was the
+  first stable release. `2.0` is reserved for the ERP transition
+  per `docs/ERP_VISION.md`. Major bumps are the only place hard
+  attributes (per §2) are allowed to move.
+- **MINOR (`1.X.y`, e.g. `v1.3.*` → `v1.4.*`)** — significant new
+  capability or a hard-attribute-breaking internal refactor that
+  justifies a `### Changed (BREAKING)` CHANGELOG entry. `1.3` →
+  `1.4` happened because the tile architecture graduated as a
+  hard attribute. Minor bumps are rare and deliberate.
+- **PATCH (`1.X.Y`, the third segment)** — tested polish, bug
+  fixes, new crawler strategies, new soft-attribute work, doc
+  passes, ops improvements. **This is the iOS-style tight loop.**
+  Cut as soon as trunk reaches a green tested state. Multiple
+  patches per day is normal. The goal is never to accumulate
+  un-tagged work on trunk.
+
+**Definition of "ready to tag."** A patch release is tag-able the
+instant ALL of:
+
+1. The commit is on `origin/v1.3.0-stable-release` (never a
+   local-only commit — origin is the canonical source).
+2. The pre-receive sanity wave ran on that commit and printed
+   `sanity green — push accepted`. The wave is the correctness
+   gate; the tag is just a label on an already-vetted SHA.
+3. The operator approves the tag. Tagging is deliberate, not
+   automated — one line like "tag v1.4.3" is enough.
+4. The SHA being tagged is a **real-work commit, not a claim
+   commit**. Claim commits are locks, not milestones. If the
+   current HEAD is a claim commit, tag the real-work commit
+   immediately below it.
+
+**Tagging protocol:**
+
+```bash
+git fetch origin
+git log v<previous>..origin/v1.3.0-stable-release --oneline
+#   → identify the last real-work SHA (not a claim commit)
+git tag -a v1.4.X <real-work-sha> -m "<one-line summary + body>"
+git push origin v1.4.X
+```
+
+No `git checkout` is needed — tags pin a SHA and do not touch the
+working tree, so dirty-tree concerns from concurrent agents do
+not apply. This was a real finding from the `v1.4.2` cut: the
+first iOS-cadence tag was almost blocked by a strict
+checkout-based protocol draft that turned out to be unnecessary.
+
+**Why iOS cadence, not "release-as-ceremony."** The proof point
+is `v1.4.2` itself. Between `v1.4.1` and `1f771e2` (the `v1.4.2`
+target) ~15 improvements shipped through the pre-receive sanity
+gate — new tile pattern on `new_request`, parallel agent work
+protocol, xhr_contracts / agents_md_contract / parallel_claims
+crawlers, intake/approval inline toggles, launchd newsyslog
+rotation, portfolio action-first dashboard, dev_panel hero, and
+more. None of it was tagged, because the old model was holding
+`v1.4.2` behind an ops-gated Tailscale Serve click that may never
+come. **That is the failure mode.** iOS cadence decouples
+tagging from any external deploy dependency: the mini can pull
+any tag, the tag doesn't need a live URL to earn its number.
+Ship tags as often as the sanity wave allows. The Tailscale
+click is now parked in `docs/NEXT_WAVES.md` §"Future technology
+bets" as a strategic tech bet, not a routine blocker.
+
+**Tags are immutable.** Never force-push a tag, never delete a
+tag. A mistake in a tag message is fixed by adding a new
+annotated tag (e.g. `v1.4.X.1` if strictly necessary) and
+leaving the old one in place. The immutability matches the
+stable-release-branch discipline of §3 above.
+
+**What does NOT change.** The hard attribute contract (§2),
+demo/operational separation (§4), stable-release branch
+discipline (§3 above — no force-push on
+`v1.3.0-stable-release`, no history rewrites), the pre-commit
+gate (`scripts/smoke_test.py`), and the pre-receive sanity wave
+on the central bare all stay exactly as they are. The only
+thing §3.1 changes is the tagging cadence — tag often, tag when
+green, tag what's real-work, and decouple tags from external
+gates.
+
 ---
 
 ## 4. Demo data is not operational data

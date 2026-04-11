@@ -529,36 +529,118 @@ is live; W1.4.2a shipped three commits; W1.4.3 shipped three more
 as Jony-Ive polish on top. Grid-overlay was unhooked from the main
 site on 2026-04-11 (`02cb7ce`) and parked for future dev-mode work.
 
-## Blocked / HARD TODO — exception list
+## Future technology bets
 
-Rows here are **not on the current-progress dashboard**. They
-describe work that is either (a) waiting on a one-shot external
-event outside any agent's control, or (b) deliberately deferred
-to a later major version. The WAVES parser skips this section,
-so these waves do not light up as `hot` or `pending` in the dev
-panel. When an item unblocks, move it back into the
-§"Time budget summary" table.
+Rows here are **strategic technology decisions**, not routine
+task-board work. They stem from the product's long-horizon goals
+(HTTPS on the public internet, multi-role users, ERP evolution,
+etc.) and each one is a multi-hour-to-multi-day investment that
+wants deliberate operator attention rather than opportunistic
+agent pickup. The WAVES parser skips this section, so these
+waves do not light up as `hot` or `pending` in the dev panel.
+The parallel task board (§"Parallel task board" further down) is
+deliberately kept free of these — a fresh agent claiming one by
+accident would blow past the 60-minute cutoff and need to abort.
 
-### W1.3.9 — bare-minimum HTTPS · **ops-blocked**
+When the operator decides a tech bet is ripe, move the row out
+of this section and into the §"Time budget summary" table with a
+concrete W-number and a target tag.
 
-**Blocked on:** one operator click at
-https://login.tailscale.com/f/serve to enable Tailscale Serve
-tailnet-wide. The code prep already landed (`5bc3142`,
-`3af05da`). After the click, `scripts/ship_https.sh` collapses
-the rest to ~2 minutes of ops: one command, no re-tries, idempotent.
+### Tech bet — HTTPS for the public internet
 
-### W1.4.2b — demo goes live · **downstream-of-W1.3.9**
+**Goal:** PRISM reachable at `https://prism-mini.<tail>.ts.net/`
+(or a custom domain) with a valid Let's Encrypt cert, so the
+portfolio site at `nvishvajeet.github.io` can link to a live
+demo URL that works in any browser without cert warnings.
 
-**Blocked on:** W1.3.9 (so the portfolio button has a live HTTPS
-URL to link at). Trivial once unblocked: one `<a>` on
-`nvishvajeet.github.io` + the `v1.4.2` tag.
+**Current state:**
+- Code prep already landed: `5bc3142` (`docs/HTTPS.md` +
+  `scripts/tailscale_serve.sh` helper), `3af05da` (the
+  `ship_https.sh` one-command collapser), `929911d` (stunnel/
+  Caddy alternatives retired — Tailscale Serve is the only path).
+- `LOCAL_DEPLOY.md` documents the mini's launchd recipe.
+- The `deploy_smoke` sanity crawler is wired and ready to probe
+  `PRISM_DEPLOY_URL` the moment the mini is reachable over HTTPS.
 
-### W1.5.0 / W1.5.1 — schema waves · **deferred to v1.5.x**
+**What's blocking:**
+- One operator click at https://login.tailscale.com/f/serve to
+  enable Tailscale Serve tailnet-wide. This is an admin-console
+  action; no agent can perform it.
+- After the click: `bash scripts/ship_https.sh` runs on the mini.
+  ~2 minutes, idempotent, no retries. The helper handles
+  `tailscale cert`, `tailscale serve --bg --https=443 …`, the
+  `.env` flip (`LAB_SCHEDULER_HTTPS=true`,
+  `LAB_SCHEDULER_COOKIE_SECURE=true`), and the `launchctl
+  kickstart -k gui/$(id -u)/local.prism` atomic restart.
 
-`user_roles` multi-role refactor and `instrument_group`
-first-class membership. Intentionally deferred until v1.4.2 has
-been in the wild for a week. Re-admit to the progress table
-then.
+**Why it's a tech bet and not a task:** there is no amount of
+local work that unblocks this — the click is a policy decision
+at the Tailscale admin layer. Bundling it into the routine board
+invited agents to claim it, spin, and abort. Keeping it here
+makes the strategic nature explicit: HTTPS is a goal, not a todo.
+
+**Downstream unblocks** (all one-shot, all trivial once HTTPS is live):
+- **Portfolio button on `nvishvajeet.github.io`** — one `<a>`
+  pointing at the HTTPS tailnet URL with "demo creds inside,
+  requires tailnet access" microcopy.
+- **Tag `v1.4.X` on the commit that goes live** — mark the
+  first publicly-reachable release in the iOS-cadence patch
+  stream (see `docs/PHILOSOPHY.md` §3.1).
+- **`deploy_smoke` on `PRISM_DEPLOY_URL`** moves from skip to 3
+  passing checks in the sanity wave.
+
+### Tech bet — Multi-role users (`v1.5.0`)
+
+**Goal:** drop the single-`users.role` column in favour of a
+`user_roles(user_id, role)` junction table. Users can hold
+multiple roles simultaneously; `primary_role(user)` returns
+the highest privilege for display; permission functions iterate
+the role set and accept if any single role passes. New
+`multi_role` crawler asserts both role paths work per user.
+
+**Why it's a tech bet:** the migration touches `users` (a hard
+attribute — 9 roles, locked) and every `user["role"] ==`
+comparison in `app.py`. It is the first deliberate hard-attribute
+bump on the `v1.4.x` line and therefore needs a major-version
+decision: is this `v1.5.0`, or does it wait for the `v2.0` ERP
+transition? Operator call, not agent call.
+
+**Blocked on:** operator decision + `v1.4.x` being "in the wild
+for a week" with no critical bug reports. The week-long soak is
+the acceptance gate.
+
+### Tech bet — Instrument groups as first-class entities (`v1.5.1`)
+
+**Goal:** `instrument_group(id, name, description)` +
+`instrument_group_member(group_id, instrument_id)` tables with a
+"By Group" assignment matrix in user detail. Migration seeds
+Electron-Microscopy and Spectroscopy starter groups from the
+existing `instruments.category` column. New `group_visibility`
+crawler asserts grant/revoke propagates cleanly.
+
+**Why it's a tech bet:** like multi-role, it's a hard-attribute
+bump — new foreign-key relationships, new migration, new
+assignment UX. Depends on multi-role (users need to be able to
+hold group-scoped roles) and therefore inherits the same
+major-version decision.
+
+**Blocked on:** multi-role landing first.
+
+### Tech bet — ERP v2.0 transition
+
+**Goal:** the long-horizon evolution documented in
+`docs/ERP_VISION.md`. PRISM becomes the first portal of an
+internal ERP, integrating finance / inventory / HR / academic
+administration. All the hard attributes of `v1.x` are candidates
+for reshaping inside `v2.0`.
+
+**Why it's a tech bet:** it's literally a major-version bump and
+a paradigm shift. Not a task; a direction of travel. Do not
+admit to the progress table — admit to a `v2.0.0-alpha` branch
+when the team is ready to start.
+
+**Blocked on:** `v1.4.x` stable for several weeks, `v1.5.x`
+schema waves landed, and a deliberate operator kickoff.
 
 ## Parallel task board
 

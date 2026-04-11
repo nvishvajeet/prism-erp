@@ -7357,7 +7357,10 @@ def user_profile(user_id: int):
                 "faculty_in_charge", "professor_approver", "finance_admin",
                 "site_admin", "super_admin",
             }
+            is_xhr = request.headers.get("X-Requested-With") == "XMLHttpRequest"
             if new_role not in all_roles:
+                if is_xhr:
+                    return jsonify({"ok": False, "error": "invalid_role"}), 400
                 flash("Pick a valid role.", "error")
                 return redirect(url_for("user_profile", user_id=user_id))
             if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
@@ -7374,6 +7377,16 @@ def user_profile(user_id: int):
             )
             # Make sure the new primary role is also in the role set.
             grant_user_role(user_id, new_role, viewer["id"])
+            if is_xhr:
+                # W1.4.12 — third consumer of the inline-toggle XHR
+                # pattern. Client soft-reloads so the tile, role set,
+                # and permission-gated sections refresh authoritatively.
+                return jsonify({
+                    "ok": True,
+                    "new_role": new_role,
+                    "new_role_label": role_display_name(new_role),
+                    "reload_url": url_for("user_profile", user_id=user_id),
+                })
             flash(f"Role updated to {role_display_name(new_role)}.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
         if action == "update_user_role_set":

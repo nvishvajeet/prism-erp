@@ -5988,3 +5988,40 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 @media (max-width: 680px) {
   .tile-req-pulse .req-pulse-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* W1.4.12 — Role toggle (third inline-toggle consumer after intake
+   and approval). 2-tap arming reuses approval-arm-pulse keyframes. */
+.role-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.role-toggle-btn {
+  appearance: none;
+  border: 1px solid var(--line, #e4e4e9);
+  background: var(--surface, #fff);
+  color: var(--ink, #1a1a1f);
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.55rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 140ms ease, background 120ms ease;
+}
+.role-toggle-btn:hover:not(:disabled):not(.is-active) { transform: translateY(-1px); }
+.role-toggle-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.role-toggle-btn.is-active {
+  background: var(--ink, #1a1a1f);
+  color: #fff;
+  border-color: var(--ink, #1a1a1f);
+  cursor: default;
+}
+.role-toggle-btn.is-arming {
+  animation: approval-arm-pulse 0.9s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.4);
+}
+.role-toggle-group.is-committed { opacity: 0.7; pointer-events: none; }
+.role-toggle-status { min-height: 1.15em; margin: 0.5rem 0 0; font-size: 0.78rem; }
+.role-toggle-status[data-tone="ok"]   { color: #0a7a3f; }
+.role-toggle-status[data-tone="warn"] { color: #c08a2b; }
+.role-toggle-status[data-tone="err"]  { color: #b42318; }

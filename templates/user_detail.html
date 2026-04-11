@@ -89,22 +89,22 @@
   {% call card_heading("", "Role") %}
     <button type="button" class="link-button" data-toggle-target="#userRoleForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Change Role</button>
   {% endcall %}
-  <p class="tile-lead" data-vis="{{ V }}">Current role: <strong>{{ role_display_name(target_user['role']) }}</strong>. Changing a role takes effect immediately — the user's next page load will reflect the new permissions.</p>
-  <form method="post" class="meta-edit-form top-gap" id="userRoleForm" hidden data-vis="{{ V }}">
-    <input type="hidden" name="action" value="change_role">
-    <div class="meta-edit-grid" data-vis="{{ V }}">
-      <label data-vis="{{ V }}">New Role
-        <select name="new_role" data-vis="{{ V }}">
-          {% for value, label in role_choices %}
-          <option value="{{ value }}" {% if target_user['role'] == value %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </label>
+  <p class="tile-lead" data-vis="{{ V }}">Current role: <strong>{{ role_display_name(target_user['role']) }}</strong>. Changing a role takes effect immediately — the user's next page load will reflect the new permissions. Tap a role twice to confirm.</p>
+  <div id="userRoleForm" hidden data-vis="{{ V }}">
+    <div class="role-toggle-group top-gap"
+         data-role-post="{{ url_for('user_profile', user_id=target_user['id']) }}"
+         data-role-current="{{ target_user['role'] }}"
+         data-vis="{{ V }}">
+      {% for value, label in role_choices %}
+      <button type="button"
+              class="role-toggle-btn {% if value == target_user['role'] %}is-active{% endif %}"
+              data-role-action="change_role"
+              data-role-new="{{ value }}"
+              data-vis="{{ V }}">{{ label }}</button>
+      {% endfor %}
     </div>
-    <div class="meta-edit-actions" data-vis="{{ V }}">
-      <button type="submit" data-vis="{{ V }}">Apply Role</button>
-    </div>
-  </form>
+    <p class="role-toggle-status hint" aria-live="polite" data-vis="{{ V }}"></p>
+  </div>
 </section>
 {% endif %}
 

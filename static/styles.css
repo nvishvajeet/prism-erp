@@ -4260,14 +4260,11 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-weight: 600;
 }
 
-.approval-action-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.approval-action-form textarea {
+/* W1.4.6 — the old twin-form layout was replaced by a single
+   .approval-toggle-group div. These rules now style the shared
+   textarea, the button pair, the arming state, and the committed
+   lock state. */
+.approval-action-note {
   border: 1px solid var(--line, #e4e4e9);
   border-radius: 0.55rem;
   padding: 0.5rem 0.65rem;
@@ -4277,7 +4274,14 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   min-height: 2.25rem;
 }
 
-.approval-action-form button {
+.approval-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.approval-action-buttons button {
   appearance: none;
   border: 1px solid var(--ink, #1a1a1f);
   background: var(--ink, #1a1a1f);
@@ -4287,11 +4291,14 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-weight: 600;
   font-size: 0.82rem;
   cursor: pointer;
-  align-self: flex-end;
-  transition: transform 120ms ease, opacity 120ms ease;
+  transition: transform 120ms ease, opacity 120ms ease, box-shadow 140ms ease;
 }
-
-.approval-action-form button:hover { transform: translateY(-1px); }
+.approval-action-buttons button:hover:not(:disabled) { transform: translateY(-1px); }
+.approval-action-buttons button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .approval-action-approve {
   background: #0a7a3f;
@@ -4302,6 +4309,32 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: #b42318;
   border-color: #b42318;
 }
+
+/* Reject's 2-tap arming state mirrors the intake toggle's is-arming
+   so the same pulse cue carries across dangerous actions. */
+.approval-action-reject.is-arming {
+  animation: approval-arm-pulse 0.9s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.4);
+}
+@keyframes approval-arm-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.35); }
+  50%      { box-shadow: 0 0 0 5px rgba(180, 35, 24, 0.55); }
+}
+
+/* Committed block: dim + stop-interaction until the soft-reload lands. */
+.approval-toggle-group.is-committed {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.approval-action-status {
+  min-height: 1.15em;
+  margin: 0;
+  font-size: 0.78rem;
+}
+.approval-action-status[data-tone="ok"]   { color: #0a7a3f; }
+.approval-action-status[data-tone="warn"] { color: #c08a2b; }
+.approval-action-status[data-tone="err"]  { color: #b42318; }
 
 .approval-action-file {
   display: inline-flex;

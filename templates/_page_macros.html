@@ -239,33 +239,48 @@
 
 {#
   approval_action_form(step, allow_file=False, allow_note=True)
-  Approve/Reject forms for one approval step. step is a sqlite Row (or dict)
-  with keys: id, step_order, approver_role.
-  Field names match the server handler (remarks, approval_attachment).
-  allow_file=True renders the receipt/bill upload input (finance step).
+
+  W1.4.6 — inline-toggle rewrite. A single container replaces the old
+  two-<form> layout. The approve button commits on first click (safe);
+  the reject button uses 2-tap arming (dangerous) identical to the
+  W1.4.3 c1 instrument intake toggle. Both POSTs carry the
+  X-Requested-With: XMLHttpRequest header and receive a JSON response
+  from the request_detail handler, eliminating the full-page reload.
+  Fallback: if static/approval-toggle.js fails to load, a plain-form
+  degrade is used via the <noscript>-style fallback form below so the
+  feature never breaks for a JS-off client.
+
+  Field names (remarks, approval_attachment, action, step_id) still
+  match the existing server handler so the non-JS fallback works
+  unchanged.
 #}
 {% macro approval_action_form(step, allow_file=False, allow_note=True) -%}
 {% set role_label = step['approver_role'].replace('_', ' ').title() %}
-<div class="approval-action-block" data-vis="{{ V }}">
+<div class="approval-action-block approval-toggle-group"
+     data-vis="{{ V }}"
+     data-approval-step-id="{{ step['id'] }}"
+     data-approval-role="{{ step['approver_role'] }}"
+     data-approval-post="{{ url_for('request_detail', request_id=sample_request['id']) }}">
   <p class="approval-action-heading" data-vis="{{ V }}">Step {{ step['step_order'] }} · {{ role_label }}</p>
-  <form method="post" enctype="multipart/form-data" class="approval-action-form approve" data-vis="{{ V }}">
-    <input type="hidden" name="action" value="approve_step">
-    <input type="hidden" name="step_id" value="{{ step['id'] }}">
-    {% if allow_note %}<textarea name="remarks" rows="2" placeholder="Optional approval note" data-vis="{{ V }}"></textarea>{% endif %}
-    {% if allow_file %}
-    <label class="approval-action-file" data-vis="{{ V }}">
-      <input type="file" name="approval_attachment" accept=".pdf,.png,.jpg,.jpeg">
-      <span data-vis="{{ V }}">📎 Receipt / Bill</span>
-    </label>
-    {% endif %}
-    <button type="submit" class="approval-action-approve" data-vis="{{ V }}">Approve — {{ role_label }}</button>
-  </form>
-  <form method="post" class="approval-action-form reject" data-vis="{{ V }}">
-    <input type="hidden" name="action" value="reject_step">
-    <input type="hidden" name="step_id" value="{{ step['id'] }}">
-    {% if allow_note %}<textarea name="remarks" rows="2" placeholder="Reason for rejection (required)" required data-vis="{{ V }}"></textarea>{% endif %}
-    <button type="submit" class="approval-action-reject" data-vis="{{ V }}">Reject</button>
-  </form>
+  {% if allow_note %}
+  <textarea class="approval-action-note" name="remarks" rows="2"
+            placeholder="Optional note (required for rejection)" data-vis="{{ V }}"></textarea>
+  {% endif %}
+  {% if allow_file %}
+  <label class="approval-action-file" data-vis="{{ V }}">
+    <input type="file" name="approval_attachment" accept=".pdf,.png,.jpg,.jpeg">
+    <span data-vis="{{ V }}">📎 Receipt / Bill</span>
+  </label>
+  {% endif %}
+  <div class="approval-action-buttons" data-vis="{{ V }}">
+    <button type="button" class="approval-action-approve"
+            data-approval-action="approve" data-approval-safe="1"
+            data-vis="{{ V }}">Approve — {{ role_label }}</button>
+    <button type="button" class="approval-action-reject"
+            data-approval-action="reject"
+            data-vis="{{ V }}">Reject</button>
+  </div>
+  <p class="approval-action-status hint" aria-live="polite" data-vis="{{ V }}"></p>
 </div>
 {%- endmacro %}
 

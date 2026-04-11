@@ -5458,6 +5458,8 @@ def request_detail(request_id: int):
                 or not can_approve_step(user, step, sample_request["instrument_id"])
                 or not approval_step_is_actionable(step, approval_steps)
             ):
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": False, "error": "forbidden"}), 403
                 abort(403)
             execute(
                 "UPDATE approval_steps SET status = 'approved', remarks = ?, acted_at = ? WHERE id = ?",
@@ -5478,6 +5480,16 @@ def request_detail(request_id: int):
                 except ValueError as exc:
                     flash(f"Approved, but file upload failed: {exc}", "error")
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_approved", {"step_id": step_id})
+            # W1.4.6 — XHR branch: return JSON so approval-toggle.js can
+            # refresh in place without a full-page reload round-trip.
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "ok": True,
+                    "step_id": step_id,
+                    "new_request_status": next_status,
+                    "approver_role": step["approver_role"],
+                    "reload_url": url_for("request_detail", request_id=request_id),
+                })
         elif action == "reject_step":
             step_id = int(request.form["step_id"])
             remarks = request.form.get("remarks", "").strip()
@@ -5487,7 +5499,17 @@ def request_detail(request_id: int):
                 or not can_approve_step(user, step, sample_request["instrument_id"])
                 or not approval_step_is_actionable(step, approval_steps)
             ):
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": False, "error": "forbidden"}), 403
                 abort(403)
+            if not remarks:
+                # Rejection without a reason is an audit gap — the old UI
+                # enforced this with `required` on the textarea. Preserve
+                # that contract on the XHR path too.
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"ok": False, "error": "remarks_required"}), 400
+                flash("A rejection reason is required.", "error")
+                return redirect(url_for("request_detail", request_id=request_id))
             execute(
                 "UPDATE approval_steps SET status = 'rejected', remarks = ?, acted_at = ? WHERE id = ?",
                 (remarks, now_iso(), step_id),
@@ -5495,6 +5517,14 @@ def request_detail(request_id: int):
             assert_status_transition(sample_request["status"], "rejected")
             execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_rejected", {"step_id": step_id})
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({
+                    "ok": True,
+                    "step_id": step_id,
+                    "new_request_status": "rejected",
+                    "approver_role": step["approver_role"],
+                    "reload_url": url_for("request_detail", request_id=request_id),
+                })
         elif action == "assign_approver" and can_manage:
             step_id = int(request.form["step_id"])
             approver_user_id = int(request.form["approver_user_id"])

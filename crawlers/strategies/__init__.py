@@ -25,3 +25,4 @@ from . import cleanup                  # noqa: F401
 from . import deploy_smoke             # noqa: F401
 from . import topbar_badges            # noqa: F401
 from . import empty_states             # noqa: F401
+from . import dev_panel_readability    # noqa: F401

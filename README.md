@@ -437,29 +437,8 @@ harness) on any machine that has met the prerequisites above:
    See `docs/PHILOSOPHY.md` §2.
 10. **The website stays up.** Deploys to the Mac mini are atomic:
     pull → smoke → kickstart. Never interrupt live users.
-11. **Portfolio recommendation refresh — one per day.** Whenever a
-    Claude (or other LLM) agent touches this repo, check whether
-    `~/Downloads/portfolio-plan/commentary_state.json` was generated
-    today (compare its `generated_at` field to the current local
-    date). If it is missing or stale:
-    - Run `cd ~/Downloads/portfolio-plan && ./run.sh quick` to
-      refresh the deterministic Python pipeline (NAVs, Nifty z-score,
-      drift, 14-day forecast, daily_state.json).
-    - Read `daily_state.json`, `market_snapshot.json`,
-      `analysis_state.json`, and (if present) `news_digest.json` +
-      `macro_state.json`.
-    - Write a fresh `commentary_state.json` to the portfolio-plan
-      directory with the schema documented in
-      `~/Downloads/portfolio-plan/README.md` (`generated_at`,
-      `model`, `nifty_z`, `multiplier`, `today_total`, `text`,
-      `verdict`). Keep the `text` under 200 words; the `verdict` is
-      one line.
-    - If the file is already fresh for today, do NOT regenerate —
-      one recommendation per day, and the time of day shapes the
-      verdict (before 13:30 IST = same-day NAV; after = T+1).
-    - The deterministic per-fund amounts are authoritative. The LLM
-      adds context, never overrides numbers. Never recommend selling
-      equity. The Flask `/admin/portfolio` panel reads
-      `commentary_state.json` automatically — no restart, no commit.
-    See `~/Downloads/portfolio-plan/README.md` for the full rules
-    that govern that sibling repo.
+11. **Cross-project auto-tasks live in `~/.claude/AGENT_POLICY.md`
+    §3 item 12.** Includes the once-per-day portfolio recommendation
+    refresh that any agent touching any repo on this laptop must
+    run. Do not duplicate that rule here — the policy file is the
+    single source of truth.

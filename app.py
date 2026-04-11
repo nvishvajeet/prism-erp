@@ -239,6 +239,25 @@ def handle_server_error(_exc):
     return render_template("error.html", title="Server Error", heading="Something went wrong", message="An internal error occurred. Please try again shortly.", code=500), 500
 
 
+@app.errorhandler(ValueError)
+def handle_value_error(exc):
+    """v2.0.1 — catch raw int(request.form[...]) crashes on empty/missing
+    form fields. These used to bubble up as 500s; the stability crawler
+    flagged ~8 such sites across the request_detail + member admin
+    routes. Rather than instrumenting each one, we catch ValueError at
+    the Flask layer and redirect to the referrer with a user-friendly
+    flash. Real validation bugs still need fixing — this is a safety
+    net, not a cure."""
+    # Only handle form-parsing errors; let genuine TypeError / other
+    # ValueErrors from inside route bodies still produce 500s (those
+    # are real bugs the operator should see).
+    msg = str(exc)
+    if not ("invalid literal" in msg or "base 10" in msg):
+        raise exc
+    flash("Invalid form input. Please double-check and try again.", "error")
+    return redirect(request.referrer or url_for("index"))
+
+
 def query_all(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     return get_db().execute(sql, params).fetchall()
 
@@ -5403,7 +5422,7 @@ def admin_notices_new():
             flash("Invalid instrument target.", "error")
             return redirect(url_for("admin_notices"))
     now_iso = datetime.utcnow().isoformat(timespec="seconds")
-    execute(
+    notice_id = execute(
         """
         INSERT INTO notices
             (scope, scope_target, severity, subject, body,
@@ -5413,6 +5432,10 @@ def admin_notices_new():
         (scope, scope_target, severity, subject, body,
          user["id"], now_iso, expires_at),
     )
+    # v2.0.1 — audit log (was silently missing pre-v2.0.1).
+    log_action(user["id"], "notice", notice_id, "notice_created",
+               {"scope": scope, "scope_target": scope_target,
+                "severity": severity, "subject": subject[:200]})
     flash(f"Notice posted: {subject[:60]}", "success")
     return redirect(url_for("admin_notices"))
 
@@ -5424,7 +5447,12 @@ def admin_notices_delete(notice_id: int):
     user = current_user()
     if not _user_can_post_notice(user):
         abort(403)
+    # v2.0.1 — audit log BEFORE delete so we capture the subject.
+    notice_row = query_one("SELECT subject, scope FROM notices WHERE id = ?", (notice_id,))
     execute("DELETE FROM notices WHERE id = ?", (notice_id,))
+    log_action(user["id"], "notice", notice_id, "notice_deleted",
+               {"subject": (notice_row["subject"] if notice_row else "")[:200],
+                "scope": notice_row["scope"] if notice_row else None})
     flash(f"Notice #{notice_id} removed.", "success")
     return redirect(url_for("admin_notices"))
 
@@ -10435,8 +10463,14 @@ def activate():
 PRISM_LOG = Path(__file__).resolve().parent / "prism_log.json"
 
 @app.route("/prism/save", methods=["POST"])
+@login_required
 def prism_save():
-    """Persist the full prism dump to disk. Called by overlay JS on every entry."""
+    """Persist the full prism dump to disk. Called by overlay JS on every entry.
+
+    v2.0.1 — Gated to authenticated users. Previously unauthenticated,
+    which let any bot overwrite prism_log.json. File is still writable
+    by every logged-in user since the overlay ships with the app.
+    """
     data = request.get_json(silent=True)
     if not data:
         return jsonify(ok=False, error="no data"), 400
@@ -10444,15 +10478,17 @@ def prism_save():
     return jsonify(ok=True)
 
 @app.route("/prism/log", methods=["GET"])
+@login_required
 def prism_log():
-    """Return the current persisted prism log."""
+    """Return the current persisted prism log. v2.0.1 — auth-gated."""
     if PRISM_LOG.exists():
         return app.response_class(PRISM_LOG.read_text(), mimetype="application/json")
     return jsonify(feedLog=[], errorLog=[], paths=[])
 
 @app.route("/prism/clear", methods=["POST"])
+@login_required
 def prism_clear():
-    """Clear the persisted prism log."""
+    """Clear the persisted prism log. v2.0.1 — auth-gated."""
     if PRISM_LOG.exists():
         PRISM_LOG.write_text("{}")
     return jsonify(ok=True)

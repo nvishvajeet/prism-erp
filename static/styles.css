@@ -6263,3 +6263,121 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .role-toggle-status[data-tone="ok"]   { color: #0a7a3f; }
 .role-toggle-status[data-tone="warn"] { color: #c08a2b; }
 .role-toggle-status[data-tone="err"]  { color: #b42318; }
+
+/* v1.5.2 — Mission Control banner pinned above /admin/dev_panel
+   tile grid. NASA-console aesthetic: dark gradient, monospaced
+   version readout, 4 status lights with green/amber/info dots. */
+.mc-banner {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 1.25rem 2rem;
+  align-items: center;
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-lg, 14px);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #0b1220 88%, var(--accent, #4c6ef5)),
+    color-mix(in srgb, #0b1220 94%, var(--accent, #4c6ef5)));
+  color: #e6ecf5;
+  border: 1px solid color-mix(in srgb, var(--accent, #4c6ef5) 30%, #0b1220);
+  box-shadow: 0 8px 28px -18px color-mix(in srgb, var(--accent, #4c6ef5) 40%, transparent);
+}
+.mc-banner-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+.mc-banner-brand {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #fff;
+}
+.mc-banner-sep {
+  color: color-mix(in srgb, #e6ecf5 40%, transparent);
+  font-size: 1.1rem;
+}
+.mc-banner-role {
+  font-size: 0.82rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent, #4c6ef5) 75%, #ffffff);
+  font-weight: 600;
+}
+.mc-banner-tag {
+  display: flex;
+  align-items: center;
+}
+.mc-banner-version {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, #0b1220 50%, #000);
+  color: #7cffd4;
+  border: 1px solid color-mix(in srgb, #7cffd4 28%, #0b1220);
+  letter-spacing: 0.04em;
+}
+.mc-banner-status {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-self: end;
+}
+.mc-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, #0b1220 60%, transparent);
+  border: 1px solid color-mix(in srgb, #e6ecf5 10%, transparent);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.mc-light-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5a6475;
+  box-shadow: 0 0 0 0 transparent;
+}
+.mc-light-ok   .mc-light-dot { background: #3ee07b; box-shadow: 0 0 10px color-mix(in srgb, #3ee07b 70%, transparent); }
+.mc-light-warn .mc-light-dot { background: #f2b44a; box-shadow: 0 0 10px color-mix(in srgb, #f2b44a 70%, transparent); }
+.mc-light-info .mc-light-dot { background: #4c9bff; box-shadow: 0 0 10px color-mix(in srgb, #4c9bff 70%, transparent); animation: mc-pulse 2.2s ease-in-out infinite; }
+@keyframes mc-pulse {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, #4c9bff 60%, transparent); }
+  50%      { box-shadow: 0 0 14px color-mix(in srgb, #4c9bff 90%, transparent); }
+}
+.mc-light-label {
+  color: color-mix(in srgb, #e6ecf5 55%, transparent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.mc-light-value {
+  color: #e6ecf5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .mc-banner {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+  }
+  .mc-banner-status { justify-self: start; }
+}
+
+/* Clickable HISTORY tile commit sha → drill-down page */
+.dp-commit-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+}
+.dp-commit-link:hover code.inline-code {
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 14%, var(--panel));
+  border-color: var(--accent, #4c6ef5);
+}

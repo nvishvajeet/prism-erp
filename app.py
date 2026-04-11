@@ -6587,6 +6587,150 @@ def dev_panel_doc():
     return jsonify({"name": safe, "content": text})
 
 
+# ─── Mission Control drill-downs (v1.5.2) ──────────────────────────────
+# Commit + tag detail pages — clickable from HISTORY and PROJECT
+# TIMELINE tiles. Each reads from `git show` / `git for-each-ref`
+# via the scrubbed `_dev_panel_git` helper so hook inheritance
+# doesn't poison the subprocess env (see `6baca66` for the
+# GIT_DIR scrubbing rationale).
+
+
+import re as _mc_re  # local import — used only by the drill-down validators
+
+
+def _dev_panel_safe_sha(sha: str) -> str | None:
+    """Validate a git SHA is short-or-long hex before handing it to
+    git. Prevents shell-injection via argument splitting and rejects
+    any non-SHA input with a 404. Accepts 7-40 hex chars."""
+    if not sha:
+        return None
+    if not _mc_re.fullmatch(r"[0-9a-f]{7,40}", sha):
+        return None
+    return sha
+
+
+def _dev_panel_safe_tag(tag: str) -> str | None:
+    """Validate a git tag name looks like a semver `v1.2.3` or the
+    short `v1.2` / `v1.2.3.4` variants. Rejects everything else
+    with a 404 so the drill-down can't be used as an arbitrary
+    git-ref-peek gadget."""
+    if not tag:
+        return None
+    if not _mc_re.fullmatch(r"v\d+(?:\.\d+){1,3}", tag):
+        return None
+    return tag
+
+
+@app.route("/admin/dev_panel/commit/<sha>")
+@owner_required
+def dev_panel_commit(sha: str):
+    """Mission Control drill-down: show a single commit's full body +
+    files changed stat. Linked from the HISTORY tile rows."""
+    safe = _dev_panel_safe_sha(sha)
+    if safe is None:
+        abort(404)
+    # Header: sha / author / date / subject / body
+    header = _dev_panel_git(
+        "show", "--no-patch",
+        "--format=%H%n%h%n%an%n%ae%n%cI%n%s%n%b",
+        safe,
+    )
+    if not header:
+        abort(404)
+    parts = header.split("\n", 6)
+    commit = {
+        "full_sha": parts[0] if len(parts) > 0 else "",
+        "short_sha": parts[1] if len(parts) > 1 else safe,
+        "author_name": parts[2] if len(parts) > 2 else "",
+        "author_email": parts[3] if len(parts) > 3 else "",
+        "iso_date": parts[4] if len(parts) > 4 else "",
+        "subject": parts[5] if len(parts) > 5 else "",
+        "body": parts[6] if len(parts) > 6 else "",
+    }
+    # Files changed stat — `git show --stat --format=""` prints only
+    # the diffstat portion, one line per file + a summary line.
+    stat_raw = _dev_panel_git("show", "--stat", "--format=", safe)
+    stat_lines = [ln for ln in stat_raw.splitlines() if ln.strip()]
+    return render_template(
+        "dev_panel_commit.html",
+        commit=commit,
+        stat_lines=stat_lines,
+    )
+
+
+@app.route("/admin/dev_panel/tag/<tag>")
+@owner_required
+def dev_panel_tag(tag: str):
+    """Mission Control drill-down: show a tag's full annotated message
+    plus every commit between the previous tag and this one. Linked
+    from the PROJECT TIMELINE tile entries."""
+    safe = _dev_panel_safe_tag(tag)
+    if safe is None:
+        abort(404)
+    # Tag metadata: sha of the tagged commit, tagger name + date,
+    # first-line subject, full body. `for-each-ref` returns empty
+    # if the tag doesn't exist.
+    meta = _dev_panel_git(
+        "for-each-ref",
+        "--format=%(objectname)%n%(objectname:short)%n%(taggername)%n"
+        "%(taggerdate:iso-strict)%n%(subject)%n%(body)",
+        f"refs/tags/{safe}",
+    )
+    if not meta:
+        abort(404)
+    mparts = meta.split("\n", 5)
+    tag_info = {
+        "name": safe,
+        "full_sha": mparts[0] if len(mparts) > 0 else "",
+        "short_sha": mparts[1] if len(mparts) > 1 else "",
+        "tagger": mparts[2] if len(mparts) > 2 else "",
+        "tagged_at": mparts[3] if len(mparts) > 3 else "",
+        "subject": mparts[4] if len(mparts) > 4 else "",
+        "body": mparts[5] if len(mparts) > 5 else "",
+    }
+    # Previous tag for the "commits since last tag" drill-down. If
+    # there is no previous semver tag, we show no commits section.
+    all_tags = [t.strip() for t in _dev_panel_git("tag", "--list").splitlines() if t.strip()]
+    semver_sorted: list[tuple[tuple[int, ...], str]] = []
+    for t in all_tags:
+        if not t.startswith("v"):
+            continue
+        parts = t[1:].split(".")
+        if 2 <= len(parts) <= 4 and all(p.isdigit() for p in parts):
+            semver_sorted.append((tuple(int(p) for p in parts), t))
+    semver_sorted.sort()
+    prev_tag = None
+    for i, (_, t) in enumerate(semver_sorted):
+        if t == safe and i > 0:
+            prev_tag = semver_sorted[i - 1][1]
+            break
+    commits_in_range: list[dict] = []
+    if prev_tag:
+        log_out = _dev_panel_git(
+            "log", f"{prev_tag}..{safe}",
+            "--pretty=format:%h|%cI|%an|%s",
+        )
+        for line in log_out.splitlines():
+            lp = line.split("|", 3)
+            if len(lp) == 4:
+                commits_in_range.append({
+                    "sha": lp[0], "at": lp[1], "author": lp[2], "subject": lp[3],
+                })
+    # Files changed since the previous tag (or the initial commit).
+    stat_args = ["show", "--stat", "--format=", safe] if not prev_tag else [
+        "diff", "--stat", f"{prev_tag}..{safe}"
+    ]
+    stat_raw = _dev_panel_git(*stat_args)
+    stat_lines = [ln for ln in stat_raw.splitlines() if ln.strip()][-8:]  # last 8 lines = top files + summary
+    return render_template(
+        "dev_panel_tag.html",
+        tag=tag_info,
+        prev_tag=prev_tag,
+        commits_in_range=commits_in_range,
+        stat_lines=stat_lines,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Portfolio panel — owner-only.
 # Reads state files written by ~/Downloads/portfolio-plan/{daily,analyze,simulate}.py

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('dev_panel') }}" class="hover-back-btn" title="Back to Dev Panel">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}">← Dev Panel</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Commit</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ commit.short_sha }}</span>
+  </div>
+</header>
+
+<section class="mc-drill-tiles" data-vis="{{ V }}">
+
+  {# ── Tile: Commit Header ── #}
+  <article class="card tile tile-mc-header" data-vis="{{ V }}">
+    {{ card_heading("SUBJECT", commit.subject|truncate(60)) }}
+    <div class="mc-header-body" data-vis="{{ V }}">
+      <p class="mc-subject" data-vis="{{ V }}">{{ commit.subject }}</p>
+      <dl class="mc-meta-grid" data-vis="{{ V }}">
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">SHA</dt>
+          <dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ commit.full_sha[:12] }}</code></dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Author</dt>
+          <dd data-vis="{{ V }}">{{ commit.author_name }}</dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Email</dt>
+          <dd data-vis="{{ V }}">{{ commit.author_email }}</dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Committed</dt>
+          <dd data-vis="{{ V }}">{{ commit.iso_date[:19]|replace("T", " ") }}</dd>
+        </div>
+      </dl>
+    </div>
+  </article>
+
+  {# ── Tile: Commit body ── #}
+  <article class="card tile tile-mc-body" data-vis="{{ V }}">
+    {{ card_heading("BODY", "Full message") }}
+    {% if commit.body %}
+    <pre class="mc-commit-body" data-vis="{{ V }}">{{ commit.body }}</pre>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(no body — subject only)</p>
+    {% endif %}
+  </article>
+
+  {# ── Tile: Files changed ── #}
+  <article class="card tile tile-mc-stat" data-vis="{{ V }}">
+    {{ card_heading("FILES CHANGED", "diffstat") }}
+    {% if stat_lines %}
+    <ul class="mc-stat-list" data-vis="{{ V }}">
+      {% for line in stat_lines %}
+      <li class="mc-stat-line" data-vis="{{ V }}"><code data-vis="{{ V }}">{{ line }}</code></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(no diffstat — merge or empty commit)</p>
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

@@ -2,15 +2,41 @@
 {% from "_page_macros.html" import card_heading, stat_blob, empty_state, chart_bar with context %}
 {% block content %}
 
-{# ─── Header ─────────────────────────────────────────── #}
-<header class="inst-header" data-vis="{{ V }}">
-  <div class="inst-header-main" data-vis="{{ V }}">
-    <h2 class="inst-header-title" data-vis="{{ V }}">Development Console</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">v{{ progress.current_release }}</span>
-    <span class="operation-status operation-active operation-status-compact inst-header-status" data-vis="{{ V }}">
-      <span class="operation-dot" aria-hidden="true"></span>
-      <strong data-vis="{{ V }}">{{ progress.branch }}</strong>
-    </span>
+{# ─── PROJECT CONTROL banner — Mission Control header strip.
+     Always-visible status bar rendered above the tile grid. Four
+     status lights (stable / branch / dirty / crawlers) + a big
+     monospaced version tag, framed like a NASA consoles readout.
+     Replaces the compact inst-header that used to live here. ─── #}
+<header class="mc-banner" data-vis="{{ V }}">
+  <div class="mc-banner-title" data-vis="{{ V }}">
+    <span class="mc-banner-brand" data-vis="{{ V }}">PRISM</span>
+    <span class="mc-banner-sep" data-vis="{{ V }}">·</span>
+    <span class="mc-banner-role" data-vis="{{ V }}">PROJECT CONTROL</span>
+  </div>
+  <div class="mc-banner-tag" data-vis="{{ V }}">
+    <code class="mc-banner-version" data-vis="{{ V }}">v{{ progress.current_release }}</code>
+  </div>
+  <div class="mc-banner-status" data-vis="{{ V }}">
+    <div class="mc-light mc-light-ok" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">BRANCH</span>
+      <span class="mc-light-value" data-vis="{{ V }}">{{ progress.branch }}</span>
+    </div>
+    <div class="mc-light {% if progress.dirty == 0 %}mc-light-ok{% else %}mc-light-warn{% endif %}" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">TREE</span>
+      <span class="mc-light-value" data-vis="{{ V }}">{% if progress.dirty == 0 %}clean{% else %}{{ progress.dirty }} dirty{% endif %}</span>
+    </div>
+    <div class="mc-light {% if progress.reports_latest_age_hours is not none and progress.reports_latest_age_hours < 24 %}mc-light-ok{% else %}mc-light-warn{% endif %}" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">CRAWLERS</span>
+      <span class="mc-light-value" data-vis="{{ V }}">{% if progress.reports_latest_age_hours is none %}never{% elif progress.reports_latest_age_hours < 1 %}{{ (progress.reports_latest_age_hours * 60)|round(0, 'floor')|int }}m ago{% elif progress.reports_latest_age_hours < 24 %}{{ progress.reports_latest_age_hours|round(0, 'floor')|int }}h ago{% else %}stale{% endif %}</span>
+    </div>
+    <div class="mc-light {% if progress.future_fixes.total == 0 %}mc-light-ok{% else %}mc-light-info{% endif %}" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">v1.5.0</span>
+      <span class="mc-light-value" data-vis="{{ V }}">{{ progress.future_fixes.total }} TODO</span>
+    </div>
   </div>
 </header>
 
@@ -220,7 +246,7 @@
       <ul class="dp-commit-list" data-vis="{{ V }}">
         {% for c in progress.recent_commits[:6] %}
         <li class="dp-commit-row" data-vis="{{ V }}">
-          <code class="inline-code" data-vis="{{ V }}">{{ c.sha }}</code>
+          <a class="dp-commit-link" href="{{ url_for('dev_panel_commit', sha=c.sha) }}" title="Drill into this commit" data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ c.sha }}</code></a>
           <span data-vis="{{ V }}">{{ c.subject }}</span>
           {% if c.at %}<small class="hint dp-commit-when" data-vis="{{ V }}">{{ c.at[:16]|replace("T", " ") }}</small>{% endif %}
         </li>

@@ -42,6 +42,12 @@ ROLE_PERSONAS: list[tuple[str, str, str]] = [
     ("FESEM Admin",      "fesem.admin@lab.local", "instrument_admin"),
     ("Dr. Sen",          "sen@lab.local",         "faculty_in_charge"),
     ("Anika Operator",   "anika@lab.local",       "operator"),
+    # Second operator on purpose — the load-balance-pick logic in
+    # app.py:_default_user_for_approval_role needs a real pool to
+    # round-robin across. Crawlers that care about approver fairness
+    # (see `approver_pools` strategy) assert that sequential requests
+    # on instrument 1 alternate between anika@ and bala@.
+    ("Bala Operator",    "bala@lab.local",        "operator"),
     ("Prof. Approver",   "prof.approver@lab.local", "professor_approver"),
     ("Finance Officer",  "finance@lab.local",     "finance_admin"),
     ("Aarav Shah",       "shah@lab.local",        "requester"),
@@ -249,12 +255,35 @@ class Harness:
                 "VALUES (?, ?)",
                 (instrument_ids[0], user_ids["fesem.admin@lab.local"]),
             )
-        if instrument_ids and "anika@lab.local" in user_ids:
-            cur.execute(
-                "INSERT OR IGNORE INTO instrument_operators (instrument_id, user_id) "
-                "VALUES (?, ?)",
-                (instrument_ids[0], user_ids["anika@lab.local"]),
-            )
+        # Build a POOL of operators on every instrument anika is
+        # already linked to (the demo seed usually puts anika on
+        # instrument id 1 with a different code than our SEED_INSTRUMENTS
+        # entries, so wiring to `instrument_ids[0]` alone misses it).
+        # `_default_user_for_approval_role` needs a real multi-member
+        # pool to round-robin across, and crawlers conventionally use
+        # `instrument_id=1`. Anika stays the primary; bala joins her
+        # everywhere.
+        if "anika@lab.local" in user_ids:
+            anika_rows = cur.execute(
+                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?",
+                (user_ids["anika@lab.local"],),
+            ).fetchall()
+            anika_instruments = {r[0] for r in anika_rows}
+            # Also cover the instruments THIS harness just inserted, so
+            # fresh boots without a pre-seeded demo still have a pool.
+            anika_instruments.update(instrument_ids)
+            for inst_id in sorted(anika_instruments):
+                cur.execute(
+                    "INSERT OR IGNORE INTO instrument_operators (instrument_id, user_id) "
+                    "VALUES (?, ?)",
+                    (inst_id, user_ids["anika@lab.local"]),
+                )
+                if "bala@lab.local" in user_ids:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO instrument_operators (instrument_id, user_id) "
+                        "VALUES (?, ?)",
+                        (inst_id, user_ids["bala@lab.local"]),
+                    )
 
         conn.commit()
         conn.close()

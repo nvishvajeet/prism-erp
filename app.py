@@ -926,33 +926,111 @@ def next_instrument_code() -> str:
     return f"INST-{number:03d}"
 
 
+def _load_balance_pick(
+    db: sqlite3.Connection,
+    candidate_ids: list[int],
+    role: str,
+    instrument_id: int,
+) -> int | None:
+    """Round-robin pick among candidate approvers for one (role, instrument).
+
+    The "pool" is `candidate_ids` — every user currently eligible to be
+    the default approver for this role on this instrument. If the pool
+    has only one member, return them. If it has several, pick the one
+    with the fewest currently-pending `approval_steps` rows for this
+    role on this instrument, tie-broken by the least-recently-acted-on
+    step, tie-broken by lowest user id.
+
+    The net effect: sequential requests against an instrument that has
+    two operators / two finance officers / etc. will alternate between
+    them so workload stays balanced, while a request whose approval
+    chain names an explicit person (see `create_approval_chain()` —
+    `cfg["approver_user_id"]` wins over this helper) still routes to
+    that specific person unchanged.
+    """
+    if not candidate_ids:
+        return None
+    if len(candidate_ids) == 1:
+        return candidate_ids[0]
+    # The LEFT JOIN only matches approval_steps that are BOTH
+    # (a) owned by this user in this role AND (b) still pending AND
+    # (c) attached to a sample_request on this instrument. Any step
+    # that fails any of those is simply unjoined — it does NOT
+    # contaminate the count. That matters: approval_steps sit on a
+    # global table and without the instrument scoping a user's work
+    # on every instrument would count against their fairness here.
+    placeholders = ",".join("?" * len(candidate_ids))
+    rows = db.execute(
+        f"""
+        SELECT u.id AS user_id,
+               COUNT(aps.id) AS pending_count,
+               MAX(aps.acted_at) AS last_acted_at
+        FROM users u
+        LEFT JOIN approval_steps aps
+               ON aps.approver_user_id = u.id
+              AND aps.approver_role = ?
+              AND aps.status = 'pending'
+              AND EXISTS (
+                  SELECT 1 FROM sample_requests sr
+                   WHERE sr.id = aps.sample_request_id
+                     AND sr.instrument_id = ?
+              )
+        WHERE u.id IN ({placeholders})
+        GROUP BY u.id
+        ORDER BY pending_count ASC,
+                 (last_acted_at IS NULL) DESC,
+                 last_acted_at ASC,
+                 u.id ASC
+        """,
+        (role, instrument_id, *candidate_ids),
+    ).fetchall()
+    if not rows:
+        return candidate_ids[0]
+    return rows[0]["user_id"]
+
+
 def _default_user_for_approval_role(db: sqlite3.Connection, role: str, instrument_id: int) -> int | None:
+    """Pick the default approver for (role, instrument).
+
+    Historically this used `ORDER BY u.id LIMIT 1` on each role, which
+    meant every new request on an instrument with multiple operators
+    (or multiple finance officers, or multiple professors) piled up on
+    the lowest-id person in the pool. Now we collect every eligible
+    candidate and delegate to `_load_balance_pick()` so workload
+    round-robins across the pool.
+
+    This helper only fires when `instrument_approval_config` does NOT
+    name a specific `approver_user_id` — explicit per-person routes
+    still win (see `create_approval_chain()`).
+    """
     if role == "finance":
-        row = db.execute("SELECT id FROM users WHERE role = 'finance_admin' AND active = 1 ORDER BY id LIMIT 1").fetchone()
+        rows = db.execute(
+            "SELECT id FROM users WHERE role = 'finance_admin' AND active = 1 ORDER BY id"
+        ).fetchall()
     elif role == "professor":
-        row = db.execute(
+        rows = db.execute(
             """
             SELECT u.id FROM users u
             LEFT JOIN instrument_faculty_admins ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
             WHERE u.active = 1 AND (ifa.instrument_id IS NOT NULL OR u.role IN ('professor_approver', 'super_admin'))
             ORDER BY (ifa.instrument_id IS NOT NULL) DESC, u.id
-            LIMIT 1
             """,
             (instrument_id,),
-        ).fetchone()
+        ).fetchall()
     elif role == "operator":
-        row = db.execute(
+        rows = db.execute(
             """
             SELECT u.id FROM users u
             JOIN instrument_operators io ON io.user_id = u.id
             WHERE io.instrument_id = ? AND u.active = 1
-            ORDER BY u.id LIMIT 1
+            ORDER BY u.id
             """,
             (instrument_id,),
-        ).fetchone()
+        ).fetchall()
     else:
-        row = None
-    return row["id"] if row else None
+        rows = []
+    candidate_ids = [r["id"] for r in rows]
+    return _load_balance_pick(db, candidate_ids, role, instrument_id)
 
 
 def create_approval_chain(db: sqlite3.Connection, request_id: int, instrument_id: int) -> None:

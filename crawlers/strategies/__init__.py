@@ -13,6 +13,7 @@ from . import performance              # noqa: F401
 from . import contrast_audit           # noqa: F401
 from . import css_orphan               # noqa: F401
 from . import lifecycle                # noqa: F401
+from . import approver_pools           # noqa: F401
 from . import random_walk              # noqa: F401
 from . import architecture             # noqa: F401
 from . import philosophy_propagation   # noqa: F401

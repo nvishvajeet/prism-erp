@@ -55,7 +55,7 @@ WAVES: dict[str, Wave] = {
     "lifecycle": Wave(
         name="lifecycle",
         description="End-to-end UI journeys + dead-link sweep",
-        strategies=("lifecycle", "dead_link"),
+        strategies=("lifecycle", "approver_pools", "dead_link"),
         stop_on_fail=False,
     ),
     "coverage": Wave(
@@ -88,7 +88,7 @@ WAVES: dict[str, Wave] = {
             # behavioral
             "role_behavior",
             # lifecycle
-            "lifecycle", "dead_link",
+            "lifecycle", "approver_pools", "dead_link",
             # coverage
             "performance", "random_walk",
             # accessibility

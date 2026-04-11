@@ -1177,6 +1177,64 @@ def approval_step_is_actionable(step: sqlite3.Row, all_steps: list[sqlite3.Row])
     return all(prev["status"] == "approved" for prev in all_steps if prev["step_order"] < step["step_order"])
 
 
+def nav_pending_counts(user) -> dict[str, int]:
+    """W1.4.1 — "what needs my attention right now" counts for the topbar nav.
+
+    Returns a dict keyed by nav item (currently just ``"queue"``) whose
+    values are the number of items the current user is expected to act
+    on next. The template renders ``<span class="topbar-count-badge">``
+    when the value is non-zero, and renders nothing when zero — the nav
+    stays visually quiet for idle users and the count appears the instant
+    a role gets work queued up.
+
+    Rules:
+
+    * **Approvers** (finance_admin / professor_approver / operator /
+      instrument_admin / faculty_in_charge): any ``approval_steps`` row
+      assigned to me with status ``pending`` and every earlier step for
+      the same request already ``approved`` — i.e. actually actionable
+      per ``approval_step_is_actionable``'s definition, computed in SQL.
+    * **Requesters**: any of my own requests sitting in
+      ``awaiting_sample_submission`` — the state machine is blocked on
+      me until I hand samples over.
+
+    Both rules can apply to the same user (an owner who is also a
+    requester); the counts add. Empty dict when there is nothing — the
+    template uses `{% if counts.queue %}` so an idle user sees no badge
+    at all.
+    """
+    if not user:
+        return {}
+    db = get_db()
+    queue_total = 0
+    step_row = db.execute(
+        """
+        SELECT COUNT(*)
+        FROM approval_steps s
+        WHERE s.status = 'pending'
+          AND s.approver_user_id = ?
+          AND NOT EXISTS (
+              SELECT 1 FROM approval_steps p
+              WHERE p.sample_request_id = s.sample_request_id
+                AND p.step_order < s.step_order
+                AND p.status != 'approved'
+          )
+        """,
+        (user["id"],),
+    ).fetchone()
+    if step_row and step_row[0]:
+        queue_total += int(step_row[0])
+    if user["role"] == "requester":
+        own = db.execute(
+            "SELECT COUNT(*) FROM sample_requests "
+            "WHERE requester_id = ? AND status = 'awaiting_sample_submission'",
+            (user["id"],),
+        ).fetchone()[0]
+        if own:
+            queue_total += int(own)
+    return {"queue": queue_total} if queue_total else {}
+
+
 def safe_token(value: str) -> str:
     sanitized = secure_filename(value or "").replace(".", "_")
     return sanitized or "record"
@@ -3891,6 +3949,7 @@ def inject_globals():
         "support_admin_email": support_admin_email,
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,
+        "nav_pending_counts": nav_pending_counts(user),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),

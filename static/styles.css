@@ -3110,6 +3110,29 @@ code {
   color: var(--accent);
 }
 
+/* W1.4.1 — topbar count badge.
+   Rendered only when nav_pending_counts has a non-zero value for a
+   nav item (see base.html). Sits inline inside the nav <a>, no
+   layout reflow needed, same height as the link text. */
+.topbar-count-badge {
+  display: inline-block;
+  min-width: 1.4rem;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  vertical-align: baseline;
+}
+:root[data-theme="dark"] .topbar-count-badge {
+  background: var(--accent);
+  color: #0c1720;
+}
+
 /* ─────────────────────────────────────────────────────────────
    BREADCRUMB TRAIL
    ───────────────────────────────────────────────────────────── */

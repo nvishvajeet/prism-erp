@@ -87,7 +87,7 @@
     {% set endpoint = request.endpoint or '' %}
     {% if not access_profile_user.can_access_instruments %}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
-    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
@@ -118,7 +118,7 @@
     </div>
     {% endif %}
     {% if can_access_schedule_user %}
-    <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
     {% endif %}
     {% if can_access_calendar_user %}
     <a class="{% if endpoint in ['calendar', 'calendar_events'] %}nav-active{% endif %}" href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>

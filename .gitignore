@@ -44,3 +44,26 @@ venv_310/
 
 # Crawler reports (generated every run)
 reports/
+
+# Runtime logs & churn
+logs/
+*.log
+prism_log.json
+visibility_audit.txt
+
+# Editor/workspace junk
+*.code-workspace
+
+# Pre-tile editor aids
+grid-screenshots/
+
+# Retired top-level scratch
+CRAWL_PLAN.md
+TODO_AI.txt
+start_server.sh
+
+# Ephemeral instrument image uploads (user data, regenerable)
+static/instrument_images/instrument_*.png
+
+# Paper submission bundles
+FOCS-submission/

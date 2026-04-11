@@ -10,12 +10,12 @@ Improves: catches regressions where a role can still *load* a page
 Scenarios exercised (one per role):
 
   super_admin        — create a new user via /admin/users
-  site_admin         — invite a new user via /admin/users
-  instrument_admin   — open the instrument config page
+  site_admin         — load admin users page
+  instrument_admin   — open the instrument detail (config lives there)
   faculty_in_charge  — view the instrument detail they manage
-  operator           — accept a pending request (or no-op if none)
-  professor_approver — view the pending approvals queue
-  finance_admin      — view the finance dashboard
+  operator           — open the schedule + instrument detail
+  professor_approver — view the schedule (approvals surface)
+  finance_admin      — view the stats dashboard
   requester          — submit a new request
 """
 from __future__ import annotations
@@ -43,6 +43,7 @@ class RoleBehaviorStrategy(CrawlerStrategy):
                     "name": "Test Bot",
                     "email": "testbot@lab.local",
                     "role": "requester",
+                    "password": "BotPass123",
                 },
                 follow_redirects=True,
             )
@@ -53,10 +54,10 @@ class RoleBehaviorStrategy(CrawlerStrategy):
             resp = harness.get("/admin/users", follow_redirects=True)
             self._score(result, resp.status_code, "site_admin: /admin/users")
 
-        # ---- instrument_admin: open instrument config --------------
+        # ---- instrument_admin: open instrument detail (config lives there) ----
         with harness.logged_in("fesem.admin@lab.local"):
-            resp = harness.get("/instruments/1/config", follow_redirects=True)
-            self._score(result, resp.status_code, "instrument_admin: /config")
+            resp = harness.get("/instruments/1", follow_redirects=True)
+            self._score(result, resp.status_code, "instrument_admin: /instruments/1")
 
         # ---- faculty_in_charge: instrument detail ------------------
         with harness.logged_in("sen@lab.local"):
@@ -69,25 +70,15 @@ class RoleBehaviorStrategy(CrawlerStrategy):
                 resp = harness.get(path, follow_redirects=True)
                 self._score(result, resp.status_code, f"operator: {path}")
 
-        # ---- professor_approver: pending approvals -----------------
+        # ---- professor_approver: approvals surface -----------------
         with harness.logged_in("prof.approver@lab.local"):
-            for path in ["/pending", "/schedule"]:
-                resp = harness.get(path, follow_redirects=True)
-                # /pending may not exist yet → warning, not fail
-                if resp.status_code in (404, 405):
-                    result.warnings += 1
-                    result.details.append(f"professor_approver: {path} → {resp.status_code}")
-                else:
-                    self._score(result, resp.status_code, f"professor_approver: {path}")
+            resp = harness.get("/schedule", follow_redirects=True)
+            self._score(result, resp.status_code, "professor_approver: /schedule")
 
-        # ---- finance_admin: finance dashboard ----------------------
+        # ---- finance_admin: stats dashboard ------------------------
         with harness.logged_in("finance@lab.local"):
-            for path in ["/finance", "/stats"]:
-                resp = harness.get(path, follow_redirects=True)
-                if resp.status_code == 404:
-                    result.warnings += 1
-                else:
-                    self._score(result, resp.status_code, f"finance_admin: {path}")
+            resp = harness.get("/stats", follow_redirects=True)
+            self._score(result, resp.status_code, "finance_admin: /stats")
 
         # ---- requester: submit a new request -----------------------
         with harness.logged_in("shah@lab.local"):

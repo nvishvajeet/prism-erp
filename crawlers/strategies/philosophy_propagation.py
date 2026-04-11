@@ -20,6 +20,8 @@ Rules the crawler enforces on every `templates/*.html` file:
      visibility slicing composes with the client safety net.
   7. No use of deprecated class families (`.grid-two`, `.stream-pill`,
      `.warroom-header`, `.bucket-link`, `.event-stream*`).
+  8. `static/keybinds.js` exists, is referenced from `base.html`, and
+     stays ≤40 lines (no JS framework creep — W1.4.1 c3).
 
 Exemptions: macro files (`_*.html`), `base.html`, `error_*.html`,
 `login.html`, `logout.html`.
@@ -135,6 +137,33 @@ class PhilosophyStrategy(CrawlerStrategy):
                 result.warnings += 1
                 bump("missing_data_vis")
                 result.details.append(f"{tpl.name}: no data-vis attribute")
+
+        # Rule 8: keybinds.js — tiny, vanilla, referenced from base.html
+        KEYBIND_MAX_LINES = 40
+        keybinds_path = root / "static" / "keybinds.js"
+        base_path = templates_dir / "base.html"
+        if not keybinds_path.exists():
+            result.failed += 1
+            bump("keybinds_missing")
+            result.details.append("static/keybinds.js: missing")
+        else:
+            line_count = sum(1 for _ in keybinds_path.open(encoding="utf-8"))
+            if line_count > KEYBIND_MAX_LINES:
+                result.failed += 1
+                bump("keybinds_too_long")
+                result.details.append(
+                    f"static/keybinds.js: {line_count} lines > {KEYBIND_MAX_LINES} (JS framework creep)"
+                )
+            else:
+                result.passed += 1
+            if base_path.exists():
+                base_text = base_path.read_text(encoding="utf-8", errors="ignore")
+                if "keybinds.js" not in base_text:
+                    result.failed += 1
+                    bump("keybinds_not_linked")
+                    result.details.append("base.html: does not reference keybinds.js")
+                else:
+                    result.passed += 1
 
         result.metrics = {
             "templates_checked": checked,

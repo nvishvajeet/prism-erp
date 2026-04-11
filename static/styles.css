@@ -6620,3 +6620,90 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-weight: 600;
   line-height: 1.2;
 }
+
+/* v1.6.1 — Admin Notices compose + list page (/admin/notices).
+   Reuses .notice-severity-* + .notice-eyebrow from v1.6.0 so the
+   visual language stays consistent between the home-page tile
+   and this write surface. */
+.admin-notices-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+  grid-auto-flow: row dense;
+}
+.admin-notices-tiles > .tile { min-width: 0; }
+.tile-admin-notices-compose { grid-column: 1 / -1; }
+.tile-admin-notices-list    { grid-column: 1 / -1; }
+
+@media (max-width: 760px) {
+  .admin-notices-tiles { grid-template-columns: 1fr; }
+  .admin-notices-tiles > .tile { grid-column: 1 / -1; }
+}
+
+.admin-notice-form {
+  gap: 0.85rem;
+  margin-top: 0.45rem;
+}
+.admin-notice-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+.admin-notice-submit-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 0.3rem;
+}
+.admin-notice-target { /* hidden until scope matches */ }
+
+/* Active list */
+.admin-notice-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.admin-notice-row-item {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-left-width: 3px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel);
+}
+.admin-notice-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.3rem;
+  flex-wrap: wrap;
+}
+.admin-notice-delete-form {
+  margin: 0 0 0 auto;
+}
+.admin-notice-delete-btn {
+  all: unset;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border: 1px solid var(--line, rgba(0,0,0,0.15));
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.admin-notice-delete-btn:hover {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+.admin-notice-meta {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

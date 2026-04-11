@@ -4532,6 +4532,133 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
     return uniq[:4]
 
 
+# ─── v1.6.1 Admin Notices — sitewide messaging write surface ──────────
+# Single source of truth is the `notices` table. Home page tile reads
+# from it via `active_notices_for_user`; this admin UI writes into it.
+# Owner / site_admin / super_admin only.
+
+
+NOTICE_SCOPES = ("site", "role", "instrument")
+NOTICE_SEVERITIES = ("info", "warning", "critical")
+NOTICE_ROLE_TARGETS = (
+    "super_admin", "site_admin", "instrument_admin",
+    "professor_approver", "finance_admin", "faculty_in_charge",
+    "operator", "requester",
+)
+
+
+def _user_can_post_notice(user: sqlite3.Row | None) -> bool:
+    """Gate notice posting to owner / site_admin / super_admin. All
+    three are legit 'site messaging authority' roles."""
+    if not user:
+        return False
+    roles = user_role_set(user)
+    return bool(roles & {"super_admin", "site_admin"}) or is_owner(user)
+
+
+@app.route("/admin/notices", methods=["GET"])
+@login_required
+def admin_notices():
+    """List every notice + render the compose form. Read access
+    implicit for any logged-in user so they can see what's on the
+    board; write is gated via `_user_can_post_notice` in the POST
+    handlers below."""
+    user = current_user()
+    rows = query_all(
+        """
+        SELECT n.id, n.scope, n.scope_target, n.severity, n.subject,
+               n.body, n.created_at, n.expires_at,
+               u.name AS author_name
+          FROM notices n
+          LEFT JOIN users u ON u.id = n.author_id
+         ORDER BY
+            CASE n.severity
+                WHEN 'critical' THEN 0
+                WHEN 'warning'  THEN 1
+                ELSE 2
+            END,
+            n.created_at DESC
+        """
+    )
+    # Instrument codes for the scope picker dropdown
+    instrument_rows = query_all(
+        "SELECT code, name FROM instruments WHERE status = 'active' ORDER BY code"
+    )
+    can_post = _user_can_post_notice(user)
+    return render_template(
+        "admin_notices.html",
+        notices=rows,
+        instruments=instrument_rows,
+        scopes=NOTICE_SCOPES,
+        severities=NOTICE_SEVERITIES,
+        role_targets=NOTICE_ROLE_TARGETS,
+        can_post=can_post,
+    )
+
+
+@app.route("/admin/notices/new", methods=["POST"])
+@login_required
+def admin_notices_new():
+    """Create a new notice. Validates scope + severity + required
+    subject, persists with the authenticated user as author."""
+    user = current_user()
+    if not _user_can_post_notice(user):
+        abort(403)
+    scope = (request.form.get("scope") or "site").strip()
+    scope_target = (request.form.get("scope_target") or "").strip() or None
+    severity = (request.form.get("severity") or "info").strip()
+    subject = (request.form.get("subject") or "").strip()
+    body = (request.form.get("body") or "").strip()
+    expires_at = (request.form.get("expires_at") or "").strip() or None
+    if scope not in NOTICE_SCOPES:
+        flash("Invalid scope.", "error")
+        return redirect(url_for("admin_notices"))
+    if severity not in NOTICE_SEVERITIES:
+        flash("Invalid severity.", "error")
+        return redirect(url_for("admin_notices"))
+    if not subject:
+        flash("Subject is required.", "error")
+        return redirect(url_for("admin_notices"))
+    # Scope target validation: site scope must have no target; role
+    # and instrument scopes must have a recognized target.
+    if scope == "site":
+        scope_target = None
+    elif scope == "role":
+        if scope_target not in NOTICE_ROLE_TARGETS:
+            flash("Invalid role target.", "error")
+            return redirect(url_for("admin_notices"))
+    elif scope == "instrument":
+        codes = {r["code"] for r in query_all("SELECT code FROM instruments")}
+        if scope_target not in codes:
+            flash("Invalid instrument target.", "error")
+            return redirect(url_for("admin_notices"))
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    execute(
+        """
+        INSERT INTO notices
+            (scope, scope_target, severity, subject, body,
+             author_id, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (scope, scope_target, severity, subject, body,
+         user["id"], now_iso, expires_at),
+    )
+    flash(f"Notice posted: {subject[:60]}", "success")
+    return redirect(url_for("admin_notices"))
+
+
+@app.route("/admin/notices/<int:notice_id>/delete", methods=["POST"])
+@login_required
+def admin_notices_delete(notice_id: int):
+    """Delete a notice. Same write gate as posting."""
+    user = current_user()
+    if not _user_can_post_notice(user):
+        abort(403)
+    execute("DELETE FROM notices WHERE id = ?", (notice_id,))
+    flash(f"Notice #{notice_id} removed.", "success")
+    return redirect(url_for("admin_notices"))
+
+
 @app.route("/api/health-check")
 def api_health_check():
     """Lightweight healthcheck endpoint — no auth required."""

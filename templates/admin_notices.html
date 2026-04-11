@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Noticeboard</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">sitewide messaging</span>
+  </div>
+</header>
+
+<section class="admin-notices-tiles" data-vis="{{ V }}">
+
+  {# ── TILE: Compose new notice (owner/site_admin/super_admin only) ── #}
+  {% if can_post %}
+  <article class="card tile tile-admin-notices-compose" data-vis="{{ V }}">
+    {{ card_heading("COMPOSE", "Post a new notice") }}
+    <form method="post" action="{{ url_for('admin_notices_new') }}" class="form-grid admin-notice-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+
+      <div class="admin-notice-row" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Scope
+          <select name="scope" id="adminNoticeScope" data-vis="{{ V }}">
+            <option value="site">Site-wide — everyone</option>
+            <option value="role">Role-scoped — one role only</option>
+            <option value="instrument">Instrument-scoped — users with access</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Severity
+          <select name="severity" data-vis="{{ V }}">
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="admin-notice-target admin-notice-target-role" data-vis="{{ V }}">Role target
+        <select name="scope_target_role" data-vis="{{ V }}">
+          {% for r in role_targets %}
+          <option value="{{ r }}">{{ r.replace("_", " ").title() }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="admin-notice-target admin-notice-target-instrument" data-vis="{{ V }}">Instrument target
+        <select name="scope_target_instrument" data-vis="{{ V }}">
+          {% for i in instruments %}
+          <option value="{{ i.code }}">{{ i.code }} — {{ i.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Subject
+        <input type="text" name="subject" maxlength="200" required placeholder="Short headline people will read on their home page" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Body
+        <textarea name="body" rows="4" placeholder="Optional longer message. Plain text. Every word earns its place." data-vis="{{ V }}"></textarea>
+      </label>
+
+      <label data-vis="{{ V }}">Expires at (optional)
+        <input type="text" name="expires_at" placeholder="YYYY-MM-DDTHH:MM:SS or blank = never" data-vis="{{ V }}">
+      </label>
+
+      <div class="admin-notice-submit-row" data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Post notice</button>
+      </div>
+    </form>
+
+    <script>
+      // Scope-target picker: hide role/instrument selects unless
+      // the matching scope is selected. Also rename the hidden
+      // scope_target name on submit so only one value lands.
+      (function () {
+        const form = document.querySelector('.admin-notice-form');
+        if (!form) return;
+        const scopeSel = form.querySelector('#adminNoticeScope');
+        const roleCell = form.querySelector('.admin-notice-target-role');
+        const instCell = form.querySelector('.admin-notice-target-instrument');
+        function sync() {
+          const s = scopeSel.value;
+          roleCell.style.display = (s === 'role') ? '' : 'none';
+          instCell.style.display = (s === 'instrument') ? '' : 'none';
+        }
+        scopeSel.addEventListener('change', sync);
+        sync();
+        form.addEventListener('submit', function () {
+          const s = scopeSel.value;
+          const target = (s === 'role')
+            ? form.querySelector('[name="scope_target_role"]').value
+            : (s === 'instrument')
+              ? form.querySelector('[name="scope_target_instrument"]').value
+              : '';
+          let hidden = form.querySelector('[name="scope_target"]');
+          if (!hidden) {
+            hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'scope_target';
+            form.appendChild(hidden);
+          }
+          hidden.value = target;
+        });
+      })();
+    </script>
+  </article>
+  {% else %}
+  <article class="card tile tile-admin-notices-compose" data-vis="{{ V }}">
+    {{ card_heading("COMPOSE", "Read-only for your role") }}
+    <p class="hint" data-vis="{{ V }}">Posting a notice requires owner, site admin, or super admin access. You can still read every active notice on the list below.</p>
+  </article>
+  {% endif %}
+
+  {# ── TILE: Active notices list ── #}
+  <article class="card tile tile-admin-notices-list" data-vis="{{ V }}">
+    {{ card_heading("ACTIVE", notices|length|string ~ " notice" ~ ("s" if notices|length != 1 else "")) }}
+    {% if notices %}
+    <ul class="admin-notice-list" data-vis="{{ V }}">
+      {% for n in notices %}
+      <li class="admin-notice-row-item notice-{{ n.severity }}" data-vis="{{ V }}">
+        <div class="admin-notice-row-head" data-vis="{{ V }}">
+          <span class="notice-eyebrow" data-vis="{{ V }}">
+            {% if n.scope == 'site' %}SITE-WIDE{% elif n.scope == 'role' %}ROLE · {{ n.scope_target|upper }}{% elif n.scope == 'instrument' %}INSTRUMENT · {{ n.scope_target|upper }}{% else %}{{ n.scope|upper }}{% endif %}
+          </span>
+          <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
+          <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace("T", " ") }}</span>
+          {% if can_post %}
+          <form method="post" action="{{ url_for('admin_notices_delete', notice_id=n.id) }}" class="admin-notice-delete-form" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+            <button type="submit" class="admin-notice-delete-btn" title="Delete notice" onclick="return confirm('Delete this notice?');" data-vis="{{ V }}">×</button>
+          </form>
+          {% endif %}
+        </div>
+        <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
+        {% if n.body %}
+        <p class="notice-body" data-vis="{{ V }}">{{ n.body }}</p>
+        {% endif %}
+        <p class="hint admin-notice-meta" data-vis="{{ V }}">
+          by {{ n.author_name or 'unknown' }}
+          {% if n.expires_at %}· expires {{ n.expires_at[:16]|replace("T", " ") }}{% else %}· no expiry{% endif %}
+        </p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No active notices. Post the first one above.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

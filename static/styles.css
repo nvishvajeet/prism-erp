@@ -5736,6 +5736,144 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   white-space: nowrap;
 }
 
+/* ──────────────────────────────────────────────────────────────────── */
+/* Portfolio ACTIONS card — three-column PENDING/SELL/BUY hero.         */
+/* Extracted from inline styles in portfolio.html to satisfy the        */
+/* philosophy "no raw color literals in templates" rule (W1.4.5).       */
+/* Semantic colour vars live here so the template never mentions hex.   */
+/* ──────────────────────────────────────────────────────────────────── */
+:root {
+  --pf-buy: #3aa86b;
+  --pf-buy-soft: rgba(58, 168, 107, 0.05);
+  --pf-sell: #a37b00;
+  --pf-sell-soft: rgba(163, 123, 0, 0.04);
+  --pf-sell-banner: rgba(163, 123, 0, 0.08);
+  --pf-pending: #3a76a8;
+  --pf-col-line: #e6e8ec;
+  --pf-footer-bg: #f6f7f9;
+  --pf-dim-1: #666;
+  --pf-dim-2: #888;
+  --pf-body: #444;
+}
+:root[data-theme="dark"] {
+  --pf-col-line: #2c3340;
+  --pf-footer-bg: #1d242d;
+  --pf-dim-1: #a4b0bc;
+  --pf-dim-2: #8692a0;
+  --pf-body: #cfd6e1;
+}
+
+.pf-weekend-banner {
+  border-left: 4px solid var(--pf-sell);
+  background: var(--pf-sell-banner);
+}
+.pf-weekend-banner p { margin: 6px 0; }
+
+.pf-actions-card {
+  border: 2px solid var(--pf-buy);
+  padding: 0;
+  overflow: hidden;
+}
+.pf-actions-header {
+  background: var(--pf-buy);
+  color: #fff;
+  padding: 10px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pf-actions-title {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.pf-actions-cutoff {
+  font-size: 12px;
+  opacity: 0.92;
+}
+.pf-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+}
+.pf-actions-col {
+  padding: 16px 18px;
+}
+.pf-actions-col-pending {
+  border-right: 1px solid var(--pf-col-line);
+}
+.pf-actions-col-sell {
+  border-right: 1px solid var(--pf-col-line);
+  background: var(--pf-sell-soft);
+}
+.pf-actions-col-buy {
+  background: var(--pf-buy-soft);
+}
+.pf-actions-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--pf-dim-2);
+  margin-bottom: 6px;
+}
+.pf-actions-amt {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.pf-actions-amt-pending {
+  font-size: 22px;
+  color: var(--pf-pending);
+}
+.pf-actions-amt-sell   { color: var(--pf-sell); }
+.pf-actions-amt-buy    { color: var(--pf-buy); }
+.pf-actions-amt-paused {
+  font-size: 22px;
+  color: var(--pf-pending);
+}
+.pf-actions-sub {
+  font-size: 13px;
+  color: var(--pf-body);
+  margin: 6px 0;
+}
+.pf-actions-note {
+  font-size: 12px;
+  color: var(--pf-dim-1);
+}
+.pf-actions-hint {
+  font-size: 11px;
+  color: var(--pf-dim-2);
+  margin-top: 6px;
+}
+.pf-actions-footer {
+  background: var(--pf-footer-bg);
+  border-top: 1px solid var(--pf-col-line);
+  padding: 8px 18px;
+  font-size: 11px;
+  color: var(--pf-dim-1);
+}
+.pf-pending-row { margin-bottom: 10px; }
+.pf-leg-table {
+  width: 100%;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+.pf-leg-table td {
+  padding: 1px 0;
+  border: 0;
+}
+.pf-leg-table td.amt { text-align: right; }
+
+/* Calendar explainer inline tokens — keep the SELL/BUY colour pairing
+   consistent with the ACTIONS card above. */
+.pf-side-sell { color: var(--pf-sell); }
+.pf-side-buy  { color: var(--pf-buy); }
+
+/* LLM commentary stale state — dimmed card. */
+.pf-commentary-stale { opacity: 0.65; }
+
 /* W1.4.1 c3 — keyboard-shortcut help overlay (triggered by "?"). */
 .keybind-help {
   position: fixed;

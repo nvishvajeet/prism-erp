@@ -105,6 +105,43 @@ sourcing `.env` at boot. If `SECRET_KEY`, `LAB_SCHEDULER_HOST`, or
 `LAB_SCHEDULER_DEMO_MODE` appear unset in `logs/server.log`, the
 fix is always in `.env` + a kickstart, never in the plist.
 
+**Log rotation — newsyslog (opt-in, one-time sudo).** The launchd
+plists point both `StandardOutPath` and `StandardErrorPath` at a
+single `logs/server.log`, which otherwise grows forever on a
+long-running deploy. The rotation policy lives at
+`ops/launchd/newsyslog.prism.conf` and is picked up by macOS's
+built-in hourly `com.apple.newsyslog` job — no cron, no extra
+daemon. Install it once:
+
+```bash
+sudo cp ops/launchd/newsyslog.prism.conf /etc/newsyslog.d/prism.conf
+sudo chown root:wheel /etc/newsyslog.d/prism.conf
+sudo chmod 644 /etc/newsyslog.d/prism.conf
+```
+
+`./scripts/install_launchd.sh` prints these exact commands at the
+end of its run — it never executes them itself, because PRISM
+installs are manual and never silently `sudo`. Policy: rotate
+when `logs/server.log` crosses 10 MB, keep 7 gzipped archives
+(`server.log.0.gz` … `server.log.6.gz`), drop older ones. Not
+time-driven — a quiet week never churns the log.
+
+**Gotcha after rotation — launchd keeps the old FD.** When
+newsyslog moves `logs/server.log` aside, the running Flask process
+still has the old inode open via launchd's stdout redirection and
+will continue writing to the rotated (now archive) file. Disk
+stays bounded, but the newest lines aren't visible under the
+expected filename until the service is bounced. Fix on the mini
+(or laptop service) with:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/local.prism
+```
+
+In practice the service restarts often enough during development
+that you rarely need to do this by hand; on the production mini a
+quarterly kickstart (or a natural reboot) is sufficient.
+
 **Rule (see PHILOSOPHY.md §3):** the website stays up. The mini
 is not allowed to fall over between releases. Crawler proof of
 that rule is the `deploy_smoke` strategy added to the `sanity`

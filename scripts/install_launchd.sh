@@ -81,6 +81,31 @@ echo "=== First lines of logs/server.log ==="
 head -15 logs/server.log 2>/dev/null || echo "(logs/server.log not created yet — wait a few seconds and tail it)"
 
 echo ""
+echo "=== Log rotation (newsyslog) ==="
+# PRISM's launchd stdout/stderr both land in logs/server.log as a single
+# unbounded sink. newsyslog(8) is macOS-native (runs hourly via
+# com.apple.newsyslog), so dropping a config file under /etc/newsyslog.d/
+# is the cheapest way to bound that file without a cron job or external
+# daemon. We never run `sudo` ourselves — the operator does it manually.
+NEWSYSLOG_SRC="ops/launchd/newsyslog.prism.conf"
+NEWSYSLOG_DST="/etc/newsyslog.d/prism.conf"
+if [ -f "${NEWSYSLOG_SRC}" ]; then
+  if [ -f "${NEWSYSLOG_DST}" ] && cmp -s "${NEWSYSLOG_SRC}" "${NEWSYSLOG_DST}"; then
+    echo "newsyslog config already installed at ${NEWSYSLOG_DST}"
+  else
+    echo "To enable hourly log rotation for logs/server.log, run:"
+    echo "  sudo cp ${REPO_ROOT}/${NEWSYSLOG_SRC} ${NEWSYSLOG_DST}"
+    echo "  sudo chown root:wheel ${NEWSYSLOG_DST}"
+    echo "  sudo chmod 644 ${NEWSYSLOG_DST}"
+    echo ""
+    echo "Rotation policy: size-driven at 10 MB, keep 7 gzipped archives."
+    echo "See docs/DEPLOY.md §2 for the launchd FD gotcha after rotation."
+  fi
+else
+  echo "(${NEWSYSLOG_SRC} not found — skipping rotation install hint)"
+fi
+
+echo ""
 echo "Done. Verify externally with:"
 echo "  PRISM_DEPLOY_URL=http://127.0.0.1:5055 \\"
 echo "    .venv/bin/python -m crawlers run deploy_smoke"

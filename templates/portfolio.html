@@ -18,7 +18,7 @@
     {% endif %}
   </div>
   <form method="post" action="{{ url_for('portfolio_refresh') }}" class="section-actions" data-vis="{{ V }}">
-    <button type="submit" class="link-button" data-vis="{{ V }}">↻ Refresh data</button>
+    <button type="submit" class="link-button" data-vis="{{ V }}">↻ Recompute now</button>
   </form>
 </header>
 
@@ -145,7 +145,15 @@
           {% endif %}
         </td>
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ row.label }}</strong></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(today) }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">
+          {% if today > 0 %}
+          ₹<input type="number" name="amount_{{ row.tag }}" value="{{ today }}" min="0" step="1000"
+                  class="todayAmt" style="width:90px;text-align:right;font-variant-numeric:tabular-nums;background:transparent;border:1px solid transparent;padding:2px 4px;border-radius:4px"
+                  title="Edit to override the recommended amount before logging" data-vis="{{ V }}">
+          {% else %}
+          ₹{{ "{:,}".format(today) }}
+          {% endif %}
+        </td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(row.spent) }}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(row.target) }}</td>
         <td data-vis="{{ V }}">{{ chart_bar("", (row.pct|string) ~ "%", row.pct) }}</td>
@@ -166,11 +174,17 @@
   <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap" data-vis="{{ V }}">
     <button type="button" class="link-button subtle" id="buyOneOfEach" data-vis="{{ V }}">✓✓ Buy one of each</button>
     <span class="hint" style="align-self:center" data-vis="{{ V }}">
-      Click a checkbox to instantly log that fund as bought (today's amount + latest NAV). Or use "Buy one of each" to log them all at once.
+      One-click: tick a row's checkbox to log that fund at the recommended amount + latest NAV.
+      To override, edit the amount in the Today ₹ cell first, then tick the box.
+      "Buy one of each" logs every row at once (using whatever amounts are currently shown).
     </span>
   </div>
   </form>
 </section>
+
+<style>
+  .todayAmt:hover, .todayAmt:focus { border-color: var(--border-base, #ccc) !important; outline: none; }
+</style>
 
 <script>
 (function () {
@@ -222,11 +236,30 @@ setTimeout(function () { window.location.reload(); }, 600000);
   </section>
 </div>
 
-{# ─── 14-day forecast ────────────────────────────────── #}
+{# ─── Calendar view of the redeem→buy pipeline ──────── #}
 <section class="card" data-vis="{{ V }}">
-  {{ card_heading("FORECAST", "Next 14 trading days") }}
+  {{ card_heading("CALENDAR", "Redeem (amber) and buy (green) on the same calendar grid the scheduler uses") }}
   <p class="hint" data-vis="{{ V }}">
-    Forecast assumes the Nifty z-score mean-reverts gently toward 0. Actual numbers update each morning when <code>./daily.py</code> reruns.
+    Each day has up to two events: a <strong style="color:#a37b00">⬇ REDEEM</strong>
+    (place that morning, settles in 2 trading days) and a <strong style="color:#3aa86b">⬆ BUY</strong>
+    (place that day, funded by a redemption from 2 trading days earlier).
+    Click <strong>↻ Recompute now</strong> in the header to refresh.
+  </p>
+  <div id="portfolioCalendar" style="min-height:520px" data-vis="{{ V }}"></div>
+</section>
+
+{# ─── 14-day forecast: redeem→buy pipeline ──────────── #}
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("PIPELINE", "Next 14 trading days · redeem today → buy in T+2") }}
+  <p class="hint" data-vis="{{ V }}">
+    Each row is one trading day. <strong>Redeem today</strong> = the debt-MF
+    redemption to place that morning (drains the freeable corpus); it settles
+    in 2 trading days and funds the equity buy on <strong>Funds buy on</strong>.
+    <strong>Buy today</strong> = the equity slice to place that day, funded by
+    a redemption from 2 trading days earlier. Once corpus is exhausted, the
+    Phase column flips to <code>salary</code> and no further redemption is
+    needed. Hit <strong>↻ Recompute now</strong> in the header to re-run
+    <code>daily.py</code> and refresh the schedule.
   </p>
   <canvas id="pfForecastChart" height="120" data-vis="{{ V }}"></canvas>
 
@@ -237,7 +270,10 @@ setTimeout(function () { window.location.reload(); }, 600000);
         <th data-vis="{{ V }}">Wd</th>
         <th data-vis="{{ V }}" style="text-align:right">z (proj)</th>
         <th data-vis="{{ V }}">Signal</th>
-        <th data-vis="{{ V }}" style="text-align:right">Total ₹</th>
+        <th data-vis="{{ V }}" style="text-align:right">Redeem today</th>
+        <th data-vis="{{ V }}">Funds buy on</th>
+        <th data-vis="{{ V }}" style="text-align:right">Buy today</th>
+        <th data-vis="{{ V }}">Phase</th>
       </tr>
     </thead>
     <tbody data-vis="{{ V }}">
@@ -247,7 +283,12 @@ setTimeout(function () { window.location.reload(); }, 600000);
         <td data-vis="{{ V }}">{{ f.weekday }}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">{{ "%+.2f"|format(f.z_proj or 0) }}</td>
         <td data-vis="{{ V }}"><span class="badge portfolio-forecast-chip" style="--chip-bg: {{ f.color }}" data-vis="{{ V }}">{{ f.label }}</span></td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">
+          {% if (f.redeem_today or 0) > 0 %}<strong>₹{{ "{:,}".format(f.redeem_today) }}</strong>{% else %}<span class="hint">—</span>{% endif %}
+        </td>
+        <td data-vis="{{ V }}">{% if f.funds_buy_on and (f.redeem_today or 0) > 0 %}{{ f.funds_buy_on }}{% else %}<span class="hint">—</span>{% endif %}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(f.total) }}</strong></td>
+        <td data-vis="{{ V }}"><span class="hint">{{ f.phase or "—" }}</span></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -313,6 +354,32 @@ setTimeout(function () { window.location.reload(); }, 600000);
 </section>
 
 {% endif %}
+
+{# ─── FullCalendar (same library as the lab scheduler) ── #}
+<script src="{{ url_for('static', filename='vendor/fullcalendar/index.global.min.js') }}"></script>
+<script>
+(function () {
+  if (typeof FullCalendar === 'undefined') return;
+  var el = document.getElementById('portfolioCalendar');
+  if (!el) return;
+  var cal = new FullCalendar.Calendar(el, {
+    initialView: 'dayGridMonth',
+    firstDay: 1,
+    height: 'auto',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
+    buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
+    events: '{{ url_for("portfolio_calendar_events") }}',
+    eventDidMount: function (info) {
+      var p = info.event.extendedProps || {};
+      var lines = [info.event.title];
+      if (p.kind === 'redeem' && p.funds_buy_on) lines.push('→ funds buy on ' + p.funds_buy_on);
+      if (p.kind === 'buy' && p.label) lines.push('signal: ' + p.label);
+      info.el.title = lines.join('\n');
+    }
+  });
+  cal.render();
+})();
+</script>
 
 {# ─── Charts JS ──────────────────────────────────────── #}
 <script>

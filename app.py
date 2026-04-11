@@ -6153,7 +6153,7 @@ import csv as _csv  # local import — only used by portfolio routes
 
 PORTFOLIO_DIR = Path(os.environ.get(
     "PORTFOLIO_PLAN_DIR",
-    str(Path.home() / "Downloads" / "portfolio-plan"),
+    str(Path.home() / "Claude" / "portfolio-plan"),
 ))
 
 
@@ -6399,6 +6399,21 @@ def portfolio_log_orders_bulk():
     tag_to_isin = {info.get("tag"): isin for isin, info in funds_meta.items() if info.get("tag")}
     tag_to_nav = {info.get("tag"): float(info.get("last_nav") or 0) for info in funds_meta.values() if info.get("tag")}
 
+    # Optional per-fund override amounts from the inline editable cells.
+    # Anything missing or unparseable falls back to the canonical
+    # recommendation in daily_state.json.
+    overrides: dict[str, int] = {}
+    for tag in selected:
+        raw = (request.form.get(f"amount_{tag}") or "").strip()
+        if not raw:
+            continue
+        try:
+            v = int(round(float(raw)))
+        except ValueError:
+            continue
+        if v > 0:
+            overrides[tag] = v
+
     today_iso = date.today().isoformat()
     orders_path = PORTFOLIO_DIR / "orders.csv"
     is_new = not orders_path.exists()
@@ -6411,7 +6426,8 @@ def portfolio_log_orders_bulk():
             if is_new:
                 w.writeheader()
             for tag in selected:
-                amt = int(today_amounts.get(tag, 0) or 0)
+                canonical = int(today_amounts.get(tag, 0) or 0)
+                amt = overrides.get(tag, canonical)
                 if amt <= 0:
                     continue
                 isin = tag_to_isin.get(tag, "")
@@ -6424,7 +6440,7 @@ def portfolio_log_orders_bulk():
                     "amount_inr": amt,
                     "nav": round(nav, 4),
                     "units": units,
-                    "note": "from-recommendation",
+                    "note": "manual-override" if tag in overrides and overrides[tag] != canonical else "from-recommendation",
                 })
                 logged += 1
                 total_inr += amt
@@ -6437,6 +6453,72 @@ def portfolio_log_orders_bulk():
     else:
         flash(f"Logged {logged} order{'s' if logged != 1 else ''} totalling ₹{total_inr:,} from today's recommendation.", "success")
     return redirect(url_for("portfolio_panel"))
+
+
+@app.route("/admin/portfolio/calendar-events")
+@owner_required
+def portfolio_calendar_events():
+    """FullCalendar event feed for the portfolio page. Reuses the same
+    library and styling as the lab scheduler calendar — each forecast
+    day yields up to two all-day events: an amber REDEEM and a green BUY."""
+    daily = _portfolio_load_json("daily_state.json") or {}
+    forecast = daily.get("forecast", []) or []
+    events = []
+    for f in forecast:
+        d = f.get("date")
+        if not d:
+            continue
+        redeem_amt = int(f.get("redeem_today") or 0)
+        buy_amt = int(f.get("total") or 0)
+        if redeem_amt > 0:
+            events.append({
+                "title": f"⬇ REDEEM ₹{redeem_amt:,}",
+                "start": d,
+                "allDay": True,
+                "backgroundColor": "#a37b00",
+                "borderColor": "#a37b00",
+                "textColor": "#fff",
+                "extendedProps": {
+                    "kind": "redeem",
+                    "funds_buy_on": f.get("funds_buy_on"),
+                    "phase": f.get("phase"),
+                },
+            })
+        if buy_amt > 0:
+            color = f.get("color") or "#3aa86b"
+            events.append({
+                "title": f"⬆ BUY ₹{buy_amt:,}",
+                "start": d,
+                "allDay": True,
+                "backgroundColor": color,
+                "borderColor": color,
+                "textColor": "#fff",
+                "extendedProps": {
+                    "kind": "buy",
+                    "label": f.get("label"),
+                    "multiplier": f.get("multiplier"),
+                },
+            })
+    # Today's REDEEM gets its own marker in case it's not in the 14d forecast
+    today = (daily.get("today") or {})
+    redeem_today = (today.get("redeem") or {})
+    if redeem_today.get("amount") and redeem_today.get("sell_day"):
+        d = redeem_today["sell_day"]
+        if not any(e["start"] == d and e["extendedProps"].get("kind") == "redeem" for e in events):
+            events.append({
+                "title": f"⬇ REDEEM ₹{int(redeem_today['amount']):,}",
+                "start": d,
+                "allDay": True,
+                "backgroundColor": "#a37b00",
+                "borderColor": "#a37b00",
+                "textColor": "#fff",
+                "extendedProps": {
+                    "kind": "redeem",
+                    "funds_buy_on": redeem_today.get("target_buy_date"),
+                    "phase": redeem_today.get("phase"),
+                },
+            })
+    return jsonify(events)
 
 
 @app.route("/admin/portfolio/refresh", methods=["POST"])

@@ -60,6 +60,10 @@ ALLOWLIST_PREFIXES: tuple[str, ...] = (
     "dp-wave-",
     # Stat tile tone classes — `stat-tone-{{ tone }}` in _page_macros.html
     "stat-tone-",
+    # Dev-panel "Now Shipping" reports-freshness tone — composed in
+    # dev_panel.html as `dev-now-reports-{{ age_tone }}` where age_tone
+    # ∈ {fresh, ok, stale}. One class per freshness bucket (W1.4.3 c2).
+    "dev-now-reports-",
     # All -tiles grids used by the tile architecture (page-level layout)
     # are applied once per template; crawler treats any existing
     # `<thing>-tiles` class as used-by-convention.

@@ -3533,13 +3533,7 @@ code {
   width: 100%;
 }
 
-/* ── Tile: Control Panel (operation mode as radio cards) ── */
-.control-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
+/* ── Tile: Control Panel (operation mode as inline toggle, W1.4.3 c1) ── */
 .control-mode-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3633,11 +3627,6 @@ code {
 .control-mode-hold .control-mode-label,
 .control-mode-maintenance .control-mode-label {
   color: var(--ink);
-}
-
-.control-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 @media (max-width: 540px) {

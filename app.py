@@ -3723,6 +3723,31 @@ def init_db() -> None:
         db.commit()
     db.close()
     seed_data()
+    # Second pass of the W1.3.7 backfill — the first pass runs before
+    # seed_data() creates demo users, so user_roles starts empty.
+    # Re-run the same INSERT OR IGNORE after seeding so every freshly-
+    # seeded user gets their junction row. Idempotent: no-op if
+    # already populated. This is the v1.5.0 acceptance gate fix.
+    _backfill_user_roles()
+
+
+def _backfill_user_roles() -> None:
+    """Populate `user_roles` with one row per `users.role`.
+    Idempotent: safe to call repeatedly."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        db.execute(
+            """
+            INSERT OR IGNORE INTO user_roles (user_id, role, granted_at)
+            SELECT id, role, datetime('now')
+              FROM users
+             WHERE role IS NOT NULL AND role != ''
+            """
+        )
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed_data() -> None:

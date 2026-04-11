@@ -1,33 +1,55 @@
-# PRISM dev plan — optimized build plan from db7bc19
+# PRISM dev plan — optimized build plan from 02cb7ce
 
-_Anchored 2026-04-11. Replaces the backlog section of `ROADMAP.md`._
-_Each wave is a bounded commit bundle on `v1.3.0-stable-release`,_
-_with a crawler proof and a time budget. Sanity wave stays green_
-_end-to-end between every wave._
+_Last re-anchored 2026-04-11 (third pass) after the grid-overlay_
+_unhook. Replaces the backlog section of `ROADMAP.md`. Each wave is_
+_a bounded commit bundle on `v1.3.0-stable-release`, with a crawler_
+_proof and a time budget. Sanity wave stays green end-to-end between_
+_every wave._
 
-_This revision (second pass) collapses W1.3.9+W1.4.0 into a single_
-_post-ops wave, shrinks W1.4.1 from 2 days → 2 hours (each commit_
-_is <50 lines), drops the W1.4.2 hotfix-buffer slot, renumbers_
-_W1.4.3 → W1.4.2, and splits the release gate into laptop-local_
-_work (ships now) vs ops-dependent work (ships after the Tailscale_
-_unblock). Net effect: the demo-live gate collapses from "½ day_
-_after ops unblock" to "~20 minutes after ops unblock"._
+_**Third pass** marks every W1.4.1 / W1.4.2a / W1.4.3 item as_
+_✅ SHIPPED against actual git history, collapses the ship-today_
+_candidates list to only the truly pending items, and adds a_
+_"now parked" section pointing at the dev-mode overlay plan_
+_further down. Second pass (earlier) collapsed W1.3.9+W1.4.0 into_
+_a single post-ops wave and split the release gate into laptop-local_
+_vs ops-dependent work._
 
-## State @ db7bc19
+## State @ 02cb7ce
 
-* **Branch:** `v1.3.0-stable-release` @ `db7bc19`
-* **Shipped since 18cef1f:** `b77463f` (level 1/2 framing),
-  `5bc3142` (W1.3.9+W1.4.0 code prep — HTTPS.md + tailscale_serve.sh),
-  `b20a2de` (portfolio REDEEM tile), `d97c777` (ERP v2.0 vision doc),
-  `0d3102e` (W1.3.11 CSS fossil backlog wiped), `90383b1`
-  (AGENTS.md vendor-neutral agent onboarding), tag **`v1.3.8`**
-  at `9dfe765`, `8043696` (dev_panel WAVES tile honours ✅ SHIPPED
-  marker), `929911d` (W1.3.12 stunnel/Caddy cleanup — Tailscale
-  Serve is now the only HTTPS path), `36fe93f` (W1.4.1 c1a —
-  `.row-time-hint` on queue rows), `455ffb7` (W1.4.1 c1b — topbar
-  queue count badge + new `topbar_badges` sanity crawler),
-  `db7bc19` (W1.4.1 c2 — empty-state warmth on the big tables +
-  new `empty_states` sanity crawler).
+* **Branch:** `v1.3.0-stable-release` @ `02cb7ce`
+* **Tags on the line:** `v1.3.8`, `v1.4.1`.
+* **Shipped since the second-pass anchor at `db7bc19`:**
+  `bcd3990` (W1.4.1 c3 — `keybinds.js` + `n`/`?` help overlay +
+  philosophy rule locking the ≤40-line budget) → **tags `v1.4.1`**;
+  `61c45b9` (W1.4.2a c1 — CHANGELOG `[Unreleased]` fill + `[1.3.8]`
+  section); `741742b` (W1.4.2a c2 — README quickstart, five lines
+  clone→login); `424bf9c` (W1.4.2a c3 — pre-receive sanity hook
+  installed on the laptop bare, two-tier safety net now live);
+  `3f2ef2b` (portfolio calendar + inline amount override + pipeline
+  table); `d2b3546` (W1.4.2a mark-shipped doc pass); `ff6057a`
+  (dev_panel WAVES regex accepts letter-suffixed wave ids);
+  `535b2dc` (CHANGELOG backfill 1.3.1–1.3.7); `e3157c1` (W1.4.3 c1 —
+  inline intake-mode toggle on `instrument_detail.html`, 2-tap
+  safety); `72b5821` (unit test — `time_ago()` humanisation, 15
+  cases, no Flask context); `8ea3fab` (AGENTS.md — two-tier safety
+  net + pre-receive flow); `597640a` (W1.4.3 c2 — dev_panel
+  "Now Shipping" hero + hot-wave highlight); `94849ae` (W1.4.3 c3 —
+  `dev_panel_readability` crawler locks the hero contract);
+  `6baca66` (fix — scrub `GIT_*` env from `_dev_panel_git`
+  subprocess so the sanity wave hook no longer reads the bare's
+  object store); **`02cb7ce`** (grid-overlay unhooked from main
+  site, parked behind future debug mode); `b658249` (laptop launchd
+  agent + service-mode reloader fix); `9d682a4` (portfolio
+  action-first dashboard); `42a3068` (mini LaunchDaemon variant
+  for headless install); `80979f3` (CSS orphan retirement,
+  instrument form + reports tone).
+* **W1.4.3 note:** the old second-pass doc anticipated W1.4.2 as the
+  next tag on the critical path. In reality a "W1.4.3" batch
+  (inline intake toggle + dev_panel hero + readability crawler)
+  landed *before* W1.4.2 tagged, untagged, as Jony-Ive polish on
+  top of the already-green v1.4.1. Not blocking; just noted so
+  future agents don't chase the W1.4.2 tag and wonder where W1.4.3
+  came from.
 * **Static wave right now:** architecture 63/0/9, philosophy 14/0/0,
   css_orphan 548/0/0. **Zero CSS orphan warnings.**
 * **Sanity wave:** 170/0/0 across 7 strategies (smoke 33,
@@ -201,17 +223,17 @@ lines of diff — the original 2-day budget was inflated.
     macro from `_page_macros.html`. Landed as a new `empty_states`
     crawler strategy in the `sanity` wave (3 PASS).
 
-**Commit 3 — keyboard shortcut `n` + `?` help (~30 min, pending).**
-  - `static/keybinds.js` added to `base.html` via `<script
-    defer>`. Only `n` → `/requests/new`, `?` → overlay. Listener
-    is a no-op when an input is focused.
-  - Crawler proof: extend `philosophy` to assert `keybinds.js`
-    is referenced from `base.html` and that it is ≤40 lines
-    (no JS framework creep).
+**Commit 3 — keyboard shortcut `n` + `?` help. ✅ SHIPPED (`bcd3990`, tags `v1.4.1`)**
+  - `static/keybinds.js` (34 lines) loaded via `<script defer>` in
+    `base.html:328`. `n` → `/requests/new`, `?` → toggle
+    `#keybindHelp` overlay, `Esc` → close overlay. No-op when any
+    input / textarea / select / contenteditable is focused, and
+    when any modifier key is held.
+  - Philosophy crawler rule 8 (`crawlers/strategies/philosophy_propagation.py:141-164`)
+    locks the ≤40-line budget: bumps `keybinds_too_long` / `keybinds_missing` /
+    `keybinds_not_linked` on drift.
 
-Budget: each commit is <50 lines of app + template + css diff.
-**Net after this revision: 2 of 3 W1.4.1 commits are in trunk;
-only commit 3 (keybinds.js) remains before tagging v1.4.1.**
+**Status: all three W1.4.1 commits shipped. `v1.4.1` tagged.**
 
 ## Track C — the release gate (split into ops-free + ops-dependent)
 
@@ -250,6 +272,33 @@ the W1.4.1 polish batch:*
    before commit, central-bare sanity wave on every push.
 
 No new crawlers. Sanity stays under 17 s across 7 strategies.
+
+### W1.4.3 — dev_panel + instrument polish (retro, untagged) ✅ SHIPPED
+
+*Not in the original optimized plan — landed as three bundled
+commits in a single focus session on top of `v1.4.1`, before
+`v1.4.2` tagged. Captured here so the history reconciles with
+`git log`.*
+
+1. **`e3157c1` W1.4.3 c1 — inline intake-mode toggle** on
+   `templates/instrument_detail.html`. Two-tap safety (arm →
+   confirm) for toggling an instrument between "accepting" /
+   "hold" / "maintenance" without leaving the detail page.
+   New `static/intake-toggle.js`, wired into `base.html` via
+   `<script defer>`.
+2. **`597640a` W1.4.3 c2 — "Now Shipping" hero tile** on
+   `/admin/dev_panel`. Four-cell dashboard (current release,
+   hot wave, today's commits, last crawler run) answering
+   "what's the state of the project right now" in 5 seconds.
+3. **`94849ae` W1.4.3 c3 — `dev_panel_readability` crawler**
+   strategy that asserts the hero tile, the hot-wave callout,
+   and the reports-freshness widget render on `/admin/dev_panel`.
+   Wired into the `sanity` wave (8th strategy) and caught one
+   real hook-vs-local drift in `6baca66` the same day (git subprocess
+   inheriting `GIT_*` env from the pre-receive hook process).
+
+No new tag. The line remains `v1.4.1` → `HEAD` on
+`v1.3.0-stable-release` until W1.4.2b ships.
 
 ### W1.4.2b — demo goes live (~10 minutes, post-ops)
 
@@ -366,52 +415,67 @@ wave already.
 
 ## Time budget summary
 
-| wave    | track | est.        | blocks               | tag     |
-|---------|-------|-------------|----------------------|---------|
-| W1.3.7  | A     | 30 min      | —                    | — ✅    |
-| W1.3.8  | A     | 1-2 h       | W1.3.7               | v1.3.8 ✅ |
-| W1.3.9  | A     | 15 min ops  | W1.3.8 + ops unblock | v1.3.9  |
-| W1.4.1  | B     | 2 h         | —                    | v1.4.1  |
-| W1.4.2a | C     | 90 min      | —                    | —       |
-| W1.4.2b | C     | 10 min      | W1.3.9 + W1.4.2a     | v1.4.2  |
-| W1.5.0  | v1.5  | 1-2 d       | v1.4.2               | v1.5.0  |
-| W1.5.1  | v1.5  | 1-2 d       | v1.5.0               | v1.5.1  |
+| wave    | track | est.        | blocks               | tag       | status |
+|---------|-------|-------------|----------------------|-----------|--------|
+| W1.3.7  | A     | 30 min      | —                    | —         | ✅     |
+| W1.3.8  | A     | 1-2 h       | W1.3.7               | v1.3.8    | ✅     |
+| W1.3.9  | A     | 15 min ops  | W1.3.8 + ops unblock | v1.3.9    | ops-blocked |
+| W1.4.1  | B     | 2 h         | —                    | v1.4.1    | ✅     |
+| W1.4.2a | C     | 90 min      | —                    | —         | ✅     |
+| W1.4.3  | B     | ~2 h retro  | —                    | —         | ✅     |
+| W1.4.2b | C     | 10 min      | W1.3.9 + W1.4.2a     | v1.4.2    | ops-blocked |
+| W1.5.0  | v1.5  | 1-2 d       | v1.4.2               | v1.5.0    | deferred |
+| W1.5.1  | v1.5  | 1-2 d       | v1.5.0               | v1.5.1    | deferred |
 
-**Total to a live demo URL, measured in focused laptop-local
-work:** W1.4.1 (2 h) + W1.4.2a (90 min) = **~3.5 hours** of
-parallel code work, none of it gated on anything external.
+**All laptop-local critical-path work is done.** The v1.4.1 tag
+is live; W1.4.2a shipped three commits; W1.4.3 shipped three more
+as Jony-Ive polish on top. Grid-overlay was unhooked from the main
+site on 2026-04-11 (`02cb7ce`) and parked for future dev-mode work.
 
 **Ops dependency:** one click at
 https://login.tailscale.com/f/serve . After that click, the
-W1.3.9 + W1.4.2b combo is ~25 minutes from click to live URL.
+W1.3.9 + W1.4.2b combo is ~25 minutes from click to live URL:
+run `scripts/tailscale_serve.sh`, flip `.env`, `launchctl kickstart`,
+`deploy_smoke` from the laptop, then the portfolio button commit
+on `nvishvajeet.github.io` and the `v1.4.2` tag. That is the only
+remaining critical-path work to demo-live.
 
-**Critical path math:** `max(W1.4.1, W1.4.2a) = 2 h` +
-`W1.3.9 + W1.4.2b = 25 min post-click` → **~2 h 25 min of focused
-work** to demo-live, assuming the click lands during the window.
-The old plan estimated "~3 hours" for just Track A and then added
-"2 days" of W1.4.1 on top — net savings vs old plan: ~1.5 days of
-calendar time, ~1 hour of focused work.
+## Ship-today candidates (fresh)
 
-## Ship-today candidates (updated)
+Laptop-local work that can land without any ops dependency or
+external unblock:
 
-Things that can land in the next ~2.5 hours with zero external
-dependencies (no admin console, no ops on the mini):
+1. **Dev-mode overlay revival** (parked by explicit request
+   2026-04-11). See the "Deferred — dev mode overlay" section
+   below. Scope: six steps, no schema, no role bump. Sized for
+   one focused session. **Gated on explicit user approval to
+   un-park.**
+2. **Sample-page (`new_request.html`) layout pass** —
+   `.new-request-layout` currently splits 1.55fr : 0.85fr with
+   the right column holding only a 5-row instrument summary
+   card, wasting ~36% of the page below that card as empty
+   space. Either promote the instrument summary to a full-width
+   header card and let the form span the full page (mirroring
+   the `inst-header` → `inst-tiles` pattern from
+   `instrument_detail.html`), or fill the sidebar with something
+   useful. ~1 h, no schema, no crawler. See "UI uniformity
+   audit" proposal below for whether this should ship as a
+   one-off or as part of a broader per-role audit wave.
+3. **UI uniformity audit wave (proposal, unscoped)** — a new
+   `ui_uniformity` crawler that logs in as every role, visits
+   the ~8 canonical pages (`/`, `/instruments`,
+   `/instruments/<id>`, `/schedule`, `/requests/new`,
+   `/requests/<id>`, `/stats`, `/sitemap`), and asserts that
+   every page wrapper is `<main class="page">`, every hero is a
+   `.inst-header`-shaped header, every content region is a
+   `.tile`-family grid, and every form uses the shared
+   `.form-grid` macro. Goal: reject new pages that invent their
+   own layout. Size and whether it belongs in `sanity` or
+   `behavioral` is TBD — not a self-executable task until the
+   scope is locked.
 
-1. **W1.4.1 commit 3** — `static/keybinds.js` (<40 lines), wired
-   into `base.html`, philosophy crawler extension. **Tags v1.4.1.**
-   ~30 min.
-2. **W1.4.2a commit 1** — `CHANGELOG.md` entries for every tag
-   since v1.3.5. ~30 min.
-3. **W1.4.2a commit 2** — `README.md` quickstart (5 lines).
-   ~15 min.
-4. **W1.4.2a commit 3** — pre-push hook on the laptop bare. ~30 min.
-
-Four commits over ~2 hours (commits 1b and 2 of W1.4.1 shipped
-while this plan was being optimized — `455ffb7` and `db7bc19`).
-Every remaining item is independently valuable and lands on the
-laptop bare immediately, so the ops click (whenever it happens)
-has almost no work left in front of it — just the 25-minute
-Tailscale ceremony + portfolio button.
+W1.3.9 + W1.4.2b are deliberately **not** on this list because
+they are ops-gated, not laptop-local.
 
 ## Guardrails (unchanged from `ROADMAP.md`)
 

@@ -293,6 +293,104 @@ to collect a complete backlog of findings.
 
 ---
 
+## Remote server access for other agents
+
+PRISM's canonical git remote lives on a Mac mini in India, reachable
+only over Tailscale. Other agents (Claude Code instances on other
+machines, CI jobs, a second developer) can connect to it through the
+same SSH-to-git bridge this repo already uses.
+
+### What the remote is
+
+- **Host:** `vishwajeet@100.115.176.118` (Tailscale IP, not public)
+- **Repo path:** `~/git/lab-scheduler.git` (bare)
+- **Branch of record:** `v1.3.0-stable-release`
+- **Transport:** SSH with `publickey` auth — no password, no HTTPS,
+  no GitHub mirror. The Mac mini is the origin.
+
+### Prerequisites for a new agent / machine
+
+1. **Tailscale** installed and logged into the same tailnet. Without
+   Tailscale the IP `100.115.176.118` is unreachable.
+2. **SSH key** generated locally (`ssh-keygen -t ed25519`) and the
+   public key (`~/.ssh/id_ed25519.pub`) appended to
+   `~/.ssh/authorized_keys` on the Mac mini. One-shot:
+   ```bash
+   ssh-copy-id -i ~/.ssh/id_ed25519.pub vishwajeet@100.115.176.118
+   ```
+3. **`~/.ssh/config` hygiene.** If the host's default config has
+   macOS-only keys like `UseKeychain`, add this guard at the very
+   top so non-macOS ssh clients don't choke:
+   ```
+   IgnoreUnknown UseKeychain,AddKeysToAgent
+   ```
+4. **Force the right identity.** If ssh-agent has other keys loaded
+   the Mac mini will hit `MaxAuthTries` before reaching the right
+   one. Always pin the key explicitly:
+   ```
+   Host prism-mini
+       HostName 100.115.176.118
+       User vishwajeet
+       IdentityFile ~/.ssh/id_ed25519
+       IdentitiesOnly yes
+   ```
+
+### Clone
+
+```bash
+git clone vishwajeet@100.115.176.118:~/git/lab-scheduler.git Scheduler
+cd Scheduler
+git checkout v1.3.0-stable-release
+git config core.sshCommand "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+```
+
+The `core.sshCommand` line persists the right SSH invocation on the
+clone, so `git pull` / `git push` work without environment hacks.
+
+### Verify
+
+```bash
+ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+    vishwajeet@100.115.176.118 "hostname && ls ~/git/lab-scheduler.git"
+git ls-remote origin
+```
+
+Both should succeed silently. If either prompts for a password or
+returns `Permission denied (publickey)`, fix the key / config
+before running any git commands.
+
+### Agent kickoff prompt
+
+Copy-paste this into a new Claude Code session (or equivalent agent
+harness) on any machine that has met the prerequisites above:
+
+> You are joining the PRISM / Lab Scheduler project as a secondary
+> agent. The canonical git remote is a Mac mini reachable only over
+> Tailscale at `vishwajeet@100.115.176.118:~/git/lab-scheduler.git`,
+> branch `v1.3.0-stable-release`. Before touching any code:
+>
+> 1. Confirm Tailscale is up (`tailscale status`) and the mini is
+>    reachable (`ping -c1 100.115.176.118`).
+> 2. Verify SSH works with an explicit identity:
+>    `ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes vishwajeet@100.115.176.118 hostname`
+> 3. Clone with `git clone vishwajeet@100.115.176.118:~/git/lab-scheduler.git`,
+>    then `git config core.sshCommand "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"`
+>    inside the clone.
+> 4. Read `PHILOSOPHY.md`, `README.md`, `ROADMAP.md`, and
+>    `HANDOVER.md` before editing anything.
+> 5. Default rhythm: **pull → work → smoke test → commit → push.**
+>    The pre-push gate is `.venv/bin/python -m crawlers wave sanity`.
+>    Never skip it. Never force-push. Never rewrite history on
+>    `v1.3.0-stable-release`.
+> 6. Hard attributes (data model, routes, roles, audit chain, tile
+>    architecture) are locked — see `PHILOSOPHY.md` §2. Soft
+>    attributes (copy, colour, layout) are fair game.
+>
+> Your first action is to run `git pull` and report the latest
+> three commits on `v1.3.0-stable-release`, then wait for a task.
+
+---
+
 ## AI agent workflow rules
 
 1. **Read `PHILOSOPHY.md` first, every session.** It is
@@ -320,3 +418,29 @@ to collect a complete backlog of findings.
    See `PHILOSOPHY.md` §2.
 10. **The website stays up.** Deploys to the Mac mini are atomic:
     pull → smoke → kickstart. Never interrupt live users.
+11. **Portfolio recommendation refresh — one per day.** Whenever a
+    Claude (or other LLM) agent touches this repo, check whether
+    `~/Downloads/portfolio-plan/commentary_state.json` was generated
+    today (compare its `generated_at` field to the current local
+    date). If it is missing or stale:
+    - Run `cd ~/Downloads/portfolio-plan && ./run.sh quick` to
+      refresh the deterministic Python pipeline (NAVs, Nifty z-score,
+      drift, 14-day forecast, daily_state.json).
+    - Read `daily_state.json`, `market_snapshot.json`,
+      `analysis_state.json`, and (if present) `news_digest.json` +
+      `macro_state.json`.
+    - Write a fresh `commentary_state.json` to the portfolio-plan
+      directory with the schema documented in
+      `~/Downloads/portfolio-plan/README.md` (`generated_at`,
+      `model`, `nifty_z`, `multiplier`, `today_total`, `text`,
+      `verdict`). Keep the `text` under 200 words; the `verdict` is
+      one line.
+    - If the file is already fresh for today, do NOT regenerate —
+      one recommendation per day, and the time of day shapes the
+      verdict (before 13:30 IST = same-day NAV; after = T+1).
+    - The deterministic per-fund amounts are authoritative. The LLM
+      adds context, never overrides numbers. Never recommend selling
+      equity. The Flask `/admin/portfolio` panel reads
+      `commentary_state.json` automatically — no restart, no commit.
+    See `~/Downloads/portfolio-plan/README.md` for the full rules
+    that govern that sibling repo.

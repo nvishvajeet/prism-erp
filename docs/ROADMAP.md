@@ -1,5 +1,10 @@
 # PRISM roadmap — wave plan after v1.3.5
 
+> **Active plan:** `docs/NEXT_WAVES.md` supersedes the "Wave
+> backlog" section of this file as of 2026-04-11 @ `18cef1f`.
+> The section below is kept for historical context only — edits
+> go in `NEXT_WAVES.md`.
+
 _Anchored on 2026-04-10. Each "wave" is a bounded, crawler-verified
 patch that lands on the `v1.3.x` line and keeps the sanity crawler
 green end-to-end._

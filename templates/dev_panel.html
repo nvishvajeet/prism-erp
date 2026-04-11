@@ -95,6 +95,56 @@
     </div>
   </section>
 
+  {# ── Tile: Waves (task + progress panel) ── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("WAVES", "Next-waves pipeline") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if waves %}
+        {% set shipped = waves|selectattr("status", "equalto", "shipped")|list|length %}
+        {% set total = waves|length %}
+        {% set pct = (shipped * 100 / total) if total > 0 else 0 %}
+        {{ chart_bar("Pipeline", (shipped|string) ~ "/" ~ (total|string), pct) }}
+        <ul class="dp-wave-list" data-vis="{{ V }}">
+          {% for w in waves %}
+          <li class="dp-wave-row dp-wave-{{ w.status }}" data-vis="{{ V }}">
+            <span class="dp-wave-mark" data-vis="{{ V }}">{% if w.status == "shipped" %}✓{% elif w.status == "hot" %}▶{% else %}○{% endif %}</span>
+            <strong class="dp-wave-id" data-vis="{{ V }}">{{ w.wave }}</strong>
+            <span class="dp-wave-track" data-vis="{{ V }}">{{ w.track }}</span>
+            <span class="dp-wave-est" data-vis="{{ V }}">{{ w.est }}</span>
+            {% if w.tag and w.tag not in ("—", "-") %}
+            <span class="dp-wave-tag" data-vis="{{ V }}">{{ w.tag }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        {{ empty_state("No waves parsed from NEXT_WAVES.md.") }}
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Tile: Crawler Health ── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("CRAWLERS", "Last report health") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(crawler_health.passed, "Passed", "#", tone="completed") }}
+      {{ stat_blob(crawler_health.failed, "Failed", "#", tone="open") }}
+      {{ stat_blob(crawler_health.warnings, "Warnings", "#", tone="wait") }}
+      {{ stat_blob(crawler_health.rows|length, "Strategies", "#", tone="active") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if crawler_health.rows %}
+      <ul class="dp-crawler-list" data-vis="{{ V }}">
+        {% for r in crawler_health.rows[:10] %}
+        {{ chart_bar(r.strategy, (r.passed|string) ~ "/" ~ (r.total|string) ~ (r.failed > 0 and (" · " ~ r.failed|string ~ "F") or ""), r.pct) }}
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No crawler reports yet. Run `python -m crawlers wave sanity`.") }}
+      {% endif %}
+    </div>
+  </section>
+
   {# ── Tile: Document Viewer ── #}
   <section class="card tile tile-edit" data-vis="{{ V }}">
     {{ card_heading("DOCS", "In-page document viewer") }}

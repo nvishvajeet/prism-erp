@@ -5786,6 +5786,7 @@ DEV_PANEL_DOC_FILES = (
     "DEPLOY.md",
     "PROJECT.md",
     "ROADMAP.md",
+    "NEXT_WAVES.md",
     "HANDOVER.md",
     "MODULES.md",
     "DATA_POLICY.md",
@@ -5794,6 +5795,98 @@ DEV_PANEL_DOC_FILES = (
     "SECURITY_TODO.md",
     "CSS_COMPONENT_MAP.md",
 )
+
+
+def _dev_panel_waves() -> list[dict]:
+    """Parse the 'Time budget summary' table from docs/NEXT_WAVES.md.
+
+    Each row becomes a dict with keys: wave, track, est, blocks, tag,
+    status. Status is 'shipped' if the row's tag appears as a git tag,
+    'hot' if the wave is the first unshipped row, 'pending' otherwise.
+    Dev portal uses this to drive the WAVES tile.
+    """
+    path = BASE_DIR / "docs" / "NEXT_WAVES.md"
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    in_table = False
+    for raw in path.read_text(errors="ignore").splitlines():
+        line = raw.strip()
+        if line.startswith("| wave") and "track" in line:
+            in_table = True
+            continue
+        if in_table:
+            if not line.startswith("|"):
+                break
+            if set(line.replace("|", "").strip()) <= {"-", ":", " "}:
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 5:
+                continue
+            rows.append({
+                "wave": cells[0],
+                "track": cells[1],
+                "est": cells[2],
+                "blocks": cells[3],
+                "tag": cells[4],
+                "status": "pending",
+            })
+    shipped_tags = set(_dev_panel_git("tag", "--list").splitlines())
+    first_unshipped = True
+    for row in rows:
+        tag_clean = row["tag"].replace("v", "")
+        if row["tag"] and row["tag"] not in ("—", "-") and (
+            row["tag"] in shipped_tags or ("v" + tag_clean) in shipped_tags
+        ):
+            row["status"] = "shipped"
+        elif first_unshipped and row["wave"].startswith("W"):
+            row["status"] = "hot"
+            first_unshipped = False
+    return rows
+
+
+def _dev_panel_crawler_health() -> dict:
+    """Summarise the latest crawler reports under ./reports/*_log.json.
+
+    Returns totals and per-strategy rows for the CRAWLER HEALTH tile.
+    Missing reports dir → empty summary (tile renders empty-state).
+    """
+    reports_dir = BASE_DIR / "reports"
+    if not reports_dir.exists():
+        return {"total": 0, "passed": 0, "failed": 0, "warnings": 0, "rows": []}
+    rows: list[dict] = []
+    totals = {"passed": 0, "failed": 0, "warnings": 0}
+    for log in sorted(reports_dir.glob("*_log.json")):
+        try:
+            data = json.loads(log.read_text(errors="ignore"))
+        except Exception:
+            continue
+        result = data.get("result") or {}
+        passed = int(result.get("passed", 0) or 0)
+        failed = int(result.get("failed", 0) or 0)
+        warnings = int(result.get("warnings", 0) or 0)
+        total = passed + failed + warnings
+        if total == 0:
+            continue
+        pct = int(round(100 * passed / total)) if total else 0
+        rows.append({
+            "strategy": data.get("strategy") or log.stem.replace("_log", ""),
+            "aspect": data.get("aspect") or "—",
+            "passed": passed,
+            "failed": failed,
+            "warnings": warnings,
+            "total": total,
+            "pct": pct,
+        })
+        totals["passed"] += passed
+        totals["failed"] += failed
+        totals["warnings"] += warnings
+    rows.sort(key=lambda r: (-r["failed"], -r["warnings"], r["strategy"]))
+    return {
+        "total": totals["passed"] + totals["failed"] + totals["warnings"],
+        **totals,
+        "rows": rows,
+    }
 
 
 def _dev_panel_git(*args: str) -> str:
@@ -5884,9 +5977,13 @@ def _dev_panel_safe_doc_name(name: str) -> str | None:
 def dev_panel():
     """Owner-only development control panel."""
     progress = _dev_panel_progress()
+    waves = _dev_panel_waves()
+    crawler_health = _dev_panel_crawler_health()
     return render_template(
         "dev_panel.html",
         progress=progress,
+        waves=waves,
+        crawler_health=crawler_health,
         doc_files=DEV_PANEL_DOC_FILES,
     )
 

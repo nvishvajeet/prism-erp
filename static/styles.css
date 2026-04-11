@@ -7312,6 +7312,19 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dp-commit-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.82rem; align-items: baseline; }
 .dp-metadata-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.85rem; }
 .dp-bridge-detail { margin: 0.1rem 0 0.5rem; font-size: 0.75rem; }
+.dp-wave-list { list-style: none; padding: 0; margin: 0.25rem 0 0.25rem; }
+.dp-wave-row { display: grid; grid-template-columns: 1rem 4.5rem 1.2rem 5rem 1fr; align-items: baseline; gap: 0.45rem; padding: 0.18rem 0; font-size: 0.8rem; border-bottom: 1px dashed var(--border, #e4e6ec); }
+.dp-wave-row:last-child { border-bottom: 0; }
+.dp-wave-mark { text-align: center; opacity: 0.75; font-weight: 600; }
+.dp-wave-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+.dp-wave-track { display: inline-block; text-align: center; border-radius: 999px; background: var(--surface-2, #f0f2f7); font-size: 0.7rem; padding: 0 0.35rem; opacity: 0.85; }
+.dp-wave-est { opacity: 0.7; font-size: 0.75rem; }
+.dp-wave-tag { justify-self: end; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; opacity: 0.65; }
+.dp-wave-shipped { opacity: 0.55; }
+.dp-wave-shipped .dp-wave-id { text-decoration: line-through; }
+.dp-wave-hot { background: linear-gradient(90deg, rgba(76,110,245,0.08), transparent); border-left: 2px solid var(--accent, #4c6ef5); padding-left: 0.35rem; }
+.dp-wave-hot .dp-wave-mark { color: var(--accent, #4c6ef5); }
+.dp-crawler-list { list-style: none; padding: 0; margin: 0; }
 
 /* ──────────────────────────────────────────────────────────────────── */
 /* UNIVERSAL TILE GRIDS — v1.3.1                                        */

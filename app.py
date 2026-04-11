@@ -5423,82 +5423,139 @@ def message_send():
 @app.route("/finance")
 @login_required
 def finance_portal():
-    """v1.7.0 — Finance portal. ERP-ready proof point: a new portal
-    dropped in on top of the existing sample_requests finance columns
-    (amount_due / amount_paid / finance_status / receipt_number) plus
-    the existing finance_admin role gate. Zero schema change.
+    """v2.0.0-alpha.2 — Finance portal reads from the new peer aggregates.
 
-    Gated to finance_admin / super_admin / site_admin / owner. Every
-    other role gets a 403. Ferrari-dashboard aesthetic: KPI row on
-    top, by-instrument aggregation, outstanding invoices, recent
-    receipts, all read from the one source-of-truth table.
+    The v1.7.0 implementation read SUM(amount_due) / SUM(amount_paid) /
+    finance_status straight off sample_requests. alpha.1 added the peer
+    tables (invoices, payments, projects, grant_allocations) and
+    dual-wrote them via _backfill_domain_split(). alpha.2 (this step)
+    flips the read path: every number on /finance now comes from
+    invoices + payments, with finance_status derived at read time from
+    SUM(payments.amount) vs invoices.amount_due — no denormalized status
+    column that could drift.
+
+    The legacy columns on sample_requests are still being written, so
+    this tag is reversible: if a bug surfaces on the new path, revert
+    the route bodies and /finance returns to reading the old columns.
+    alpha.3 will stop writing the legacy columns; beta.1 drops them.
+
+    Row shape into the template is preserved — `outstanding` and
+    `recently_paid` rows still expose `amount_due`, `amount_paid`,
+    `finance_status`, `receipt_number`, so finance.html does not change.
+
+    Gated to finance_admin / super_admin / site_admin / owner.
     """
     user = current_user()
     roles = user_role_set(user)
     if not (roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user)):
         abort(403)
-    # KPIs — the four headline numbers in the hero row.
+    # KPIs — headline row. Computed over invoices joined to external
+    # sample_requests, with paid-sum derived from payments.
     kpi_row = query_one(
         """
         SELECT
-            COALESCE(SUM(CASE WHEN sample_origin = 'external' THEN amount_due ELSE 0 END), 0) AS total_owed,
-            COALESCE(SUM(CASE WHEN sample_origin = 'external' THEN amount_paid ELSE 0 END), 0) AS total_paid,
-            COUNT(CASE WHEN sample_origin = 'external' AND finance_status IN ('pending', 'partial') THEN 1 END) AS pending_count,
-            COUNT(CASE WHEN sample_origin = 'external' AND finance_status = 'paid' THEN 1 END) AS paid_count
-          FROM sample_requests
+          COALESCE(SUM(inv.amount_due), 0) AS total_owed,
+          COALESCE(SUM(COALESCE(p.paid, 0)), 0) AS total_paid,
+          COUNT(CASE WHEN COALESCE(p.paid, 0) < inv.amount_due THEN 1 END) AS pending_count,
+          COUNT(CASE WHEN COALESCE(p.paid, 0) >= inv.amount_due AND inv.amount_due > 0 THEN 1 END) AS paid_count
+        FROM invoices inv
+        JOIN sample_requests sr ON sr.id = inv.request_id
+        LEFT JOIN (
+          SELECT invoice_id, SUM(amount) AS paid
+            FROM payments
+           GROUP BY invoice_id
+        ) p ON p.invoice_id = inv.id
+        WHERE sr.sample_origin = 'external'
         """
     )
     kpis = dict(kpi_row) if kpi_row else {
         "total_owed": 0, "total_paid": 0, "pending_count": 0, "paid_count": 0,
     }
-    # Outstanding = owed minus paid, positive only.
     kpis["outstanding"] = max(0, (kpis["total_owed"] or 0) - (kpis["total_paid"] or 0))
-    # By-instrument aggregation for the middle tile.
+
+    # By-instrument aggregation — subquery per metric keeps the join
+    # graph shallow and makes each column independently auditable.
     by_instrument = query_all(
         """
-        SELECT i.code, i.name,
-               COUNT(sr.id)                                                 AS total_requests,
-               COALESCE(SUM(CASE WHEN sr.sample_origin='external' THEN sr.amount_due  ELSE 0 END),0) AS owed,
-               COALESCE(SUM(CASE WHEN sr.sample_origin='external' THEN sr.amount_paid ELSE 0 END),0) AS paid
-          FROM instruments i
-          LEFT JOIN sample_requests sr ON sr.instrument_id = i.id
-         WHERE i.status = 'active'
-         GROUP BY i.id
-         HAVING total_requests > 0
-         ORDER BY owed DESC
-         LIMIT 20
+        SELECT
+          i.code, i.name,
+          (SELECT COUNT(*) FROM sample_requests WHERE instrument_id = i.id) AS total_requests,
+          COALESCE((
+            SELECT SUM(inv.amount_due)
+              FROM invoices inv
+              JOIN sample_requests sr ON sr.id = inv.request_id
+             WHERE sr.instrument_id = i.id AND sr.sample_origin = 'external'
+          ), 0) AS owed,
+          COALESCE((
+            SELECT SUM(p.amount)
+              FROM payments p
+              JOIN invoices inv ON inv.id = p.invoice_id
+              JOIN sample_requests sr ON sr.id = inv.request_id
+             WHERE sr.instrument_id = i.id AND sr.sample_origin = 'external'
+          ), 0) AS paid
+        FROM instruments i
+        WHERE i.status = 'active'
+          AND (SELECT COUNT(*) FROM sample_requests WHERE instrument_id = i.id) > 0
+        ORDER BY owed DESC
+        LIMIT 20
         """
     )
-    # Outstanding invoices list — external requests with non-paid
-    # finance_status, newest first. Capped so /finance stays fast
-    # even when a facility scales past a few hundred invoices.
+
+    # Outstanding list — invoices with SUM(payments) < amount_due.
+    # finance_status is derived on the fly; receipt_number taken from
+    # the most recent payment row on that invoice (NULL for pure-pending).
     outstanding = query_all(
         """
-        SELECT sr.id, sr.request_no, sr.title, sr.receipt_number,
-               sr.amount_due, sr.amount_paid, sr.finance_status, sr.created_at,
-               i.code AS instrument_code, i.name AS instrument_name,
-               u.name AS requester_name
-          FROM sample_requests sr
-          JOIN instruments i ON i.id = sr.instrument_id
-          LEFT JOIN users u ON u.id = sr.requester_id
-         WHERE sr.sample_origin = 'external'
-           AND sr.finance_status IN ('pending', 'partial')
-         ORDER BY sr.created_at DESC
-         LIMIT 30
+        SELECT
+          sr.id, sr.request_no, sr.title, sr.created_at,
+          inv.amount_due,
+          COALESCE(p.paid, 0) AS amount_paid,
+          CASE
+            WHEN COALESCE(p.paid, 0) = 0 THEN 'pending'
+            WHEN COALESCE(p.paid, 0) < inv.amount_due THEN 'partial'
+            ELSE 'paid'
+          END AS finance_status,
+          (SELECT receipt_number FROM payments
+            WHERE invoice_id = inv.id
+            ORDER BY paid_at DESC LIMIT 1) AS receipt_number,
+          i.code AS instrument_code, i.name AS instrument_name,
+          u.name AS requester_name
+        FROM invoices inv
+        JOIN sample_requests sr ON sr.id = inv.request_id
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN users u ON u.id = sr.requester_id
+        LEFT JOIN (
+          SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id
+        ) p ON p.invoice_id = inv.id
+        WHERE sr.sample_origin = 'external'
+          AND COALESCE(p.paid, 0) < inv.amount_due
+        ORDER BY sr.created_at DESC
+        LIMIT 30
         """
     )
-    # Recently paid invoices — proof that money is flowing.
+
+    # Recently paid — invoices where SUM(payments) >= amount_due > 0.
     recently_paid = query_all(
         """
-        SELECT sr.id, sr.request_no, sr.title, sr.receipt_number,
-               sr.amount_due, sr.amount_paid, sr.created_at,
-               i.code AS instrument_code
-          FROM sample_requests sr
-          JOIN instruments i ON i.id = sr.instrument_id
-         WHERE sr.sample_origin = 'external'
-           AND sr.finance_status = 'paid'
-         ORDER BY sr.created_at DESC
-         LIMIT 15
+        SELECT
+          sr.id, sr.request_no, sr.title, sr.created_at,
+          inv.amount_due,
+          COALESCE(p.paid, 0) AS amount_paid,
+          (SELECT receipt_number FROM payments
+            WHERE invoice_id = inv.id
+            ORDER BY paid_at DESC LIMIT 1) AS receipt_number,
+          i.code AS instrument_code
+        FROM invoices inv
+        JOIN sample_requests sr ON sr.id = inv.request_id
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN (
+          SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id
+        ) p ON p.invoice_id = inv.id
+        WHERE sr.sample_origin = 'external'
+          AND inv.amount_due > 0
+          AND COALESCE(p.paid, 0) >= inv.amount_due
+        ORDER BY sr.created_at DESC
+        LIMIT 15
         """
     )
     return render_template(
@@ -5520,35 +5577,63 @@ def _user_can_view_finance(user: sqlite3.Row | None) -> bool:
 @app.route("/finance/grants")
 @login_required
 def finance_grants_list():
-    """Grant inventory with per-grant spend aggregation. Same finance
-    gate as the main portal. Spend is computed at read time as
-    SUM(amount_paid) over sample_requests.grant_id → no denormalized
-    spend column that could drift."""
+    """v2.0.0-alpha.2 — Grants inventory reads via the new peer graph.
+
+    Old path: spend = SUM(sample_requests.amount_paid) WHERE grant_id = g.id
+    New path: grants → grant_allocations → projects → sample_requests →
+              invoices → payments
+
+    The graph is longer but the semantics are the same — every row that
+    used to be reachable via sample_requests.grant_id is now reachable
+    via the allocation table after the alpha.1 backfill. The domain
+    split test suite locks this invariant."""
     user = current_user()
     if not _user_can_view_finance(user):
         abort(403)
     rows = query_all(
         """
-        SELECT g.id, g.code, g.name, g.sponsor, g.total_budget,
-               g.start_date, g.end_date, g.status, g.notes,
-               pi.name AS pi_name, pi.email AS pi_email,
-               COALESCE((SELECT SUM(sr.amount_paid) FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS spend_paid,
-               COALESCE((SELECT SUM(sr.amount_due)  FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS spend_billed,
-               COALESCE((SELECT COUNT(*)            FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS sample_count
-          FROM grants g
-          LEFT JOIN users pi ON pi.id = g.pi_user_id
-         ORDER BY
-            CASE g.status WHEN 'active' THEN 0 ELSE 1 END,
-            g.end_date
+        SELECT
+          g.id, g.code, g.name, g.sponsor, g.total_budget,
+          g.start_date, g.end_date, g.status, g.notes,
+          pi.name AS pi_name, pi.email AS pi_email,
+          COALESCE((
+            SELECT SUM(p.amount)
+              FROM payments p
+              JOIN invoices inv ON inv.id = p.invoice_id
+              JOIN sample_requests sr ON sr.id = inv.request_id
+              JOIN grant_allocations ga ON ga.project_id = sr.project_id
+             WHERE ga.grant_id = g.id
+          ), 0) AS spend_paid,
+          COALESCE((
+            SELECT SUM(inv.amount_due)
+              FROM invoices inv
+              JOIN sample_requests sr ON sr.id = inv.request_id
+              JOIN grant_allocations ga ON ga.project_id = sr.project_id
+             WHERE ga.grant_id = g.id
+          ), 0) AS spend_billed,
+          COALESCE((
+            SELECT COUNT(DISTINCT sr.id)
+              FROM sample_requests sr
+              JOIN grant_allocations ga ON ga.project_id = sr.project_id
+             WHERE ga.grant_id = g.id
+          ), 0) AS sample_count
+        FROM grants g
+        LEFT JOIN users pi ON pi.id = g.pi_user_id
+        ORDER BY
+          CASE g.status WHEN 'active' THEN 0 ELSE 1 END,
+          g.end_date
         """
     )
     totals_row = query_one(
         """
         SELECT
-            COALESCE(SUM(g.total_budget), 0) AS total_budget,
-            COALESCE(SUM((SELECT SUM(sr.amount_paid) FROM sample_requests sr WHERE sr.grant_id = g.id)), 0) AS total_paid,
-            COUNT(*) AS grant_count
-          FROM grants g
+          (SELECT COALESCE(SUM(total_budget), 0) FROM grants) AS total_budget,
+          (SELECT COUNT(*) FROM grants) AS grant_count,
+          (SELECT COALESCE(SUM(p.amount), 0)
+             FROM payments p
+             JOIN invoices inv ON inv.id = p.invoice_id
+             JOIN sample_requests sr ON sr.id = inv.request_id
+             JOIN grant_allocations ga ON ga.project_id = sr.project_id) AS total_paid
         """
     )
     totals = dict(totals_row) if totals_row else {
@@ -5565,8 +5650,12 @@ def finance_grants_list():
 @app.route("/finance/grants/<int:grant_id>")
 @login_required
 def finance_grant_detail(grant_id: int):
-    """Single-grant drill-down. Header KPIs + every sample_request
-    charged to it, newest first."""
+    """v2.0.0-alpha.2 — Single-grant drill-down via the peer graph.
+
+    Walks grant → grant_allocations → projects → sample_requests →
+    invoices → payments. amount_due / amount_paid / finance_status /
+    receipt_number are derived per row; the template iteration
+    variable name (`inv`) is unchanged."""
     user = current_user()
     if not _user_can_view_finance(user):
         abort(403)
@@ -5583,17 +5672,31 @@ def finance_grant_detail(grant_id: int):
         abort(404)
     charged = query_all(
         """
-        SELECT sr.id, sr.request_no, sr.title, sr.created_at,
-               sr.amount_due, sr.amount_paid, sr.finance_status,
-               sr.receipt_number, sr.sample_origin,
-               i.code AS instrument_code, i.name AS instrument_name,
-               u.name AS requester_name
-          FROM sample_requests sr
-          JOIN instruments i ON i.id = sr.instrument_id
-          LEFT JOIN users u ON u.id = sr.requester_id
-         WHERE sr.grant_id = ?
-         ORDER BY sr.created_at DESC
-         LIMIT 200
+        SELECT
+          sr.id, sr.request_no, sr.title, sr.created_at, sr.sample_origin,
+          COALESCE(inv.amount_due, 0) AS amount_due,
+          COALESCE((
+            SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = inv.id
+          ), 0) AS amount_paid,
+          CASE
+            WHEN inv.id IS NULL THEN 'n/a'
+            WHEN COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id = inv.id), 0) = 0 THEN 'pending'
+            WHEN COALESCE((SELECT SUM(amount) FROM payments WHERE invoice_id = inv.id), 0) < inv.amount_due THEN 'partial'
+            ELSE 'paid'
+          END AS finance_status,
+          (SELECT receipt_number FROM payments
+            WHERE invoice_id = inv.id
+            ORDER BY paid_at DESC LIMIT 1) AS receipt_number,
+          i.code AS instrument_code, i.name AS instrument_name,
+          u.name AS requester_name
+        FROM grant_allocations ga
+        JOIN sample_requests sr ON sr.project_id = ga.project_id
+        LEFT JOIN invoices inv ON inv.request_id = sr.id
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN users u ON u.id = sr.requester_id
+        WHERE ga.grant_id = ?
+        ORDER BY sr.created_at DESC
+        LIMIT 200
         """,
         (grant_id,),
     )

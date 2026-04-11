@@ -5629,8 +5629,67 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dp-wave-tag { justify-self: end; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; opacity: 0.65; }
 .dp-wave-shipped { opacity: 0.55; }
 .dp-wave-shipped .dp-wave-id { text-decoration: line-through; }
-.dp-wave-hot { background: linear-gradient(90deg, rgba(76,110,245,0.08), transparent); border-left: 2px solid var(--accent, #4c6ef5); padding-left: 0.35rem; }
+.dp-wave-hot { background: linear-gradient(90deg, rgba(76,110,245,0.14), transparent); border-left: 3px solid var(--accent, #4c6ef5); padding-left: 0.35rem; }
 .dp-wave-hot .dp-wave-mark { color: var(--accent, #4c6ef5); }
+.dp-wave-hot .dp-wave-id { color: var(--accent, #4c6ef5); }
+.dp-wave-hot-pill {
+  justify-self: end;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: var(--accent, #4c6ef5);
+  color: #fff;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  animation: dp-wave-hot-pulse 1.8s ease-in-out infinite;
+}
+@keyframes dp-wave-hot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #4c6ef5) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #4c6ef5) 0%, transparent); }
+}
+.dp-commit-when { margin-left: auto; font-size: 0.72rem; opacity: 0.7; }
+
+/* W1.4.3 c2 — Dev panel "Now Shipping" hero tile. */
+.tile-dev-now-shipping {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent, #4c6ef5) 6%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid var(--accent, #4c6ef5);
+}
+.dev-now-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.35rem;
+}
+.dev-now-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel);
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+}
+.dev-now-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.dev-now-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.dev-now-hot-value { color: var(--accent, #4c6ef5); }
+.dev-now-reports-fresh { color: #2f9e44; }
+.dev-now-reports-ok    { color: var(--ink); }
+.dev-now-reports-stale { color: #c34a4a; }
+.dev-now-pipeline { margin-top: 0.65rem; }
 .dp-crawler-list { list-style: none; padding: 0; margin: 0; }
 
 /* ──────────────────────────────────────────────────────────────────── */

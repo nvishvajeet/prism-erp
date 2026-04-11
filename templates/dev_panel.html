@@ -17,6 +17,64 @@
 {# ─── Tile Grid ──────────────────────────────────────── #}
 <div class="inst-tiles" data-vis="{{ V }}">
 
+  {# ─── Hero: Now Shipping — "you are here" at a glance. ───
+       Answers four questions in 5 seconds: what's the current
+       release, which wave is hot right now, did anything ship
+       today, and when did the crawlers last run. W1.4.3 c2. #}
+  <section class="card tile tile-dev-now-shipping" id="devNowShipping" data-vis="{{ V }}">
+    {{ card_heading("NOW SHIPPING", "You are here") }}
+    <div class="dev-now-grid" data-vis="{{ V }}">
+      <div class="dev-now-cell dev-now-release" data-vis="{{ V }}">
+        <span class="dev-now-label" data-vis="{{ V }}">Current release</span>
+        <strong class="dev-now-value dev-now-release-value" data-vis="{{ V }}">v{{ progress.current_release }}</strong>
+        <span class="hint" data-vis="{{ V }}">branch <code class="inline-code">{{ progress.branch }}</code></span>
+      </div>
+      <div class="dev-now-cell dev-now-hot" data-vis="{{ V }}">
+        <span class="dev-now-label" data-vis="{{ V }}">Hot wave</span>
+        {% if hot_wave %}
+        <strong class="dev-now-value dev-now-hot-value" id="devNowHotWave" data-vis="{{ V }}">{{ hot_wave.wave }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ hot_wave.track }} · {{ hot_wave.est }}{% if hot_wave.tag and hot_wave.tag not in ("—", "-") %} · target <code class="inline-code">{{ hot_wave.tag }}</code>{% endif %}</span>
+        {% else %}
+        <strong class="dev-now-value" data-vis="{{ V }}">—</strong>
+        <span class="hint" data-vis="{{ V }}">All tracked waves shipped.</span>
+        {% endif %}
+      </div>
+      <div class="dev-now-cell dev-now-commits" data-vis="{{ V }}">
+        <span class="dev-now-label" data-vis="{{ V }}">Today's commits</span>
+        <strong class="dev-now-value dev-now-commits-value" id="devNowCommitsToday" data-vis="{{ V }}">{{ progress.commits_today }}</strong>
+        {% if progress.last_commit_at %}
+        <span class="hint" data-vis="{{ V }}">last at {{ progress.last_commit_at[:16]|replace("T", " ") }} UTC</span>
+        {% else %}
+        <span class="hint" data-vis="{{ V }}">no commits yet</span>
+        {% endif %}
+      </div>
+      <div class="dev-now-cell dev-now-reports" data-vis="{{ V }}">
+        <span class="dev-now-label" data-vis="{{ V }}">Crawlers last ran</span>
+        {% if progress.reports_latest_age_hours is not none %}
+        {% set age = progress.reports_latest_age_hours %}
+        {% if age < 1 %}
+          {% set age_label = (age * 60)|round(0, 'floor')|int ~ "m ago" %}
+          {% set age_tone = "fresh" %}
+        {% elif age < 24 %}
+          {% set age_label = age|round(0, 'floor')|int ~ "h ago" %}
+          {% set age_tone = "ok" %}
+        {% else %}
+          {% set age_label = (age / 24)|round(0, 'floor')|int ~ "d ago" %}
+          {% set age_tone = "stale" %}
+        {% endif %}
+        <strong class="dev-now-value dev-now-reports-value dev-now-reports-{{ age_tone }}" id="devNowReports" data-vis="{{ V }}">{{ age_label }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ progress.reports_latest_at[:16]|replace("T", " ") }}</span>
+        {% else %}
+        <strong class="dev-now-value dev-now-reports-stale" id="devNowReports" data-vis="{{ V }}">never</strong>
+        <span class="hint" data-vis="{{ V }}">run <code class="inline-code">python -m crawlers wave sanity</code></span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="dev-now-pipeline" data-vis="{{ V }}">
+      {{ chart_bar("Pipeline", (pipeline_shipped|string) ~ "/" ~ (pipeline_total|string), (pipeline_shipped * 100 / pipeline_total) if pipeline_total > 0 else 0) }}
+    </div>
+  </section>
+
   {# ── Tile: Project Progress ── #}
   <section class="card tile tile-stats" data-vis="{{ V }}">
     {{ card_heading("PROGRESS", "Release " ~ progress.current_release) }}
@@ -24,7 +82,7 @@
       {{ stat_blob(progress.ahead, "Ahead of main", "#", tone="active") }}
       {{ stat_blob(progress.behind, "Behind main", "#", tone="wait") }}
       {{ stat_blob(progress.dirty, "Uncommitted files", "#", tone="open") }}
-      {{ stat_blob(progress.recent_commits|length, "Recent commits", "#", tone="completed") }}
+      {{ stat_blob(progress.commits_today, "Commits today", "#", tone="completed") }}
     </div>
   </section>
 
@@ -38,6 +96,7 @@
         <li class="dp-commit-row" data-vis="{{ V }}">
           <code class="inline-code" data-vis="{{ V }}">{{ c.sha }}</code>
           <span data-vis="{{ V }}">{{ c.subject }}</span>
+          {% if c.at %}<small class="hint dp-commit-when" data-vis="{{ V }}">{{ c.at[:16]|replace("T", " ") }}</small>{% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -111,7 +170,9 @@
             <strong class="dp-wave-id" data-vis="{{ V }}">{{ w.wave }}</strong>
             <span class="dp-wave-track" data-vis="{{ V }}">{{ w.track }}</span>
             <span class="dp-wave-est" data-vis="{{ V }}">{{ w.est }}</span>
-            {% if w.tag and w.tag not in ("—", "-") %}
+            {% if w.status == "hot" %}
+            <span class="dp-wave-hot-pill" data-vis="{{ V }}">HOT</span>
+            {% elif w.tag and w.tag not in ("—", "-") %}
             <span class="dp-wave-tag" data-vis="{{ V }}">{{ w.tag }}</span>
             {% endif %}
           </li>

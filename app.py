@@ -6051,12 +6051,31 @@ def _dev_panel_progress() -> dict:
             ahead, behind = parts
     dirty_lines = _dev_panel_git("status", "--porcelain")
     dirty_count = len([line for line in dirty_lines.splitlines() if line.strip()])
-    recent_commits = []
-    log_out = _dev_panel_git("log", "--oneline", "-10")
+    # Last 10 commits, rich format: sha | iso-date | subject. This lets us
+    # surface "commits in the last 24h" + a human "last commit" timestamp
+    # on the 'Now Shipping' hero tile.
+    recent_commits: list[dict] = []
+    log_out = _dev_panel_git("log", "-10", "--pretty=format:%h|%cI|%s")
+    commits_today = 0
+    last_commit_iso = ""
+    now = datetime.utcnow()
     for line in log_out.splitlines():
-        if " " in line:
-            sha, _, subject = line.partition(" ")
-            recent_commits.append({"sha": sha, "subject": subject})
+        parts = line.split("|", 2)
+        if len(parts) < 3:
+            continue
+        sha, iso, subject = parts
+        recent_commits.append({"sha": sha, "subject": subject, "at": iso})
+        if not last_commit_iso:
+            last_commit_iso = iso
+        try:
+            # %cI is strict ISO-8601 with timezone; convert to naive UTC
+            when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            if when.tzinfo:
+                when = when.astimezone(tz=None).replace(tzinfo=None)
+            if (now - when).total_seconds() <= 24 * 3600:
+                commits_today += 1
+        except ValueError:
+            pass
 
     # Parse TODO_AI.txt for the version-scoped headings.
     todo_path = BASE_DIR / "TODO_AI.txt"
@@ -6091,14 +6110,37 @@ def _dev_panel_progress() -> dict:
                 current_release = line.split("[", 1)[1].split("]", 1)[0]
                 break
 
+    # Crawler-report freshness: mtime of the newest reports/*_log.json.
+    # Dev-panel readers use this to answer "did the crawlers run lately?"
+    # without opening a terminal.
+    reports_dir = BASE_DIR / "reports"
+    reports_latest_iso = ""
+    reports_latest_age_hours: float | None = None
+    if reports_dir.exists():
+        newest = None
+        for log in reports_dir.glob("*_log.json"):
+            try:
+                mt = log.stat().st_mtime
+                if newest is None or mt > newest:
+                    newest = mt
+            except OSError:
+                continue
+        if newest is not None:
+            reports_latest_iso = datetime.utcfromtimestamp(newest).isoformat(timespec="seconds")
+            reports_latest_age_hours = max(0.0, (now.timestamp() - newest) / 3600.0)
+
     return {
         "branch": branch,
         "ahead": ahead,
         "behind": behind,
         "dirty": dirty_count,
         "recent_commits": recent_commits,
+        "commits_today": commits_today,
+        "last_commit_at": last_commit_iso,
         "versions": versions,
         "current_release": current_release,
+        "reports_latest_at": reports_latest_iso,
+        "reports_latest_age_hours": reports_latest_age_hours,
     }
 
 
@@ -6114,10 +6156,19 @@ def dev_panel():
     progress = _dev_panel_progress()
     waves = _dev_panel_waves()
     crawler_health = _dev_panel_crawler_health()
+    # W1.4.3 c2 — hoist the "hot" wave to the top so the Now Shipping
+    # hero tile can render it without re-scanning the list. Also compute
+    # a quick pipeline breakdown for the same tile.
+    hot_wave = next((w for w in waves if w.get("status") == "hot"), None)
+    pipeline_shipped = sum(1 for w in waves if w.get("status") == "shipped")
+    pipeline_total = len(waves)
     return render_template(
         "dev_panel.html",
         progress=progress,
         waves=waves,
+        hot_wave=hot_wave,
+        pipeline_shipped=pipeline_shipped,
+        pipeline_total=pipeline_total,
         crawler_health=crawler_health,
         doc_files=DEV_PANEL_DOC_FILES,
     )
@@ -6299,6 +6350,31 @@ def _portfolio_state() -> dict:
             "pct": min(pct, 100),
         })
 
+    # Commentary freshness: stale if its today_total disagrees with the
+    # current daily plan, or if it was generated before the latest daily run.
+    commentary_fresh = False
+    if commentary and commentary.get("text"):
+        c_total = int(commentary.get("today_total") or 0)
+        d_total = int(((daily.get("today") or {}).get("total")) or 0)
+        c_at = (commentary.get("generated_at") or "")[:19]
+        d_at = (daily.get("generated_at_ist") or "")[:19]
+        # Compare the date portion only (timestamps live in different TZs)
+        commentary_fresh = (c_total == d_total and c_total > 0
+                            and c_at[:10] == d_at[:10])
+
+    # Weekend banner: today is Sat/Sun → flag the next trading day
+    weekend_banner = None
+    today_local = date.today()
+    if today_local.weekday() >= 5:  # 5=Sat, 6=Sun
+        nxt = today_local
+        # Skip Sat/Sun
+        while nxt.weekday() >= 5:
+            nxt = nxt + timedelta(days=1)
+        weekend_banner = {
+            "today_label": today_local.strftime("%A %Y-%m-%d"),
+            "next_trading_day": nxt.strftime("%A %Y-%m-%d"),
+        }
+
     return {
         "exists": bool(daily or analysis),
         "portfolio_dir": str(PORTFOLIO_DIR),
@@ -6314,6 +6390,8 @@ def _portfolio_state() -> dict:
         "value_series": value_series,
         "fund_labels": fund_labels,
         "commentary": commentary,
+        "commentary_fresh": commentary_fresh,
+        "weekend_banner": weekend_banner,
     }
 
 

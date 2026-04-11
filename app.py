@@ -4595,6 +4595,14 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             "eyebrow": "REVIEW",
             "accent": "primary",
         })
+    # Finance-specific: direct portal card for anyone who can see it
+    if roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user):
+        actions.append({
+            "label": "Finance portal",
+            "href": url_for("finance_portal"),
+            "eyebrow": "BILLING",
+            "accent": "ghost",
+        })
     # Instrument / site / super admin — admin surface
     if roles & {"instrument_admin", "site_admin", "super_admin"}:
         actions.append({
@@ -4968,6 +4976,96 @@ def message_send():
     )
     flash(f"Message sent to {recipient['name']}.", "success")
     return redirect(url_for("inbox"))
+
+
+@app.route("/finance")
+@login_required
+def finance_portal():
+    """v1.7.0 — Finance portal. ERP-ready proof point: a new portal
+    dropped in on top of the existing sample_requests finance columns
+    (amount_due / amount_paid / finance_status / receipt_number) plus
+    the existing finance_admin role gate. Zero schema change.
+
+    Gated to finance_admin / super_admin / site_admin / owner. Every
+    other role gets a 403. Ferrari-dashboard aesthetic: KPI row on
+    top, by-instrument aggregation, outstanding invoices, recent
+    receipts, all read from the one source-of-truth table.
+    """
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    # KPIs — the four headline numbers in the hero row.
+    kpi_row = query_one(
+        """
+        SELECT
+            COALESCE(SUM(CASE WHEN sample_origin = 'external' THEN amount_due ELSE 0 END), 0) AS total_owed,
+            COALESCE(SUM(CASE WHEN sample_origin = 'external' THEN amount_paid ELSE 0 END), 0) AS total_paid,
+            COUNT(CASE WHEN sample_origin = 'external' AND finance_status IN ('pending', 'partial') THEN 1 END) AS pending_count,
+            COUNT(CASE WHEN sample_origin = 'external' AND finance_status = 'paid' THEN 1 END) AS paid_count
+          FROM sample_requests
+        """
+    )
+    kpis = dict(kpi_row) if kpi_row else {
+        "total_owed": 0, "total_paid": 0, "pending_count": 0, "paid_count": 0,
+    }
+    # Outstanding = owed minus paid, positive only.
+    kpis["outstanding"] = max(0, (kpis["total_owed"] or 0) - (kpis["total_paid"] or 0))
+    # By-instrument aggregation for the middle tile.
+    by_instrument = query_all(
+        """
+        SELECT i.code, i.name,
+               COUNT(sr.id)                                                 AS total_requests,
+               COALESCE(SUM(CASE WHEN sr.sample_origin='external' THEN sr.amount_due  ELSE 0 END),0) AS owed,
+               COALESCE(SUM(CASE WHEN sr.sample_origin='external' THEN sr.amount_paid ELSE 0 END),0) AS paid
+          FROM instruments i
+          LEFT JOIN sample_requests sr ON sr.instrument_id = i.id
+         WHERE i.status = 'active'
+         GROUP BY i.id
+         HAVING total_requests > 0
+         ORDER BY owed DESC
+         LIMIT 20
+        """
+    )
+    # Outstanding invoices list — external requests with non-paid
+    # finance_status, newest first. Capped so /finance stays fast
+    # even when a facility scales past a few hundred invoices.
+    outstanding = query_all(
+        """
+        SELECT sr.id, sr.request_no, sr.title, sr.receipt_number,
+               sr.amount_due, sr.amount_paid, sr.finance_status, sr.created_at,
+               i.code AS instrument_code, i.name AS instrument_name,
+               u.name AS requester_name
+          FROM sample_requests sr
+          JOIN instruments i ON i.id = sr.instrument_id
+          LEFT JOIN users u ON u.id = sr.requester_id
+         WHERE sr.sample_origin = 'external'
+           AND sr.finance_status IN ('pending', 'partial')
+         ORDER BY sr.created_at DESC
+         LIMIT 30
+        """
+    )
+    # Recently paid invoices — proof that money is flowing.
+    recently_paid = query_all(
+        """
+        SELECT sr.id, sr.request_no, sr.title, sr.receipt_number,
+               sr.amount_due, sr.amount_paid, sr.created_at,
+               i.code AS instrument_code
+          FROM sample_requests sr
+          JOIN instruments i ON i.id = sr.instrument_id
+         WHERE sr.sample_origin = 'external'
+           AND sr.finance_status = 'paid'
+         ORDER BY sr.created_at DESC
+         LIMIT 15
+        """
+    )
+    return render_template(
+        "finance.html",
+        kpis=kpis,
+        by_instrument=by_instrument,
+        outstanding=outstanding,
+        recently_paid=recently_paid,
+    )
 
 
 @app.route("/api/health-check")

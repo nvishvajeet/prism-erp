@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, stat_blob, empty_state, paginated_pane with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Finance Portal</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">external billing</span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  {# ── TILE: KPI row — 4 headline numbers, Ferrari-dashboard ── #}
+  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+    {{ card_heading("HEADLINE", "External billing at a glance") }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Outstanding</span>
+        <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.outstanding) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ kpis.pending_count }} invoice{{ "s" if kpis.pending_count != 1 else "" }} open</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Total billed</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_owed) }}</strong>
+        <span class="hint" data-vis="{{ V }}">across all external requests</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Collected</span>
+        <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_paid) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ kpis.paid_count }} paid</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Collection rate</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">{% if kpis.total_owed > 0 %}{{ "{:.0f}".format(kpis.total_paid * 100 / kpis.total_owed) }}%{% else %}—{% endif %}</strong>
+        <span class="hint" data-vis="{{ V }}">paid / billed</span>
+      </div>
+    </div>
+  </article>
+
+  {# ── TILE: By-instrument aggregation ── #}
+  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+    {{ card_heading("BY INSTRUMENT", "Owed vs paid per instrument") }}
+    {% if by_instrument %}
+    <table class="finance-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Instrument</th>
+          <th class="finance-num" data-vis="{{ V }}">Requests</th>
+          <th class="finance-num" data-vis="{{ V }}">Billed</th>
+          <th class="finance-num" data-vis="{{ V }}">Paid</th>
+          <th class="finance-num" data-vis="{{ V }}">Outstanding</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for row in by_instrument %}
+        {% set out = row.owed - row.paid %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ row.code }}</code> · {{ row.name }}</td>
+          <td class="finance-num" data-vis="{{ V }}">{{ row.total_requests }}</td>
+          <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.owed) }}</td>
+          <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.paid) }}</td>
+          <td class="finance-num finance-outstanding-cell{% if out > 0 %} finance-outstanding-pos{% endif %}" data-vis="{{ V }}">₹{{ "{:,.0f}".format(out) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No external billing activity yet.") }}
+    {% endif %}
+  </article>
+
+  {# ── TILE: Outstanding invoices ── #}
+  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+    {{ card_heading("OUTSTANDING", outstanding|length|string ~ " invoice" ~ ("s" if outstanding|length != 1 else "") ~ " · newest first") }}
+    {% if outstanding %}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for inv in outstanding %}
+      <li class="finance-invoice-row finance-invoice-{{ inv.finance_status }}" data-vis="{{ V }}">
+        <a href="{{ url_for('request_detail', request_id=inv.id) }}" class="finance-invoice-link" data-vis="{{ V }}">
+          <div class="finance-invoice-head" data-vis="{{ V }}">
+            <span class="finance-invoice-status notice-severity-warning" data-vis="{{ V }}">{{ inv.finance_status|upper }}</span>
+            <strong class="finance-invoice-title" data-vis="{{ V }}">{{ inv.title }}</strong>
+            <span class="finance-invoice-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_due - inv.amount_paid) }}</span>
+          </div>
+          <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.request_no }}</code> ·
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.instrument_code }}</code> ·
+            {{ inv.requester_name or 'external' }}{% if inv.receipt_number %} · receipt {{ inv.receipt_number }}{% endif %} ·
+            {{ inv.created_at[:10] }}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No outstanding invoices. Clean slate.") }}
+    {% endif %}
+  </article>
+
+  {# ── TILE: Recently paid ── #}
+  <article class="card tile tile-finance-paid" data-vis="{{ V }}">
+    {{ card_heading("RECENTLY PAID", recently_paid|length|string ~ " paid invoices") }}
+    {% if recently_paid %}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for inv in recently_paid %}
+      <li class="finance-invoice-row finance-invoice-paid-row" data-vis="{{ V }}">
+        <a href="{{ url_for('request_detail', request_id=inv.id) }}" class="finance-invoice-link" data-vis="{{ V }}">
+          <div class="finance-invoice-head" data-vis="{{ V }}">
+            <span class="finance-invoice-status notice-severity-info" data-vis="{{ V }}">PAID</span>
+            <strong class="finance-invoice-title" data-vis="{{ V }}">{{ inv.title }}</strong>
+            <span class="finance-invoice-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_paid) }}</span>
+          </div>
+          <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.request_no }}</code> ·
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.instrument_code }}</code>
+            {% if inv.receipt_number %} · receipt {{ inv.receipt_number }}{% endif %} ·
+            {{ inv.created_at[:10] }}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No recently-paid invoices yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

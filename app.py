@@ -4870,22 +4870,58 @@ def message_detail(message_id: int):
 @app.route("/messages/new", methods=["GET"])
 @login_required
 def message_compose():
-    """Compose form. `?to=<user_id>` pre-fills the recipient picker."""
+    """Compose form. `?to=<user_id>` pre-fills the recipient picker.
+
+    5000-user scaling note: unbounded `SELECT … FROM users` does not
+    fit in a browser dropdown. We cap at 200 rows using a relevance
+    ranking — recent conversation partners first, then alphabetical.
+    A `?q=<search>` query param narrows the list by name/email
+    substring for when the target isn't in the first 200.
+    """
     user = current_user()
     to_user_id = request.args.get("to", type=int)
-    # Recipient options: every active user except the sender.
+    q = (request.args.get("q") or "").strip()
+    RECIPIENT_CAP = 200
+    params: list = [user["id"], user["id"], user["id"]]
+    where_extra = ""
+    if q:
+        where_extra = " AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)"
+        like = f"%{q.lower()}%"
+        params.extend([like, like])
+    # Recency ranking: MAX(last message exchanged with this user) desc,
+    # NULLs sort last. Covers both directions of the conversation.
     options = query_all(
-        """
-        SELECT id, name, email, role FROM users
-         WHERE active = 1 AND id != ?
-         ORDER BY name
+        f"""
+        SELECT u.id, u.name, u.email, u.role,
+               (SELECT MAX(m.sent_at)
+                  FROM messages m
+                 WHERE (m.sender_id = ? AND m.recipient_id = u.id)
+                    OR (m.sender_id = u.id AND m.recipient_id = ?)) AS last_chat
+          FROM users u
+         WHERE u.active = 1 AND u.id != ?{where_extra}
+         ORDER BY CASE WHEN last_chat IS NULL THEN 1 ELSE 0 END,
+                  last_chat DESC,
+                  u.name
+         LIMIT {RECIPIENT_CAP}
         """,
-        (user["id"],),
+        tuple(params),
     )
+    # Force-include the preselected user if it's not already in the
+    # capped list (e.g. they're alphabetically after Z and you clicked
+    # Reply to them). Small additional fetch, bounded at 1 row.
+    if to_user_id and not any(o["id"] == to_user_id for o in options):
+        pinned = query_one(
+            "SELECT id, name, email, role, NULL AS last_chat FROM users WHERE id = ? AND active = 1",
+            (to_user_id,),
+        )
+        if pinned:
+            options = [pinned] + list(options)
     return render_template(
         "message_compose.html",
         options=options,
         preselected_to=to_user_id,
+        recipient_cap=RECIPIENT_CAP,
+        search_q=q,
     )
 
 

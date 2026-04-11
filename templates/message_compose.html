@@ -14,6 +14,18 @@
 <section class="message-tiles" data-vis="{{ V }}">
   <article class="card tile tile-message-compose" data-vis="{{ V }}">
     {{ card_heading("COMPOSE", "Pick a recipient and write") }}
+    {# Server-side search form for finding recipients beyond the
+       200-cap. Submits via GET so the compose page re-renders with
+       a narrowed option list. Bookmark-friendly. #}
+    <form method="get" action="{{ url_for('message_compose') }}" class="message-compose-search" data-vis="{{ V }}">
+      {% if preselected_to %}<input type="hidden" name="to" value="{{ preselected_to }}" data-vis="{{ V }}">{% endif %}
+      <label data-vis="{{ V }}">Find a recipient
+        <input type="search" name="q" value="{{ search_q }}" placeholder="name or email — narrows the dropdown below" data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-ghost" data-vis="{{ V }}">Search</button>
+      {% if search_q %}<a class="text-link" href="{{ url_for('message_compose', to=preselected_to) if preselected_to else url_for('message_compose') }}" data-vis="{{ V }}">clear</a>{% endif %}
+    </form>
+
     <form method="post" action="{{ url_for('message_send') }}" class="form-grid message-compose-form" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
 
@@ -24,6 +36,11 @@
           <option value="{{ u.id }}"{% if preselected_to and preselected_to == u.id %} selected{% endif %}>{{ u.name }} · {{ u.email }} · {{ u.role|replace("_", " ")|title }}</option>
           {% endfor %}
         </select>
+        <p class="hint" data-vis="{{ V }}">
+          Showing {{ options|length }} of up to {{ recipient_cap }} recipients
+          (recent conversation partners first{% if search_q %}, filtered by <code>{{ search_q }}</code>{% endif %}).
+          {% if options|length == recipient_cap and not search_q %}Use the search above to find someone further down the list.{% endif %}
+        </p>
       </label>
 
       <label data-vis="{{ V }}">Subject

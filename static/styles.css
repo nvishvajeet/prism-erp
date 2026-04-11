@@ -6488,3 +6488,135 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: color-mix(in srgb, var(--accent, #4c6ef5) 20%, var(--panel));
   border-color: var(--accent, #4c6ef5);
 }
+
+/* v1.6.0 — NOTICEBOARD + QUICK ACTIONS home tiles (Ferrari aesthetic).
+   Earthy-red severity accents on critical, amber on warning, ink on
+   info. Terminal-style monospaced eyebrows. Every element earned. */
+.tile-dash-noticeboard {
+  grid-column: 1 / -1;
+  border-left: 3px solid color-mix(in srgb, #c0392b 80%, var(--accent, #4c6ef5));
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #c0392b 4%, var(--panel)),
+    var(--panel));
+}
+.notice-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.45rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.notice {
+  padding: 0.75rem 0.95rem;
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-left-width: 3px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel);
+}
+.notice-critical { border-left-color: #c0392b; background: color-mix(in srgb, #c0392b 5%, var(--panel)); }
+.notice-warning  { border-left-color: #d98b1c; background: color-mix(in srgb, #d98b1c 5%, var(--panel)); }
+.notice-info     { border-left-color: var(--accent, #4c6ef5); }
+.notice-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.25rem;
+  flex-wrap: wrap;
+}
+.notice-eyebrow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  font-weight: 700;
+}
+.notice-severity {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm, 4px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.notice-severity-critical { background: #c0392b; color: #fff; }
+.notice-severity-warning  { background: #d98b1c; color: #fff; }
+.notice-severity-info     { background: color-mix(in srgb, var(--accent, #4c6ef5) 14%, var(--panel)); color: var(--accent, #4c6ef5); border: 1px solid color-mix(in srgb, var(--accent, #4c6ef5) 30%, transparent); }
+.notice-date {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+}
+.notice-subject {
+  display: block;
+  font-size: 0.96rem;
+  color: var(--ink);
+  line-height: 1.4;
+  margin: 0.15rem 0;
+}
+.notice-body {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* QUICK ACTIONS tile — the Ferrari dashboard buttons. Primary gets
+   the filled ink accent, ghost is an outlined card. Monospaced
+   eyebrow. Grid of up to 4 cells, collapses to 2 columns at tablet. */
+.tile-dash-quick-actions {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--ink, #1e2430) 2%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid var(--ink, #1e2430);
+}
+.qa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+.qa-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.95rem 1.1rem;
+  border-radius: var(--radius-md, 10px);
+  text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  min-height: 76px;
+  justify-content: center;
+}
+.qa-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--ink, #1e2430) 30%, transparent);
+}
+.qa-card-primary {
+  background: var(--ink, #1e2430);
+  color: #f5f6fa;
+  border: 1px solid var(--ink, #1e2430);
+}
+.qa-card-primary:hover { background: color-mix(in srgb, var(--ink, #1e2430) 88%, #c0392b); }
+.qa-card-ghost {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line, rgba(0,0,0,0.12));
+}
+.qa-card-ghost:hover {
+  border-color: var(--ink, #1e2430);
+  background: color-mix(in srgb, var(--ink, #1e2430) 4%, var(--panel));
+}
+.qa-eyebrow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+.qa-label {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.2;
+}

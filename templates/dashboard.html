@@ -17,6 +17,50 @@
   </article>
   {% endif %}
 
+  {# ── TILE: NOTICEBOARD — v1.6.0 site/role/instrument-scoped
+       announcements. Ferrari-dashboard aesthetic: earthy-red
+       severity accent on critical, amber on warning, ink on
+       info. Each notice is a terminal-style card with a
+       monospaced SCOPE eyebrow + severity badge. ── #}
+  {% if active_notices %}
+  <article class="card tile tile-dash-noticeboard" data-vis="{{ V }}">
+    {{ card_heading("NOTICEBOARD", active_notices|length|string ~ " active") }}
+    <ul class="notice-list" data-vis="{{ V }}">
+      {% for n in active_notices %}
+      <li class="notice notice-{{ n.severity }}" data-vis="{{ V }}">
+        <div class="notice-head" data-vis="{{ V }}">
+          <span class="notice-eyebrow" data-vis="{{ V }}">{{ n.scope_label|upper }}</span>
+          <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
+          <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:10] }}</span>
+        </div>
+        <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
+        {% if n.body %}
+        <p class="notice-body" data-vis="{{ V }}">{{ n.body }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── TILE: QUICK ACTIONS — "why are you here, what's your next
+       two clicks?" Per-role action set computed in quick_actions_for_user.
+       Primary action gets the Ferrari-red accent; ghost actions are
+       outlined-only. Never more than 4 actions — that's the point. ── #}
+  {% if quick_actions %}
+  <article class="card tile tile-dash-quick-actions" data-vis="{{ V }}">
+    {{ card_heading("QUICK ACTIONS", "Your next two clicks") }}
+    <div class="qa-grid" data-vis="{{ V }}">
+      {% for a in quick_actions %}
+      <a class="qa-card qa-card-{{ a.accent }}" href="{{ a.href }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">{{ a.eyebrow }}</span>
+        <span class="qa-label" data-vis="{{ V }}">{{ a.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+
   {# ── TILE: Requester pulse — "state of my samples right now" ── #}
   {% if req_pulse %}
   <article class="card tile tile-req-pulse" data-vis="{{ V }}">

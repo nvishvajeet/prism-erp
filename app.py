@@ -3565,6 +3565,29 @@ def init_db() -> None:
                 FOREIGN KEY (group_id) REFERENCES instrument_group(id) ON DELETE CASCADE,
                 FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
             );
+
+            -- v1.6.0 — noticeboard. Site-wide, instrument-scoped, or
+            -- role-scoped announcements that land on every user's home
+            -- page in a sticky tile. scope = 'site' shows to everyone;
+            -- scope = 'instrument' + scope_target = <instrument code>
+            -- shows to users with access to that instrument; scope =
+            -- 'role' + scope_target = <role> shows only to users who
+            -- hold that role (per user_roles junction). expires_at is
+            -- optional — null means never expires.
+            CREATE TABLE IF NOT EXISTS notices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scope TEXT NOT NULL,
+                scope_target TEXT,
+                severity TEXT NOT NULL DEFAULT 'info',
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                author_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                expires_at TEXT,
+                FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_notices_scope   ON notices(scope, scope_target);
+            CREATE INDEX IF NOT EXISTS idx_notices_expires ON notices(expires_at);
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3729,6 +3752,64 @@ def init_db() -> None:
     # seeded user gets their junction row. Idempotent: no-op if
     # already populated. This is the v1.5.0 acceptance gate fix.
     _backfill_user_roles()
+    # v1.6.0 — seed demo notices so the public demo shows the
+    # NOTICEBOARD tile populated. Idempotent: skips if any notice row
+    # already exists.
+    _seed_demo_notices()
+
+
+def _seed_demo_notices() -> None:
+    """Seed 3 demo notices so the public demo shows an active
+    NOTICEBOARD. Only runs in DEMO_MODE and only on an empty table."""
+    if not DEMO_MODE:
+        return
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM notices").fetchone()["c"]
+        if existing:
+            return
+        admin_id_row = db.execute(
+            "SELECT id FROM users WHERE email = 'admin@lab.local'"
+        ).fetchone()
+        admin_id = admin_id_row["id"] if admin_id_row else None
+        demo_notices = [
+            (
+                "site", None, "info",
+                "Welcome to the PRISM live demo",
+                "This is a public-facing demo of the MIT-WPU lab scheduler. Credentials are pre-filled by the /login?demo=1 shortcut. Try logging out and signing back in as operator@lab.local or requester@lab.local with the same password (12345) to see the per-role UI.",
+                admin_id,
+            ),
+            (
+                "role", "operator", "warning",
+                "FESEM preventive maintenance window next Monday",
+                "Scheduled downtime 09:00–13:00. Any queue items booked in that window will auto-shift to the next available slot. Operators: please flag any urgent samples that must run before maintenance.",
+                admin_id,
+            ),
+            (
+                "site", None, "info",
+                "v1.6.0 — noticeboard + quick actions shipped",
+                "This tile itself is the new capability. Notices can be site-wide, role-scoped, or instrument-scoped. Admin UI for posting + dismissal persistence are on the v1.6.x patch stream. See CHANGELOG [1.6.0] for the full contract.",
+                admin_id,
+            ),
+        ]
+        now_iso = datetime.utcnow().isoformat(timespec="seconds")
+        for scope, target, severity, subject, body, author in demo_notices:
+            db.execute(
+                """
+                INSERT INTO notices
+                    (scope, scope_target, severity, subject, body,
+                     author_id, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                """,
+                (scope, target, severity, subject, body, author, now_iso),
+            )
+        db.commit()
+    except sqlite3.OperationalError:
+        # notices table may not exist yet on a v1.5.x DB — graceful
+        pass
+    finally:
+        db.close()
 
 
 def _backfill_user_roles() -> None:
@@ -4297,7 +4378,158 @@ def index():
         dashboard_metrics=dashboard_metrics,
         req_pulse=req_pulse,
         upcoming_downtime=upcoming_downtime_all,
+        active_notices=active_notices_for_user(user),
+        quick_actions=quick_actions_for_user(user),
     )
+
+
+# ─── v1.6.0 Noticeboard + Quick Actions ───────────────────────────────
+# New capability on the home page: site-wide / role-scoped / instrument-
+# scoped notices land in a sticky NOTICEBOARD tile; per-role QUICK
+# ACTIONS tile answers "why is the user here and what do they do next?"
+# in two clicks. Ferrari dashboard aesthetic — terminal, monospaced,
+# earned-pixels only.
+
+
+def active_notices_for_user(user: sqlite3.Row | None) -> list[dict]:
+    """Every active notice visible to `user`, newest-first, ordered by
+    severity (critical → warning → info) then by created_at desc.
+    Filters out expired notices and notices the user lacks scope for."""
+    if not user:
+        return []
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    try:
+        rows = query_all(
+            """
+            SELECT id, scope, scope_target, severity, subject, body,
+                   author_id, created_at, expires_at
+              FROM notices
+             WHERE (expires_at IS NULL OR expires_at = '' OR expires_at > ?)
+             ORDER BY
+                CASE severity
+                    WHEN 'critical' THEN 0
+                    WHEN 'warning'  THEN 1
+                    ELSE 2
+                END,
+                created_at DESC
+            """,
+            (now_iso,),
+        )
+    except sqlite3.OperationalError:
+        # Table not yet created on a pre-v1.6.0 DB. Graceful.
+        return []
+    role_set = user_role_set(user)
+    # Instrument codes the user has any kind of access to (admin /
+    # operator / faculty). Cheap single-query fetch.
+    try:
+        acc_rows = query_all(
+            """
+            SELECT DISTINCT i.code FROM instruments i
+            LEFT JOIN instrument_admins    ia ON ia.instrument_id = i.id
+            LEFT JOIN instrument_operators io ON io.instrument_id = i.id
+            LEFT JOIN instrument_faculty_admins fa ON fa.instrument_id = i.id
+            WHERE ia.user_id = ? OR io.user_id = ? OR fa.user_id = ?
+            """,
+            (user["id"], user["id"], user["id"]),
+        )
+        user_instrument_codes = {r["code"] for r in acc_rows}
+    except sqlite3.OperationalError:
+        user_instrument_codes = set()
+    visible: list[dict] = []
+    for row in rows:
+        scope = row["scope"]
+        target = row["scope_target"] or ""
+        if scope == "site":
+            keep = True
+        elif scope == "role":
+            keep = target in role_set
+        elif scope == "instrument":
+            keep = target in user_instrument_codes
+        else:
+            keep = False
+        if keep:
+            d = dict(row)
+            # Friendly scope label for the tile
+            if scope == "site":
+                d["scope_label"] = "site-wide"
+            elif scope == "role":
+                d["scope_label"] = f"role · {target}"
+            elif scope == "instrument":
+                d["scope_label"] = f"instrument · {target}"
+            else:
+                d["scope_label"] = scope
+            visible.append(d)
+    return visible
+
+
+def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
+    """Per-role "why are you here and what's your next two clicks?"
+    Returns a small list of dicts with {label, href, eyebrow, accent}.
+    Order matters — first item is the primary CTA. Ferrari-dashboard
+    minimal, never more than 4 actions."""
+    if not user:
+        return []
+    roles = user_role_set(user)
+    actions: list[dict] = []
+    # Requester — "submit a request" is the headline
+    if "requester" in roles or "faculty_in_charge" in roles:
+        actions.append({
+            "label": "New sample request",
+            "href": url_for("new_request"),
+            "eyebrow": "SUBMIT",
+            "accent": "primary",
+        })
+        actions.append({
+            "label": "My requests",
+            "href": url_for("schedule") + "?mine=1",
+            "eyebrow": "STATUS",
+            "accent": "ghost",
+        })
+    # Operator — "today's queue" is the headline
+    if "operator" in roles:
+        actions.append({
+            "label": "Today's queue",
+            "href": url_for("schedule") + "?today=1",
+            "eyebrow": "WORK",
+            "accent": "primary",
+        })
+        actions.append({
+            "label": "My instruments",
+            "href": url_for("instruments"),
+            "eyebrow": "FLEET",
+            "accent": "ghost",
+        })
+    # Approver / finance — "pending my approval" is the headline
+    if "professor_approver" in roles or "finance_admin" in roles:
+        actions.append({
+            "label": "Pending my approval",
+            "href": url_for("schedule") + "?pending_me=1",
+            "eyebrow": "REVIEW",
+            "accent": "primary",
+        })
+    # Instrument / site / super admin — admin surface
+    if roles & {"instrument_admin", "site_admin", "super_admin"}:
+        actions.append({
+            "label": "Queue",
+            "href": url_for("schedule"),
+            "eyebrow": "OPS",
+            "accent": "primary",
+        })
+        actions.append({
+            "label": "Dev panel",
+            "href": url_for("dev_panel"),
+            "eyebrow": "CONTROL",
+            "accent": "ghost",
+        })
+    # Cap at 4 actions so the tile stays tight; de-dupe by label.
+    seen = set()
+    uniq = []
+    for a in actions:
+        if a["label"] in seen:
+            continue
+        seen.add(a["label"])
+        uniq.append(a)
+    return uniq[:4]
 
 
 @app.route("/api/health-check")

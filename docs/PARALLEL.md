@@ -43,6 +43,94 @@ deploy_smoke is **rejected before it lands**. This is the final
 correctness gate and it is unconditional — it runs for every
 agent, every push, even doc-only commits.
 
+## Read agents vs write agents
+
+Not every agent needs a claim. The distinction is mechanical
+and saves a lot of ceremony:
+
+**Read agents.** An agent doing only discovery, investigation,
+reporting, grep, file reads, `git log`, crawler runs, curl
+checks, or documentation drafts that won't be committed. Read
+agents **never edit, never commit, never push a tracked file.**
+Their output is their chat report — their effect on the tracked
+repo is zero.
+
+**Writing to private/gitignored output is fine.** `reports/`
+and `logs/` are `.gitignore`d in PRISM, and crawler runs
+legitimately write JSON + text logs into `reports/*_log.json`
+every invocation. That's still a read agent: the writes are
+private per-run scratch output, nothing another agent will
+consume, nothing git tracks. The rule is "no write to a
+tracked file", not "no write to disk at all."
+
+**Test-crawl parallelism, unlocked.** This is the biggest
+practical win from the read/write split: `.venv/bin/python -m
+crawlers wave sanity` / `behavioral` / `all` are all safe to
+run **concurrently** in multiple shells. They each write to
+their own `reports/<strategy>_log.json` + `<strategy>_report.txt`
+(last-run wins within a single strategy name, which is fine),
+they read every tracked file they need, and they never touch
+anything outside `reports/` or `logs/`. An operator investigating
+"which strategy is slow?" can fire 4 read agents at the full
+wave in parallel and compare timings, with zero lane collision
+concerns.
+
+**Write agents.** An agent that will edit, commit, and push
+one or more files. Write agents follow the full canonical
+task lifecycle (claim → work → pull --rebase → commit → push)
+and the git hygiene rules below.
+
+### Rules that differ
+
+| aspect                         | read agent | write agent |
+|--------------------------------|------------|-------------|
+| claim row in `CLAIMS.md`       | **not required**, skip it | **required** (unless single-operator serial mode and board is empty) |
+| concurrent count limit         | **unlimited** | max **3** concurrent |
+| 60-minute cutoff               | still applies | applies |
+| git hygiene rules              | don't apply (no commits) | all 10 rules apply |
+| collision risk with each other | **zero** — reads commute | real — needs lane awareness |
+| collision risk with writers    | **zero** read → write; possible write → read if the reader was mid-grep when the writer committed (refetch and retry) | real both ways |
+
+### Practical leverage
+
+A read agent fleet can run while a single write agent ships
+the actual fix. Example pattern:
+
+```
+fire  read-agent-1    "audit app.py for every Flask route that still reads user['role']"
+fire  read-agent-2    "grep templates/ for any <form> without a csrf_token hidden input"
+fire  read-agent-3    "run `crawlers wave all` against the current trunk, report the full pass/fail/warn breakdown"
+
+            ... all three run concurrently, report back in ~2-5 min ...
+
+fire  write-agent     "based on reader 1's findings, fix the 3 worst offenders in app.py"
+            ... single write agent, no lane collision with readers ...
+```
+
+Net: the investigation phase went parallel-3x with zero
+coordination overhead, and only the focused write step paid
+the claim-and-commit ceremony.
+
+### How the operator tells an agent which type to be
+
+The agent type is set in the prompt. A read-agent brief says
+**"Read-only task. Do not edit, commit, or push any file.
+Report your findings in ≤N words."** A write-agent brief says
+**"Write task. Follow the full claim → work → push lifecycle
+per docs/PARALLEL.md. Files you may touch: X, Y, Z."** The
+operator is responsible for the classification; if an agent
+that was fired as read-only starts editing files, that's a
+protocol violation and the abort protocol applies.
+
+### Read agents and the 5% rule
+
+The 5% merge-overhead rule applies to **write-agent fleets
+only**. Read agents have zero merge overhead because they
+don't commit, so adding readers never moves the percentage.
+The concurrency cap of 3 applies only to write agents; the
+read fleet is unlimited and can saturate whatever session
+budget the operator has.
+
 ## Time budget and hard cutoff
 
 Every task has a **60-minute hard cutoff** measured from the

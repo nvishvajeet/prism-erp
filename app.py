@@ -1953,25 +1953,32 @@ def approval_candidate_options(step_role: str, instrument_id: int) -> list[sqlit
 
 
 def candidate_allowed_for_step(candidate: sqlite3.Row | None, step_role: str, instrument_id: int) -> bool:
+    """True if `candidate` may be assigned to an approval step of type
+    `step_role` on `instrument_id`. Uses `user_role_set()` so users with
+    multi-role assignments via the `user_roles` junction pass the check
+    even when their primary `users.role` column says otherwise. Fixes
+    the v1.6.x assign-approver bug where the UI would reject valid
+    multi-role admins. (v1.5.0 TODO marker retired at this site.)"""
     if candidate is None:
         return False
+    roles = user_role_set(candidate)
     if step_role == "finance":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        return candidate["role"] in {"finance_admin", "super_admin", "site_admin"}
+        return bool(roles & {"finance_admin", "super_admin", "site_admin"})
     if step_role == "professor":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if candidate["role"] in {"professor_approver", "super_admin", "site_admin"}:
+        if roles & {"professor_approver", "super_admin", "site_admin"}:
             return True
         row = query_one(
             "SELECT 1 FROM instrument_faculty_admins WHERE user_id = ? AND instrument_id = ?",
             (candidate["id"], instrument_id),
         )
         return row is not None
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if candidate["role"] in {"super_admin", "site_admin"}:
+    # Operator / instrument_admin step fall-through. Any super- or
+    # site-admin is always allowed; anyone else must have an explicit
+    # row in the instrument-access tables.
+    if roles & {"super_admin", "site_admin"}:
         return True
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    return can_manage_instrument(candidate["id"], instrument_id, candidate["role"]) or can_operate_instrument(candidate["id"], instrument_id, candidate["role"])
+    primary_role = candidate["role"] if "role" in candidate.keys() else ""
+    return can_manage_instrument(candidate["id"], instrument_id, primary_role) or can_operate_instrument(candidate["id"], instrument_id, primary_role)
 
 
 def attachment_type_choices() -> list[str]:
@@ -6641,19 +6648,30 @@ def request_detail(request_id: int):
 
     operators = []
     if can_manage or can_operate:
+        # Assignment picker: every user who has access to this
+        # specific instrument via any of the 3 access tables, PLUS
+        # every super/site admin (by primary role OR by user_roles
+        # junction — the v1.5.0 multi-role fix, closes the assign-
+        # approver bug where admins-via-junction were invisible in
+        # the picker). Sorted alphabetically.
         operators = query_all(
             """
-            SELECT DISTINCT u.id, u.name
+            SELECT DISTINCT u.id, u.name, u.role
             FROM users u
-            LEFT JOIN instrument_operators io ON io.user_id = u.id AND io.instrument_id = ?
-            LEFT JOIN instrument_admins ia ON ia.user_id = u.id AND ia.instrument_id = ?
-            LEFT JOIN instrument_faculty_admins ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
+            LEFT JOIN instrument_operators       io  ON io.user_id  = u.id AND io.instrument_id  = ?
+            LEFT JOIN instrument_admins          ia  ON ia.user_id  = u.id AND ia.instrument_id  = ?
+            LEFT JOIN instrument_faculty_admins  ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
             WHERE u.active = 1
               AND (
                 io.instrument_id IS NOT NULL OR
                 ia.instrument_id IS NOT NULL OR
                 ifa.instrument_id IS NOT NULL OR
-                u.role IN ('super_admin', 'site_admin')
+                u.role IN ('super_admin', 'site_admin') OR
+                EXISTS (
+                    SELECT 1 FROM user_roles ur
+                     WHERE ur.user_id = u.id
+                       AND ur.role IN ('super_admin', 'site_admin')
+                )
               )
             ORDER BY u.name
             """,

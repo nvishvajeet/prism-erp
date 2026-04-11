@@ -17,6 +17,31 @@
   </article>
   {% endif %}
 
+  {# ── TILE: Requester pulse — "state of my samples right now" ── #}
+  {% if req_pulse %}
+  <article class="card tile tile-req-pulse" data-vis="{{ V }}">
+    {{ card_heading("PULSE", "My samples right now") }}
+    <div class="req-pulse-grid" data-vis="{{ V }}">
+      <div class="req-pulse-cell" data-vis="{{ V }}">
+        <span class="req-pulse-label" data-vis="{{ V }}">Open</span>
+        <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.open_count }}</strong>
+      </div>
+      <div class="req-pulse-cell" data-vis="{{ V }}">
+        <span class="req-pulse-label" data-vis="{{ V }}">Awaiting operator</span>
+        <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.awaiting_operator_count }}</strong>
+      </div>
+      <div class="req-pulse-cell req-pulse-cell-ready{% if req_pulse.ready_count %} req-pulse-cell-ready-active{% endif %}" data-vis="{{ V }}">
+        <span class="req-pulse-label" data-vis="{{ V }}">Ready for pickup</span>
+        <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.ready_count }}</strong>
+      </div>
+      <div class="req-pulse-cell" data-vis="{{ V }}">
+        <span class="req-pulse-label" data-vis="{{ V }}">Oldest pending</span>
+        <strong class="req-pulse-value" data-vis="{{ V }}">{{ time_ago(req_pulse.oldest_pending_at) or '—' }}</strong>
+      </div>
+    </div>
+  </article>
+  {% endif %}
+
   {# ── TILE 1: This Week — KPIs + weekly chart ── #}
   {% if dashboard_metrics %}
   <article class="card tile tile-dash-week" data-vis="{{ V }}">

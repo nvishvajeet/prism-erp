@@ -2526,6 +2526,34 @@ def stats_payload_for_scope(
     }
 
 
+def requester_pulse(user: sqlite3.Row) -> dict | None:
+    """One-glance 'state of my samples' summary for requesters.
+
+    Single SQL query with conditional aggregates; returns None for
+    non-requester roles so the template skips rendering.
+    """
+    if user["role"] != "requester":
+        return None
+    row = query_one(
+        """
+        SELECT
+          SUM(CASE WHEN sr.status NOT IN ('completed','rejected') THEN 1 ELSE 0 END) AS open_count,
+          SUM(CASE WHEN sr.status IN ('submitted','sample_submitted','under_review') THEN 1 ELSE 0 END) AS awaiting_operator_count,
+          SUM(CASE WHEN sr.status = 'completed' AND sr.completed_at IS NOT NULL AND julianday('now') - julianday(sr.completed_at) <= 7 THEN 1 ELSE 0 END) AS ready_count,
+          MIN(CASE WHEN sr.status NOT IN ('completed','rejected') THEN sr.created_at ELSE NULL END) AS oldest_pending_at
+        FROM sample_requests sr
+        WHERE sr.requester_id = ?
+        """,
+        (user["id"],),
+    )
+    return {
+        "open_count": (row["open_count"] if row else 0) or 0,
+        "awaiting_operator_count": (row["awaiting_operator_count"] if row else 0) or 0,
+        "ready_count": (row["ready_count"] if row else 0) or 0,
+        "oldest_pending_at": row["oldest_pending_at"] if row else None,
+    }
+
+
 def dashboard_analytics(user: sqlite3.Row) -> dict:
     weekly_stats = stats_payload(user, {"horizon": "weekly", "date_from": "", "date_to": ""})
     monthly_stats = stats_payload(user, {"horizon": "monthly", "date_from": "", "date_to": ""})
@@ -4112,6 +4140,7 @@ def index():
             row for row in fifo_rows if row["status"] == "sample_submitted"
         ][:5]
     dashboard_metrics = dashboard_analytics(user) if can_access_stats(user) else None
+    req_pulse = requester_pulse(user)
     profile = user_access_profile(user)
     can_operate_queue = bool(
         {"reassign", "mark_received"} & set(profile["card_action_fields"])
@@ -4147,6 +4176,7 @@ def index():
         can_operate_queue=can_operate_queue,
         role_switches=DEMO_ROLE_SWITCHES,
         dashboard_metrics=dashboard_metrics,
+        req_pulse=req_pulse,
         upcoming_downtime=upcoming_downtime_all,
     )
 

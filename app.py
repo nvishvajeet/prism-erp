@@ -3963,6 +3963,70 @@ def init_db() -> None:
     # then drops the columns. Second run is a no-op.
     _backfill_domain_split()
     _drop_legacy_finance_columns()
+    # v2.0.2 — sweep stale debug/trace logs older than 7 days.
+    _purge_stale_logs()
+
+
+def _purge_stale_logs(retention_days: int = 7) -> None:
+    """v2.0.2 — delete stale debug/trace log files older than N days.
+
+    Runs once at init_db time. Touches ONLY file-based debug traces.
+    Every DB-level log is off-limits because of tamper-evidence:
+
+      - audit_logs TABLE has prev_hash + entry_hash forming a chain.
+        Deleting rows breaks the chain and destroys the tamper-evident
+        property. NEVER auto-purged. If an operator genuinely needs to
+        trim old audit rows, they must do it manually through a proper
+        archive-table migration that preserves the hash chain — not
+        through this function.
+
+      - mailing_list_send_events TABLE is audit-first append-only for
+        external communications. Compliance artifact. Never purged.
+
+      - data/**, uploads/** are user data and attachment files linked
+        from sample_requests rows. Never auto-purged.
+
+      - logs/server.log, logs/cloudflared.log are live Flask output
+        with open file descriptors. Must be rotated via logrotate or
+        launchd's newsyslog, not Python truncation, because truncating
+        mid-run produces a null gap between existing and new writes.
+
+    Purged (file-based only):
+      - prism_log.json                — debug overlay dump
+      - logs/wave-*.log               — old wave-run captures
+      - reports/*_log.json            — stale crawler report files
+                                        (each wave run overwrites the
+                                        latest, so anything older than
+                                        retention_days is dead weight)
+
+    Safety: only deletes files whose mtime is older than the cutoff.
+    Current files are untouched. Idempotent: nothing to delete → no-op.
+    Errors on individual files are swallowed — partial cleanup is
+    better than no cleanup.
+    """
+    import time
+    cutoff = time.time() - retention_days * 86400
+    base = Path(__file__).resolve().parent
+
+    singletons = [base / "prism_log.json"]
+    globs = [
+        base.glob("logs/wave-*.log"),
+        base.glob("reports/*_log.json"),
+    ]
+
+    for p in singletons:
+        try:
+            if p.exists() and p.stat().st_mtime < cutoff:
+                p.unlink()
+        except OSError:
+            pass
+    for g in globs:
+        for p in g:
+            try:
+                if p.exists() and p.stat().st_mtime < cutoff:
+                    p.unlink()
+            except OSError:
+                pass
 
 
 def _drop_legacy_finance_columns() -> None:

@@ -3238,6 +3238,42 @@ def init_db() -> None:
                 is_active INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (created_by_user_id) REFERENCES users(id)
             );
+
+            -- W1.3.7 multi-role users (additive). `users.role` remains
+            -- the canonical "primary role" (display + topbar). This
+            -- table layers additional roles on top without breaking
+            -- any existing permission check. Every user gets at least
+            -- one row here mirroring users.role via the backfill in
+            -- init_db().
+            CREATE TABLE IF NOT EXISTS user_roles (
+                user_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                granted_at TEXT NOT NULL DEFAULT '',
+                granted_by_user_id INTEGER,
+                PRIMARY KEY (user_id, role),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (granted_by_user_id) REFERENCES users(id)
+            );
+
+            -- W1.3.6 instrument groups (additive). A group bundles
+            -- instruments for bulk assignment in the user-admin
+            -- assignment matrix. Does NOT replace `instruments.category`
+            -- — that stays as the free-text taxonomy. Groups are
+            -- admin-curated and act as grant shortcuts.
+            CREATE TABLE IF NOT EXISTS instrument_group (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS instrument_group_member (
+                group_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                PRIMARY KEY (group_id, instrument_id),
+                FOREIGN KEY (group_id) REFERENCES instrument_group(id) ON DELETE CASCADE,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3330,8 +3366,58 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_downtime_inst          ON instrument_downtime(instrument_id);
             CREATE INDEX IF NOT EXISTS idx_downtime_active        ON instrument_downtime(is_active);
+
+            -- W1.3.6 / W1.3.7 indexes
+            CREATE INDEX IF NOT EXISTS idx_user_roles_user        ON user_roles(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_roles_role        ON user_roles(role);
+            CREATE INDEX IF NOT EXISTS idx_igm_group              ON instrument_group_member(group_id);
+            CREATE INDEX IF NOT EXISTS idx_igm_instrument         ON instrument_group_member(instrument_id);
             """
         )
+
+        # W1.3.7 backfill — every existing user gets a user_roles row
+        # mirroring their primary users.role. Idempotent: only inserts
+        # the pair (user_id, role) if it's not already present.
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO user_roles (user_id, role, granted_at)
+            SELECT id, role, COALESCE(NULLIF('', ''), datetime('now'))
+              FROM users
+             WHERE role IS NOT NULL AND role != ''
+            """
+        )
+
+        # W1.3.6 backfill — seed one instrument_group per distinct
+        # instruments.category if no groups exist yet, then populate
+        # the member table. This turns the free-text category taxonomy
+        # into first-class groupings without touching the category
+        # column (which stays as the canonical label).
+        existing_groups = cur.execute(
+            "SELECT COUNT(*) FROM instrument_group"
+        ).fetchone()[0]
+        if existing_groups == 0:
+            categories = cur.execute(
+                "SELECT DISTINCT category FROM instruments "
+                "WHERE category IS NOT NULL AND category != '' "
+                "ORDER BY category"
+            ).fetchall()
+            for (cat,) in categories:
+                cur.execute(
+                    "INSERT OR IGNORE INTO instrument_group "
+                    "(name, description, created_at) VALUES (?, ?, datetime('now'))",
+                    (cat, f"Auto-seeded from category '{cat}'"),
+                )
+                group_row = cur.execute(
+                    "SELECT id FROM instrument_group WHERE name = ?", (cat,)
+                ).fetchone()
+                if group_row:
+                    gid = group_row[0]
+                    cur.execute(
+                        "INSERT OR IGNORE INTO instrument_group_member "
+                        "(group_id, instrument_id) "
+                        "SELECT ?, id FROM instruments WHERE category = ?",
+                        (gid, cat),
+                    )
 
         db.commit()
     db.close()
@@ -3529,6 +3615,85 @@ def role_next_action(role: str | None) -> str:
     return ROLE_NEXT_ACTIONS.get(role or "", "")
 
 
+# ---------------------------------------------------------------------------
+# W1.3.7 — multi-role helpers. `users.role` stays the primary role (display,
+# topbar, `current_role_display`). The user_roles table layers additional
+# roles for permission checks. `user_role_set(user)` always includes the
+# primary role, so existing single-role lookups are a subset.
+# ---------------------------------------------------------------------------
+
+
+def user_role_set(user: sqlite3.Row | None) -> frozenset[str]:
+    """Return every role assigned to `user`, primary + additional."""
+    if not user:
+        return frozenset()
+    roles: set[str] = set()
+    primary = user["role"] if "role" in user.keys() else None
+    if primary:
+        roles.add(primary)
+    try:
+        extra = query_all(
+            "SELECT role FROM user_roles WHERE user_id = ?", (user["id"],)
+        )
+        for row in extra:
+            if row["role"]:
+                roles.add(row["role"])
+    except sqlite3.OperationalError:
+        # Table may not exist on first run before init_db; degrade gracefully.
+        pass
+    return frozenset(roles)
+
+
+def user_has_role(user: sqlite3.Row | None, role: str) -> bool:
+    return role in user_role_set(user)
+
+
+def grant_user_role(user_id: int, role: str, granted_by: int | None = None) -> None:
+    """Idempotent role grant — safe to call repeatedly."""
+    execute(
+        "INSERT OR IGNORE INTO user_roles (user_id, role, granted_at, granted_by_user_id) "
+        "VALUES (?, ?, datetime('now'), ?)",
+        (user_id, role, granted_by),
+    )
+
+
+def revoke_user_role(user_id: int, role: str) -> None:
+    """Remove a role from a user. Does not touch users.role — callers
+    that want to change the primary role must update that column too."""
+    execute(
+        "DELETE FROM user_roles WHERE user_id = ? AND role = ?",
+        (user_id, role),
+    )
+
+
+# ---------------------------------------------------------------------------
+# W1.3.6 — instrument group helpers. Groups are admin-curated bundles used
+# as grant shortcuts in the user-admin assignment matrix. They do not change
+# any instrument-access check — `instrument_admins` / `instrument_operators`
+# / `instrument_faculty_admins` stay authoritative.
+# ---------------------------------------------------------------------------
+
+
+def instrument_groups_all() -> list[sqlite3.Row]:
+    try:
+        return query_all(
+            "SELECT id, name, description FROM instrument_group ORDER BY name"
+        )
+    except sqlite3.OperationalError:
+        return []
+
+
+def instrument_group_member_ids(group_id: int) -> list[int]:
+    try:
+        rows = query_all(
+            "SELECT instrument_id FROM instrument_group_member WHERE group_id = ?",
+            (group_id,),
+        )
+        return [int(r["instrument_id"]) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
@@ -3552,6 +3717,9 @@ def inject_globals():
         "role_next_action": role_next_action,
         "current_role_display": role_display_name(user["role"]) if user else "",
         "current_role_hint": role_next_action(user["role"]) if user else "",
+        "current_role_set": user_role_set(user),
+        "user_has_role": lambda role: user_has_role(user, role),
+        "instrument_groups_all": instrument_groups_all,
         "support_admin_email": support_admin_email,
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,

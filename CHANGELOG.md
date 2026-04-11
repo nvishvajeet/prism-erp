@@ -15,6 +15,208 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [1.7.0] — 2026-04-11
+
+**Finance portal + grants & budgets — the ERP-ready proof point.**
+PRISM is still a scheduler, not an ERP. But when the user asked
+"can you pick pieces and put a finance portal in under 30 minutes",
+the answer had to be yes. This tag is that answer, twice: external
+billing in one pass, grants/budgets with charge-tracking in a
+second pass. Both built on the same single-source-of-truth
+architecture that runs the rest of the app — `sample_requests`
+remains the only table of record, the finance views read
+aggregations over its existing `amount_due` / `amount_paid` /
+`finance_status` / `grant_id` columns.
+
+### Added (hard)
+
+- **`grants(id, code, name, sponsor, pi_name, total_budget,
+  start_date, end_date, status, notes)`** (`app.py`, v1.7.0) —
+  new hard table. Each grant has a human-readable code
+  (`MHRD-FES-2024`), a sponsor, a PI, a total budget, optional
+  date range, and an active/closed status flag.
+- **`sample_requests.grant_id`** — nullable FK → `grants.id`.
+  Additive ALTER on existing DBs. A sample with a grant_id is
+  "charged to" that grant; spend is computed at read time as
+  `SUM(amount_paid) WHERE grant_id = ?`.
+
+### Added (soft)
+
+- **`/finance`** (`app.py:finance_portal`) — 4-KPI hero
+  (outstanding, total billed, collected, collection rate) +
+  by-instrument aggregation table + outstanding invoice list +
+  recently-paid list. Read-only view over `sample_requests`.
+  Gated to finance + admin roles via `_user_can_view_finance`.
+- **`/finance/grants`** (`finance_grants_list`) — totals hero
+  (total budget across all grants, spent, remaining, burn rate)
+  + per-grant list with progress bars and click-through.
+- **`/finance/grants/<id>`** (`finance_grant_detail`) — drill-down
+  with 4-KPI (budget, paid, billed, remaining + % used),
+  metadata grid (code, sponsor, PI, dates, status), and the list
+  of samples charged to the grant with their finance status.
+- **`templates/finance.html` + `finance_grants.html` +
+  `finance_grant_detail.html`** — three new templates, all in
+  the standard tile vocabulary (`.finance-tiles`, Ferrari red for
+  outstanding, mint green for collected).
+- **`_seed_demo_grants()`** — idempotent DEMO_MODE seeder.
+  Six grants: MHRD-FES-2024, DST-XRD-2024, SERB-PI-BIOCHEM,
+  ICMR-PHARMA-2024, WPU-INTERNAL, CSIR-NANO-2025.
+- **Noticeboard link** — "Finance Portal" quick action added for
+  finance + admin roles on `/` dashboard.
+- **`.finance-*` + `.mc-meta-grid` CSS** — `static/styles.css`
+  appended. Ferrari-dashboard palette consistent with the rest
+  of the app: `#c0392b` outstanding, `#2f9e44` collected, earthy
+  accents for cells, progress bars with soft glow.
+
+### Why this tag is v1.7.0, not v2.0
+
+v2.0 is a paradigm-shift marker per `docs/PHILOSOPHY.md` §3.1 —
+it would mean PRISM is no longer "just a scheduler" but a new
+class of system. Finance portal + grants is a *new capability*,
+not a *new paradigm*. It earned a minor bump (v1.6.x → v1.7.x)
+legitimately, but the core model — `sample_requests` as the
+single source of truth, tile-based read views, additive hard
+attributes — is unchanged. v2.0 stays on the shelf for something
+that actually breaks the current frame.
+
+## [1.6.2] — 2026-04-11
+
+**User-to-user messaging — inbox, detail, compose.** The
+noticeboard from v1.6.0 handled broadcast; v1.6.1 added the
+admin write surface; v1.6.2 closes the loop with direct
+person-to-person messages. Same single-source-of-truth
+architecture: one `messages` table, three read views.
+
+### Added (hard)
+
+- **`messages(id, sender_id, recipient_id, subject, body,
+  sent_at, read_at, reply_to_id)`** — new hard table. Foreign
+  keys cascade on user deletion; `reply_to_id` is a self-FK for
+  threading (currently flat, reply is just pre-filled compose).
+
+### Added (soft)
+
+- **`/inbox`** (`inbox_view`) — per-user message list with
+  unread dots. Recipient-scoped; the route reads only the
+  logged-in user's messages.
+- **`/messages/<id>`** (`message_detail`) — single-message view
+  with sender / timestamp / Reply button. Auto-marks `read_at`
+  on first view (idempotent — second view is a no-op).
+- **`/messages/new`** (GET+POST `message_compose`) — compose form
+  with recipient dropdown. Capped at 200 recipients via
+  `RECIPIENT_CAP` + `?q=` search + recency ranking via
+  `MAX(sent_at)` subquery (5000-user scaling fix).
+- **`unread_message_count(user)` + `inbox_preview_for_user(user)`**
+  — helpers for topbar badge + noticeboard inbox preview.
+- **Topbar badge** — unread count appears next to the Inbox link
+  on every page (dashboard + tile pages).
+- **`_seed_demo_messages()`** — idempotent demo seeder.
+- **`templates/inbox.html` + `message_detail.html` +
+  `message_compose.html`** — three new templates in the standard
+  tile vocabulary.
+
+## [1.6.1] — 2026-04-11
+
+**Admin notices write surface — `/admin/notices`.** v1.6.0
+shipped the noticeboard read view; v1.6.1 gives admins the
+compose form to write to it without touching the DB.
+
+### Added (soft)
+
+- **`/admin/notices`** (GET list + compose) — two-tile layout:
+  compose form on the left, live list of active notices on the
+  right. JS scope-target picker that enables/disables the target
+  select based on the chosen scope (global / role / user /
+  instrument).
+- **`/admin/notices/new`** (POST) — create-notice handler with
+  scope + severity + expiry + target_id validation.
+- **`/admin/notices/<id>/delete`** (POST) — soft-delete by
+  setting `deleted_at`. Honoured by `active_notices_for_user`.
+- **`_user_can_post_notice(user)`** — gates the admin notices
+  page to admin + super_admin roles.
+- **`templates/admin_notices.html`** — new template, same tile
+  vocabulary as the rest of the app.
+
+## [1.6.0] — 2026-04-11
+
+**Noticeboard + Quick Actions — Ferrari-dashboard home tiles.**
+The dashboard is the first thing every user sees. Until v1.6.0
+it showed their pending requests and nothing else. This tag adds
+two new tiles built for daily orientation: what's happening
+right now (noticeboard), and what should I click next (quick
+actions), both tuned per-role.
+
+### Added (hard)
+
+- **`notices(id, scope, target_id, severity, title, body,
+  created_at, created_by_user_id, expires_at, deleted_at)`** —
+  new hard table. Scope ∈ {global, role, user, instrument};
+  severity ∈ {info, warning, critical}. Soft delete via
+  `deleted_at`. Expiry via `expires_at`.
+
+### Added (soft)
+
+- **`active_notices_for_user(user)`** — returns all active
+  notices the user should see based on their role, user_id, and
+  instrument memberships. Respects `expires_at` + `deleted_at`.
+- **`quick_actions_for_user(user)`** — per-role card list, hard
+  cap of 5 cards. Admin sees different cards than requester sees
+  different cards than operator.
+- **NOTICEBOARD tile** (`templates/dashboard.html`) — severity-
+  coloured rows, timestamp, author. Empty state when nothing
+  active.
+- **QUICK ACTIONS tile** (`templates/dashboard.html`) — 5-card
+  max grid of the most-clicked actions for the current user's
+  role.
+- **`_seed_demo_notices()`** — idempotent demo seeder.
+- **`.tile-dash-noticeboard` + `.tile-dash-quick-actions` CSS** —
+  Ferrari-dashboard palette.
+
+## [1.5.2] — 2026-04-11
+
+**Mission Control drill-downs + PROJECT CONTROL banner.** v1.5.1
+added the PROJECT TIMELINE tile to `/dev`; v1.5.2 makes every
+commit and every tag clickable, and adds a dedicated banner
+surfacing the current stable version / HEAD / last-shipped
+rhythm in one glance.
+
+### Added (soft)
+
+- **PROJECT CONTROL banner** (`templates/dev_panel.html`) —
+  three-stat header: current stable tag, HEAD commit, time since
+  last ship. Earthy-red accent when HEAD ≠ stable (untagged
+  work). NASA-console monospaced feel.
+- **`/dev/commit/<sha>`** (`dev_panel_commit`) — per-commit
+  drill-down with message, diffstat, changed files.
+- **`/dev/tag/<tag_name>`** (`dev_panel_tag`) — per-tag drill-down
+  with tagger, date, and the commit range since the previous
+  tag.
+- **`templates/dev_panel_commit.html` + `dev_panel_tag.html`** —
+  two new Mission Control drill templates.
+- **Clickable commits + tags** — `PROJECT TIMELINE` tile rows
+  link to their drill-downs.
+- **`.mc-banner` + `.mc-drill-tiles` CSS** — shared Ferrari
+  vocabulary for the Mission Control drill pages.
+
+## [1.5.1] — 2026-04-11
+
+**PROJECT TIMELINE tile — every shipped tag in one view.** The
+`/dev` Mission Control panel gets a new tile listing every
+version tag chronologically with its commit count, date, and
+subject line of the tag commit. The point is daily situational
+awareness: how fast are we shipping, what just landed.
+
+### Added (soft)
+
+- **PROJECT TIMELINE tile** (`templates/dev_panel.html`) —
+  reverse-chronological tag list. Read via `git for-each-ref`
+  through a new helper. Each row shows tag, date, commit count
+  since previous tag, and the tag message first line.
+- **`future_fixes` tile** — remaining v1.5.0 TODO markers from
+  `scripts/seed_fixes.py`, grouped by file. Click any to open
+  the file at that line.
+- **`.tile-dev-timeline` + `.tile-dev-future-fixes` CSS.**
+
 ## [1.5.0] — 2026-04-11
 
 **First minor bump on the `v1.4.x` → `v1.5.x` line.**

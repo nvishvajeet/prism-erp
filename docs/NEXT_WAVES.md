@@ -300,6 +300,49 @@ commits in a single focus session on top of `v1.4.1`, before
 No new tag. The line remains `v1.4.1` → `HEAD` on
 `v1.3.0-stable-release` until W1.4.2b ships.
 
+### W1.4.4 — portfolio action-first dashboard (retro, untagged) ✅ SHIPPED
+
+*Landed `9d682a4` + `9cb1d70`. New 3-column PENDING / SELL / BUY
+action-first dashboard card on the portfolio page, weekend banner,
+LLM staleness gate, and calendar explainer. The second commit
+extracted inline hex color literals to `.pf-*` semantic classes
+backed by `--pf-*` CSS vars so the `philosophy` crawler stayed
+green (16/0/0).*
+
+### W1.4.5 — css_orphan + philosophy cleanup (retro, untagged) ✅ SHIPPED
+
+*Follow-on cleanup: retired dead `.control-form` /
+`.control-actions` styles that lingered after W1.4.3 c1's intake
+toggle replaced them, and moved all portfolio inline colors to
+CSS vars. `css_orphan` 562/0/4 → 564/0/0, `philosophy` 16/0/1 →
+16/0/0 in the same session.*
+
+### W1.4.6 — inline-toggle XHR for request approve/reject ✅ SHIPPED
+
+*Landed `200f491`. Replaces the twin-form approve/reject block on
+`request_detail.html`'s Approvals tile with a single
+`.approval-toggle-group` div driven by `static/approval-toggle.js`.
+Approve is a safe single-click commit; reject is 2-tap armed with
+a pulsing border and 3s timeout, mirroring the W1.4.3 c1 intake
+toggle. Reject requires non-empty remarks both client- and
+server-side. Why this action: approval is the highest-click
+write on the system — every request passes through at least one
+step, most pass through several, and operators live inside the
+Approvals tile.*
+
+### W1.4.7 — intake-toggle soft-reload fix (retro, untagged) ✅ SHIPPED
+
+*Landed `da705cb`. The W1.4.3 c1 inline intake toggle correctly
+wrote `instrument_operation_updated` audit-log rows with
+`actor_id`, but `static/intake-toggle.js` never reloaded after a
+successful XHR so the Recent Activity tile on the instrument
+page never showed the new event — from the user's seat the
+toggle "looked broken". Fix mirrors the W1.4.6 approval-toggle
+pattern: show "Now Maintenance — refreshing…" and
+`window.location.reload()` after 450ms. No server change needed;
+the audit row was already being written with the clicker's name
+via the existing `audit_logs ← users.name` join.*
+
 ### W1.4.2b — demo goes live (~10 minutes, post-ops)
 
 *Only starts after W1.3.9 has tagged and the HTTPS tailnet URL
@@ -423,6 +466,10 @@ wave already.
 | W1.4.1  | B     | 2 h         | —                    | v1.4.1    | ✅     |
 | W1.4.2a | C     | 90 min      | —                    | —         | ✅     |
 | W1.4.3  | B     | ~2 h retro  | —                    | —         | ✅     |
+| W1.4.4  | B     | ~1 h retro  | —                    | —         | ✅     |
+| W1.4.5  | B     | ~30 min     | —                    | —         | ✅     |
+| W1.4.6  | B     | ~1 h        | —                    | —         | ✅     |
+| W1.4.7  | B     | ~15 min     | —                    | —         | ✅     |
 | W1.4.2b | C     | 10 min      | W1.3.9 + W1.4.2a     | v1.4.2    | ops-blocked |
 | W1.5.0  | v1.5  | 1-2 d       | v1.4.2               | v1.5.0    | deferred |
 | W1.5.1  | v1.5  | 1-2 d       | v1.5.0               | v1.5.1    | deferred |

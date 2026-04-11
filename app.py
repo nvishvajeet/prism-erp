@@ -5986,17 +5986,25 @@ def _dev_panel_waves() -> list[dict]:
             cells = [c.strip() for c in line.strip("|").split("|")]
             if len(cells) < 5:
                 continue
+            # The table has 6 columns; the trailing "status" cell
+            # carries freeform markers like "✅", "ops-blocked",
+            # "deferred". We respect "deferred" up-front so v1.5+
+            # waves never surface as hot while the critical path is
+            # still in flight. Shipped / ops-blocked are resolved
+            # downstream from git tags + blocks propagation.
+            status_cell = cells[5].lower() if len(cells) > 5 else ""
+            initial_status = "deferred" if "deferred" in status_cell else "pending"
             rows.append({
                 "wave": cells[0],
                 "track": cells[1],
                 "est": cells[2],
                 "blocks": cells[3],
                 "tag": cells[4],
-                "status": "pending",
+                "status": initial_status,
             })
 
     shipped_tags = set(_dev_panel_git("tag", "--list").splitlines())
-    first_unshipped = True
+    # Pass 3a: decide shipped vs pending for every row.
     for row in rows:
         tag_clean = row["tag"].replace("v", "")
         tagged_shipped = row["tag"] and row["tag"] not in ("—", "-") and (
@@ -6004,7 +6012,46 @@ def _dev_panel_waves() -> list[dict]:
         )
         if tagged_shipped or row["wave"] in shipped_via_marker:
             row["status"] = "shipped"
-        elif first_unshipped and row["wave"].startswith("W"):
+
+    # Pass 3b: propagate ops-blocked through dependencies. An ops-blocked
+    # row waits on an external click (e.g. Tailscale Serve unblock) and
+    # must NOT surface as the hot wave because picking it up is not
+    # laptop-local work. A row is ops-blocked if its "blocks" column
+    # says so directly, OR if any wave it depends on is ops-blocked.
+    # Fixed-point over at most len(rows) iterations since the dependency
+    # graph is a DAG. W1.4.7+.
+    ops_blocked: set[str] = set()
+    wave_ids = {row["wave"] for row in rows}
+    for _ in range(len(rows) + 1):
+        grew = False
+        for row in rows:
+            if row["status"] == "shipped" or row["wave"] in ops_blocked:
+                continue
+            blocks_text = (row.get("blocks") or "").lower()
+            direct = "ops unblock" in blocks_text or "ops-blocked" in blocks_text
+            transitive = any(
+                wid in ops_blocked
+                for wid in wave_ids
+                if wid.lower() in blocks_text
+            )
+            if direct or transitive:
+                ops_blocked.add(row["wave"])
+                grew = True
+        if not grew:
+            break
+    for row in rows:
+        if row["wave"] in ops_blocked:
+            row["status"] = "ops-blocked"
+
+    # Pass 3c: first unshipped row that is NOT ops-blocked or
+    # deferred wins "hot". If the critical path is entirely
+    # shipped / ops-blocked / deferred, no row is hot and the
+    # hero tile falls back to "All tracked waves shipped."
+    first_unshipped = True
+    for row in rows:
+        if row["status"] in ("shipped", "ops-blocked", "deferred"):
+            continue
+        if first_unshipped and row["wave"].startswith("W"):
             row["status"] = "hot"
             first_unshipped = False
     return rows

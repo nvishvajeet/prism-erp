@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Inbox</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ unread }} unread · {{ messages|length }} total</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('message_compose') }}" data-vis="{{ V }}">New message</a>
+  </div>
+</header>
+
+<section class="inbox-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-inbox-list" data-vis="{{ V }}">
+    {{ card_heading("MESSAGES", unread|string ~ " unread") }}
+    {% if messages %}
+    <ul class="inbox-list" data-vis="{{ V }}">
+      {% for m in messages %}
+      <li class="inbox-row{% if not m.read_at %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
+        <a class="inbox-row-link" href="{{ url_for('message_detail', message_id=m.id) }}" data-vis="{{ V }}">
+          <div class="inbox-row-head" data-vis="{{ V }}">
+            {% if not m.read_at %}<span class="inbox-unread-dot" aria-hidden="true"></span>{% endif %}
+            <strong class="inbox-subject" data-vis="{{ V }}">{{ m.subject }}</strong>
+            <span class="hint inbox-sent" data-vis="{{ V }}">{{ m.sent_at[:16]|replace("T", " ") }}</span>
+          </div>
+          <div class="inbox-row-meta" data-vis="{{ V }}">
+            <span class="inbox-from hint" data-vis="{{ V }}">from <strong>{{ m.sender_name or 'unknown' }}</strong></span>
+            {% if m.body %}
+            <span class="inbox-preview hint" data-vis="{{ V }}">· {{ m.body[:120] }}{% if m.body|length > 120 %}…{% endif %}</span>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("Inbox is empty. Start a conversation via the New message button above.") }}
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

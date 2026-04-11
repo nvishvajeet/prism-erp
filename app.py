@@ -3588,6 +3588,27 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_notices_scope   ON notices(scope, scope_target);
             CREATE INDEX IF NOT EXISTS idx_notices_expires ON notices(expires_at);
+
+            -- v1.6.2 — user-to-user direct messages. Separate from
+            -- notices (which are broadcast / scope-filtered). A
+            -- message has exactly one sender and one recipient.
+            -- read_at NULL = unread; set on first view. Threading
+            -- and multi-recipient are deliberately deferred to a
+            -- later tag — one table, one row per message.
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id    INTEGER NOT NULL,
+                recipient_id INTEGER NOT NULL,
+                subject      TEXT NOT NULL,
+                body         TEXT NOT NULL DEFAULT '',
+                sent_at      TEXT NOT NULL,
+                read_at      TEXT,
+                FOREIGN KEY (sender_id)    REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, read_at);
+            CREATE INDEX IF NOT EXISTS idx_messages_sender    ON messages(sender_id);
+            CREATE INDEX IF NOT EXISTS idx_messages_sent_at   ON messages(sent_at);
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3756,6 +3777,66 @@ def init_db() -> None:
     # NOTICEBOARD tile populated. Idempotent: skips if any notice row
     # already exists.
     _seed_demo_notices()
+    # v1.6.2 — seed demo messages between canonical personas so the
+    # inbox tour shows real traffic. Idempotent, same gate as notices.
+    _seed_demo_messages()
+
+
+def _seed_demo_messages() -> None:
+    """Seed a handful of demo direct messages so the inbox tour on the
+    public demo shows real traffic. DEMO_MODE only, idempotent."""
+    if not DEMO_MODE:
+        return
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM messages").fetchone()["c"]
+        if existing:
+            return
+        def uid(email: str) -> int | None:
+            row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            return row["id"] if row else None
+        admin = uid("admin@lab.local")
+        operator = uid("operator@lab.local")
+        requester = uid("requester@lab.local")
+        approver = uid("approver@lab.local")
+        now = datetime.utcnow()
+        seeds = [
+            # (sender, recipient, subject, body, sent_offset_minutes, read)
+            (admin, operator,
+             "Welcome aboard",
+             "Hi — welcome to the PRISM live demo. This is a direct message from the facility admin. You'll see sitewide and role-scoped announcements in the NOTICEBOARD tile on your home page, but this channel is for one-to-one back-and-forth. Ping me anytime.",
+             120, False),
+            (operator, admin,
+             "Re: FESEM maintenance window",
+             "Noted on the Monday 09:00-13:00 downtime. I've shifted the two high-priority samples from Monday morning to Sunday's afternoon slot. Will confirm with the requesters directly.",
+             95, False),
+            (approver, requester,
+             "Your recent sample request — approved",
+             "Hi — I've approved your latest request on the FESEM queue. It should move into the operator's schedule later today. Let me know if you need anything else on the write-up side.",
+             40, False),
+            (admin, requester,
+             "Quick survey link",
+             "When you get a moment, we're collecting feedback on the new noticeboard + quick actions UI. Two minutes, no login required — reply to this message with any thoughts.",
+             15, True),
+        ]
+        for sender, recipient, subj, body, offset_min, is_read in seeds:
+            if not sender or not recipient:
+                continue
+            sent_at = (now - timedelta(minutes=offset_min)).isoformat(timespec="seconds")
+            read_at = (now - timedelta(minutes=offset_min - 5)).isoformat(timespec="seconds") if is_read else None
+            db.execute(
+                """
+                INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (sender, recipient, subj, body, sent_at, read_at),
+            )
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        db.close()
 
 
 def _seed_demo_notices() -> None:
@@ -4529,7 +4610,66 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             continue
         seen.add(a["label"])
         uniq.append(a)
-    return uniq[:4]
+    # v1.6.2 — everyone gets an "Inbox" quick action, pinned last so
+    # the primary role CTA stays in slot 1. Badge hint shows unread
+    # count inline when the user has any.
+    try:
+        unread = unread_message_count(user)
+    except Exception:
+        unread = 0
+    uniq.append({
+        "label": "Inbox" if unread == 0 else f"Inbox · {unread}",
+        "href": url_for("inbox"),
+        "eyebrow": "MESSAGES",
+        "accent": "ghost" if unread == 0 else "primary",
+    })
+    return uniq[:5]
+
+
+# ─── v1.6.2 user-to-user messaging helpers ──────────────────────────
+# Same single-source-of-truth pattern as notices: the `messages` table
+# is the one write surface, and every read (inbox list, detail view,
+# unread count badge, home-page preview tile) hits those same rows.
+
+
+def unread_message_count(user: sqlite3.Row | None) -> int:
+    """Return the number of unread messages addressed to `user`.
+    Used for the Quick Actions badge + the home-page inbox preview."""
+    if not user:
+        return 0
+    try:
+        row = query_one(
+            "SELECT COUNT(*) AS c FROM messages WHERE recipient_id = ? AND read_at IS NULL",
+            (user["id"],),
+        )
+        return int(row["c"]) if row else 0
+    except sqlite3.OperationalError:
+        return 0
+
+
+def inbox_preview_for_user(user: sqlite3.Row | None, limit: int = 3) -> list[dict]:
+    """Return the most-recent N messages for `user`'s home-page preview
+    tile. Newest-first, unread always on top. Includes sender name."""
+    if not user:
+        return []
+    try:
+        rows = query_all(
+            """
+            SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+                   u.name AS sender_name, u.email AS sender_email
+              FROM messages m
+              LEFT JOIN users u ON u.id = m.sender_id
+             WHERE m.recipient_id = ?
+             ORDER BY
+                CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
+                m.sent_at DESC
+             LIMIT ?
+            """,
+            (user["id"], limit),
+        )
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        return []
 
 
 # ─── v1.6.1 Admin Notices — sitewide messaging write surface ──────────
@@ -4657,6 +4797,134 @@ def admin_notices_delete(notice_id: int):
     execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     flash(f"Notice #{notice_id} removed.", "success")
     return redirect(url_for("admin_notices"))
+
+
+# ─── v1.6.2 User-to-user messaging routes ─────────────────────────────
+# Directed messages, one sender + one recipient per row. Separate from
+# notices (broadcast). Single source of truth: the `messages` table.
+
+
+@app.route("/inbox", methods=["GET"])
+@login_required
+def inbox():
+    """List every message addressed to the current user, newest-first,
+    unread always on top. Sender names resolved via JOIN."""
+    user = current_user()
+    rows = query_all(
+        """
+        SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+               u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
+          FROM messages m
+          LEFT JOIN users u ON u.id = m.sender_id
+         WHERE m.recipient_id = ?
+         ORDER BY
+            CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
+            m.sent_at DESC
+        """,
+        (user["id"],),
+    )
+    unread = sum(1 for r in rows if not r["read_at"])
+    return render_template(
+        "inbox.html",
+        messages=rows,
+        unread=unread,
+    )
+
+
+@app.route("/messages/<int:message_id>", methods=["GET"])
+@login_required
+def message_detail(message_id: int):
+    """Show a single message. Auto-marks it read on first view if the
+    viewer is the recipient."""
+    user = current_user()
+    row = query_one(
+        """
+        SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+               m.sender_id, m.recipient_id,
+               su.name AS sender_name, su.email AS sender_email,
+               ru.name AS recipient_name, ru.email AS recipient_email
+          FROM messages m
+          LEFT JOIN users su ON su.id = m.sender_id
+          LEFT JOIN users ru ON ru.id = m.recipient_id
+         WHERE m.id = ?
+        """,
+        (message_id,),
+    )
+    if not row:
+        abort(404)
+    # Only sender or recipient may read. Everyone else → 403.
+    if user["id"] not in (row["sender_id"], row["recipient_id"]):
+        abort(403)
+    # Auto-mark-read on first view when the viewer is the recipient.
+    if user["id"] == row["recipient_id"] and not row["read_at"]:
+        now_iso = datetime.utcnow().isoformat(timespec="seconds")
+        execute(
+            "UPDATE messages SET read_at = ? WHERE id = ?",
+            (now_iso, message_id),
+        )
+        row = dict(row)
+        row["read_at"] = now_iso
+    return render_template("message_detail.html", message=row)
+
+
+@app.route("/messages/new", methods=["GET"])
+@login_required
+def message_compose():
+    """Compose form. `?to=<user_id>` pre-fills the recipient picker."""
+    user = current_user()
+    to_user_id = request.args.get("to", type=int)
+    # Recipient options: every active user except the sender.
+    options = query_all(
+        """
+        SELECT id, name, email, role FROM users
+         WHERE active = 1 AND id != ?
+         ORDER BY name
+        """,
+        (user["id"],),
+    )
+    return render_template(
+        "message_compose.html",
+        options=options,
+        preselected_to=to_user_id,
+    )
+
+
+@app.route("/messages/new", methods=["POST"])
+@login_required
+def message_send():
+    """Persist a new message. Sender = current user, recipient from
+    form. Minimal validation: recipient must exist + be active,
+    subject required, body optional."""
+    user = current_user()
+    recipient_id = request.form.get("recipient_id", type=int)
+    subject = (request.form.get("subject") or "").strip()
+    body = (request.form.get("body") or "").strip()
+    if not recipient_id:
+        flash("Pick a recipient.", "error")
+        return redirect(url_for("message_compose"))
+    if not subject:
+        flash("Subject is required.", "error")
+        return redirect(url_for("message_compose", to=recipient_id))
+    recipient = query_one(
+        "SELECT id, name FROM users WHERE id = ? AND active = 1",
+        (recipient_id,),
+    )
+    if not recipient:
+        flash("Recipient not found.", "error")
+        return redirect(url_for("message_compose"))
+    if recipient["id"] == user["id"]:
+        flash("You can't send a message to yourself.", "error")
+        return redirect(url_for("message_compose"))
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    execute(
+        """
+        INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at)
+        VALUES (?, ?, ?, ?, ?, NULL)
+        """,
+        (user["id"], recipient["id"], subject, body, now_iso),
+    )
+    flash(f"Message sent to {recipient['name']}.", "success")
+    return redirect(url_for("inbox"))
 
 
 @app.route("/api/health-check")

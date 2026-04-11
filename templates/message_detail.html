@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('inbox') }}" class="hover-back-btn" title="Back to Inbox">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('inbox') }}" data-vis="{{ V }}">← Inbox</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Message</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">#{{ message.id }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('message_compose', to=message.sender_id) }}" data-vis="{{ V }}">Reply</a>
+  </div>
+</header>
+
+<section class="message-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-message-body" data-vis="{{ V }}">
+    {{ card_heading("SUBJECT", message.subject|truncate(60)) }}
+    <div class="message-head" data-vis="{{ V }}">
+      <dl class="mc-meta-grid" data-vis="{{ V }}">
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">From</dt>
+          <dd data-vis="{{ V }}">{{ message.sender_name or 'unknown' }}</dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">To</dt>
+          <dd data-vis="{{ V }}">{{ message.recipient_name or 'unknown' }}</dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Sent</dt>
+          <dd data-vis="{{ V }}">{{ message.sent_at[:19]|replace("T", " ") }}</dd>
+        </div>
+        {% if message.read_at %}
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Read</dt>
+          <dd data-vis="{{ V }}">{{ message.read_at[:19]|replace("T", " ") }}</dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
+    <h3 class="message-subject-headline" data-vis="{{ V }}">{{ message.subject }}</h3>
+    {% if message.body %}
+    <pre class="message-body-text" data-vis="{{ V }}">{{ message.body }}</pre>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(subject only — no body)</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

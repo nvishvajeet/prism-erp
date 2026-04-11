@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('inbox') }}" class="hover-back-btn" title="Back to Inbox">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('inbox') }}" data-vis="{{ V }}">← Inbox</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New message</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">direct · one recipient</span>
+  </div>
+</header>
+
+<section class="message-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-message-compose" data-vis="{{ V }}">
+    {{ card_heading("COMPOSE", "Pick a recipient and write") }}
+    <form method="post" action="{{ url_for('message_send') }}" class="form-grid message-compose-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+
+      <label data-vis="{{ V }}">Recipient
+        <select name="recipient_id" required data-vis="{{ V }}">
+          <option value="">— select a user —</option>
+          {% for u in options %}
+          <option value="{{ u.id }}"{% if preselected_to and preselected_to == u.id %} selected{% endif %}>{{ u.name }} · {{ u.email }} · {{ u.role|replace("_", " ")|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Subject
+        <input type="text" name="subject" maxlength="200" required placeholder="Short headline" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Body
+        <textarea name="body" rows="6" placeholder="Write your message. Plain text. Keep it tight." data-vis="{{ V }}"></textarea>
+      </label>
+
+      <div class="message-compose-submit-row" data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Send message</button>
+      </div>
+    </form>
+  </article>
+</section>
+{% endblock %}

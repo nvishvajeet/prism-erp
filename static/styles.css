@@ -6707,3 +6707,106 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* v1.6.2 — User-to-user messaging (inbox, detail, compose).
+   Same tile architecture as the rest of PRISM. Ferrari-ish
+   earthy accent on unread rows, monospaced sent-at timestamps. */
+.inbox-tiles, .message-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+  grid-auto-flow: row dense;
+}
+.inbox-tiles > .tile, .message-tiles > .tile { min-width: 0; }
+.tile-inbox-list     { grid-column: 1 / -1; }
+.tile-message-body   { grid-column: 1 / -1; }
+.tile-message-compose{ grid-column: 1 / -1; }
+
+@media (max-width: 760px) {
+  .inbox-tiles, .message-tiles { grid-template-columns: 1fr; }
+}
+
+.inbox-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.inbox-row {
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.inbox-row-unread {
+  border-left: 3px solid #c0392b;
+  background: color-mix(in srgb, #c0392b 4%, var(--panel));
+}
+.inbox-row:hover { background: color-mix(in srgb, var(--accent, #4c6ef5) 5%, var(--panel)); }
+.inbox-row-link {
+  display: block;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+.inbox-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.inbox-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c0392b;
+  flex: 0 0 auto;
+}
+.inbox-subject {
+  flex: 1;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.inbox-sent {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+}
+.inbox-row-meta {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.message-head {
+  margin-top: 0.4rem;
+}
+.message-subject-headline {
+  margin: 0.8rem 0 0.55rem 0;
+  font-size: 1.2rem;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.message-body-text {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  background: var(--panel-soft, rgba(0,0,0,0.03));
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.message-compose-form {
+  gap: 0.85rem;
+  margin-top: 0.4rem;
+}
+.message-compose-submit-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 0.3rem;
+}

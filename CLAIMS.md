@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| claude-operator-protocol-fix | infra/parallel-rule-clean-tree-and-board-prune | 2026-04-11T12:58+02:00 | `docs/PARALLEL.md`, `docs/NEXT_WAVES.md` | infra(parallel): relax clean-tree rule to allow claimed-file dirtiness + prune stale board rows |
 
 ## Stale-claim recovery
 

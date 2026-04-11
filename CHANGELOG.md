@@ -95,6 +95,166 @@ line is **v1.4.2** once Tailscale Serve is unblocked.
   Code-side W1.3.8 shipped; the ops-side acceptance test is
   pending one operator command.
 
+## [1.3.7] — 2026-04-10
+
+**Layered roles + instrument-group quick-grant in user admin.**
+Wires the additive schema from v1.3.6 into the user-detail page.
+
+### Added
+
+- **Multi-role editing on `/users/<id>`** (`19d72b5`) — new
+  `update_user_role_set` POST action. Ticked roles are granted,
+  unticked are revoked, and the primary role (`users.role`) is
+  always force-granted so the set never drops below the
+  single-role baseline. Only `super_admin` may layer
+  `site_admin` on top.
+- **Extra-roles tile** — renders the full role set as inline
+  `.role-chip` badges with an Edit toggle that exposes a
+  checkbox grid. The primary-role checkbox is disabled to
+  prevent accidental revocation.
+- **Group quick-grant row** inside the Instrument Access tile
+  — one button per `instrument_group`, each ticking the operator
+  lane for every member instrument. The junction tables stay
+  authoritative; groups are a pure UI shortcut.
+
+## [1.3.6] — 2026-04-10
+
+**Additive schema — `user_roles` + `instrument_group` (W1.3.6/W1.3.7).**
+Three new tables, zero breaking changes.
+
+### Added
+
+- **`user_roles(user_id, role, granted_at, granted_by_user_id)`**
+  (`ba64c10`) — layers additional roles on top of the existing
+  `users.role` column. `users.role` stays the primary role for
+  display and topbar; helpers `user_role_set`, `user_has_role`,
+  `grant_user_role`, `revoke_user_role` handle reads/writes.
+- **`instrument_group(id, name, description)`** +
+  `instrument_group_member(group_id, instrument_id)` — admin-
+  curated bundles of instruments used as grant shortcuts. Does
+  not affect the existing `instrument_admins` /
+  `instrument_operators` / `instrument_faculty_admins` gating.
+- **`init_db` backfills** — `user_roles` gets one row per
+  existing user mirroring `users.role`; `instrument_group`
+  auto-seeds one group per distinct `instruments.category`
+  when the table is empty.
+- `inject_globals` exposes `current_role_set`, `user_has_role`,
+  `instrument_groups_all` for templates.
+
+## [1.3.5] — 2026-04-10
+
+**WAL journal mode + `slow_queries` crawler (W1.3.5 + W1.3.8 partial).**
+
+### Added
+
+- **SQLite WAL pinned** (`f81e55d`) — `PRAGMA journal_mode = WAL`
+  and `synchronous = NORMAL` in both `init_db()` and `get_db()`
+  so every PRISM connection is born in WAL. Concurrent reads
+  during writes, same durability envelope.
+- **`crawlers/strategies/slow_queries.py`** — monkey-patches
+  `query_all` / `query_one` / `execute`, records per-fingerprint
+  timings across five hot routes, and flags anything > 50 ms
+  (warn) or > 250 ms (fail). Baseline: 37 distinct queries, 0
+  over budget. Wired into the `coverage` wave.
+
+## [1.3.4] — 2026-04-10
+
+**Role orientation hint + `role_landing` crawler.**
+
+### Added
+
+- **Role-hint badge** (`7a4d11c`) — dashboard and sitemap now
+  render a "you are here" tile using the `current_role_display`
+  + `current_role_hint` globals already in `inject_globals`. One
+  shared badge style in `static/styles.css`, reused across both
+  pages.
+- **`role_landing` crawler** — asserts the badge renders on
+  `/` and `/sitemap` for every `ROLE_PERSONAS` entry (16
+  checks in ~1 s). Added to the `sanity` wave as a hard gate
+  and to `behavioral` for completeness.
+
+### Fixed
+
+- Harness bootstrap forces persona roles via `UPDATE` after
+  `INSERT OR IGNORE`, so `ROLE_PERSONAS` stays authoritative
+  even if `seed_data` already inserted the same email with a
+  different role.
+
+## [1.3.3] — 2026-04-09
+
+**Member admin hardening.** User detail becomes the central hub
+for member administration.
+
+### Added
+
+- **Change Role tile** (`72e0b35`) on `/users/<id>` — site_admin+
+  can change a user's role through a toggle form. Safeguards:
+  owners are untouchable by lesser admins, super_admin lane
+  requires super_admin viewer, site_admin can't over-grant
+  beyond their own manageable instruments.
+- **Instrument Access tile** — three-lane assignment matrix
+  (admin / operator / faculty) grouped by instrument category
+  with quick-grant buttons ("Grant all as operator", etc.) and
+  a clear-category action. Wired through a new
+  `update_user_instruments` handler.
+- **Per-role orientation** — `inject_globals` exposes
+  `role_display_name` + `role_next_action` so templates can
+  render role-scoped next-step copy consistently.
+
+## [1.3.2] — 2026-04-09
+
+**In-place admin metadata editing with timeline append.**
+Extends the v1.3.1 instrument edit pattern to users and
+requests.
+
+### Added
+
+- **User Metadata edit** (`d131e27`) — `user_detail.html` gains
+  an Edit toggle over name / member_code / active, handled by
+  a new `update_user_metadata` route. Self-deactivation blocked;
+  owner/super_admin rows protected from lesser admins.
+- **Request Details edit** — `request_detail.html` gains an
+  admin Edit toggle over title / sample_name / sample_count /
+  working remarks, handled by `update_request_metadata`. Only
+  visible to instrument-managers on non-completed requests.
+- **Timeline append** — both handlers write a `log_action` row
+  so edits land in the existing timeline feeds. The timeline
+  renderer formats `request_metadata_updated` with the changed
+  fields inline.
+
+### Changed
+
+- **Generic `data-toggle-target` handler** in `base.html` —
+  one IIFE replaces four bespoke toggles. Any button carrying
+  `data-toggle-target="#id"` now reveals/hides that element.
+
+## [1.3.1] — 2026-04-09
+
+**Skeleton strengthening pass — dead code purge + tile grids.**
+Max-gain / min-effort crawler-driven cleanup.
+
+### Removed
+
+- **6 dead templates** (`8e9a7d4`) — `budgets.html`,
+  `email_preferences.html`, `finance.html`,
+  `instrument_config.html`, `notifications.html`, `pending.html`
+  (no `render_template` / `url_for` references anywhere).
+- **5 dead Python helpers** (~87 lines) in `app.py` —
+  `generate_unique_reference`, `planner_datetime_value`,
+  `processed_history_query_parts`, `user_upload_root`,
+  `week_start_for`.
+
+### Fixed
+
+- **`philosophy` crawler warnings cleared** — `activate.html`
+  and `docs.html` wrapped in proper `-tiles` grids with
+  `card_heading` macros; `error.html` / `sitemap.html`
+  exempted as single-purpose layouts; `portfolio.html` inline
+  style colours moved to a `.portfolio-forecast-chip` class
+  with a `--chip-bg` custom property.
+- **`cleanup` crawler warnings:** 11 → 0.
+- **`css_orphan` warnings:** below the new regression threshold.
+
 ## [1.3.0] — 2026-04-10
 
 **First stable release.** Hard attributes (data model, routes,

@@ -601,6 +601,67 @@ a parallel approach.
   timeline pattern.
 - **`empty_state(...)`** — every list / table needs an empty branch.
 
+### Page layout — the `.*-tiles` tile grid family
+
+Every non-trivial content page composes itself as a **tile grid**.
+This is the canonical multi-region layout abstraction — pick it
+up, do not invent a parallel flex/grid recipe.
+
+**The pattern.** A page-level `<section class="<name>-tiles">`
+wrapper uses:
+
+```css
+display: grid;
+grid-template-columns: repeat(6, minmax(0, 1fr));
+gap: 1rem;
+grid-auto-flow: row dense;
+```
+
+Children are `<article class="card tile tile-<role>">` blocks
+carrying span rules (`.tile-info { grid-column: span 4; }`,
+`.tile-queue { grid-column: 1 / -1; }`, etc.). Every family
+collapses to a single column at `@media (max-width: 760px)` via
+`grid-template-columns: 1fr` and `.tile > { grid-column: 1 / -1 }`.
+`.inst-tiles` has an additional 4-column breakpoint at 1200px
+(`static/styles.css:3435`); the request and new-request variants
+go straight from 6 → 1.
+
+**The three live instances.**
+
+- **`.inst-tiles`** — `templates/instrument_detail.html:24`,
+  CSS at `static/styles.css:3395`. 10 tiles (info, stats,
+  control, team, approval, queue, downtime, activity, edit,
+  danger). The reference implementation.
+- **`.request-tiles`** — `templates/request_detail.html:56`,
+  CSS at `static/styles.css:4758`. 8 tiles (header, meta,
+  actions, approvals, files, samples, events, …). Adds an
+  intermediate 4-column breakpoint at 1100px.
+- **`.new-request-tiles`** — `templates/new_request.html:16`,
+  CSS at `static/styles.css:1018`. 2 full-width tiles
+  (`tile-new-request-context`, `tile-new-request-form`).
+  Graduated onto the pattern in commit `a9825b8`
+  (2026-04-11, "feat(ui): new_request — graduate sample form
+  onto the tile pattern"); no longer exempt from the crawler.
+
+**When to use it.** Any content page composing more than one
+semantic region (header + list, form + context, detail + history).
+Pick a family-specific class name (`.<page>-tiles`) and reuse the
+shared `.tile` / span vocabulary.
+
+**When NOT to use it.** Single-form dialogs, error pages, login /
+logout, and `notifications.html` (one feed, no multi-tile
+composition). The exempt list lives in `NO_TILE_GRID_OK` at
+`crawlers/strategies/philosophy_propagation.py:57` and is
+currently `{change_password.html, notifications.html}`. Adding to
+this set is a policy decision — do not expand it casually.
+
+**Enforcement.** The `philosophy` crawler's rule 2
+(`crawlers/strategies/philosophy_propagation.py:98`) greps every
+non-exempt template for `class="[^"]*-tiles[^"]*"` and warns
+`missing_tile_grid` if absent. Any new page-level template either
+gets a tile grid or gets justified into `NO_TILE_GRID_OK` with a
+comment.
+
 ---
 
 ## 12. Testing

@@ -6207,49 +6207,53 @@ def _dev_panel_progress() -> dict:
         except ValueError:
             pass
 
-    # Parse TODO_AI.txt for the version-scoped headings.
-    todo_path = BASE_DIR / "TODO_AI.txt"
-    versions: list[dict] = []
-    current_version: dict | None = None
-    if todo_path.exists():
-        for raw in todo_path.read_text(errors="ignore").splitlines():
-            line = raw.strip()
-            if line.startswith("v1.") and "—" in line:
-                if current_version:
-                    versions.append(current_version)
-                current_version = {"name": line, "entries": [], "done": 0, "open": 0}
-            elif current_version is not None and line.startswith("1.") and len(line) >= 6 and line[2] == ".":
-                # sub-item heading like "1.3.0-b  Flip CSRF enforcement on   M  [O]"
-                done = "DONE" in line.upper()
-                current_version["entries"].append({"label": line, "done": done})
-                if done:
-                    current_version["done"] += 1
-                else:
-                    current_version["open"] += 1
-        if current_version:
-            versions.append(current_version)
-
-    # Current release from git tags — authoritative.
-    # CHANGELOG.md used to be the oracle, but tags are what the operator
-    # actually cuts and what the mini deploys against, so drift between
-    # CHANGELOG and real releases always made CHANGELOG lie. Fixed 2026-04-11
-    # after the v1.4.2 / v1.4.3 cuts exposed the drift (CHANGELOG stopped
-    # at [1.3.12], dev panel was showing "v1.3.12" while origin had v1.4.3
-    # tagged). See PHILOSOPHY.md §3.1 for the iOS-style tag cadence.
-    current_release = "unknown"
-    latest_tag_info: dict = {}
+    # Git tags are the authoritative source for both the ROADMAP tile
+    # (shipped patches grouped by major.minor line) and the STABLE
+    # RELEASE / header badge (latest semver tag). Fetch once, parse
+    # once, use twice. See PHILOSOPHY.md §3.1 for the iOS cadence.
     tag_lines = _dev_panel_git("tag", "--list").splitlines()
-    semver_tags: list[tuple[tuple[int, ...], str]] = []
+    semver_tags: list[tuple[tuple[int, int, int], str]] = []
     for t in tag_lines:
         t = t.strip()
         if not t.startswith("v"):
             continue
         parts = t[1:].split(".")
         if len(parts) == 3 and all(p.isdigit() for p in parts):
-            semver_tags.append((tuple(int(p) for p in parts), t))
+            semver_tags.append(((int(parts[0]), int(parts[1]), int(parts[2])), t))
+    semver_tags.sort()
+
+    # Versions-in-flight for the ROADMAP tile. Historically parsed
+    # TODO_AI.txt (pre-stable-release artifact with stale "v1.4.0
+    # BULK OPERATIONS" / "v1.5.0 SEARCH" headings that no longer
+    # match reality). Rewired 2026-04-11 to group the semver tags
+    # above by their major.minor line — every tag is a completed
+    # patch release per the iOS cadence in PHILOSOPHY.md §3.1, and
+    # the ROADMAP tile now tells the actual shipped story instead
+    # of a planning fiction.
+    versions: list[dict] = []
+    version_groups: dict[tuple[int, int], list[tuple[tuple[int, int, int], str]]] = {}
+    for (m_mi_p, t) in semver_tags:
+        key = (m_mi_p[0], m_mi_p[1])
+        version_groups.setdefault(key, []).append((m_mi_p, t))
+    for (major, minor) in sorted(version_groups.keys()):
+        patches = sorted(version_groups[(major, minor)])
+        entries = [{"label": t, "done": True} for _, t in patches]
+        versions.append({
+            "name": f"v{major}.{minor}.x — {len(patches)} patch{'' if len(patches) == 1 else 'es'} shipped",
+            "entries": entries,
+            "done": len(entries),
+            "open": 0,
+        })
+
+    # Current release: the latest semver tag wins. Falls back to
+    # CHANGELOG.md only if no semver tags exist at all (greenfield
+    # repo safety, never hit on PRISM trunk in practice).
+    current_release = "unknown"
+    latest_tag_info: dict = {}
     if semver_tags:
-        semver_tags.sort()
-        latest_tag = semver_tags[-1][1]  # e.g. "v1.4.3"
+        # semver_tags was already sorted above when it was built for
+        # the ROADMAP tile; no need to re-sort.
+        latest_tag = semver_tags[-1][1]  # e.g. "v1.4.4"
         current_release = latest_tag.lstrip("v")
         # Resolve tag → commit SHA, tagged-at, tag subject (first line of
         # the annotated message). `git for-each-ref` gives us all three in

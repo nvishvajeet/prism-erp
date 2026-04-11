@@ -523,11 +523,25 @@ the dev panel's WAVES tile can focus on what is actually moving.
 | W1.4.5  | B     | ~30 min     | —        | —         | ✅     |
 | W1.4.6  | B     | ~1 h        | —        | —         | ✅     |
 | W1.4.7  | B     | ~15 min     | —        | —         | ✅     |
+| W1.4.8  | B     | ~20 min     | —        | —         | ✅     |
+| W1.4.9  | A     | ~30 min     | —        | —         | ✅     |
+| W1.4.10 | B     | ~45 min     | —        | v1.4.2    | ✅     |
+| W1.4.11 | B     | ~30 min     | —        | —         | ✅     |
+| W1.4.12 | B     | ~30 min     | —        | —         | ✅     |
+| W1.4.13 | B     | ~20 min     | —        | —         | ✅     |
+| W1.4.14 | B     | ~45 min     | —        | v1.4.3    | ✅     |
+| W1.4.15 | B     | ~45 min     | —        | v1.4.4    | ✅     |
 
-**All laptop-local critical-path work is done.** The v1.4.1 tag
-is live; W1.4.2a shipped three commits; W1.4.3 shipped three more
-as Jony-Ive polish on top. Grid-overlay was unhooked from the main
-site on 2026-04-11 (`02cb7ce`) and parked for future dev-mode work.
+**All laptop-local critical-path work is done.** The v1.4.1
+through v1.4.4 tags are live on the iOS-cadence patch stream
+(see `docs/PHILOSOPHY.md` §3.1). Four distinct stable patch
+releases were cut in a single 2026-04-11 session after the
+cadence policy landed. Grid-overlay was unhooked from the main
+site on 2026-04-11 (`02cb7ce`) and parked for future dev-mode
+work. W1.4.8 through W1.4.13 are retro labels for shipped
+commits from the parallel-session era; W1.4.14 / W1.4.15 are
+the two most recent retro labels covering the iOS-cadence
+doc + dev-panel-three-panels work that earned v1.4.3 / v1.4.4.
 
 ## Future technology bets
 

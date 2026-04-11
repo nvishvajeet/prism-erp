@@ -22,3 +22,4 @@ from . import role_landing             # noqa: F401
 from . import slow_queries             # noqa: F401
 from . import color_improvement        # noqa: F401
 from . import cleanup                  # noqa: F401
+from . import deploy_smoke             # noqa: F401

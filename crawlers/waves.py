@@ -37,7 +37,7 @@ WAVES: dict[str, Wave] = {
     "sanity": Wave(
         name="sanity",
         description="Pre-push gate — must be green before every push",
-        strategies=("smoke", "visibility", "role_landing", "contrast_audit"),
+        strategies=("smoke", "visibility", "role_landing", "contrast_audit", "deploy_smoke"),
         stop_on_fail=True,
     ),
     "static": Wave(
@@ -74,6 +74,70 @@ WAVES: dict[str, Wave] = {
         name="cleanup",
         description="Suggest dead code / templates / CSS for retirement",
         strategies=("cleanup", "css_orphan", "philosophy"),
+        stop_on_fail=False,
+    ),
+    # ── Category waves (taxonomy, 2026-04-11) ───────────────────────
+    # Six orthogonal buckets. Every registered strategy belongs to
+    # exactly one category. See `crawlers/taxonomy.py` for the source
+    # of truth — these wave entries are the runnable view of it.
+    # Running the rhythm:
+    #   * every ~20 min of dev work → `wave skeleton` or `wave testing`
+    #     (whichever bucket the last change touched)
+    #   * every ~1 hour → `wave rhythm` (the 5-min union of all six)
+    #   * pre-push → `wave sanity` (unchanged, hard gate)
+    "skeleton": Wave(
+        name="skeleton",
+        description="Skeleton — layout, template creed, CSS hygiene, a11y",
+        strategies=(
+            "architecture", "philosophy", "css_orphan", "cleanup",
+            "contrast_audit", "color_improvement",
+        ),
+        stop_on_fail=False,
+    ),
+    "testing": Wave(
+        name="testing",
+        description="Testing — regression smoke + dead-link sweep",
+        strategies=("smoke", "dead_link", "deploy_smoke"),
+        stop_on_fail=True,
+    ),
+    "roleplay": Wave(
+        name="roleplay",
+        description="Role-playing — 9 personas × signature actions + MCMC walk",
+        strategies=("visibility", "role_landing", "role_behavior", "random_walk"),
+        stop_on_fail=False,
+    ),
+    "feature": Wave(
+        name="feature",
+        description="Feature verification — end-to-end UI journeys",
+        strategies=("lifecycle",),
+        stop_on_fail=False,
+    ),
+    "backend": Wave(
+        name="backend",
+        description="Backend — SQL budgets, route timing, slow queries",
+        strategies=("performance", "slow_queries"),
+        stop_on_fail=False,
+    ),
+    "data": Wave(
+        name="data",
+        description="Data structure — integrity, pools, round-robin invariants",
+        strategies=("approver_pools",),
+        stop_on_fail=False,
+    ),
+    # "rhythm" is the 5-minute union every ~1 hour of dev work runs:
+    # one representative from each category, sequenced shortest-first
+    # so a failing smoke stops the wave in <5s.
+    "rhythm": Wave(
+        name="rhythm",
+        description="20-min-dev / 5-min-crawl rhythm — one per category",
+        strategies=(
+            "smoke",            # testing
+            "philosophy",       # skeleton
+            "visibility",       # roleplay
+            "approver_pools",   # data
+            "slow_queries",     # backend
+            "lifecycle",        # feature
+        ),
         stop_on_fail=False,
     ),
     # Meta-wave: run every wave in order. Matches a full pre-release pass.

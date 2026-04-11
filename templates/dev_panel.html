@@ -109,6 +109,40 @@
     </div>
   </section>
 
+  {# ─── PROJECT TIMELINE — the "Mission Control" past/present at a
+       glance. Every shipped tag on the v1.x line, newest-first,
+       grouped by minor-line (v1.3.x / v1.4.x / v1.5.x) with the
+       latest tag highlighted. No fake future placeholders — the
+       operator decides what comes next, the tile shows what's real.
+       Full-width tile spanning the tile grid. ─── #}
+  <section class="card tile tile-dev-timeline" id="devProjectTimeline" data-vis="{{ V }}">
+    {{ card_heading("PROJECT TIMELINE", "Every shipped tag, newest first") }}
+    {% if progress.timeline %}
+    <div class="dev-timeline-body" data-vis="{{ V }}">
+      {% set ns = namespace(last_line='') %}
+      {% for t in progress.timeline %}
+        {% if t.line != ns.last_line %}
+          {% if not loop.first %}</ol>{% endif %}
+          <div class="dev-timeline-line-head" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ t.line }}</strong>
+            <span class="hint" data-vis="{{ V }}">line</span>
+          </div>
+          <ol class="dev-timeline-list" data-vis="{{ V }}">
+          {% set ns.last_line = t.line %}
+        {% endif %}
+        <li class="dev-timeline-item{% if t.is_latest %} dev-timeline-item-latest{% endif %}" data-vis="{{ V }}">
+          <code class="inline-code dev-timeline-tag" data-vis="{{ V }}">{{ t.tag }}</code>
+          {% if t.tagged_at %}<span class="hint dev-timeline-date" data-vis="{{ V }}">{{ t.tagged_at }}</span>{% endif %}
+          {% if t.is_latest %}<span class="dev-timeline-latest-chip" data-vis="{{ V }}">LATEST</span>{% endif %}
+        </li>
+      {% endfor %}
+      </ol>
+    </div>
+    {% else %}
+    {{ empty_state("No semver tags yet — cut the first via `git tag -a v1.X.Y <sha>`.") }}
+    {% endif %}
+  </section>
+
   {# ─── Hero: Now Shipping — "you are here" at a glance. ───
        Answers four questions in 5 seconds: what's the current
        release, which wave is hot right now, did anything ship

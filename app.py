@@ -6489,6 +6489,31 @@ def _dev_panel_progress() -> dict:
             reports_latest_iso = datetime.utcfromtimestamp(newest).isoformat(timespec="seconds")
             reports_latest_age_hours = max(0.0, (now.timestamp() - newest) / 3600.0)
 
+    # Project timeline — every shipped tag, newest-first, with the
+    # commits-since-tag depth hint for each. Powers the Mission
+    # Control PROJECT TIMELINE tile on /admin/dev_panel. Shipped tags
+    # only — no fake "future" placeholders. The operator decides what
+    # v1.5.1 / v1.6.0 / v2.0 look like; the tile shows what's real.
+    timeline: list[dict] = []
+    # semver_tags is already sorted ascending; reverse for newest-first.
+    for (m_mi_p, t) in reversed(semver_tags):
+        major, minor, patch = m_mi_p
+        tag_date = _dev_panel_git(
+            "for-each-ref",
+            "--format=%(taggerdate:short)",
+            f"refs/tags/{t}",
+        ).strip()
+        is_latest = (t == latest_tag_info.get("tag", ""))
+        timeline.append({
+            "tag": t,
+            "major": major,
+            "minor": minor,
+            "patch": patch,
+            "tagged_at": tag_date,
+            "is_latest": is_latest,
+            "line": f"v{major}.{minor}.x",  # e.g. "v1.5.x" for grouping
+        })
+
     return {
         "branch": branch,
         "ahead": ahead,
@@ -6502,6 +6527,7 @@ def _dev_panel_progress() -> dict:
         "current_release": current_release,
         "latest_tag": latest_tag_info,
         "latest_commit": latest_commit_info,
+        "timeline": timeline,
         "reports_latest_at": reports_latest_iso,
         "reports_latest_age_hours": reports_latest_age_hours,
         "future_fixes": _dev_panel_future_fixes_count(),

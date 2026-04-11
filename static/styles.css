@@ -5843,6 +5843,82 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   margin: 0.15rem 0 0 0;
 }
 
+/* v1.5.0 — PROJECT TIMELINE tile (Mission Control feel).
+   Full-width tile spanning the inst-tiles grid, with per-line
+   groupings of every shipped tag and a "LATEST" chip on the tip
+   of the chain. */
+.tile-dev-timeline {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent, #4c6ef5) 4%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid var(--accent, #4c6ef5);
+}
+.dev-timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 0.5rem;
+}
+.dev-timeline-line-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--line, rgba(0,0,0,0.08));
+}
+.dev-timeline-line-head strong {
+  font-size: 0.9rem;
+  color: var(--accent, #4c6ef5);
+  letter-spacing: 0.02em;
+}
+.dev-timeline-line-head .hint {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dev-timeline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+.dev-timeline-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  background: var(--panel-soft, rgba(0,0,0,0.02));
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.82rem;
+}
+.dev-timeline-item-latest {
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 10%, var(--panel));
+  border-color: var(--accent, #4c6ef5);
+  box-shadow: 0 0 0 1px var(--accent, #4c6ef5) inset;
+}
+.dev-timeline-tag {
+  font-weight: 600;
+}
+.dev-timeline-date {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.dev-timeline-latest-chip {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent, #4c6ef5);
+  color: #fff;
+}
+
 .tile-dev-stable-release {
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--accent, #4c6ef5) 8%, var(--panel)),

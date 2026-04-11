@@ -8223,7 +8223,13 @@ if __name__ == "__main__":
     app.jinja_env.auto_reload = True
     # Static files are served fresh by Flask dev server (no caching)
     # use_reloader watches .py files and auto-restarts on code changes
-    # Set LAB_SCHEDULER_DEBUG=1 for verbose Flask debug toolbar
+    # Set LAB_SCHEDULER_DEBUG=1 for verbose Flask debug + auto-reloader.
+    # Service mode (start.sh --service under launchd) exports
+    # LAB_SCHEDULER_DEBUG=0 so the reloader does NOT fork a grandchild
+    # — that fork-and-exit pattern makes launchd mark the service as
+    # EX_CONFIG-crashed because the parent PID vanishes. Debug-off is
+    # also the right choice for a persistent local deploy: no code
+    # auto-restart on every file touch, no debugger PIN exposed.
     is_debug = os.environ.get("LAB_SCHEDULER_DEBUG", "0") == "1"
     # LAB_SCHEDULER_HOST controls the bind address. Default is loopback
     # (127.0.0.1) so `python app.py` on a laptop does not accidentally
@@ -8231,7 +8237,7 @@ if __name__ == "__main__":
     # host, set LAB_SCHEDULER_HOST=0.0.0.0 in .env so Tailscale and LAN
     # devices can reach it at http://<host>:5055/.
     bind_host = os.environ.get("LAB_SCHEDULER_HOST", "127.0.0.1")
-    app.run(debug=True, use_reloader=True, host=bind_host, port=5055,
+    app.run(debug=is_debug, use_reloader=is_debug, host=bind_host, port=5055,
             extra_files=[
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),

@@ -28,3 +28,4 @@ from . import empty_states             # noqa: F401
 from . import dev_panel_readability    # noqa: F401
 from . import xhr_contracts            # noqa: F401
 from . import agents_md_contract       # noqa: F401
+from . import parallel_claims          # noqa: F401

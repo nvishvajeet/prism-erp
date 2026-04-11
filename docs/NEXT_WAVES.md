@@ -504,36 +504,61 @@ for v1.4.x. They ship after v1.4.2 is in the wild for a week.
 `deploy_smoke` shipped in `f6e7507` and is wired into the `sanity`
 wave already.
 
-## Time budget summary
+## Time budget summary — current progress of features
 
-| wave    | track | est.        | blocks               | tag       | status |
-|---------|-------|-------------|----------------------|-----------|--------|
-| W1.3.7  | A     | 30 min      | —                    | —         | ✅     |
-| W1.3.8  | A     | 1-2 h       | W1.3.7               | v1.3.8    | ✅     |
-| W1.3.9  | A     | 15 min ops  | W1.3.8 + ops unblock | v1.3.9    | ops-blocked |
-| W1.4.1  | B     | 2 h         | —                    | v1.4.1    | ✅     |
-| W1.4.2a | C     | 90 min      | —                    | —         | ✅     |
-| W1.4.3  | B     | ~2 h retro  | —                    | —         | ✅     |
-| W1.4.4  | B     | ~1 h retro  | —                    | —         | ✅     |
-| W1.4.5  | B     | ~30 min     | —                    | —         | ✅     |
-| W1.4.6  | B     | ~1 h        | —                    | —         | ✅     |
-| W1.4.7  | B     | ~15 min     | —                    | —         | ✅     |
-| W1.4.2b | C     | 10 min      | W1.3.9 + W1.4.2a     | v1.4.2    | ops-blocked |
-| W1.5.0  | v1.5  | 1-2 d       | v1.4.2               | v1.5.0    | deferred |
-| W1.5.1  | v1.5  | 1-2 d       | v1.5.0               | v1.5.1    | deferred |
+Rows that represent **in-flight or shipped feature work on the
+laptop**. Externally-blocked rows (waiting on an ops click, a
+third-party admin console, or a schema wave we explicitly
+deferred) live in the §"Blocked / HARD TODO" section below so
+the dev panel's WAVES tile can focus on what is actually moving.
+
+| wave    | track | est.        | blocks   | tag       | status |
+|---------|-------|-------------|----------|-----------|--------|
+| W1.3.7  | A     | 30 min      | —        | —         | ✅     |
+| W1.3.8  | A     | 1-2 h       | W1.3.7   | v1.3.8    | ✅     |
+| W1.4.1  | B     | 2 h         | —        | v1.4.1    | ✅     |
+| W1.4.2a | C     | 90 min      | —        | —         | ✅     |
+| W1.4.3  | B     | ~2 h retro  | —        | —         | ✅     |
+| W1.4.4  | B     | ~1 h retro  | —        | —         | ✅     |
+| W1.4.5  | B     | ~30 min     | —        | —         | ✅     |
+| W1.4.6  | B     | ~1 h        | —        | —         | ✅     |
+| W1.4.7  | B     | ~15 min     | —        | —         | ✅     |
 
 **All laptop-local critical-path work is done.** The v1.4.1 tag
 is live; W1.4.2a shipped three commits; W1.4.3 shipped three more
 as Jony-Ive polish on top. Grid-overlay was unhooked from the main
 site on 2026-04-11 (`02cb7ce`) and parked for future dev-mode work.
 
-**Ops dependency:** one click at
-https://login.tailscale.com/f/serve . After that click, the
-W1.3.9 + W1.4.2b combo is ~25 minutes from click to live URL:
-run `scripts/tailscale_serve.sh`, flip `.env`, `launchctl kickstart`,
-`deploy_smoke` from the laptop, then the portfolio button commit
-on `nvishvajeet.github.io` and the `v1.4.2` tag. That is the only
-remaining critical-path work to demo-live.
+## Blocked / HARD TODO — exception list
+
+Rows here are **not on the current-progress dashboard**. They
+describe work that is either (a) waiting on a one-shot external
+event outside any agent's control, or (b) deliberately deferred
+to a later major version. The WAVES parser skips this section,
+so these waves do not light up as `hot` or `pending` in the dev
+panel. When an item unblocks, move it back into the
+§"Time budget summary" table.
+
+### W1.3.9 — bare-minimum HTTPS · **ops-blocked**
+
+**Blocked on:** one operator click at
+https://login.tailscale.com/f/serve to enable Tailscale Serve
+tailnet-wide. The code prep already landed (`5bc3142`,
+`3af05da`). After the click, `scripts/ship_https.sh` collapses
+the rest to ~2 minutes of ops: one command, no re-tries, idempotent.
+
+### W1.4.2b — demo goes live · **downstream-of-W1.3.9**
+
+**Blocked on:** W1.3.9 (so the portfolio button has a live HTTPS
+URL to link at). Trivial once unblocked: one `<a>` on
+`nvishvajeet.github.io` + the `v1.4.2` tag.
+
+### W1.5.0 / W1.5.1 — schema waves · **deferred to v1.5.x**
+
+`user_roles` multi-role refactor and `instrument_group`
+first-class membership. Intentionally deferred until v1.4.2 has
+been in the wild for a week. Re-admit to the progress table
+then.
 
 ## Parallel task board
 

@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude-waves-blocked-split | plan/blocked-exception-list | 2026-04-11T12:25+02:00 | `docs/NEXT_WAVES.md`, `crawlers/strategies/parallel_claims.py` (new), `crawlers/strategies/__init__.py`, `crawlers/waves.py` | perf(dev_panel): W1.3.9 out of progress list, parallel_claims crawler |
+| _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery
 

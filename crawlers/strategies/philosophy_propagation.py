@@ -34,9 +34,11 @@ from pathlib import Path
 from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
+# sitemap.html graduated onto .sitemap-tiles on 2026-04-11 — no
+# longer exempt, so future tile-architecture drift is caught here.
 EXEMPT_PREFIXES = ("_", "base.html", "error", "login.html",
                    "logout.html", "onboard", "accept_invite",
-                   "password_reset", "calendar_card", "sitemap.html")
+                   "password_reset", "calendar_card")
 
 DEPRECATED_CLASSES = [
     "grid-two", "grid-auto-stats", "stream-pill", "stream-filter-strip",

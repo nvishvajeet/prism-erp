@@ -6,9 +6,8 @@ on the rendered HTML of the canonical pages: (1) `<main class=
 "page"` wrapper, (2) a `*-tiles` grid class, (3) a `.tile`
 descendant — the last check catches drift philosophy rule 2
 can't see (a grid wrapper whose `{% for %}` loop produced zero
-children). `/sitemap` is exempt from (2): it uses the
-`settings-layout` panel pattern, matching philosophy's
-EXEMPT_PREFIXES.
+children). `/sitemap` graduated onto `.sitemap-tiles` on
+2026-04-11 and is no longer exempt from (2).
 """
 from __future__ import annotations
 
@@ -26,7 +25,7 @@ CANONICAL_PAGES: tuple[str, ...] = (
     "/sitemap",
 )
 
-NO_TILES_GRID_PATHS: frozenset[str] = frozenset({"/sitemap"})
+NO_TILES_GRID_PATHS: frozenset[str] = frozenset()
 
 PAGE_WRAPPER_MARKER = '<main class="page"'
 TILES_GRID_RE = re.compile(r'class="[^"]*-tiles[^"]*"')

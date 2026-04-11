@@ -6025,7 +6025,20 @@ def _dev_panel_crawler_health() -> dict:
 
 
 def _dev_panel_git(*args: str) -> str:
-    """Run a git subcommand and return stdout (or empty on failure)."""
+    """Run a git subcommand and return stdout (or empty on failure).
+
+    Scrubs every git-related environment variable before spawning the
+    subprocess so git discovers its working copy purely from `cwd`.
+    Without this, the dev panel breaks when the web app is started
+    from a git-hook context (pre-receive / post-receive / post-commit):
+    git inherits `GIT_DIR` / `GIT_WORK_TREE` / `GIT_QUARANTINE_PATH` /
+    `GIT_INDEX_FILE` from the parent hook and operates on the hook's
+    repo (or its quarantine object store) instead of the app's own
+    working tree — returning empty log output and breaking the dev-
+    panel readability contract. Regression-tested by
+    `crawlers/strategies/dev_panel_readability.py`.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     try:
         result = subprocess.run(
             ["git", *args],
@@ -6034,6 +6047,7 @@ def _dev_panel_git(*args: str) -> str:
             text=True,
             timeout=5,
             check=False,
+            env=env,
         )
         return result.stdout.strip()
     except Exception:

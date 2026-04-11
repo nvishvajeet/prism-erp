@@ -263,6 +263,81 @@ is confirmed green via `deploy_smoke`.*
 2. **`v1.4.2` tag** on `v1.3.0-stable-release`. First tag of
    the v1.4.x line. Demo is live. (~1 min)
 
+## Deferred — dev mode overlay
+
+_Parked 2026-04-11. Ships when the main product is stable and we_
+_have appetite for a dev-only surface. Not on the v1.4.x critical_
+_path._
+
+### What exists today (preserved, not loaded)
+
+* `static/grid-overlay.js` (~697 lines) — full grid/feedback
+  overlay. Classes every visible element with a zone code
+  (H/N/S/M/F/B/C/E/T/P/R/K/L/D), paints badges, intercepts
+  clicks for logging, captures JS errors passively, records
+  named "paths" of click sequences, exports JSON/plain-text
+  dumps, and auto-flushes to `/prism/save` via `sendBeacon`.
+  Public surface: `window.prism.{on,off,codes,at,tap,path.*,dump,clear,find}`.
+* Flask endpoints in `app.py` (≈L8193): `/prism/save`,
+  `/prism/log`, `/prism/clear`, persisting to `prism_log.json`.
+* `templates/dev_panel.html` — separate "Development Console"
+  page (wave/commit dashboard). Unrelated to the overlay and
+  stays live for super-admin/owner.
+
+### Why it was unhooked
+
+The script tag in `templates/base.html` loaded
+`grid-overlay.js` unconditionally for **every user on every
+page**, adding a floating button to the main site. No role
+gate, no debug gate, no CSS shipped for its classes. Removed
+from `base.html` on 2026-04-11; file and routes preserved.
+
+### Wave sketch for revival (no commits, no schema, no role bump)
+
+1. **Gate the script load** in `base.html` behind a single
+   context flag `debug_mode_active`, set by an `inject_globals`
+   context processor to `True` **iff** all three hold:
+   * env var `PRISM_DEBUG_OVERLAY=1` (laptop only; mini leaves
+     it unset → dead in prod)
+   * `session.get("debug_mode") is True`
+   * `current_user.role in ("super_admin", "owner")` — reuses
+     existing roles, **no 10th role** (hard-attribute lock per
+     `WORKFLOW.md` §3.2 stays intact)
+2. **Session toggle:** one new POST route
+   `/dev_panel/debug-toggle` (super_admin/owner only) that
+   flips `session["debug_mode"]`. Add the toggle button to the
+   existing `/dev_panel` page as a new tile.
+3. **Ship the missing CSS.** The overlay references
+   `.prism-grid-btn`, `.prism-grid-badge`, `.prism-grid-outline`,
+   `.prism-pane-id-badge`, `.prism-fb-*` — zero rules exist in
+   `static/styles.css`. Add a self-contained `dev-overlay.css`
+   loaded in the same `{% if debug_mode_active %}` block so it
+   never pollutes the main site's CSS surface.
+4. **Demo-mode entry point.** Same `/dev_panel` page gains a
+   button that runs the existing demo reset flow (TBD: confirm
+   which script under `scripts/` is the canonical entry — likely
+   a `reset_demo.*` or an `init_db` variant with `DEMO_MODE=1`).
+5. **Crawler:** new `dev_overlay` strategy under `crawlers/
+   strategies/` that logs in as super_admin, flips the toggle,
+   asserts the overlay button renders on `/`, flips it off,
+   asserts it disappears. Lives in the `behavioral` wave only —
+   never in `sanity`, never in prod.
+6. **Docs:** one paragraph in `docs/PROJECT.md` under "Security
+   model" documenting the three-fold gate, and an `### Added`
+   CHANGELOG entry. No BREAKING marker because no hard attribute
+   moves.
+
+### Acceptance criteria
+
+* With `PRISM_DEBUG_OVERLAY` unset, the overlay is unreachable
+  for every role on every page — `view-source:` must not
+  contain the `<script src="grid-overlay.js">` tag.
+* With `PRISM_DEBUG_OVERLAY=1` and `session["debug_mode"]=False`,
+  still unreachable.
+* With both flipped on and role = super_admin/owner, `window.prism`
+  is defined and the button renders.
+* Sanity wave stays green end-to-end in all three states.
+
 ## Deferred to v1.5.x (schema waves)
 
 Both waves below touch foundational tables and are out of scope

@@ -324,7 +324,11 @@
       });
     })();
   </script>
-  <script src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
+  {# grid-overlay.js is the PRISM grid/feedback overlay — disabled on the
+     main site as of 2026-04-11. The file at static/grid-overlay.js and the
+     /prism/save|/prism/log|/prism/clear Flask routes are intentionally
+     preserved; they will be revived behind a dedicated debug mode in a
+     future wave. See docs/NEXT_WAVES.md → "Deferred — dev mode overlay". #}
   <script defer src="{{ url_for('static', filename='keybinds.js') }}"></script>
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>
   {% if current_user %}

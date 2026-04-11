@@ -37,6 +37,8 @@ ALLOWLIST: set[str] = {
     "selected", "sticky", "compact", "dense", "bare",
     # Pagination and pane internals used by JS macros
     "pane-controls", "pane-scroll", "pane-empty", "pane-page",
+    # FullCalendar base class (prefix rule "fc-" misses the bare name)
+    "fc",
 }
 
 # Any selector whose name starts with one of these prefixes is
@@ -46,11 +48,18 @@ ALLOWLIST: set[str] = {
 # ship from a third-party library get an automatic pass.
 ALLOWLIST_PREFIXES: tuple[str, ...] = (
     # FullCalendar + dhtmlx calendar (runtime-injected by the JS lib)
-    "fc-", "fc_", "calendar_white_",
+    "fc-", "fc_", "calendar_white_", "month_white_",
     # Generic button families composed at runtime
     "btn-",
     # State and utility flags composed at runtime
     "is-", "has-",
+    # Sample-request / workflow status classes composed in templates as
+    # `status-{{ row['status'] }}` — one class per workflow state.
+    "status-",
+    # Dev-panel wave rows — `dp-wave-{{ w.status }}` (shipped/hot/pending)
+    "dp-wave-",
+    # Stat tile tone classes — `stat-tone-{{ tone }}` in _page_macros.html
+    "stat-tone-",
     # All -tiles grids used by the tile architecture (page-level layout)
     # are applied once per template; crawler treats any existing
     # `<thing>-tiles` class as used-by-convention.
@@ -63,10 +72,12 @@ ALLOWLIST_SUFFIXES: tuple[str, ...] = (
 )
 
 # If more than this number of orphans appear, the run fails hard.
-# Current baseline after v1.3.0 template purge: ~230 orphans — many
-# are legacy families from retired pages. Threshold is a regression
-# ceiling, not a target; reduce it every time the backlog shrinks.
-FAIL_THRESHOLD = 260
+# Backlog was wiped to zero on 2026-04-11 (W1.3.11 cleanup — 194
+# dead classes + ~1700 dead CSS lines removed, 13 dynamic-prefix
+# families added to the allowlist). The threshold is intentionally
+# low now so any regression fails loudly instead of being allowed
+# to grow a second fossil layer.
+FAIL_THRESHOLD = 20
 
 
 class CSSOrphanStrategy(CrawlerStrategy):

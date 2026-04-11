@@ -202,7 +202,7 @@
         </tr>
         {% else %}
         {% set empty_colspan = 8 if can_operate_queue else 6 %}
-        <tr data-vis="{{ V }}"><td colspan="{{ empty_colspan }}" data-vis="{{ V }}">{{ empty_state("No jobs found", "Try adjusting filters or submit a new request.") }}</td></tr>
+        <tr data-vis="{{ V }}"><td colspan="{{ empty_colspan }}" data-vis="{{ V }}">{{ empty_state("No jobs found", "Adjust the filters, or start a fresh request.", "New Request", url_for('new_request')) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -37,7 +37,7 @@ WAVES: dict[str, Wave] = {
     "sanity": Wave(
         name="sanity",
         description="Pre-push gate — must be green before every push",
-        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "contrast_audit", "deploy_smoke"),
+        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "empty_states", "contrast_audit", "deploy_smoke"),
         stop_on_fail=True,
     ),
     "static": Wave(

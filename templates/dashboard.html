@@ -98,6 +98,16 @@
   {% endif %}
 
   {# ── TILE 4: Instrument Queues — inline grid of up to 9 instrument mini-queues ── #}
+  {% if has_instrument_area_access_user and not instrument_fifo_queue %}
+  <article class="card tile tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
+    {% call card_heading("", "Instrument Queues") %}
+      <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
+    {% endcall %}
+    {{ empty_state("No queued work across any instrument.",
+                   "When requests come in, they'll appear here first.",
+                   "New Request", url_for('new_request')) }}
+  </article>
+  {% endif %}
   {% if has_instrument_area_access_user and instrument_fifo_queue %}
   <article class="card tile tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
     {% call card_heading("", "Instrument Queues") %}
@@ -130,7 +140,7 @@
           </tbody>
         </table>
         {% else %}
-        {{ empty_state("No jobs queued", "Requests will appear here once submitted.") }}
+        {{ empty_state("No jobs queued", "Requests will appear here once submitted.", "New Request", url_for('new_request', instrument_id=queue.instrument_id)) }}
         {% endif %}
       </div>
       {% endfor %}

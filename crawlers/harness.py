@@ -214,6 +214,14 @@ class Harness:
                 """,
                 (name, email, pw_hash, role),
             )
+            # ROLE_PERSONAS is the source of truth for who-is-which-role
+            # in crawlers. If the row already existed (e.g. seed_data ran
+            # first and gave Sen role=requester), force the persona role
+            # so visibility / role_landing / role_behavior stay in sync.
+            cur.execute(
+                "UPDATE users SET role = ?, active = 1, invite_status = 'active' WHERE email = ?",
+                (role, email),
+            )
             row = cur.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             if row:
                 user_ids[email] = row[0]

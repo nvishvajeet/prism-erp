@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 
+{% if current_user and current_role_display %}
+<article class="card tile tile-sitemap-role-hint" data-vis="{{ V }}">
+  <div class="role-hint-body" data-vis="{{ V }}">
+    <span class="role-hint-badge" data-vis="{{ V }}">{{ current_role_display }}</span>
+    {% if current_role_hint %}
+    <span class="role-hint-text" data-vis="{{ V }}">{{ current_role_hint }}</span>
+    {% endif %}
+  </div>
+</article>
+{% endif %}
+
 <div class="settings-layout" data-vis="{{ V }}">
   {# Left sidebar with section buttons #}
   <div class="settings-sidebar" data-vis="{{ V }}">

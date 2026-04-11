@@ -6521,6 +6521,43 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   margin-bottom: 0.75rem;
 }
 
+/* ---------- .tile-dash-role-hint / .tile-sitemap-role-hint ---------------- */
+.tile-dash-role-hint,
+.tile-sitemap-role-hint {
+  grid-column: 1 / -1;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(90deg, rgba(80, 120, 220, 0.08), rgba(80, 120, 220, 0.02));
+  border-left: 3px solid rgba(80, 120, 220, 0.55);
+}
+
+.tile-sitemap-role-hint {
+  margin-bottom: 1rem;
+}
+
+.role-hint-body {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.role-hint-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  background: rgba(80, 120, 220, 0.18);
+  color: rgba(30, 50, 120, 1);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.role-hint-text {
+  font-size: 0.9rem;
+  color: var(--text-muted, #555);
+}
+
 /* ---------- .tile-dash-week / .tile-dash-month ---------------------------- */
 .tile-dash-week .chart-list,
 .tile-dash-month .chart-list {

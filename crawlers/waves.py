@@ -37,7 +37,7 @@ WAVES: dict[str, Wave] = {
     "sanity": Wave(
         name="sanity",
         description="Pre-push gate — must be green before every push",
-        strategies=("smoke", "visibility", "contrast_audit"),
+        strategies=("smoke", "visibility", "role_landing", "contrast_audit"),
         stop_on_fail=True,
     ),
     "static": Wave(
@@ -49,7 +49,7 @@ WAVES: dict[str, Wave] = {
     "behavioral": Wave(
         name="behavioral",
         description="Behavioral RBAC — each role performs its signature action",
-        strategies=("role_behavior", "visibility"),
+        strategies=("role_behavior", "visibility", "role_landing"),
         stop_on_fail=False,
     ),
     "lifecycle": Wave(
@@ -82,7 +82,7 @@ WAVES: dict[str, Wave] = {
         description="Every wave in order — full release gate (slow)",
         strategies=(
             # sanity
-            "smoke", "visibility", "contrast_audit",
+            "smoke", "visibility", "role_landing", "contrast_audit",
             # static
             "architecture", "philosophy", "css_orphan",
             # behavioral

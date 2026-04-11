@@ -66,5 +66,15 @@
 
     <key>ProcessType</key>
     <string>Interactive</string>
+
+    <!-- Force the Werkzeug reloader OFF under launchd. The reloader
+         forks a grandchild and exits the parent, which makes launchd
+         mark the service EX_CONFIG-crashed. LAB_SCHEDULER_AUTORELOAD=0
+         is the explicit opt-out; see app.py's auto_reload block. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>LAB_SCHEDULER_AUTORELOAD</key>
+        <string>0</string>
+    </dict>
 </dict>
 </plist>

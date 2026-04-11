@@ -49,24 +49,67 @@ Tailscale network.
 
 ---
 
-## 2. Running as a service
+## 2. Running as a service (W1.3.8, 2026-04-11)
 
-On the Mac mini, once the first boot works, install the launchd
-plist so PRISM starts on reboot and restarts on crash:
+The real recipe. Run on the mini after the first-boot in §1 works.
+The old `backend/launchd` / `backend/start_server.sh` paths in earlier
+revisions of this doc never existed in git — they were aspirational.
+These are the actual files:
+
+* `ops/launchd/local.prism.plist` — LaunchAgent definition
+* `scripts/start.sh --service` — foreground runner (venv python,
+  sources `.env`, `exec`s `app.py`, no reloader, no Chrome)
+* `scripts/install_launchd.sh` — one-shot installer (bootstrap +
+  kickstart, idempotent)
 
 ```bash
-cp backend/launchd/local.prism.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/local.prism.plist
-launchctl start local.prism
+cd ~/Scheduler/Main
+./scripts/install_launchd.sh
 ```
 
-The plist points at `~/Scheduler/Main/backend/start_server.sh`
-which sources `.env`, kills any stale process on 5055, and boots
-`app.py` via the `.venv` python. stdout and stderr go to
-`~/Scheduler/Main/logs/server.log`.
+That script:
+
+1. Copies `ops/launchd/local.prism.plist` to
+   `~/Library/LaunchAgents/local.prism.plist`.
+2. `launchctl bootout` any previously-loaded copy (silent if absent).
+3. `launchctl bootstrap gui/$(id -u) …` to load the service.
+4. `launchctl kickstart -k gui/$(id -u)/local.prism` to start it
+   immediately so a reboot isn't required.
+5. `launchctl print` + the first 15 lines of `logs/server.log` as
+   a local smoke check.
+
+Verify from the laptop that the service is actually serving:
+
+```bash
+PRISM_DEPLOY_URL=http://127.0.0.1:5055 \
+  .venv/bin/python -m crawlers run deploy_smoke
+# → PASS 3  FAIL 0  WARN 0 when everything is green
+```
+
+Tail logs while developing:
+
+```bash
+tail -f ~/Scheduler/Main/logs/server.log
+```
+
+Stop and uninstall:
+
+```bash
+launchctl bootout gui/$(id -u)/local.prism
+rm ~/Library/LaunchAgents/local.prism.plist
+```
+
+**Known gotcha — launchd env is empty.** Launchd does NOT inherit
+your shell's environment, so the service relies on `start.sh`
+sourcing `.env` at boot. If `SECRET_KEY`, `LAB_SCHEDULER_HOST`, or
+`LAB_SCHEDULER_DEMO_MODE` appear unset in `logs/server.log`, the
+fix is always in `.env` + a kickstart, never in the plist.
 
 **Rule (see PHILOSOPHY.md §3):** the website stays up. The mini
-is not allowed to fall over between releases.
+is not allowed to fall over between releases. Crawler proof of
+that rule is the `deploy_smoke` strategy added to the `sanity`
+wave — every push to `v1.3.0-stable-release` (with
+`PRISM_DEPLOY_URL` set) re-verifies the mini is answering.
 
 ---
 

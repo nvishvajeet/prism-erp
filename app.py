@@ -6268,6 +6268,36 @@ def _dev_panel_git(*args: str) -> str:
         return ""
 
 
+def _dev_panel_future_fixes_count() -> dict:
+    """Count remaining `# TODO [vX.Y.Z …]` markers in app.py + templates.
+
+    Mirrors the regex used by `crawlers/strategies/future_fixes_placeholder.py`
+    but invoked inline so the dev panel doesn't need the crawler harness
+    (which bootstraps a DB). Returns `{"total": N, "by_file": {...}}`.
+    """
+    import re as _re
+    marker_re = _re.compile(r"#\s*TODO\s*\[(v\d+\.\d+\.\d+)\s+[^\]]+\]")
+    targets: list[Path] = []
+    if (BASE_DIR / "app.py").exists():
+        targets.append(BASE_DIR / "app.py")
+    if (BASE_DIR / "templates").exists():
+        targets.extend(sorted((BASE_DIR / "templates").glob("*.html")))
+    targets.extend(p for p in sorted(BASE_DIR.glob("*.py")) if p.name != "app.py")
+    total = 0
+    by_file: dict[str, int] = {}
+    for path in targets:
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        matches = marker_re.findall(text)
+        if not matches:
+            continue
+        by_file[path.relative_to(BASE_DIR).as_posix()] = len(matches)
+        total += len(matches)
+    return {"total": total, "by_file": by_file}
+
+
 def _dev_panel_progress() -> dict:
     """Compute current project progress from git + the docs."""
     branch = _dev_panel_git("symbolic-ref", "--short", "HEAD") or "DETACHED"
@@ -6449,6 +6479,7 @@ def _dev_panel_progress() -> dict:
         "latest_commit": latest_commit_info,
         "reports_latest_at": reports_latest_iso,
         "reports_latest_age_hours": reports_latest_age_hours,
+        "future_fixes": _dev_panel_future_fixes_count(),
     }
 
 

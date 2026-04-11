@@ -85,6 +85,30 @@
     {% endif %}
   </section>
 
+  {# ─── v1.5.0 Pre-seed future-fixes counter tile. Counts
+       remaining `# TODO [vX.Y.Z …]` markers seeded by
+       `scripts/seed_fixes.py` in app.py + templates. Crawler
+       `future_fixes_placeholder` owns the full breakdown; this
+       tile surfaces the headline total at a glance. ─── #}
+  <section class="card tile tile-dev-future-fixes" id="devFutureFixes" data-vis="{{ V }}">
+    {{ card_heading("v1.5.0 PRE-SEED", "Marker progress") }}
+    <div class="dev-future-fixes-body" data-vis="{{ V }}">
+      <strong class="dev-future-fixes-total" data-vis="{{ V }}">{{ progress.future_fixes.total }}</strong>
+      <span class="hint dev-future-fixes-label" data-vis="{{ V }}">TODO markers awaiting multi-role graduation</span>
+      {% if progress.future_fixes.total > 0 %}
+      {% set app_count = progress.future_fixes.by_file.get("app.py", 0) %}
+      <p class="hint dev-future-fixes-depth" data-vis="{{ V }}">
+        {{ app_count }} sites in <code class="inline-code" data-vis="{{ V }}">app.py</code> — see
+        <code class="inline-code" data-vis="{{ V }}">scripts/seed_fixes.py --dry-run</code>
+      </p>
+      {% else %}
+      <p class="hint dev-future-fixes-depth" data-vis="{{ V }}">
+        v1.5.0 work complete — all markers retired.
+      </p>
+      {% endif %}
+    </div>
+  </section>
+
   {# ─── Hero: Now Shipping — "you are here" at a glance. ───
        Answers four questions in 5 seconds: what's the current
        release, which wave is hot right now, did anything ship

@@ -5799,16 +5799,48 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
    "Now Shipping" hero. Answer the three-panel question per the
    operator spec: current stable tag / git pane / latest shipped. */
 .tile-dev-stable-release,
-.tile-dev-latest-shipped {
+.tile-dev-latest-shipped,
+.tile-dev-future-fixes {
   grid-column: span 3;
 }
 @media (max-width: 1200px) {
   .tile-dev-stable-release,
-  .tile-dev-latest-shipped { grid-column: span 4; }
+  .tile-dev-latest-shipped,
+  .tile-dev-future-fixes { grid-column: span 4; }
 }
 @media (max-width: 760px) {
   .tile-dev-stable-release,
-  .tile-dev-latest-shipped { grid-column: 1 / -1; }
+  .tile-dev-latest-shipped,
+  .tile-dev-future-fixes { grid-column: 1 / -1; }
+}
+
+/* 2026-04-11 — v1.5.0 pre-seed future-fixes counter tile.
+   Same recipe as the stable-release / latest-shipped pair:
+   accent left border, subtle gradient, big headline total. */
+.tile-dev-future-fixes {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #e8590c 6%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid #e8590c;
+}
+.dev-future-fixes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+.dev-future-fixes-total {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #e8590c;
+  font-variant-numeric: tabular-nums;
+}
+.dev-future-fixes-label {
+  font-size: 0.85rem;
+}
+.dev-future-fixes-depth {
+  margin: 0.15rem 0 0 0;
 }
 
 .tile-dev-stable-release {

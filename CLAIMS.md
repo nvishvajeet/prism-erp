@@ -33,6 +33,7 @@ to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude-ops-logrotate | ops-infra/launchd-stdout-rotation | 2026-04-11T12:15+02:00 | `ops/launchd/newsyslog.prism.conf` (new), `scripts/install_launchd.sh`, `docs/DEPLOY.md` | ops(launchd): newsyslog rotation for server.log |
 | claude-docs-tile-pattern | docs-freshness/project-md-tile-pattern | 2026-04-11T12:14+02:00 | `docs/PROJECT.md` | docs(project): document .tile family as reusable abstraction |
 | claude-crawler-metadata-trim | crawlers/optimize-metadata | 2026-04-11T11:55+02:00 | `crawlers/base.py`, `crawlers/harness.py`, `crawlers/strategies/*.py` (metrics producers only — read-only for the rest) | perf(crawlers): drop unused metadata tracking |
 

@@ -3734,15 +3734,25 @@ def seed_data() -> None:
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
 
-    # admin@lab.local gets a shorter demo password ("12345") for the
-    # public demo card on nvishvajeet.github.io. DEMO_MODE-only path,
-    # so operational never has the weak credential. Rebind runs on
-    # every boot BEFORE the early-return below so existing demo DBs
-    # pick it up without a re-seed.
-    demo_admin_password = generate_password_hash("12345", method="pbkdf2:sha256")
-    db.execute(
-        "UPDATE users SET password_hash = ? WHERE email = 'admin@lab.local'",
-        (demo_admin_password,),
+    # Unified demo seed: one simple password ("12345") for every seeded
+    # account, and role-named emails so a public tester logging in via
+    # nvishvajeet.github.io → /login?demo=1 instantly sees which role
+    # they're exercising. DEMO_MODE-only path; operational never hits
+    # this because seed_data() returns early when DEMO_MODE is off.
+    DEMO_PASSWORD = "12345"
+    demo_pw_hash = generate_password_hash(DEMO_PASSWORD, method="pbkdf2:sha256")
+
+    # Rebind every seeded persona's password on every boot so existing
+    # demo DBs catch up without a re-seed. Keyed by role-named emails
+    # so any persona whose email we know gets refreshed in place.
+    _persona_emails = (
+        "admin@lab.local", "operator@lab.local", "requester@lab.local",
+        "member@lab.local", "finance@lab.local", "approver@lab.local",
+        "instrument_admin@lab.local", "site_admin@lab.local",
+    )
+    db.executemany(
+        "UPDATE users SET password_hash = ? WHERE email = ?",
+        [(demo_pw_hash, e) for e in _persona_emails],
     )
     db.commit()
 
@@ -3751,25 +3761,39 @@ def seed_data() -> None:
         db.close()
         return
 
-    users = [
-        ("Dean Rao", "dean@lab.local", "super_admin"),
-        ("Facility Admin", "admin@lab.local", "super_admin"),
-        ("Finance Office", "finance@lab.local", "finance_admin"),
-        ("Prof. Approver", "prof.approver@lab.local", "professor_approver"),
-        ("FESEM Admin", "fesem.admin@lab.local", "instrument_admin"),
-        ("ICPMS Admin", "icpms.admin@lab.local", "instrument_admin"),
-        ("Anika", "anika@lab.local", "operator"),
-        ("Ravi", "ravi@lab.local", "operator"),
-        ("Prof. Sen", "sen@lab.local", "requester"),
-        ("Prof. Iyer", "iyer@lab.local", "requester"),
-        ("Dr. Shah", "shah@lab.local", "requester"),
+    # Legacy named personas — seeded FIRST to keep their autoincrement
+    # IDs stable. scripts/smoke_test.py hardcodes `requester_id=9` for
+    # sen@lab.local and several crawlers hardcode other positional IDs
+    # like this. Same order as the pre-simplification seed (11 entries).
+    legacy_users = [
+        ("Dean Rao",        "dean@lab.local",          "super_admin"),
+        ("Facility Admin",  "admin@lab.local",         "super_admin"),
+        ("Finance Office",  "finance@lab.local",       "finance_admin"),
+        ("Prof. Approver",  "prof.approver@lab.local", "professor_approver"),
+        ("FESEM Admin",     "fesem.admin@lab.local",   "instrument_admin"),
+        ("ICPMS Admin",     "icpms.admin@lab.local",   "instrument_admin"),
+        ("Anika",           "anika@lab.local",         "operator"),
+        ("Ravi",            "ravi@lab.local",          "operator"),
+        ("Prof. Sen",       "sen@lab.local",           "requester"),
+        ("Prof. Iyer",      "iyer@lab.local",          "requester"),
+        ("Dr. Shah",        "shah@lab.local",          "requester"),
     ]
-    default_password = generate_password_hash("SimplePass123", method="pbkdf2:sha256")
-    for name, email, role in users:
-        pw = demo_admin_password if email == "admin@lab.local" else default_password
+    # Role-aware seeded users for the public demo card on
+    # nvishvajeet.github.io. The email IS the role label — a visitor
+    # logging in as operator@lab.local instantly knows which UI
+    # they're testing. Seeded AFTER the legacy set so IDs start at 12.
+    role_aware_users = [
+        ("Site Admin",       "site_admin@lab.local",       "site_admin"),
+        ("Instrument Admin", "instrument_admin@lab.local", "instrument_admin"),
+        ("Approver",         "approver@lab.local",         "professor_approver"),
+        ("Operator",         "operator@lab.local",         "operator"),
+        ("Requester",        "requester@lab.local",        "requester"),
+        ("Member",           "member@lab.local",           "requester"),
+    ]
+    for name, email, role in legacy_users + role_aware_users:
         db.execute(
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
-            (name, email, pw, role),
+            (name, email, demo_pw_hash, role),
         )
 
     instruments = [

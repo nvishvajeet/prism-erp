@@ -18,12 +18,7 @@ import app  # noqa: E402
 import populate_live_demo  # noqa: E402
 
 
-def login(client, email: str, password: str | None = None) -> None:
-    # admin@lab.local uses "12345" in demo mode (public-facing demo
-    # card on nvishvajeet.github.io). Every other demo account keeps
-    # the legacy SimplePass123.
-    if password is None:
-        password = "12345" if email == "admin@lab.local" else "SimplePass123"
+def login(client, email: str, password: str = "12345") -> None:
     response = client.post("/login", data={"email": email, "password": password}, follow_redirects=True)
     assert response.status_code == 200
     # Sanity: post-login response should be a logged-in PRISM page (not the
@@ -339,7 +334,7 @@ def main() -> None:
         db.execute(
             "UPDATE users SET password_hash = ?, must_change_password = 0 "
             "WHERE id = ?",
-            (_gph("SimplePass123", method="pbkdf2:sha256"), temp_member_id),
+            (_gph("12345", method="pbkdf2:sha256"), temp_member_id),
         )
         db.commit()
 
@@ -595,7 +590,7 @@ def main() -> None:
         assert "released into review" in (released_row["remarks"] or "").lower()
 
     client.get("/logout")
-    response = client.post("/login", data={"email": "member.temp@lab.local", "password": "SimplePass123"}, follow_redirects=True)
+    response = client.post("/login", data={"email": "member.temp@lab.local", "password": "12345"}, follow_redirects=True)
     assert b"Invalid login" in response.data
 
     print("smoke test passed")

@@ -88,11 +88,6 @@ class CleanupStrategy(CrawlerStrategy):
             "dead_templates": len(dead_tpl),
             "stale_files": len(stale),
         }
-        result.report_json = {
-            "dead_python": [{"name": n, "kind": k} for n, k in dead_py],
-            "dead_templates": dead_tpl,
-            "stale_files": stale,
-        }
         return result
 
     # -----------------------------------------------------------------

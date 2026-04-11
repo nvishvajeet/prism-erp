@@ -102,10 +102,6 @@ class RandomWalkStrategy(CrawlerStrategy):
             "status_mix": dict(status_mix),
             "five_xx_count": len(five_xx),
         }
-        result.report_json = {
-            "coverage": {f"{r}|{p}": n for (r, p), n in coverage.items()},
-            "five_xx": five_xx[:200],
-        }
         return result
 
 

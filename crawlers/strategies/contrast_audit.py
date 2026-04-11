@@ -75,7 +75,6 @@ class ContrastAuditStrategy(CrawlerStrategy):
                     f"{label}: {score:.2f} < {minimum:.2f} ({fg} on {bg})"
                 )
         result.metrics = {"pairs_checked": len(PALETTE_CHECKS)}
-        result.report_json = {"ratios": ratios}
         return result
 
 

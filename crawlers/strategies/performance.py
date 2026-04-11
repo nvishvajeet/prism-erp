@@ -93,13 +93,10 @@ class PerformanceStrategy(CrawlerStrategy):
             else:
                 result.passed += 1
 
-        result.metrics = {
-            "routes_sampled": len(per_route),
-            "samples_per_route": SAMPLES_PER_ROUTE,
-            "warn_budget_ms": BUDGET_WARN_MS,
-            "fail_budget_ms": BUDGET_FAIL_MS,
-        }
-        result.report_json = {"per_route": per_route}
+        # samples_per_route / warn_budget_ms / fail_budget_ms are
+        # module-level constants — recording them per-run is noise.
+        # Dropped in the crawlers/optimize-metadata claim.
+        result.metrics = {"routes_sampled": len(per_route)}
         return result
 
 

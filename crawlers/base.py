@@ -38,7 +38,18 @@ ASPECTS = {
 
 @dataclass
 class CrawlResult:
-    """Structured return value from every strategy.run()."""
+    """Structured return value from every strategy.run().
+
+    Historical note: this class used to carry a `report_json` field
+    that strategies filled with deep per-run data (orphan lists,
+    per-route timings, palette ratios). No consumer ever read it —
+    the dev_panel CRAWLERS tile only reads passed/failed/warnings
+    out of the summary, and the `reports/<name>_log.json` blob was
+    otherwise untouched. Dropped in the crawlers/optimize-metadata
+    claim along with the `harness_summary` persist channel. If a
+    future tile wants deep data, reintroduce the field then, not
+    speculatively now.
+    """
     name: str
     aspect: str
     passed: int = 0
@@ -46,7 +57,6 @@ class CrawlResult:
     warnings: int = 0
     details: list[str] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
-    report_json: dict[str, Any] = field(default_factory=dict)
 
     @property
     def exit_code(self) -> int:

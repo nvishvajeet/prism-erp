@@ -109,10 +109,6 @@ class ArchitectureStrategy(CrawlerStrategy):
 
         result.metrics["handler_count"] = len(handlers)
         result.metrics["oversized_handlers"] = len(big_handlers)
-        if big_handlers:
-            result.report_json = {"oversized": [
-                {"name": n, "route": r, "size": s} for n, r, s in big_handlers
-            ]}
 
     def _check_templates(self, templates_dir: Path, result: CrawlResult) -> None:
         if not templates_dir.exists():

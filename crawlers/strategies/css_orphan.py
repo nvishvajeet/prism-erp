@@ -147,15 +147,14 @@ class CSSOrphanStrategy(CrawlerStrategy):
             result.warnings += len(orphans)
         result.passed += used
 
+        # allowlist_size/prefixes/suffixes are static at import time
+        # — they don't change between runs, so recording them is
+        # pure noise. Dropped in the crawlers/optimize-metadata claim.
         result.metrics = {
             "total_class_selectors": len(candidates),
             "used": used,
             "orphans": len(orphans),
-            "allowlist_size": len(ALLOWLIST),
-            "allowlist_prefixes": list(ALLOWLIST_PREFIXES),
-            "allowlist_suffixes": list(ALLOWLIST_SUFFIXES),
         }
-        result.report_json = {"orphans": orphans}
         return result
 
 

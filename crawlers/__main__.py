@@ -58,12 +58,18 @@ def _run_one(name: str) -> int:
         harness.teardown()
     elapsed = time.perf_counter() - t0
 
-    # Persist
+    # Persist. `harness_summary` (harness.log rollup) and `report`
+    # (result.report_json) both had zero consumers — dropped in the
+    # crawlers/optimize-metadata claim. `elapsed_ms` replaces them
+    # as the one per-run number every downstream view actually wants
+    # (dev_panel CRAWLERS tile, slow-strategy triage, wave budget
+    # verification).
     harness.write_reports(
         strategy.name,
         payload={
             "strategy": strategy.name,
             "aspect": strategy.aspect,
+            "elapsed_ms": round(elapsed * 1000),
             "result": {
                 "passed": result.passed,
                 "failed": result.failed,
@@ -71,8 +77,6 @@ def _run_one(name: str) -> int:
                 "metrics": result.metrics,
                 "details": result.details,
             },
-            "harness_summary": harness.log.summary(),
-            "report": result.report_json,
         },
         summary=result.human_summary() + f"\nelapsed:  {elapsed:.2f}s\n",
     )

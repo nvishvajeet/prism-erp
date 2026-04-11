@@ -108,7 +108,6 @@ class DeadLinkStrategy(CrawlerStrategy):
             "roles_crawled": len(ROLES_TO_CRAWL),
             "total_checks": len(checked),
         }
-        result.report_json = {"checked": checked}
         return result
 
 

@@ -81,7 +81,6 @@ class ColorImprovementStrategy(CrawlerStrategy):
             "unique_colors_found": len(colors),
             "suggestions": len(suggestions),
         }
-        result.report_json = {"colors": dict(colors)}
         return result
 
 

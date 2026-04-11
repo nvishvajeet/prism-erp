@@ -129,13 +129,24 @@ budget without a real deployment and real user feedback. See
 
 ## Running
 
-### Development (MacBook)
+### Quickstart — clone to first login in five lines
 
 ```bash
-cd Main
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+git clone <origin>/lab-scheduler.git && cd lab-scheduler/Main
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+./scripts/start.sh
+# open http://127.0.0.1:5055
+# login: admin@lab.local / SimplePass123  (demo mode, seeded)
+```
 
+That's it. `start.sh` boots Flask in DEMO_MODE=1, seeds the
+database on first run, and opens Chrome. Every seeded account
+shares the password `SimplePass123` — see `### Demo accounts`
+below for the full list.
+
+### Development (MacBook) — detail
+
+```bash
 ./scripts/start.sh              # development (HTTP, localhost, Chrome auto-open)
 ./scripts/start.sh --service    # launchd/systemd foreground (no Chrome, .env sourced)
 ```

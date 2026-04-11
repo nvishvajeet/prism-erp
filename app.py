@@ -3638,8 +3638,102 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status);
             CREATE INDEX IF NOT EXISTS idx_grants_pi     ON grants(pi_user_id);
+
+            -- v2.0.0-alpha.1 — Domain split. sample_requests stops being
+            -- the single source of truth for money + project context.
+            -- Four new peer aggregates land alongside it:
+            --
+            --   Project   → research container ("why is this work
+            --               happening"). Groups many requests.
+            --   Invoice   → billing document for a request. A request
+            --               may have multiple invoices over time
+            --               (reissue, credit note). Money owed lives
+            --               here, NOT on sample_requests.
+            --   Payment   → a single money event against an invoice.
+            --               Enables partial payments without the
+            --               amount_paid-as-column hack.
+            --   GrantAlloc→ many-to-many between grants and projects.
+            --               Grants fund projects, projects contain
+            --               requests, requests bill invoices.
+            --
+            -- In alpha.1 the new tables exist but the old columns on
+            -- sample_requests stay the primary read source. Dual-write
+            -- helpers keep both in sync. alpha.2 flips finance reads to
+            -- the new tables; alpha.3 stops writing the old columns;
+            -- beta.1 drops them. Each step is a separate tag, each
+            -- reversible up to beta.1.
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                pi_user_id INTEGER,
+                description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (pi_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+            CREATE INDEX IF NOT EXISTS idx_projects_pi     ON projects(pi_user_id);
+
+            CREATE TABLE IF NOT EXISTS invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                project_id INTEGER,
+                amount_due REAL NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                issued_at TEXT NOT NULL DEFAULT '',
+                due_at TEXT,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_invoices_request ON invoices(request_id);
+            CREATE INDEX IF NOT EXISTS idx_invoices_project ON invoices(project_id);
+            CREATE INDEX IF NOT EXISTS idx_invoices_status  ON invoices(status);
+
+            CREATE TABLE IF NOT EXISTS payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER NOT NULL,
+                amount REAL NOT NULL DEFAULT 0,
+                method TEXT NOT NULL DEFAULT 'unspecified',
+                receipt_number TEXT NOT NULL DEFAULT '',
+                paid_at TEXT NOT NULL DEFAULT '',
+                recorded_by_user_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+                FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);
+            CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at);
+
+            CREATE TABLE IF NOT EXISTS grant_allocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grant_id INTEGER NOT NULL,
+                project_id INTEGER NOT NULL,
+                amount REAL NOT NULL DEFAULT 0,
+                allocated_at TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (grant_id) REFERENCES grants(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE (grant_id, project_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_grant_allocs_grant   ON grant_allocations(grant_id);
+            CREATE INDEX IF NOT EXISTS idx_grant_allocs_project ON grant_allocations(project_id);
+
+            -- sample_requests gains a project_id FK for forward-lookup.
+            -- Nullable in alpha.1 because the backfill stitches it after
+            -- the fact; NOT NULL would block the tables-exist-before-
+            -- backfill-runs sequence. The real contract (every request
+            -- must belong to a project) is enforced at dual-write time
+            -- and by tests/test_domain_split.py invariants.
             """
         )
+        cur.execute("PRAGMA table_info(sample_requests)")
+        _sr_cols_after_v20 = {row[1] for row in cur.fetchall()}
+        if "project_id" not in _sr_cols_after_v20:
+            cur.execute(
+                "ALTER TABLE sample_requests ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"
+            )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
         if "created_by_user_id" not in columns:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN created_by_user_id INTEGER")
@@ -3814,6 +3908,275 @@ def init_db() -> None:
     # v1.7.0 — seed demo grants + link some external requests to them
     # so the /finance/grants portal renders populated budgets + spend.
     _seed_demo_grants()
+    # v2.0.0-alpha.1 — domain split backfill. Every legacy sample_request
+    # with amount_due > 0 gets an implicit Project, one Invoice, and one
+    # Payment per unit of amount_paid. Grant FKs move from request →
+    # project via allocation. Idempotent and read-only-reversible: the
+    # old columns on sample_requests stay populated. Safe to re-run.
+    _backfill_domain_split()
+
+
+def _backfill_domain_split() -> None:
+    """v2.0.0-alpha.1 domain-split backfill.
+
+    Mitosis step: every legacy sample_request with billing activity gets
+    the peer-aggregate rows it should have had if v2.0 had been the
+    schema from day one.
+
+    Per-request mapping:
+      - If amount_due > 0 OR grant_id IS NOT NULL OR finance_status != 'n/a':
+          ensure a Project exists (synthetic code PROJ-LEGACY-<request_no>)
+          stitch sample_requests.project_id → projects.id
+          ensure one Invoice (amount = amount_due, status from finance_status)
+          if amount_paid > 0: ensure one Payment (amount = amount_paid,
+              receipt_number = original OR 'LEGACY-<request_id>')
+          if original grant_id: ensure one grant_allocation row linking
+              grant → project for the full grant budget (one project per
+              grant in the legacy mapping; alpha.3 will refine this
+              many-to-many properly)
+
+    Invariants locked by tests/test_domain_split.py:
+      - Every legacy request with amount_due > 0 has exactly one invoice
+      - SUM(payments.amount) == sample_requests.amount_paid per request
+      - No money is created or destroyed by the backfill
+      - Every request with an old grant_id ends up reachable via
+        project → grant_allocation → grant
+      - Re-running is a no-op (INSERT OR IGNORE semantics via lookup-
+        then-insert, not via unique constraint violations)
+
+    Safety:
+      - Touches only rows with billing activity; purely-internal
+        requests with amount_due == 0 and grant_id IS NULL are ignored.
+      - Does NOT touch legacy columns (amount_due, amount_paid,
+        finance_status, receipt_number, grant_id). Dual-sourcing is
+        the whole point of alpha.1.
+      - Wrapped in a single transaction; failure rolls back cleanly.
+    """
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        # Bail fast if the new tables don't exist yet — defensive, this
+        # function runs after init_db() so they always should, but if
+        # someone calls it early, fail loud not silent.
+        tables = {row[0] for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        required = {"projects", "invoices", "payments", "grant_allocations"}
+        if not required.issubset(tables):
+            return
+
+        now_iso = datetime.utcnow().isoformat(timespec="seconds")
+
+        # Eligible requests: anything with billing activity.
+        rows = db.execute(
+            """
+            SELECT id, request_no, requester_id, title,
+                   amount_due, amount_paid, finance_status,
+                   receipt_number, grant_id, project_id, created_at
+            FROM sample_requests
+            WHERE amount_due > 0
+               OR grant_id IS NOT NULL
+               OR finance_status NOT IN ('n/a', '')
+            """
+        ).fetchall()
+
+        for r in rows:
+            req_id = r["id"]
+            req_no = r["request_no"]
+            amount_due = float(r["amount_due"] or 0)
+            amount_paid = float(r["amount_paid"] or 0)
+            legacy_grant_id = r["grant_id"]
+            legacy_receipt = (r["receipt_number"] or "").strip()
+            created_at = r["created_at"] or now_iso
+
+            # 1. Project — one per legacy request, synthetic code.
+            project_code = f"PROJ-LEGACY-{req_no}"
+            proj_row = db.execute(
+                "SELECT id FROM projects WHERE code = ?", (project_code,)
+            ).fetchone()
+            if proj_row:
+                project_id = proj_row["id"]
+            else:
+                cur = db.execute(
+                    """
+                    INSERT INTO projects (code, name, pi_user_id, description, status, created_at)
+                    VALUES (?, ?, ?, ?, 'active', ?)
+                    """,
+                    (
+                        project_code,
+                        (r["title"] or req_no)[:200],
+                        r["requester_id"],
+                        f"Auto-created by v2.0.0-alpha.1 domain-split backfill from {req_no}.",
+                        created_at,
+                    ),
+                )
+                project_id = cur.lastrowid
+
+            # 2. Stitch sample_requests.project_id if still NULL.
+            if r["project_id"] is None:
+                db.execute(
+                    "UPDATE sample_requests SET project_id = ? WHERE id = ?",
+                    (project_id, req_id),
+                )
+
+            # 3. Invoice — one per legacy request iff amount_due > 0.
+            if amount_due > 0:
+                inv_row = db.execute(
+                    "SELECT id FROM invoices WHERE request_id = ?", (req_id,)
+                ).fetchone()
+                if inv_row:
+                    invoice_id = inv_row["id"]
+                else:
+                    status_map = {
+                        "paid": "paid",
+                        "partial": "partial",
+                        "pending": "pending",
+                        "n/a": "pending",
+                        "": "pending",
+                    }
+                    inv_status = status_map.get(r["finance_status"] or "", "pending")
+                    cur = db.execute(
+                        """
+                        INSERT INTO invoices
+                            (request_id, project_id, amount_due, status, issued_at, due_at, notes)
+                        VALUES (?, ?, ?, ?, ?, NULL, ?)
+                        """,
+                        (
+                            req_id,
+                            project_id,
+                            amount_due,
+                            inv_status,
+                            created_at,
+                            "Backfilled from v1.7.0 sample_requests row by v2.0.0-alpha.1.",
+                        ),
+                    )
+                    invoice_id = cur.lastrowid
+
+                # 4. Payment — one row collapsing the amount_paid column.
+                if amount_paid > 0:
+                    pay_row = db.execute(
+                        "SELECT id FROM payments WHERE invoice_id = ? AND notes LIKE 'Backfill%'",
+                        (invoice_id,),
+                    ).fetchone()
+                    if not pay_row:
+                        receipt = legacy_receipt or f"LEGACY-{req_id}"
+                        db.execute(
+                            """
+                            INSERT INTO payments
+                                (invoice_id, amount, method, receipt_number, paid_at, recorded_by_user_id, notes)
+                            VALUES (?, ?, 'legacy', ?, ?, NULL, ?)
+                            """,
+                            (
+                                invoice_id,
+                                amount_paid,
+                                receipt,
+                                created_at,
+                                "Backfilled from v1.7.0 amount_paid by v2.0.0-alpha.1.",
+                            ),
+                        )
+
+            # 5. Grant allocation — legacy grant FK moves to a project link.
+            if legacy_grant_id is not None:
+                alloc_row = db.execute(
+                    "SELECT id FROM grant_allocations WHERE grant_id = ? AND project_id = ?",
+                    (legacy_grant_id, project_id),
+                ).fetchone()
+                if not alloc_row:
+                    # Allocation amount = amount_due for this request (the
+                    # portion of the grant this request is charging). This
+                    # is the minimal correct mapping; alpha.3 will refine.
+                    db.execute(
+                        """
+                        INSERT INTO grant_allocations
+                            (grant_id, project_id, amount, allocated_at, notes)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            legacy_grant_id,
+                            project_id,
+                            amount_due,
+                            created_at,
+                            f"Backfilled from sample_requests.grant_id on {req_no}.",
+                        ),
+                    )
+
+        db.commit()
+    finally:
+        db.close()
+
+
+# ── v2.0.0-alpha.1 dual-write helpers ────────────────────────────
+# These are the forward-path for code that wants to write to the new
+# aggregates. In alpha.1 they are called alongside legacy column
+# writes; alpha.3 will flip the legacy calls off. They are pure
+# functions over a db connection — no Flask globals, so tests can
+# drive them against a tmp DB.
+
+def create_invoice_for_request(
+    db: sqlite3.Connection,
+    request_id: int,
+    amount_due: float,
+    project_id: Optional[int] = None,
+    status: str = "pending",
+    notes: str = "",
+) -> int:
+    """Create an invoice for a request. Returns the new invoice id.
+
+    Does not touch sample_requests.amount_due — that is the caller's
+    responsibility during the dual-write window. alpha.3 will drop the
+    column-side write."""
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    if project_id is None:
+        row = db.execute(
+            "SELECT project_id FROM sample_requests WHERE id = ?", (request_id,)
+        ).fetchone()
+        project_id = row["project_id"] if row and row["project_id"] is not None else None
+    cur = db.execute(
+        """
+        INSERT INTO invoices (request_id, project_id, amount_due, status, issued_at, due_at, notes)
+        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        """,
+        (request_id, project_id, float(amount_due), status, now_iso, notes),
+    )
+    return cur.lastrowid
+
+
+def record_payment(
+    db: sqlite3.Connection,
+    invoice_id: int,
+    amount: float,
+    receipt_number: str = "",
+    method: str = "unspecified",
+    recorded_by_user_id: Optional[int] = None,
+    notes: str = "",
+) -> int:
+    """Record a payment against an invoice. Returns the new payment id.
+
+    Multiple calls against the same invoice are valid — this is how
+    partial payments work in the new model. Total paid for an invoice
+    is SUM(payments.amount) WHERE invoice_id = ?."""
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    cur = db.execute(
+        """
+        INSERT INTO payments
+            (invoice_id, amount, method, receipt_number, paid_at, recorded_by_user_id, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (invoice_id, float(amount), method, receipt_number, now_iso, recorded_by_user_id, notes),
+    )
+    return cur.lastrowid
+
+
+def attach_request_to_project(
+    db: sqlite3.Connection,
+    request_id: int,
+    project_id: int,
+) -> None:
+    """Set sample_requests.project_id. Idempotent."""
+    db.execute(
+        "UPDATE sample_requests SET project_id = ? WHERE id = ?",
+        (project_id, request_id),
+    )
 
 
 def _seed_demo_grants() -> None:

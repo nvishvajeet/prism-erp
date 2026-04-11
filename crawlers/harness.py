@@ -32,8 +32,15 @@ from typing import Any, Callable, Iterator
 
 # ── Canonical roles + seed personas ─────────────────────────────────
 # Every strategy can rely on these accounts existing after seed_users().
-# Password for all seeded accounts is PASSWORD below.
+# Default password is PASSWORD below; admin@lab.local uses
+# ADMIN_DEMO_PASSWORD because the public demo card on
+# nvishvajeet.github.io prefills that credential.
 PASSWORD = "SimplePass123"
+ADMIN_DEMO_PASSWORD = "12345"
+
+
+def _password_for(email: str) -> str:
+    return ADMIN_DEMO_PASSWORD if email == "admin@lab.local" else PASSWORD
 
 ROLE_PERSONAS: list[tuple[str, str, str]] = [
     # (name, email, role)
@@ -204,7 +211,8 @@ class Harness:
         assert self.app is not None, "Harness.bootstrap() must be called first"
         personas = personas or ROLE_PERSONAS
         instruments = instruments or SEED_INSTRUMENTS
-        pw_hash = generate_password_hash(PASSWORD, method="pbkdf2:sha256")
+        pw_hash_default = generate_password_hash(PASSWORD, method="pbkdf2:sha256")
+        pw_hash_admin = generate_password_hash(ADMIN_DEMO_PASSWORD, method="pbkdf2:sha256")
 
         conn = sqlite3.connect(str(self.temp_db_path))
         cur = conn.cursor()
@@ -212,6 +220,7 @@ class Harness:
         # Users --------------------------------------------------------
         user_ids: dict[str, int] = {}
         for name, email, role in personas:
+            pw_hash = pw_hash_admin if email == "admin@lab.local" else pw_hash_default
             cur.execute(
                 """
                 INSERT OR IGNORE INTO users
@@ -219,6 +228,13 @@ class Harness:
                 VALUES (?, ?, ?, ?, 1, 'active')
                 """,
                 (name, email, pw_hash, role),
+            )
+            # Force the password hash to match our current setting even
+            # if the row already existed from a prior seed_data() pass
+            # (PRISM's init_db also rebinds admin@lab.local → 12345).
+            cur.execute(
+                "UPDATE users SET password_hash = ? WHERE email = ?",
+                (pw_hash, email),
             )
             # ROLE_PERSONAS is the source of truth for who-is-which-role
             # in crawlers. If the row already existed (e.g. seed_data ran
@@ -294,7 +310,9 @@ class Harness:
         }
 
     # -- HTTP ---------------------------------------------------------
-    def login(self, email: str, password: str = PASSWORD) -> int:
+    def login(self, email: str, password: str | None = None) -> int:
+        if password is None:
+            password = _password_for(email)
         """Log `email` in. Returns the resulting HTTP status."""
         assert self.client is not None
         resp = self.client.post(

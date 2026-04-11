@@ -131,37 +131,53 @@
     {% endcall %}
   </section>
 
-  {# ── Tile: Control Panel (operation mode) ── #}
+  {# ── Tile: Control Panel (operation mode) — W1.4.3 c1: instant inline toggle ── #}
   {% if can_edit %}
   <section class="card tile tile-control" data-vis="{{ V }}">
     {{ card_heading("", "Control Panel") }}
-    <p class="tile-lead" data-vis="{{ V }}">Change intake state. Applies immediately on submit.</p>
-    <form method="post" id="instrumentOperationForm" class="control-form" data-vis="{{ V }}">
-      <input type="hidden" name="action" value="update_operation">
-      <div class="control-mode-row" data-vis="{{ V }}">
-        <label class="control-mode control-mode-accepting {% if intake_mode == 'accepting' %}is-active{% endif %}" data-vis="{{ V }}">
-          <input type="radio" name="intake_mode" value="accepting" {% if intake_mode == 'accepting' %}checked{% endif %}>
-          <span class="control-mode-dot" aria-hidden="true"></span>
-          <span class="control-mode-label" data-vis="{{ V }}">Accepting</span>
-          <span class="control-mode-hint" data-vis="{{ V }}">Queue open</span>
-        </label>
-        <label class="control-mode control-mode-hold {% if intake_mode == 'on_hold' %}is-active{% endif %}" data-vis="{{ V }}">
-          <input type="radio" name="intake_mode" value="on_hold" {% if intake_mode == 'on_hold' %}checked{% endif %}>
-          <span class="control-mode-dot" aria-hidden="true"></span>
-          <span class="control-mode-label" data-vis="{{ V }}">On Hold</span>
-          <span class="control-mode-hint" data-vis="{{ V }}">Review only</span>
-        </label>
-        <label class="control-mode control-mode-maintenance {% if intake_mode == 'maintenance' %}is-active{% endif %}" data-vis="{{ V }}">
-          <input type="radio" name="intake_mode" value="maintenance" {% if intake_mode == 'maintenance' %}checked{% endif %}>
-          <span class="control-mode-dot" aria-hidden="true"></span>
-          <span class="control-mode-label" data-vis="{{ V }}">Maintenance</span>
-          <span class="control-mode-hint" data-vis="{{ V }}">Closed</span>
-        </label>
-      </div>
-      <div class="control-actions" data-vis="{{ V }}">
-        <button type="submit" class="small-button" data-vis="{{ V }}">Apply Change</button>
-      </div>
-    </form>
+    <p class="tile-lead" data-vis="{{ V }}">
+      Tap a mode to change intake state. Moving to <strong>On Hold</strong> or
+      <strong>Maintenance</strong> needs a second tap within 3 seconds — safety
+      against accidental taps.
+    </p>
+    <div class="control-mode-row" role="radiogroup" aria-label="Intake mode"
+         id="instrumentIntakeToggle"
+         data-intake-post="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}"
+         data-intake-current="{{ intake_mode }}"
+         data-vis="{{ V }}">
+      <button type="button"
+              class="control-mode control-mode-accepting {% if intake_mode == 'accepting' %}is-active{% endif %}"
+              data-intake-mode="accepting"
+              data-intake-safe="1"
+              role="radio"
+              aria-checked="{% if intake_mode == 'accepting' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">Accepting</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Queue open</span>
+      </button>
+      <button type="button"
+              class="control-mode control-mode-hold {% if intake_mode == 'on_hold' %}is-active{% endif %}"
+              data-intake-mode="on_hold"
+              role="radio"
+              aria-checked="{% if intake_mode == 'on_hold' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">On Hold</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Review only</span>
+      </button>
+      <button type="button"
+              class="control-mode control-mode-maintenance {% if intake_mode == 'maintenance' %}is-active{% endif %}"
+              data-intake-mode="maintenance"
+              role="radio"
+              aria-checked="{% if intake_mode == 'maintenance' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">Maintenance</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Closed</span>
+      </button>
+    </div>
+    <p class="control-mode-status hint" id="intakeToggleStatus" aria-live="polite" data-vis="{{ V }}"></p>
   </section>
   {% endif %}
 
@@ -400,14 +416,8 @@
     sync(); filter();
   })();
 
-  /* Operation form disable on submit */
-  (function () {
-    var form = document.getElementById('instrumentOperationForm');
-    if (!form) return;
-    form.addEventListener('submit', function () { var b = form.querySelector('button[type="submit"]'); if (b) b.disabled = true; });
-  })();
-
   /* Metadata + Danger toggles are wired by the generic data-toggle-target
-     handler in base.html — no page-local IIFE needed. */
+     handler in base.html — no page-local IIFE needed.
+     Intake-mode toggle is wired by static/intake-toggle.js (loaded from base.html). */
 </script>
 {% endblock %}

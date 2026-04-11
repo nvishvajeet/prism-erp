@@ -3603,6 +3603,28 @@ code {
 
 .control-mode.is-active .control-mode-dot { opacity: 1; transform: scale(1.2); }
 
+/* W1.4.3 c1 — "armed" intermediate state for the 2-tap confirm.
+   First click on a dangerous mode (on_hold / maintenance) arms the
+   button; second click within 3s commits. Accepting is always safe
+   and skips arming. */
+.control-mode.is-arming {
+  border-color: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 30%, transparent);
+  animation: intake-arm-pulse 0.9s ease-in-out infinite;
+}
+@keyframes intake-arm-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 30%, transparent); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 45%, transparent); }
+}
+.control-mode-status {
+  min-height: 1.2em;
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+}
+.control-mode-status[data-tone="ok"]   { color: #2f9e44; }
+.control-mode-status[data-tone="warn"] { color: #e8a02b; }
+.control-mode-status[data-tone="err"]  { color: #c34a4a; }
+
 .control-mode-accepting    { color: #2f9e44; }
 .control-mode-hold         { color: #e8a02b; }
 .control-mode-maintenance  { color: #c34a4a; }

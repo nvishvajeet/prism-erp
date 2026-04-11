@@ -6916,6 +6916,14 @@ def user_profile(user_id: int):
             if viewer["role"] == "super_admin" else []
         ),
         instrument_groups=instrument_groups_all(),
+        # Authoritative {group_id: [instrument_ids]} map for the
+        # group-quick-grant buttons. Uses the real junction table
+        # instead of the category heuristic so groups curated by
+        # admins (rather than auto-seeded from category) work too.
+        instrument_group_members={
+            int(g["id"]): instrument_group_member_ids(int(g["id"]))
+            for g in instrument_groups_all()
+        },
     )
 
 

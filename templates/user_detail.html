@@ -159,14 +159,8 @@
     <div class="group-quick-grant" data-vis="{{ V }}">
       <span class="hint" data-vis="{{ V }}">Quick-grant a whole group:</span>
       {% for grp in instrument_groups %}
-      {% set _ids = [] %}
-      {% for inst in instrument_roster %}
-        {% if (inst['category'] or 'Uncategorized') == grp['name'] %}
-          {% set _ = _ids.append(inst['id']) %}
-        {% endif %}
-      {% endfor %}
       <button type="button" class="link-button group-grant"
-              data-group-ids="{{ _ids|tojson }}"
+              data-group-ids="{{ instrument_group_members.get(grp['id'], [])|tojson }}"
               data-group-lane="operator_ids"
               data-vis="{{ V }}">
         {{ grp['name'] }} → Operator

@@ -59,24 +59,42 @@ class LifecycleStrategy(CrawlerStrategy):
             return result
 
         # ---- Step 2: finance approve --------------------------------
-        with harness.logged_in("finance@lab.local"):
-            resp = harness.post(
-                f"/requests/{request_id}",
-                data={"action": "approve", "remarks": "budget ok"},
-                follow_redirects=True,
-            )
-            self._check(result, resp.status_code < 400,
-                        "finance approval", f"finance → {resp.status_code}")
+        # Current app uses action=approve_step with an explicit
+        # step_id (sample_requests have a chain of approval_steps,
+        # one per approver role). Look up the pending finance step,
+        # approve it, then repeat for professor.
+        finance_step = self._pending_step_for_role(harness, request_id, "finance_admin")
+        if finance_step is None:
+            result.warnings += 1
+            result.details.append("no pending finance step on new request")
+        else:
+            with harness.logged_in("finance@lab.local"):
+                resp = harness.post(
+                    f"/requests/{request_id}",
+                    data={"action": "approve_step",
+                          "step_id": str(finance_step),
+                          "remarks": "budget ok"},
+                    follow_redirects=True,
+                )
+                self._check(result, resp.status_code < 400,
+                            "finance approval", f"finance → {resp.status_code}")
 
         # ---- Step 3: professor approve ------------------------------
-        with harness.logged_in("prof.approver@lab.local"):
-            resp = harness.post(
-                f"/requests/{request_id}",
-                data={"action": "approve", "remarks": "looks good"},
-                follow_redirects=True,
-            )
-            self._check(result, resp.status_code < 400,
-                        "professor approval", f"professor → {resp.status_code}")
+        prof_step = self._pending_step_for_role(harness, request_id, "professor_approver")
+        if prof_step is None:
+            result.warnings += 1
+            result.details.append("no pending professor step after finance")
+        else:
+            with harness.logged_in("prof.approver@lab.local"):
+                resp = harness.post(
+                    f"/requests/{request_id}",
+                    data={"action": "approve_step",
+                          "step_id": str(prof_step),
+                          "remarks": "looks good"},
+                    follow_redirects=True,
+                )
+                self._check(result, resp.status_code < 400,
+                            "professor approval", f"professor → {resp.status_code}")
 
         # ---- Step 4: operator accept → start → complete -------------
         with harness.logged_in("anika@lab.local"):
@@ -142,6 +160,27 @@ class LifecycleStrategy(CrawlerStrategy):
         try:
             row = conn.execute(
                 "SELECT id FROM sample_requests ORDER BY id LIMIT 1"
+            ).fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+
+    def _pending_step_for_role(
+        self, harness: Harness, request_id: int, role: str
+    ) -> int | None:
+        """Return the id of the first `pending` approval_step for
+        `role` on `request_id`, or None if none exists."""
+        import sqlite3
+        if not harness.temp_db_path:
+            return None
+        conn = sqlite3.connect(str(harness.temp_db_path))
+        try:
+            row = conn.execute(
+                "SELECT id FROM approval_steps "
+                "WHERE sample_request_id = ? AND approver_role = ? "
+                "  AND status = 'pending' "
+                "ORDER BY step_order LIMIT 1",
+                (request_id, role),
             ).fetchone()
             return row[0] if row else None
         finally:

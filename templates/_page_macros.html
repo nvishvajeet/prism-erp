@@ -183,7 +183,7 @@
 #}
 {% macro person_chip(name, user_id=None, link=True, avatar=True, size='md', subtitle='', href='') -%}
 {% set initials = (name or '?')[:1]|upper %}
-{% set final_href = href if href else ('/user/' ~ user_id if user_id else '') %}
+{% set final_href = href if href else (url_for('user_profile', user_id=user_id) if user_id else '') %}
 {% set is_link = link and final_href %}
 {% set tag = 'a' if is_link else 'span' %}
 <{{ tag }} class="person-chip person-chip-{{ size }}"{% if is_link %} href="{{ final_href }}"{% endif %} data-vis="{{ V }}">

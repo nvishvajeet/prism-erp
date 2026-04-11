@@ -69,6 +69,7 @@ it is safe to clear._
 | _(empty)_ | — | — | — | — |
 | claude-modules-refresh | docs-freshness/modules-engine-map | 2026-04-11T10:34:20Z | docs/MODULES.md | docs(modules): refresh engine map with v1.3.4→v1.4.7 subsystems |
 | claude-parallel-claims-test | tests/parallel-claims-lock | 2026-04-11T10:34:50Z | tests/test_parallel_claims.py | test: lock parallel_claims crawler — N assertions |
+| claude-roadmap-retire | docs-freshness/roadmap-historical-pointer | 2026-04-11T10:35:07Z | docs/ROADMAP.md | docs(roadmap): retire to a historical pointer at NEXT_WAVES.md |
 
 ## Stale-claim recovery
 

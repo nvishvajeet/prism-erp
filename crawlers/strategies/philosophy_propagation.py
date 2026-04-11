@@ -51,9 +51,10 @@ HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{3,6}\b")
 RGB_COLOR_RE = re.compile(r"rgb\(")
 
 # Pages don't need a tile grid if they're listed here — forms /
-# dialogs / special pages.
+# dialogs / special pages. `new_request.html` graduated onto the
+# tile pattern as of the W1.4.3-polish batch (see `.new-request-tiles`
+# in styles.css); it is no longer exempt, so future drift gets caught.
 NO_TILE_GRID_OK = {
-    "new_request.html",
     "change_password.html",
     "notifications.html",  # single feed, no multi-tile composition
 }

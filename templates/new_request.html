@@ -1,12 +1,50 @@
 {% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('schedule') }}" class="hover-back-btn" title="Back to Queue">←</a>{% endblock %}
 {% block content %}
-<section class="new-request-layout" data-vis="{{ V }}">
-  <div class="card new-request-card" data-vis="{{ V }}">
-    <div class="section-head" data-vis="{{ V }}">
-      <div data-vis="{{ V }}">
-        <h2 data-vis="{{ V }}">New Request</h2>
+
+{# ─── Header (mirrors instrument_detail.html for Jony-Ive uniformity) ── #}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">← Queue</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New Request</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">sample intake</span>
+  </div>
+</header>
+
+{# ─── Tile grid ────────────────────────────────────────── #}
+<section class="new-request-tiles" data-vis="{{ V }}">
+
+  {# ── Tile: Instrument context (full-width header card) ── #}
+  <article class="card tile tile-new-request-context" id="requestInstrumentContext" data-vis="{{ V }}">
+    {{ card_heading("", "Instrument") }}
+    <dl class="new-request-context-grid" data-vis="{{ V }}">
+      <div class="new-request-context-cell" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Name</dt>
+        <dd id="requestInstrumentName" data-vis="{{ V }}">—</dd>
       </div>
-    </div>
+      <div class="new-request-context-cell" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Code</dt>
+        <dd id="requestInstrumentCode" data-vis="{{ V }}">—</dd>
+      </div>
+      <div class="new-request-context-cell" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Location</dt>
+        <dd id="requestInstrumentLocation" data-vis="{{ V }}">—</dd>
+      </div>
+      <div class="new-request-context-cell" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Capacity</dt>
+        <dd id="requestInstrumentCapacity" data-vis="{{ V }}">—</dd>
+      </div>
+      <div class="new-request-context-cell" data-vis="{{ V }}">
+        <dt data-vis="{{ V }}">Operation</dt>
+        <dd id="requestInstrumentOperation" data-vis="{{ V }}">—</dd>
+      </div>
+    </dl>
+  </article>
+
+  {# ── Tile: The form itself (full-width) ── #}
+  <article class="card tile tile-new-request-form" data-vis="{{ V }}">
+    {{ card_heading("", "Request details") }}
     <form method="post" enctype="multipart/form-data" class="form-grid new-request-form" data-vis="{{ V }}">
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Instrument</h3>
@@ -105,21 +143,9 @@
         <button type="submit" class="primary-action" data-vis="{{ V }}">Create Request Card</button>
       </div>
     </form>
-  </div>
-
-  <aside class="new-request-side" data-vis="{{ V }}">
-    <div class="card compact" data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Instrument</h2>
-      <dl class="detail-grid compact-detail-grid new-request-summary-grid" data-vis="{{ V }}">
-        <dt data-vis="{{ V }}">Name</dt><dd id="requestInstrumentName" data-vis="{{ V }}">-</dd>
-        <dt data-vis="{{ V }}">Code</dt><dd id="requestInstrumentCode" data-vis="{{ V }}">-</dd>
-        <dt data-vis="{{ V }}">Location</dt><dd id="requestInstrumentLocation" data-vis="{{ V }}">-</dd>
-        <dt data-vis="{{ V }}">Capacity</dt><dd id="requestInstrumentCapacity" data-vis="{{ V }}">-</dd>
-        <dt data-vis="{{ V }}">Operation</dt><dd id="requestInstrumentOperation" data-vis="{{ V }}">-</dd>
-      </dl>
-    </div>
-  </aside>
+  </article>
 </section>
+
 <script>
   (function () {
     const instrumentSelect = document.getElementById("requestInstrumentSelect");
@@ -137,11 +163,11 @@
       if (!instrumentSelect) return;
       const option = instrumentSelect.options[instrumentSelect.selectedIndex];
       if (!option) return;
-      fields.name.textContent = option.dataset.name || "-";
-      fields.code.textContent = option.dataset.code || "-";
-      fields.location.textContent = option.dataset.location || "-";
-      fields.capacity.textContent = (option.dataset.capacity || "-") + (option.dataset.capacity ? " / day" : "");
-      fields.operation.textContent = option.dataset.operation || "-";
+      fields.name.textContent = option.dataset.name || "—";
+      fields.code.textContent = option.dataset.code || "—";
+      fields.location.textContent = option.dataset.location || "—";
+      fields.capacity.textContent = (option.dataset.capacity || "—") + (option.dataset.capacity ? " / day" : "");
+      fields.operation.textContent = option.dataset.operation || "—";
     }
 
     function updateOriginMode() {

@@ -1012,23 +1012,58 @@ a:hover {
   gap: var(--page-gap);
 }
 
-.new-request-layout {
+/* ── New Request — tile grid (mirrors .inst-tiles for Jony-Ive
+   uniformity with instrument_detail.html — no wasted whitespace,
+   form spans the full page width) ── */
+.new-request-tiles {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
-  gap: 0.95rem;
-  align-items: start;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+  grid-auto-flow: row dense;
 }
 
-.new-request-card {
+.new-request-tiles > .tile {
   min-width: 0;
 }
 
-.new-request-side {
+.tile-new-request-context,
+.tile-new-request-form {
+  grid-column: 1 / -1;
+}
+
+.new-request-context-grid {
   display: grid;
-  gap: 0.95rem;
-  align-self: start;
-  position: sticky;
-  top: 6.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem 1.25rem;
+  margin: 0;
+}
+
+.new-request-context-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.new-request-context-cell dt {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.new-request-context-cell dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .new-request-tiles { grid-template-columns: 1fr; }
+  .new-request-tiles > .tile { grid-column: 1 / -1; }
 }
 
 .new-request-form {
@@ -1045,10 +1080,6 @@ a:hover {
   display: flex;
   justify-content: flex-start;
   padding-top: 0.2rem;
-}
-
-.new-request-summary-grid {
-  grid-template-columns: 90px 1fr;
 }
 
 .is-muted {

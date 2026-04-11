@@ -43,67 +43,198 @@ deploy_smoke is **rejected before it lands**. This is the final
 correctness gate and it is unconditional — it runs for every
 agent, every push, even doc-only commits.
 
+## Time budget and hard cutoff
+
+Every task has a **60-minute hard cutoff** measured from the
+claim commit to the work-commit push. A task that cannot ship
+inside 60 minutes is either mis-scoped or blocked, and both of
+those are the operator's problem to triage — don't grind past
+the cutoff. Soft checkpoint at 30 minutes: if you are not on a
+clear finish line, reassess.
+
+Average successful loop for comparison: ~5 minutes for a doc
+pass, ~20 minutes for a 50-line template change, ~40 minutes
+for a new crawler strategy. Each push round-trip is ≤30 s in
+the normal case (pre-receive sanity wave + the bare's
+post-receive mini-mirror hook).
+
+Timer starts on the `claim: <agent-id> — <task-id>` commit. If
+you hit 60 minutes, run the abort protocol — do not push
+half-finished work to free the lock.
+
+## Git hygiene — non-negotiable rules
+
+These rules exist because every one of them has been broken at
+least once in observed production runs and the resulting
+failure cost real cleanup time. They are non-negotiable for
+every agent, every task, every session:
+
+1. **Always start with a clean tree.** First command in any
+   session: `git status --short`. If the working tree is
+   dirty with files you did not create, STOP and surface to
+   the operator — you may be inheriting orphan WIP from a
+   killed previous agent. Never silently `git checkout --` a
+   file you don't own.
+2. **Never `git stash`.** `stash pop` has been observed
+   silently dropping edits on this repo, probably because the
+   harness interleaves edits from multiple sources between the
+   stash and the pop. The safe pattern is always
+   commit-then-rebase. If you need to park work, make a WIP
+   commit on top of your claim commit; never stash.
+3. **Stage every new file immediately.** The moment you create
+   `new_file.py`, run `git add new_file.py`. Untracked files
+   block `git pull --rebase` — if another agent's concurrent
+   commit adds a file at the same path, rebase refuses the
+   overwrite and you lose wall-clock to sorting it out.
+4. **Always `git pull --rebase`, never plain `git pull`.** A
+   plain pull creates merge commits that can land on trunk;
+   merge commits on `v1.3.0-stable-release` are noise at best
+   and a rebase headache at worst. `--rebase` is the only
+   reconciliation mode.
+5. **Two commits per task minimum: claim first, work second.**
+   Never bundle the claim row and the work in one commit — the
+   claim commit is your lock, and it must land on origin
+   before you edit any real file. Bundling them means other
+   agents see your intent to touch a file only at the same
+   instant the file changes, defeating the whole point.
+6. **Pull `--rebase` again immediately before the final push.**
+   Between your work starting and your work pushing, other
+   agents may have landed commits. `git pull --rebase origin
+   v1.3.0-stable-release` must be the step directly before
+   `git push`, always.
+7. **Never force-push. Never `--no-verify`. Never amend a
+   published commit.** These are Level-1 kernel rules and they
+   apply unchanged in parallel mode. If sanity rejects your
+   push, fix in a new commit on top — amending the rejected
+   commit is pointless because the rejected commit never
+   reached the bare anyway, and amending a landed commit is a
+   destructive rewrite that will fight the next rebase.
+8. **Never touch files outside your claim.** Even if you find
+   a typo. Even if it is "one line". Even if you are "already
+   there". Every file outside your claim is someone else's
+   lock or a shared surface — surface the issue and let the
+   operator route it. The single biggest cause of conflicts
+   has always been an agent widening scope silently.
+9. **If a rebase surfaces a conflict in a file you did not
+   claim, STOP.** That file belongs to someone else. Abort
+   the rebase (`git rebase --abort`), surface to the operator,
+   and wait. Do not "resolve" the conflict by guessing intent.
+10. **Refresh the index before reading status.** If `git
+    status` reports files dirty that you know you never
+    touched, run `git update-index --refresh` and re-check.
+    Stale index state from concurrent agents is real and has
+    been observed.
+
 ## The canonical task lifecycle
 
 A fresh agent starting a new chat session on this project
-follows this loop:
+follows this loop. Every step is mandatory. Skip nothing.
 
-1. **Sync.** `cd ~/Documents/Scheduler/Main && git pull origin
-   v1.3.0-stable-release`.
-2. **Read the kernel + user-space context.** `~/.claude/CLAUDE.md`
-   (Level 1) auto-loads at session start. Read `WORKFLOW.md` at
-   the project root for the PRISM-specific Level-2 rules. Do
-   **not** pre-read `docs/` — `WORKFLOW.md` §4 manifest points
-   at what to read for the task at hand.
-3. **Check the lock board.** `cat CLAIMS.md`. Note every file
-   claimed by an active row.
-4. **Pick a task.** From `docs/NEXT_WAVES.md` §"Parallel task
+1. **Sync.** `cd /Users/vishvajeetn/Documents/Scheduler/Main &&
+   git pull --rebase origin v1.3.0-stable-release`.
+2. **Clean-tree check.** `git status --short`. Must be empty.
+   If not, surface to operator before touching anything else.
+3. **Read the kernel + user-space context.**
+   `~/.claude/CLAUDE.md` (Level 1) auto-loads at session
+   start. Read `WORKFLOW.md` at the project root for the
+   PRISM-specific Level-2 rules, especially §3.7. Do **not**
+   pre-read the full `docs/` folder — `WORKFLOW.md` §4
+   manifest points at what to read for the task at hand.
+4. **Check the lock board.** `cat CLAIMS.md`. Note every file
+   claimed by an active row and every row's `started` time.
+   Any row older than 60 minutes is a candidate abort — do
+   not touch it without operator confirmation.
+5. **Pick a task.** From `docs/NEXT_WAVES.md` §"Parallel task
    board", pick an unclaimed row whose `files touched` column
-   has zero overlap with active claims.
-5. **Claim it.** Append a new row to `CLAIMS.md`. Use the same
-   ISO-8601 timestamp format as the other rows. Then:
+   has zero overlap with active claims. Before claiming,
+   **grep-verify** the task is not already shipped —
+   `git log --oneline --all -- <target-file>` and
+   `grep <key-symbol> <target-file>`. Two agents have already
+   wasted a cycle claiming tasks that were already done; don't
+   be the third.
+6. **Claim it.** Append a new row to `CLAIMS.md`. Use the same
+   ISO-8601 local-time format as the other rows. Then:
    ```
    git add CLAIMS.md
    git commit -m "claim: <agent-id> — <task-id>"
+   git pull --rebase origin v1.3.0-stable-release
    git push origin v1.3.0-stable-release
    ```
-   Push this commit alone, before any real work. This is your
-   lock. If the push is rejected because another agent pushed
-   first, `git pull --rebase` and retry the push — the
-   pre-receive hook will not reject a claim commit on its own.
-6. **Do the work.** Edit the files listed in your claim row.
-   **Do not touch files outside your claim** — if you discover
-   mid-task that you need a file another agent holds, pause and
-   surface the collision to the user instead of silently
-   widening the claim.
-7. **Pre-commit gate.** Run `.venv/bin/python scripts/smoke_test.py`
-   (≈5s). It must pass green before your commit lands. If the
-   task was template- or route-touching, also run
-   `.venv/bin/python -m crawlers wave sanity` (≈17s) for a
-   stronger pre-flight check — the pre-receive hook will run
-   this on the server anyway, so you save yourself a rejection
-   round-trip.
-8. **Absorb concurrent work.** `git pull --rebase origin
+   Push this commit **alone**, before any real work. This is
+   your lock. If the push is rejected for non-fast-forward,
+   `git pull --rebase` and retry — the pre-receive hook does
+   not reject claim commits on its own.
+7. **Do the work.** Edit the files listed in your claim row.
+   **Never touch files outside your claim.** Stage new files
+   (`git add`) immediately as you create them. Never `git
+   stash`. Never force-push.
+8. **Pre-commit gate.**
+   - `.venv/bin/python scripts/smoke_test.py` (~5 s) — must
+     pass. Non-negotiable.
+   - If the task touched templates, routes, or CSS, also run
+     `.venv/bin/python -m crawlers wave sanity` (~17 s) for a
+     stronger pre-flight — the pre-receive hook will run this
+     on the server anyway, so you save yourself a round-trip.
+   - `bash -n <modified.sh>` for any shell script you edited.
+9. **Absorb concurrent work.** `git pull --rebase origin
    v1.3.0-stable-release`. If the rebase surfaces a conflict
-   that is not in a file you claimed, **stop and surface it
-   to the user** — it means the claim board lied, which is a
-   bug in whoever wrote the claim. Don't silently "fix" someone
-   else's work.
-9. **Release the claim.** Edit `CLAIMS.md` to remove your row.
-10. **Commit and push.** Stage the work files **plus** the
+   in a file you did **not** claim, STOP and surface to the
+   operator — it means the claim board lied.
+10. **Release the claim.** Edit `CLAIMS.md` to remove your
+    row. Leave every other agent's row untouched.
+11. **Commit and push.** Stage the work files **plus** the
     `CLAIMS.md` row removal, commit with a normal
     `<type>(<scope>): <subject>` message, and push. The
     pre-receive sanity wave runs on the remote. If green, the
-    push lands and your claim is released in the same atomic
-    step as your work.
-11. **Retry on hook rejection.** If the sanity wave fails on the
-    remote, read the output, fix the problem in a new commit,
-    and try again. Never `--no-verify`, never force-push.
+    push lands and your claim is released atomically with
+    your work.
+12. **Retry on hook rejection.** If the sanity wave fails,
+    read the output, fix the problem in a new commit on top,
+    and push again. Never `--no-verify`, never force-push,
+    never amend.
 
-Average successful loop: ~20 minutes for a 50-line template
-change, ~40 minutes for a new crawler strategy, ~5 minutes for
-a doc pass. Each push round-trip is ≤30s in the normal case
-(sanity wave + the bare's mini-mirror hook).
+## Abort protocol (cutoff, operator kill, or scope blow-up)
+
+When an agent cannot ship within 60 minutes, the operator kills
+it via `TaskStop`, or the agent discovers mid-task that the
+scope is wrong, it must cleanly abort. Dirty aborts leave
+orphaned claim rows and dangling WIP in the working tree,
+which costs the next agent wall-clock to untangle.
+
+1. **Discard WIP in your claimed files only.**
+   `git checkout -- <files-you-were-editing>`. If you created
+   new files, delete them (`rm <new.py>` or `git rm`). Do
+   **not** touch anything outside your claim.
+2. **Verify clean-adjacent.** `git status --short` should now
+   show only `CLAIMS.md` as modified (because you are about
+   to remove your row).
+3. **Edit `CLAIMS.md`** to remove your row.
+4. **Rebase-safe pull.** `git pull --rebase origin
+   v1.3.0-stable-release`.
+5. **Abort commit.**
+   ```
+   git add CLAIMS.md
+   git commit -m "claim: abort <task-id> — <one-line reason>"
+   git push origin v1.3.0-stable-release
+   ```
+6. **Report to operator.** What was attempted, why it was cut
+   short, whether the task should be re-scoped, re-claimed,
+   or removed from the board.
+
+Operator-initiated kills (`TaskStop`) are a special case: the
+killed agent cannot run the abort protocol because it is
+dead. The **operator** (or the next arriving agent with
+operator confirmation) must run the cleanup:
+
+1. Check which files the dead agent was holding, both by
+   reading its claim row in `CLAIMS.md` and by running
+   `git status --short` to see dangling WIP.
+2. `git checkout -- <dead-agent-files>` to discard the WIP.
+3. Edit `CLAIMS.md` to remove the dead agent's row.
+4. `git pull --rebase && git commit -m "claim: cleanup killed <task-id>"` and push.
+5. Leave every other agent's row and WIP alone — some of the
+   dirty files you see may belong to a different concurrent
+   agent who is still alive.
 
 ## Lane taxonomy (which files live together)
 

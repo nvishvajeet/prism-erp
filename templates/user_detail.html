@@ -219,6 +219,28 @@
 </section>
 {% endif %}
 
+{% if can_reset_password %}
+<section class="card compact tile-user-reset-password" data-vis="{{ V }}">
+  <div class="section-head" data-vis="{{ V }}">
+    <div data-vis="{{ V }}">
+      <h2 data-vis="{{ V }}">Password</h2>
+    </div>
+  </div>
+  <p class="hint" data-vis="{{ V }}">
+    Admins do not set passwords directly. Use this button to issue a
+    random temporary password for {{ target_user["name"] }}. The
+    temporary password will be displayed exactly once on save; share
+    it securely. {{ target_user["name"] }} will be required to choose
+    their own password on next login.
+  </p>
+  <form method="post" class="inline-form" data-vis="{{ V }}"
+        onsubmit="return confirm('Issue a new temporary password for {{ target_user.email }}? Their current password will be invalidated.');">
+    <input type="hidden" name="action" value="reset_password">
+    <button type="submit" data-vis="{{ V }}">Reset Password</button>
+  </form>
+</section>
+{% endif %}
+
 {% if can_edit_user and instrument_roster %}
 <script>
   /* Category quick-grant buttons for the instrument assignment matrix */

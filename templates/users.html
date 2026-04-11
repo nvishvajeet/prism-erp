@@ -70,9 +70,11 @@
           <option value="super_admin" data-vis="super_admin">Super Admin</option>
         </select>
       </label>
-      <label data-vis="{{ V }}">Temporary Password
-        <input type="text" name="password" value="SimplePass123" data-vis="{{ V }}">
-      </label>
+      <p class="hint" data-vis="{{ V }}">
+        A temporary password will be generated and shown to you once
+        on save. Share it securely; the new user will be required to
+        change it on first login.
+      </p>
       <button type="submit" data-vis="{{ V }}">Create User</button>
     </form>
     {% else %}

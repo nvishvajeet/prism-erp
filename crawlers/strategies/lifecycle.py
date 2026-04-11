@@ -96,38 +96,29 @@ class LifecycleStrategy(CrawlerStrategy):
                 self._check(result, resp.status_code < 400,
                             "professor approval", f"professor → {resp.status_code}")
 
-        # ---- Step 4: operator accept → start → complete -------------
+        # ---- Step 4: operator accept → start -----------------------
+        # Order matters: the requester follow-up (Step 5) has to
+        # happen before `complete_job` flips completion_locked=1,
+        # because can_edit_request_note blocks requester notes on
+        # locked requests. So we split operator progress into
+        # (accept + start) now and (complete) later.
         with harness.logged_in("anika@lab.local"):
             for action, label in [
                 ("accept_sample", "operator accept"),
                 ("start_now", "operator start"),
-                ("complete_job", "operator complete"),
             ]:
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": action},
                     follow_redirects=True,
                 )
-                # Any 2xx/3xx counts as forward progress. 400s mean the
-                # state machine refused — tolerate as warning.
                 if resp.status_code < 400:
                     result.passed += 1
                 else:
                     result.warnings += 1
                     result.details.append(f"{label} → {resp.status_code}")
 
-        # ---- Step 5: admin views history + detail -------------------
-        with harness.logged_in("admin@lab.local"):
-            for path in [f"/requests/{request_id}", "/schedule",
-                         "/instruments/1/history", "/stats"]:
-                resp = harness.get(path, follow_redirects=True)
-                if resp.status_code < 400:
-                    result.passed += 1
-                else:
-                    result.failed += 1
-                    result.details.append(f"admin {path} → {resp.status_code}")
-
-        # ---- Step 6: requester posts a follow-up --------------------
+        # ---- Step 5: requester posts a follow-up (before lock) ------
         with harness.logged_in("shah@lab.local"):
             resp = harness.post(
                 f"/requests/{request_id}",
@@ -137,6 +128,30 @@ class LifecycleStrategy(CrawlerStrategy):
             )
             self._check(result, resp.status_code < 400, "requester follow-up",
                         f"reply → {resp.status_code}")
+
+        # ---- Step 6: operator completes (locks the request) --------
+        with harness.logged_in("anika@lab.local"):
+            resp = harness.post(
+                f"/requests/{request_id}",
+                data={"action": "complete_job"},
+                follow_redirects=True,
+            )
+            if resp.status_code < 400:
+                result.passed += 1
+            else:
+                result.warnings += 1
+                result.details.append(f"operator complete → {resp.status_code}")
+
+        # ---- Step 7: admin views history + detail ------------------
+        with harness.logged_in("admin@lab.local"):
+            for path in [f"/requests/{request_id}", "/schedule",
+                         "/instruments/1/history", "/stats"]:
+                resp = harness.get(path, follow_redirects=True)
+                if resp.status_code < 400:
+                    result.passed += 1
+                else:
+                    result.failed += 1
+                    result.details.append(f"admin {path} → {resp.status_code}")
 
         result.metrics = {
             "request_id": request_id,

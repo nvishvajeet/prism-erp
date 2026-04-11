@@ -281,6 +281,24 @@ def generate_member_code(name: str, role: str) -> str:
     return f"{name_prefix}{role_abbr}{seq_num:03d}"
 
 
+def generate_temp_password() -> str:
+    """Generate a short random temporary password for admin-issued resets.
+
+    Policy (DATA_POLICY.md §3, see docs/DATA_POLICY.md):
+      - Admins NEVER type passwords directly. They call this helper.
+      - The returned string is shown to the admin once via a flash
+        message so they can share it out-of-band.
+      - The user is expected to change it on first login; the
+        `must_change_password` column on `users` gates access until
+        they do.
+      - 8 characters from a friendly alphabet (no 0/O/1/l/I ambiguity)
+        so admins can dictate over the phone if needed.
+    """
+    import secrets
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
 def log_action(actor_id: int | None, entity_type: str, entity_id: int, action: str, payload: dict) -> None:
     log_action_at(actor_id, entity_type, entity_id, action, payload, now_iso())
 
@@ -2744,8 +2762,17 @@ def can_approve_step(user: sqlite3.Row, step: sqlite3.Row, instrument_id: int) -
 def login_required(view):
     @wraps(view)
     def wrapped(**kwargs):
-        if current_user() is None:
+        user = current_user()
+        if user is None:
             return redirect(url_for("login"))
+        # W1.3.8 password hygiene: a user signed in with a temporary
+        # admin-issued password can only reach the change-password
+        # page and /logout until they set their own. Allow static-ish
+        # endpoints so the change_password page itself renders.
+        if row_value(user, "must_change_password", 0):
+            allowed = {"change_password", "logout", "static", "api_health_check"}
+            if request.endpoint not in allowed:
+                return redirect(url_for("change_password"))
         return view(**kwargs)
 
     return wrapped
@@ -3331,6 +3358,16 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN member_code TEXT DEFAULT NULL")
             except:
                 pass  # Column already exists or other issue, skip
+
+        # W1.3.8 — Password hygiene. Admin-created / admin-reset
+        # users must change their password on first login. Flag
+        # defaults to 0 so existing seed rows keep working; only
+        # new admin-issued temporary passwords set this to 1.
+        if "must_change_password" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+            except:
+                pass
 
         # Phase 6 W6.1 — Indexes for hot query paths.
         # Every query that filters by status, instrument, requester, or
@@ -4203,6 +4240,16 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
+            # W1.3.8 password hygiene: if the admin issued a temporary
+            # password (create_user or reset_password), force the user
+            # to set their own before they can use the app.
+            if row_value(user, "must_change_password", 0):
+                flash(
+                    f"Welcome {user['name']}. You are signed in with a temporary password — "
+                    f"please choose a new one to continue.",
+                    "success",
+                )
+                return redirect(url_for("change_password"))
             flash(f"Signed in as {user['name']}.", "success")
             return redirect(url_for("index"))
         flash("Invalid login.", "error")
@@ -6583,7 +6630,7 @@ def change_password():
             flash("New passwords do not match.", "error")
             return redirect(url_for("change_password"))
         execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
+            "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
             (generate_password_hash(new_pw, method="pbkdf2:sha256"), user["id"]),
         )
         log_action(user["id"], "user", user["id"], "password_changed", {})
@@ -6619,6 +6666,35 @@ def user_profile(user_id: int):
             execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
             log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
             flash(f"Access removed for {target_user['email']}.", "success")
+            return redirect(url_for("user_profile", user_id=user_id))
+        if action == "reset_password":
+            # Password hygiene (W1.3.8) — admin-issued password reset.
+            # Admin never types a password. We generate a random temp
+            # password, flash it to the admin exactly once, and set
+            # must_change_password=1 so the target is forced to pick
+            # their own on next login. Owner rows are never reset from
+            # here; super_admin rows can only be reset by another
+            # super_admin.
+            if not can_manage_members(viewer):
+                abort(403)
+            if is_owner(target_user) and not is_owner(viewer):
+                abort(403)
+            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+                abort(403)
+            temp_password = generate_temp_password()
+            execute(
+                "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+                (generate_password_hash(temp_password, method="pbkdf2:sha256"), user_id),
+            )
+            log_action(
+                viewer["id"], "user", user_id, "password_reset_by_admin",
+                {"email": target_user["email"]},
+            )
+            flash(
+                f"Temporary password for {target_user['email']}: {temp_password} — "
+                f"share securely; they will be required to change it on next login.",
+                "success",
+            )
             return redirect(url_for("user_profile", user_id=user_id))
         if action == "update_user_metadata":
             # In-place admin edit of a user's profile. Shown behind the
@@ -6897,6 +6973,12 @@ def user_profile(user_id: int):
         originated_count=originated_count,
         is_self=viewer["id"] == target_user["id"],
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
+        can_reset_password=(
+            can_manage_members(viewer)
+            and target_user["id"] != viewer["id"]
+            and (not is_owner(target_user) or is_owner(viewer))
+            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+        ),
         can_edit_user=can_edit_user_value,
         instrument_roster=instrument_roster,
         instrument_categories=instrument_categories,
@@ -7515,8 +7597,13 @@ def admin_users():
             name = request.form["name"].strip()
             email = request.form["email"].strip().lower()
             role = request.form["role"]
-            password = request.form["password"].strip() or "SimplePass123"
-            invite_status = "invited" if role == "requester" else "active"
+            # Password hygiene (W1.3.8) — admins do NOT type passwords.
+            # A random temporary password is generated; the admin sees
+            # it once via the flash below and shares it out-of-band;
+            # must_change_password=1 forces the user to set their own
+            # on first successful login. Any submitted `password` field
+            # in the form is deliberately ignored.
+            temp_password = generate_temp_password()
             existing_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
             if existing_user is not None:
                 flash(f"User {email} already exists.", "error")
@@ -7524,13 +7611,18 @@ def admin_users():
                 member_code = generate_member_code(name, role)
                 execute(
                     """
-                    INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active, member_code)
-                    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                    INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active, member_code, must_change_password)
+                    VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1)
                     """,
-                    (name, email, generate_password_hash(password, method="pbkdf2:sha256"), role, user["id"], invite_status, member_code),
+                    (name, email, generate_password_hash(temp_password, method="pbkdf2:sha256"), role, user["id"], member_code),
                 )
                 log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
-                flash(f"User {email} created (Code: {member_code}).", "success")
+                flash(
+                    f"User {email} created. Temporary password: {temp_password} — "
+                    f"share securely; {name} will be required to change it on first login. "
+                    f"Member code: {member_code}.",
+                    "success",
+                )
         elif action == "delete_member":
             member_id = int(request.form["user_id"])
             member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))

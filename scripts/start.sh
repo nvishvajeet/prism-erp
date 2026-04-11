@@ -35,12 +35,23 @@ case "$1" in
     # Foreground service mode. Used by launchd (ops/launchd/local.prism.plist)
     # and systemd. NO Chrome auto-open, NO reloader, NO debug. stdout/stderr
     # are captured by launchd and rotated into logs/server.log.
+    #
+    # LAB_SCHEDULER_AUTORELOAD=0 is pinned UNCONDITIONALLY here even
+    # though the plist sets it in EnvironmentVariables — belt +
+    # suspenders, because the Werkzeug reloader is catastrophic under
+    # launchd: the reloader forks a child process, the parent exits,
+    # launchd sees the parent die and marks the service EX_CONFIG
+    # (exit 78). Observed 2026-04-11 during the launchd bootstrap
+    # attempt for the public demo. Setting it in start.sh guarantees
+    # service mode always turns the reloader off regardless of how
+    # the script was launched.
     echo "=== SERVICE MODE ==="
     echo "    python:  ${PY_BIN}"
     echo "    host:    ${LAB_SCHEDULER_HOST:-127.0.0.1}"
     echo "    https:   ${LAB_SCHEDULER_HTTPS:-false}"
     echo "    demo:    ${LAB_SCHEDULER_DEMO_MODE:-0}"
     export LAB_SCHEDULER_DEBUG=0
+    export LAB_SCHEDULER_AUTORELOAD=0
     exec "${PY_BIN}" app.py
     ;;
   *)

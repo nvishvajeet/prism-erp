@@ -312,133 +312,35 @@ repo root.
 
 ---
 
-## Remote server access for other agents
+## AI agent access & workflow
 
-PRISM's canonical git remote lives on a Mac mini in India, reachable
-only over Tailscale. Other agents (Claude Code instances on other
-machines, CI jobs, a second developer) can connect to it through the
-same SSH-to-git bridge this repo already uses.
+The laptop-wide agent policy is the single source of truth for
+topology, SSH key, commit rhythm, and cross-project rules. It is
+auto-loaded into every Claude Code session on this MacBook, so
+there is nothing to paste. Other agents on other machines: read
+`~/.claude/CLAUDE.md` first; consult `~/.claude/AGENT_POLICY.md`
+and `~/.claude/git-server/README.md` only for specific recipes.
 
-### What the remote is
+### PRISM-specific deltas on top of `~/.claude/CLAUDE.md`
 
-- **Host:** `vishwajeet@100.115.176.118` (Tailscale IP, not public)
-- **Repo path:** `~/git/lab-scheduler.git` (bare)
-- **Branch of record:** `v1.3.0-stable-release`
-- **Transport:** SSH with `publickey` auth — no password, no HTTPS,
-  no GitHub mirror. The Mac mini is the origin.
-
-### Prerequisites for a new agent / machine
-
-1. **Tailscale** installed and logged into the same tailnet. Without
-   Tailscale the IP `100.115.176.118` is unreachable.
-2. **SSH key** generated locally (`ssh-keygen -t ed25519`) and the
-   public key (`~/.ssh/id_ed25519.pub`) appended to
-   `~/.ssh/authorized_keys` on the Mac mini. One-shot:
-   ```bash
-   ssh-copy-id -i ~/.ssh/id_ed25519.pub vishwajeet@100.115.176.118
-   ```
-3. **`~/.ssh/config` hygiene.** If the host's default config has
-   macOS-only keys like `UseKeychain`, add this guard at the very
-   top so non-macOS ssh clients don't choke:
-   ```
-   IgnoreUnknown UseKeychain,AddKeysToAgent
-   ```
-4. **Force the right identity.** If ssh-agent has other keys loaded
-   the Mac mini will hit `MaxAuthTries` before reaching the right
-   one. Always pin the key explicitly:
-   ```
-   Host prism-mini
-       HostName 100.115.176.118
-       User vishwajeet
-       IdentityFile ~/.ssh/id_ed25519
-       IdentitiesOnly yes
-   ```
-
-### Clone
-
-```bash
-git clone vishwajeet@100.115.176.118:~/git/lab-scheduler.git Scheduler
-cd Scheduler
-git checkout v1.3.0-stable-release
-git config core.sshCommand "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"
-```
-
-The `core.sshCommand` line persists the right SSH invocation on the
-clone, so `git pull` / `git push` work without environment hacks.
-
-### Verify
-
-```bash
-ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-    vishwajeet@100.115.176.118 "hostname && ls ~/git/lab-scheduler.git"
-git ls-remote origin
-```
-
-Both should succeed silently. If either prompts for a password or
-returns `Permission denied (publickey)`, fix the key / config
-before running any git commands.
-
-### Agent kickoff prompt
-
-Copy-paste this into a new Claude Code session (or equivalent agent
-harness) on any machine that has met the prerequisites above:
-
-> You are joining the PRISM / Lab Scheduler project as a secondary
-> agent. The canonical git remote is a Mac mini reachable only over
-> Tailscale at `vishwajeet@100.115.176.118:~/git/lab-scheduler.git`,
-> branch `v1.3.0-stable-release`. Before touching any code:
->
-> 1. Confirm Tailscale is up (`tailscale status`) and the mini is
->    reachable (`ping -c1 100.115.176.118`).
-> 2. Verify SSH works with an explicit identity:
->    `ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes vishwajeet@100.115.176.118 hostname`
-> 3. Clone with `git clone vishwajeet@100.115.176.118:~/git/lab-scheduler.git`,
->    then `git config core.sshCommand "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"`
->    inside the clone.
-> 4. Read `docs/PHILOSOPHY.md`, `README.md`, `docs/ROADMAP.md`, and
->    `docs/HANDOVER.md` before editing anything.
-> 5. Default rhythm: **pull → work → smoke test → commit → push.**
->    The pre-push gate is `.venv/bin/python -m crawlers wave sanity`.
->    Never skip it. Never force-push. Never rewrite history on
->    `v1.3.0-stable-release`.
-> 6. Hard attributes (data model, routes, roles, audit chain, tile
->    architecture) are locked — see `docs/PHILOSOPHY.md` §2. Soft
->    attributes (copy, colour, layout) are fair game.
->
-> Your first action is to run `git pull` and report the latest
-> three commits on `v1.3.0-stable-release`, then wait for a task.
-
----
-
-## AI agent workflow rules
-
-1. **Read `docs/PHILOSOPHY.md` first, every session.** It is
-   load-bearing. Any change that violates it does not ship.
-2. **Pull → work → commit → push.** Default rhythm. No local-only
-   commits.
-3. **Smoke test before every commit** (`.venv/bin/python
-   scripts/smoke_test.py`, ~5 s). `wave sanity` is the slightly stronger
-   alternative.
-4. **Fix root causes, not symptoms.** Verify state before acting —
-   items may already be done.
-5. **Commit each file change as it lands** unless a single logical
-   unit genuinely spans multiple files. `git push` after every
-   commit.
-6. **Batch terminal permissions.** Front-load shell operations into
-   long chained commands rather than drip-feeding many small calls.
-7. **Full `wave all` only at release boundaries.** The smoke test
-   is the mid-flight gate.
-8. **Read `docs/PROJECT.md` §11 (Reusable abstractions) and §12 (Testing)
-   before adding new code.** Pick the relevant helper off that list
-   rather than inventing a parallel approach.
-9. **Hard attributes are locked.** Changes to the data model,
-   routes, roles, audit chain, or tile architecture require a major
-   version bump and a CHANGELOG entry under `### Changed (BREAKING)`.
-   See `docs/PHILOSOPHY.md` §2.
-10. **The website stays up.** Deploys to the Mac mini are atomic:
-    pull → smoke → kickstart. Never interrupt live users.
-11. **Cross-project auto-tasks live in `~/.claude/AGENT_POLICY.md`
-    §3 item 12.** Includes the once-per-day portfolio recommendation
-    refresh that any agent touching any repo on this laptop must
-    run. Do not duplicate that rule here — the policy file is the
-    single source of truth.
+1. **Read `docs/PHILOSOPHY.md` before any non-trivial change.** It
+   is load-bearing. Any change that violates it does not ship.
+2. **Pre-commit gate:** `.venv/bin/python scripts/smoke_test.py`
+   (≈5 s). The slightly stronger alternative is
+   `.venv/bin/python -m crawlers wave sanity`. Full `wave all`
+   only at release boundaries.
+3. **Read `docs/PROJECT.md` §11 (Reusable abstractions) and
+   §12 (Testing) before adding new code.** Pick a helper off
+   that list rather than inventing a parallel approach.
+4. **Hard attributes are locked** — the data model, routes, roles,
+   audit chain, and tile architecture. Changes to them require a
+   major version bump and a `CHANGELOG` entry under
+   `### Changed (BREAKING)`. See `docs/PHILOSOPHY.md` §2.
+5. **The website stays up.** Deploys to the Mac mini are atomic:
+   pull → smoke → `launchctl kickstart`. Never interrupt live
+   users. Never force-push or rewrite history on
+   `v1.3.0-stable-release`.
+6. **Canonical branch:** `v1.3.0-stable-release`. The central git
+   bare lives at `~/.claude/git-server/lab-scheduler.git` and
+   auto-mirrors to the Mac mini via a post-receive hook — agents
+   push to `origin` only.

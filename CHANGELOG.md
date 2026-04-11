@@ -11,13 +11,89 @@ detail.
 
 ## [Unreleased]
 
-Forward plan lives in `TODO_AI.txt`. Headline:
+Forward plan lives in `docs/NEXT_WAVES.md`. The active line is
+the `v1.3.0-stable-release` branch; the first tag of the v1.4.x
+line is **v1.4.2** once Tailscale Serve is unblocked.
 
-- **v1.3.x patch stream** — `safe_int`/`safe_float` wrap (1.3.1),
-  instrument-page polish under the Jony Ive / Apple / Ferrari
-  philosophy (1.3.2), demo / operational directory split (1.3.3).
-- **v1.4.0** — bulk operations on the queue tile.
-- **v1.5.0** — SQLite FTS5 full-text search.
+**Shipped on trunk since v1.3.8, pending the next tag:**
+
+### Added
+
+- **W1.3.9/W1.4.0 code prep** (`5bc3142`) — `scripts/tailscale_serve.sh`
+  one-shot helper + `docs/HTTPS.md`. Lands the laptop-side
+  deliverables for tailnet HTTPS. Execution blocks on one operator
+  click at https://login.tailscale.com/f/serve . Plan B (mkcert
+  local cert via Flask `ssl_context`) documented as the fallback.
+- **W1.4.1 c1a — `.row-time-hint`** (`36fe93f`) — server-side
+  `time_ago()` helper renders a muted "just now / 5m ago / 2d ago
+  / in 4h" hint under every queue row's exact timestamp. No JS.
+- **W1.4.1 c1b — topbar queue count badge** (`455ffb7`) — pending-
+  for-role count on the Queue nav item, computed once in
+  `inject_globals`. New `topbar_badges` crawler in the sanity wave.
+- **W1.4.1 c2 — empty-state warmth** (`db7bc19`) — shared
+  `empty_state(...)` macro applied to the big table pages; stray
+  "No records" stubs retired. New `empty_states` crawler in the
+  sanity wave.
+- **W1.4.1 c3 — bare-key shortcuts** (`bcd3990`) — `static/keybinds.js`
+  (≤40 lines, vanilla JS, zero framework creep). `n` → new
+  request, `?` → toggle help overlay, `Esc` → close. No-op while
+  a form input / textarea / contenteditable is focused.
+  Philosophy crawler extended with a rule that enforces the
+  40-line budget and base.html reference. **Completes W1.4.1;
+  v1.4.1 is ready to tag.**
+- **AGENTS.md at project root** (`90383b1`) — vendor-neutral
+  onboarding for any AI coding agent (Claude, Codex, Gemini,
+  Cursor, Continue, Aider, Copilot). Self-contained: topology,
+  commit rhythm, pre-commit gate, hard/soft contract, demo/
+  operational separation, docs manifest.
+- **Dev panel WAVES tile honours `✅ SHIPPED` marker** (`8043696`)
+  — `_dev_panel_waves()` now treats any section header with the
+  marker in `docs/NEXT_WAVES.md` as shipped, not just git-tagged
+  waves. Unblocks reflecting state for waves the plan explicitly
+  leaves untagged.
+
+### Changed
+
+- **CSS fossil backlog wiped** (`0d3102e`) — W1.3.11 retired 231
+  orphaned selectors from `static/styles.css`. `css_orphan`
+  crawler went from 512/0/229 → 548/0/0.
+- **Stunnel / Caddy fallback retired** (`929911d`) — W1.3.12
+  Tailscale Serve is now the only HTTPS path. Simpler state to
+  reason about, one fewer moving piece.
+- **`docs/NEXT_WAVES.md` second-pass optimization** (`6f2b543`) —
+  collapsed W1.3.9+W1.4.0 into one post-ops wave, dropped the
+  W1.4.2 hotfix-buffer slot, split the release gate into ops-free
+  W1.4.2a + post-ops W1.4.2b. Net: critical path to demo-live
+  dropped from ~4 days calendar to ~2.5 h focused work.
+
+## [1.3.8] — 2026-04-11
+
+**W1.3.8 — launchd service for Flask on the mini.** Turns the
+`nohup` dance into a real service that survives reboots.
+
+### Added
+
+- **`ops/launchd/local.prism.plist`** — `KeepAlive` + `RunAtLoad`,
+  stdout/stderr to `logs/server.log`, env vars sourced from a
+  one-line wrapper.
+- **`scripts/start_server.sh`** — exports `.env`, execs
+  `.venv/bin/python app.py`. Launchd invokes this, not python
+  directly, so env loading is unambiguous.
+- **`scripts/install_launchd.sh`** — copies the plist to
+  `~/Library/LaunchAgents/` and runs `launchctl bootstrap`.
+
+### Changed
+
+- **`docs/DEPLOY.md` §2 rewrite** — launchd is now the canonical
+  deploy recipe; manual `python app.py` is a debugging fallback
+  only.
+
+### Blocked on
+
+- **Reboot-acceptance step deferred** until the Mac mini
+  Application Firewall is unblocked (`logs/mini_network_diag_20260411.md`).
+  Code-side W1.3.8 shipped; the ops-side acceptance test is
+  pending one operator command.
 
 ## [1.3.0] — 2026-04-10
 

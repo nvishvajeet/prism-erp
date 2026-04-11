@@ -6164,12 +6164,21 @@ def _dev_panel_git(*args: str) -> str:
 def _dev_panel_progress() -> dict:
     """Compute current project progress from git + the docs."""
     branch = _dev_panel_git("symbolic-ref", "--short", "HEAD") or "DETACHED"
-    ahead_behind = _dev_panel_git("rev-list", "--left-right", "--count", "HEAD...origin/main")
+    # Compare against the upstream of the current branch, not a hardcoded
+    # "origin/main" — PRISM lives on `v1.3.0-stable-release`, and the
+    # hardcode was stale from the pre-stable-release era. If the branch
+    # has no tracked upstream (detached HEAD, fresh local branch), both
+    # counts stay at 0 rather than returning nonsense.
+    upstream_ref = _dev_panel_git("rev-parse", "--abbrev-ref", "@{upstream}")
     ahead, behind = "0", "0"
-    if ahead_behind:
-        parts = ahead_behind.split()
-        if len(parts) == 2:
-            ahead, behind = parts
+    if upstream_ref:
+        ahead_behind = _dev_panel_git(
+            "rev-list", "--left-right", "--count", f"HEAD...{upstream_ref}"
+        )
+        if ahead_behind:
+            parts = ahead_behind.split()
+            if len(parts) == 2:
+                ahead, behind = parts
     dirty_lines = _dev_panel_git("status", "--porcelain")
     dirty_count = len([line for line in dirty_lines.splitlines() if line.strip()])
     # Last 10 commits, rich format: sha | iso-date | subject. This lets us
@@ -6220,16 +6229,80 @@ def _dev_panel_progress() -> dict:
         if current_version:
             versions.append(current_version)
 
-    # Current release from CHANGELOG.md.
-    changelog_path = BASE_DIR / "CHANGELOG.md"
+    # Current release from git tags — authoritative.
+    # CHANGELOG.md used to be the oracle, but tags are what the operator
+    # actually cuts and what the mini deploys against, so drift between
+    # CHANGELOG and real releases always made CHANGELOG lie. Fixed 2026-04-11
+    # after the v1.4.2 / v1.4.3 cuts exposed the drift (CHANGELOG stopped
+    # at [1.3.12], dev panel was showing "v1.3.12" while origin had v1.4.3
+    # tagged). See PHILOSOPHY.md §3.1 for the iOS-style tag cadence.
     current_release = "unknown"
-    if changelog_path.exists():
-        for raw in changelog_path.read_text(errors="ignore").splitlines():
+    latest_tag_info: dict = {}
+    tag_lines = _dev_panel_git("tag", "--list").splitlines()
+    semver_tags: list[tuple[tuple[int, ...], str]] = []
+    for t in tag_lines:
+        t = t.strip()
+        if not t.startswith("v"):
+            continue
+        parts = t[1:].split(".")
+        if len(parts) == 3 and all(p.isdigit() for p in parts):
+            semver_tags.append((tuple(int(p) for p in parts), t))
+    if semver_tags:
+        semver_tags.sort()
+        latest_tag = semver_tags[-1][1]  # e.g. "v1.4.3"
+        current_release = latest_tag.lstrip("v")
+        # Resolve tag → commit SHA, tagged-at, tag subject (first line of
+        # the annotated message). `git for-each-ref` gives us all three in
+        # one call without needing a second subprocess roundtrip.
+        tag_meta = _dev_panel_git(
+            "for-each-ref",
+            "--format=%(objectname:short)|%(taggerdate:iso-strict)|%(subject)",
+            f"refs/tags/{latest_tag}",
+        )
+        tag_sha = ""
+        tag_date = ""
+        tag_subject = ""
+        if tag_meta:
+            mparts = tag_meta.split("|", 2)
+            if len(mparts) == 3:
+                tag_sha, tag_date, tag_subject = mparts
+        # Count commits on the current branch since the tag — this is
+        # the "unreleased work" depth that tells the operator whether
+        # a new patch cut is warranted.
+        commits_since_tag = _dev_panel_git(
+            "rev-list", "--count", f"{latest_tag}..HEAD"
+        )
+        latest_tag_info = {
+            "tag": latest_tag,
+            "sha": tag_sha,
+            "tagged_at": tag_date,
+            "subject": tag_subject,
+            "commits_since": int(commits_since_tag) if commits_since_tag.isdigit() else 0,
+        }
+    elif (BASE_DIR / "CHANGELOG.md").exists():
+        # Fallback only if no semver tags exist at all.
+        for raw in (BASE_DIR / "CHANGELOG.md").read_text(errors="ignore").splitlines():
             line = raw.strip()
             if line.startswith("## [") and "Unreleased" not in line:
-                # "## [1.2.0] — 2026-04-10"
                 current_release = line.split("[", 1)[1].split("]", 1)[0]
                 break
+
+    # Latest shipped = HEAD commit, richer than recent_commits[0] because
+    # we resolve the full author + short body for the Latest-Shipped tile.
+    latest_commit_info: dict = {}
+    head_line = _dev_panel_git(
+        "log", "-1", "--pretty=format:%h|%cI|%an|%s"
+    )
+    if head_line:
+        hparts = head_line.split("|", 3)
+        if len(hparts) == 4:
+            h_sha, h_at, h_author, h_subject = hparts
+            latest_commit_info = {
+                "sha": h_sha,
+                "at": h_at,
+                "author": h_author,
+                "subject": h_subject,
+            }
 
     # Crawler-report freshness: mtime of the newest reports/*_log.json.
     # Dev-panel readers use this to answer "did the crawlers run lately?"
@@ -6254,12 +6327,15 @@ def _dev_panel_progress() -> dict:
         "branch": branch,
         "ahead": ahead,
         "behind": behind,
+        "upstream": upstream_ref,
         "dirty": dirty_count,
         "recent_commits": recent_commits,
         "commits_today": commits_today,
         "last_commit_at": last_commit_iso,
         "versions": versions,
         "current_release": current_release,
+        "latest_tag": latest_tag_info,
+        "latest_commit": latest_commit_info,
         "reports_latest_at": reports_latest_iso,
         "reports_latest_age_hours": reports_latest_age_hours,
     }

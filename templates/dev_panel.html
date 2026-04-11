@@ -17,6 +17,74 @@
 {# ─── Tile Grid ──────────────────────────────────────── #}
 <div class="inst-tiles" data-vis="{{ V }}">
 
+  {# ─── Stable Release tile — the iOS-cadence answer to
+       "what's the current stable version?" Pulled straight from
+       `git tag --list` via `_dev_panel_progress()`, not from
+       CHANGELOG (which drifts). See PHILOSOPHY.md §3.1 for the
+       tag-often philosophy. ─── #}
+  <section class="card tile tile-dev-stable-release" id="devStableRelease" data-vis="{{ V }}">
+    {{ card_heading("STABLE RELEASE", "Latest tag on origin") }}
+    {% if progress.latest_tag and progress.latest_tag.tag %}
+    <div class="dev-stable-body" data-vis="{{ V }}">
+      <strong class="dev-stable-tag" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</strong>
+      {% if progress.latest_tag.sha %}
+      <div class="dev-stable-meta" data-vis="{{ V }}">
+        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.sha }}</code>
+        {% if progress.latest_tag.tagged_at %}
+        <span class="hint" data-vis="{{ V }}">tagged {{ progress.latest_tag.tagged_at[:16]|replace("T", " ") }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if progress.latest_tag.subject %}
+      <p class="dev-stable-subject" data-vis="{{ V }}">{{ progress.latest_tag.subject }}</p>
+      {% endif %}
+      <p class="hint dev-stable-depth" data-vis="{{ V }}">
+        {% if progress.latest_tag.commits_since == 0 %}
+        HEAD is exactly this tag — nothing untagged to cut.
+        {% elif progress.latest_tag.commits_since == 1 %}
+        1 commit on trunk since this tag — candidate for the next patch.
+        {% else %}
+        {{ progress.latest_tag.commits_since }} commits on trunk since this tag — candidates for the next patch.
+        {% endif %}
+      </p>
+    </div>
+    {% else %}
+    {{ empty_state("No semver tags found. Cut the first one via `git tag -a v1.X.Y <sha>`.") }}
+    {% endif %}
+  </section>
+
+  {# ─── Latest Shipped tile — the HEAD commit as a "what just
+       landed" card. Different from HISTORY (which lists 6 recent)
+       and from PROGRESS (which counts today). This answers
+       "what's the freshest thing on trunk?" ─── #}
+  <section class="card tile tile-dev-latest-shipped" id="devLatestShipped" data-vis="{{ V }}">
+    {{ card_heading("LATEST SHIPPED", "HEAD commit") }}
+    {% if progress.latest_commit and progress.latest_commit.sha %}
+    <div class="dev-shipped-body" data-vis="{{ V }}">
+      <strong class="dev-shipped-subject" data-vis="{{ V }}">{{ progress.latest_commit.subject }}</strong>
+      <div class="dev-shipped-meta" data-vis="{{ V }}">
+        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_commit.sha }}</code>
+        <span class="hint" data-vis="{{ V }}">by {{ progress.latest_commit.author }}</span>
+        {% if progress.latest_commit.at %}
+        <span class="hint" data-vis="{{ V }}">· {{ progress.latest_commit.at[:16]|replace("T", " ") }}</span>
+        {% endif %}
+      </div>
+      {% if progress.latest_tag and progress.latest_tag.tag and progress.latest_tag.commits_since > 0 %}
+      <p class="hint dev-shipped-depth" data-vis="{{ V }}">
+        This commit is <strong>+{{ progress.latest_tag.commits_since }}</strong> ahead of the last stable tag
+        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</code>.
+      </p>
+      {% elif progress.latest_tag and progress.latest_tag.tag %}
+      <p class="hint dev-shipped-depth" data-vis="{{ V }}">
+        HEAD is on the stable tag <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</code>.
+      </p>
+      {% endif %}
+    </div>
+    {% else %}
+    {{ empty_state("git log returned nothing for HEAD.") }}
+    {% endif %}
+  </section>
+
   {# ─── Hero: Now Shipping — "you are here" at a glance. ───
        Answers four questions in 5 seconds: what's the current
        release, which wave is hot right now, did anything ship

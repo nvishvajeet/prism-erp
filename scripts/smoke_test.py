@@ -18,7 +18,12 @@ import app  # noqa: E402
 import populate_live_demo  # noqa: E402
 
 
-def login(client, email: str, password: str = "SimplePass123") -> None:
+def login(client, email: str, password: str | None = None) -> None:
+    # admin@lab.local uses "12345" in demo mode (public-facing demo
+    # card on nvishvajeet.github.io). Every other demo account keeps
+    # the legacy SimplePass123.
+    if password is None:
+        password = "12345" if email == "admin@lab.local" else "SimplePass123"
     response = client.post("/login", data={"email": email, "password": password}, follow_redirects=True)
     assert response.status_code == 200
     # Sanity: post-login response should be a logged-in PRISM page (not the

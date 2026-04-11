@@ -1,14 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
+{# Demo prefill: visiting /login?demo=1 prefills admin@lab.local / 12345
+   into the form so public-demo visitors coming from nvishvajeet.github.io
+   land one click away from a signed-in PRISM tour. Only active in
+   DEMO_MODE; operational deployments ignore the query param server-side
+   (see _render_login_demo_prefill in app.py). #}
+{% set _demo_prefill = (request.args.get('demo') == '1') and demo_mode %}
 <section class="card narrow" data-vis="requester">
   <h2 data-vis="requester">Sign In</h2>
+  {% if _demo_prefill %}
+  <p class="hint" data-vis="requester">Demo account pre-filled — just hit <strong>Login</strong>.</p>
+  {% endif %}
   <form method="post" class="form-grid" data-vis="requester">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="requester">
     <label data-vis="requester">Email
-      <input type="email" name="email" required data-vis="requester">
+      <input type="email" name="email" required value="{% if _demo_prefill %}admin@lab.local{% endif %}" data-vis="requester">
     </label>
     <label data-vis="requester">Password
-      <input type="password" name="password" required data-vis="requester">
+      <input type="password" name="password" required value="{% if _demo_prefill %}12345{% endif %}" data-vis="requester">
     </label>
     <button type="submit" data-vis="requester">Login</button>
   </form>

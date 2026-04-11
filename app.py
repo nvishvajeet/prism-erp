@@ -3733,6 +3733,19 @@ def seed_data() -> None:
         return
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
+
+    # admin@lab.local gets a shorter demo password ("12345") for the
+    # public demo card on nvishvajeet.github.io. DEMO_MODE-only path,
+    # so operational never has the weak credential. Rebind runs on
+    # every boot BEFORE the early-return below so existing demo DBs
+    # pick it up without a re-seed.
+    demo_admin_password = generate_password_hash("12345", method="pbkdf2:sha256")
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE email = 'admin@lab.local'",
+        (demo_admin_password,),
+    )
+    db.commit()
+
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
     if existing:
         db.close()
@@ -3753,9 +3766,10 @@ def seed_data() -> None:
     ]
     default_password = generate_password_hash("SimplePass123", method="pbkdf2:sha256")
     for name, email, role in users:
+        pw = demo_admin_password if email == "admin@lab.local" else default_password
         db.execute(
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
-            (name, email, default_password, role),
+            (name, email, pw, role),
         )
 
     instruments = [
@@ -4016,6 +4030,7 @@ def inject_globals():
     return {
         "V": V,
         "current_user": user,
+        "demo_mode": DEMO_MODE,
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,

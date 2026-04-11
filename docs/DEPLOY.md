@@ -85,11 +85,11 @@ git push origin master
 ssh mini 'cd ~/Scheduler/Main && \
   git pull --rebase && \
   .venv/bin/pip install -r requirements.txt && \
-  .venv/bin/python smoke_test.py && \
+  .venv/bin/python scripts/smoke_test.py && \
   launchctl kickstart -k gui/$(id -u)/local.prism'
 ```
 
-The deploy is gated by `smoke_test.py`. If smoke fails the
+The deploy is gated by `scripts/smoke_test.py`. If smoke fails the
 `launchctl kickstart` does not run and the old process keeps
 serving.
 

@@ -7,9 +7,9 @@ per-request attachments, SHA-256 audit chain.
 
 Single binary. SQLite. No build step.
 
-> **v1.3.0 is the first stable release.** See `PHILOSOPHY.md` for
+> **v1.3.0 is the first stable release.** See `docs/PHILOSOPHY.md` for
 > the hard-attribute contract that governs every subsequent change.
-> See `DEPLOY.md` for how PRISM is hosted on the Mac mini and
+> See `docs/DEPLOY.md` for how PRISM is hosted on the Mac mini and
 > reached from the lab network.
 
 ---
@@ -60,7 +60,7 @@ may still drift between patch releases.
 - `DEMO_MODE` gates `/demo/switch` and `seed_data()`. Production
   deploys on the Mac mini ship with `LAB_SCHEDULER_DEMO_MODE=0`.
   Demo and operational data are physically separate (see
-  `PHILOSOPHY.md` §4).
+  `docs/PHILOSOPHY.md` §4).
 - Rate-limited login (10 attempts / 5 minutes / IP), parameterised
   SQL everywhere, extension whitelist on uploads, XSS-safe templates
   (Jinja auto-escape on, `metadata_grid` escapes strings).
@@ -136,20 +136,20 @@ cd Main
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-./start.sh              # development (HTTP, localhost)
-./start.sh --https      # production-style HTTPS on the LAN
-./start.sh --trust      # trust the self-signed cert (one-time, sudo)
+./scripts/start.sh              # development (HTTP, localhost)
+./scripts/start.sh --https      # production-style HTTPS on the LAN
+./scripts/start.sh --trust      # trust the self-signed cert (one-time, sudo)
 ```
 
 Open `http://127.0.0.1:5055`.
 
-`start.sh` auto-restarts on crash with exponential backoff, kills
-any stale process on port 5055 first, and writes everything to
-`logs/server.log` with timestamps.
+`scripts/start.sh` auto-restarts on crash with exponential backoff,
+kills any stale process on port 5055 first, and writes everything
+to `logs/server.log` with timestamps.
 
 ### Production (Mac mini)
 
-See `DEPLOY.md`. The Mac mini at `100.115.176.118` is the
+See `docs/DEPLOY.md`. The Mac mini at `100.115.176.118` is the
 canonical production host. It serves PRISM to every machine on
 the Tailscale network, 24×7. Deploys are `git pull` → smoke test
 → `launchctl kickstart` — atomic, never interrupting live users.
@@ -171,7 +171,7 @@ the Mac mini production deploy. Password for all seeded accounts:
 | `sen@lab.local` | Requester |
 
 Demo and operational data are physically separated. Demo never
-touches the operational database. See `PHILOSOPHY.md` §4.
+touches the operational database. See `docs/PHILOSOPHY.md` §4.
 
 ### Environment
 
@@ -189,18 +189,28 @@ Everything else is either assets (templates, css, images), data
 | File / package | Role | Significance |
 |---|---|---|
 | `app.py` | The Flask engine | Routes, views, DB schema, state machine, audit chain, email, exports, auth, CSRF. This is the product. |
-| `smoke_test.py` | End-to-end health check | ~5-second smoke test. Pre-commit gate. Exercises every hot route under every role and asserts real writes land. |
-| `populate_live_demo.py` | Demo data seeder | Populates `data/demo/lab_scheduler.db` with 24 users, 10 instruments, 33 requests. Demo-only — never runs in production mode. |
+| `scripts/smoke_test.py` | End-to-end health check | ~5-second smoke test. Pre-commit gate. Exercises every hot route under every role and asserts real writes land. |
+| `scripts/populate_live_demo.py` | Demo data seeder | Populates `data/demo/lab_scheduler.db` with 24 users, 10 instruments, 33 requests. Demo-only — never runs in production mode. |
+| `scripts/start.sh` | Launcher | Dev/HTTPS/cert-trust modes. Always `cd`'s to repo root before `python app.py`. |
+| `ops/Caddyfile` | Reverse proxy config | LAN HTTPS with self-signed cert, subnet-gated. |
+| `ops/certs/` | TLS certificates | Self-signed cert + key used by `--https` mode. Gitignored in production. |
 | `crawlers/` | QA crawler suite | 13 strategies + 8 wave pipelines. `python -m crawlers wave sanity` is the slightly-stronger pre-commit gate; `wave all` runs at release boundaries. |
 | `tests/test_status_transitions.py` | State-machine unit test | Validates every allowed transition in `REQUEST_STATUS_TRANSITIONS`. Runs under `pytest` or directly. |
 | `templates/` | Jinja templates | Tile-architected HTML. 28 pages + `_page_macros.html` (9 canonical widgets). |
 | `static/` | CSS, JS, images | Single `styles.css` (≈7,180 lines) + calendar.js + instrument_images/. |
 | `data/demo/` | Demo runtime state | SQLite DB + uploads + exports. Regenerable. Gitignored. |
 | `data/operational/` | Production runtime state | Real lab DB + uploads + exports. Gitignored. Mac mini only. |
-| `PHILOSOPHY.md` | The design creed | Hard-vs-soft attributes, demo/operational split, stable-release discipline. Read every session. |
-| `DEPLOY.md` | Production deploy guide | Mac mini atomic deploy recipe. |
-| `PROJECT.md` | Architecture spec | Schema, page map, reusable helpers, state machine. |
-| `TODO_AI.txt` | Forward plan | Version-scoped backlog. |
+| `docs/PHILOSOPHY.md` | The design creed | Hard-vs-soft attributes, demo/operational split, stable-release discipline. Read every session. |
+| `docs/DEPLOY.md` | Production deploy guide | Mac mini atomic deploy recipe. |
+| `docs/PROJECT.md` | Architecture spec | Schema, page map, reusable helpers, state machine. |
+| `docs/MODULES.md` | Engine map | 13 engines + 2 tool packages, each with file:line handles for routes/tables/helpers/templates/crawlers. Compose features from here. |
+| `docs/DATA_POLICY.md` | Single-source-of-truth rules | One home, one writer, one loader, one macro, one label. |
+| `docs/COMPONENT_LIBRARY.md` | Feature composition catalog | P1-P7 page patterns + T1-T16 tile patterns + 6 macros + 19 loaders. Worked "make a finance portal" example. |
+| `docs/ROADMAP.md` | Forward plan | Version-scoped backlog. |
+| `docs/HANDOVER.md` | Operator runbook | First-time mini bring-up + daily operations. |
+| `docs/ROLE_VISIBILITY_MATRIX.md` | Access matrix | Every page × role. |
+| `docs/SECURITY_TODO.md` | Hardening checklist | HTTPS, CSRF, auth hardening. |
+| `docs/CSS_COMPONENT_MAP.md` | CSS class catalog | |
 | `CHANGELOG.md` | Release history | |
 | `README.md` | This file | |
 | `.env.example` | Config manifest | Every environment flag PRISM reads. |
@@ -211,15 +221,15 @@ crawlers package and a single test file.
 ## Testing
 
 ```bash
-.venv/bin/python smoke_test.py               # ~5 s, pre-commit gate
+.venv/bin/python scripts/smoke_test.py       # ~5 s, pre-commit gate
 .venv/bin/python -m crawlers wave sanity     # smoke + visibility + contrast
 .venv/bin/python -m crawlers wave all        # full pre-release sweep
 .venv/bin/python -m pytest tests/            # unit tests (status state machine)
 ```
 
-`smoke_test.py` must stay green before any commit lands on `master`.
+`scripts/smoke_test.py` must stay green before any commit lands on `master`.
 
-**When to run what.** `smoke_test.py` or `wave sanity` before every
+**When to run what.** `scripts/smoke_test.py` or `wave sanity` before every
 commit. `wave all` only at release boundaries. The random-walk
 coverage crawler plateaus at ~1000 steps (configurable via
 `CRAWLER_RANDOM_WALK_STEPS`); more steps duplicate already-visited
@@ -276,20 +286,29 @@ to collect a complete backlog of findings.
 
 ## Documentation
 
-- **`PHILOSOPHY.md`** — THE PHILOSOPHY. Jony Ive / Apple / Ferrari
+All narrative docs live under `docs/` after the v1.3.8 cleanup;
+`README.md` and `CHANGELOG.md` are the only markdown files at the
+repo root.
+
+- **`docs/PHILOSOPHY.md`** — THE PHILOSOPHY. Jony Ive / Apple / Ferrari
   design creed, hard-vs-soft attribute contract, demo-vs-operational
   separation, stable-release discipline. **Read every session.**
-- **`DEPLOY.md`** — Mac mini production deployment + disaster
+- **`docs/DEPLOY.md`** — Mac mini production deployment + disaster
   checklist.
-- **`PROJECT.md`** — architecture specification. Schema, page map,
+- **`docs/PROJECT.md`** — architecture specification. Schema, page map,
   reusable helpers, state machine, security model.
-- **`TODO_AI.txt`** — active plan (forward-looking, version-scoped).
+- **`docs/MODULES.md`** — engine map. 13 engines + 2 tool packages,
+  each with file:line handles. Compose features from here.
+- **`docs/DATA_POLICY.md`** — single-source-of-truth rules.
+- **`docs/COMPONENT_LIBRARY.md`** — feature composition catalog with
+  the worked "make a finance portal in ~2 hours" example.
+- **`docs/ROADMAP.md`** — forward plan (version-scoped).
+- **`docs/HANDOVER.md`** — operator runbook for the Mac mini.
+- **`docs/ROLE_VISIBILITY_MATRIX.md`** — every page mapped to roles.
+- **`docs/SECURITY_TODO.md`** — hardening checklist + HTTPS migration.
+- **`docs/CSS_COMPONENT_MAP.md`** — CSS class catalog.
 - **`.env.example`** — every environment flag PRISM reads.
 - **`CHANGELOG.md`** — release-by-release history.
-- **`ROLE_VISIBILITY_MATRIX.md`** — every page mapped to roles.
-- **`SECURITY_TODO.md`** — hardening checklist + HTTPS migration.
-- **`CSS_COMPONENT_MAP.md`** — CSS class catalog.
-- **`CRAWL_PLAN.md`** — role-based access testing plan.
 
 ---
 
@@ -376,14 +395,14 @@ harness) on any machine that has met the prerequisites above:
 > 3. Clone with `git clone vishwajeet@100.115.176.118:~/git/lab-scheduler.git`,
 >    then `git config core.sshCommand "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes"`
 >    inside the clone.
-> 4. Read `PHILOSOPHY.md`, `README.md`, `ROADMAP.md`, and
->    `HANDOVER.md` before editing anything.
+> 4. Read `docs/PHILOSOPHY.md`, `README.md`, `docs/ROADMAP.md`, and
+>    `docs/HANDOVER.md` before editing anything.
 > 5. Default rhythm: **pull → work → smoke test → commit → push.**
 >    The pre-push gate is `.venv/bin/python -m crawlers wave sanity`.
 >    Never skip it. Never force-push. Never rewrite history on
 >    `v1.3.0-stable-release`.
 > 6. Hard attributes (data model, routes, roles, audit chain, tile
->    architecture) are locked — see `PHILOSOPHY.md` §2. Soft
+>    architecture) are locked — see `docs/PHILOSOPHY.md` §2. Soft
 >    attributes (copy, colour, layout) are fair game.
 >
 > Your first action is to run `git pull` and report the latest
@@ -393,12 +412,12 @@ harness) on any machine that has met the prerequisites above:
 
 ## AI agent workflow rules
 
-1. **Read `PHILOSOPHY.md` first, every session.** It is
+1. **Read `docs/PHILOSOPHY.md` first, every session.** It is
    load-bearing. Any change that violates it does not ship.
 2. **Pull → work → commit → push.** Default rhythm. No local-only
    commits.
 3. **Smoke test before every commit** (`.venv/bin/python
-   smoke_test.py`, ~5 s). `wave sanity` is the slightly stronger
+   scripts/smoke_test.py`, ~5 s). `wave sanity` is the slightly stronger
    alternative.
 4. **Fix root causes, not symptoms.** Verify state before acting —
    items may already be done.
@@ -409,13 +428,13 @@ harness) on any machine that has met the prerequisites above:
    long chained commands rather than drip-feeding many small calls.
 7. **Full `wave all` only at release boundaries.** The smoke test
    is the mid-flight gate.
-8. **Read `PROJECT.md` §11 (Reusable abstractions) and §12 (Testing)
+8. **Read `docs/PROJECT.md` §11 (Reusable abstractions) and §12 (Testing)
    before adding new code.** Pick the relevant helper off that list
    rather than inventing a parallel approach.
 9. **Hard attributes are locked.** Changes to the data model,
    routes, roles, audit chain, or tile architecture require a major
    version bump and a CHANGELOG entry under `### Changed (BREAKING)`.
-   See `PHILOSOPHY.md` §2.
+   See `docs/PHILOSOPHY.md` §2.
 10. **The website stays up.** Deploys to the Mac mini are atomic:
     pull → smoke → kickstart. Never interrupt live users.
 11. **Portfolio recommendation refresh — one per day.** Whenever a

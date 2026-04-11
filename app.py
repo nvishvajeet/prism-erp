@@ -4065,7 +4065,7 @@ def docs():
     """Render project documentation + progress bar from PROJECT.md."""
     import re
 
-    project_path = os.path.join(os.path.dirname(__file__), "PROJECT.md")
+    project_path = os.path.join(os.path.dirname(__file__), "docs", "PROJECT.md")
     readme_path = os.path.join(os.path.dirname(__file__), "README.md")
 
     project_content = ""
@@ -5697,13 +5697,24 @@ def request_detail(request_id: int):
 # dependencies, no compute offload. The panel is pure
 # read-only introspection of the repository state.
 
+# Basenames only — the reader tries BASE_DIR first, then BASE_DIR/docs.
+# That keeps the dev-panel tabs uncluttered ("PHILOSOPHY.md" instead of
+# "docs/PHILOSOPHY.md") while still following the actual file location
+# after the v1.3.8 top-level cleanup.
 DEV_PANEL_DOC_FILES = (
     "README.md",
+    "CHANGELOG.md",
     "PHILOSOPHY.md",
     "DEPLOY.md",
     "PROJECT.md",
-    "TODO_AI.txt",
-    "CHANGELOG.md",
+    "ROADMAP.md",
+    "HANDOVER.md",
+    "MODULES.md",
+    "DATA_POLICY.md",
+    "COMPONENT_LIBRARY.md",
+    "ROLE_VISIBILITY_MATRIX.md",
+    "SECURITY_TODO.md",
+    "CSS_COMPONENT_MAP.md",
 )
 
 
@@ -5810,7 +5821,12 @@ def dev_panel_doc():
     safe = _dev_panel_safe_doc_name(name)
     if safe is None:
         abort(404)
+    # Resolution: README/CHANGELOG live at repo root; everything else
+    # lives in docs/ after the v1.3.8 top-level cleanup. Try both so
+    # old bookmarks keep working.
     path = BASE_DIR / safe
+    if not path.exists():
+        path = BASE_DIR / "docs" / safe
     if not path.exists():
         return jsonify({"name": safe, "content": f"({safe} not found)"}), 200
     try:

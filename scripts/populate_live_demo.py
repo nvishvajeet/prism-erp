@@ -3,13 +3,19 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
 
 
-BASE_DIR = Path(__file__).resolve().parent
+# After the v1.3.8 top-level cleanup this file lives in scripts/, so
+# BASE_DIR must walk up one level to reach the repo root before we
+# can `import app`.
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 # Honour the same data/ split that app.py uses so `populate_live_demo`
 # writes into data/demo/lab_scheduler.db (never operational).

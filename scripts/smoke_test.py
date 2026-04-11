@@ -6,7 +6,13 @@ import shutil
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# After the v1.3.8 top-level cleanup this file lives in scripts/.
+# Expose both the repo root (for `import app`) and scripts/ itself
+# (for `import populate_live_demo`) on sys.path.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parent
+sys.path.insert(0, str(_REPO_ROOT))
+sys.path.insert(0, str(_SCRIPT_DIR))
 
 import app  # noqa: E402
 import populate_live_demo  # noqa: E402
@@ -301,6 +307,13 @@ def main() -> None:
     )
     assert b"Operator Note updated" in response.data
     assert response.status_code == 200
+    # W1.3.8 — admin-issued temp passwords. `create_user` ignores any
+    # submitted `password` field and generates a random temp. The user
+    # is inserted with `invite_status='active'` + `must_change_password=1`;
+    # first login forces a /change_password redirect. For the smoke test
+    # we cannot recover the flashed temp, so we overwrite the hash in
+    # place and clear must_change_password to fake "user has already
+    # chosen their password".
     response = client.post(
         "/admin/users",
         data={
@@ -308,31 +321,24 @@ def main() -> None:
             "name": "Member Temp",
             "email": "member.temp@lab.local",
             "role": "requester",
-            "password": "SimplePass123",
         },
         follow_redirects=True,
     )
     assert b"member.temp@lab.local" in response.data
+    from werkzeug.security import generate_password_hash as _gph
     with app.app.app_context():
-        temp_member = app.get_db().execute("SELECT id FROM users WHERE email = 'member.temp@lab.local'").fetchone()
+        db = app.get_db()
+        temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@lab.local'").fetchone()
         assert temp_member is not None
         temp_member_id = temp_member["id"]
+        db.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 0 "
+            "WHERE id = ?",
+            (_gph("SimplePass123", method="pbkdf2:sha256"), temp_member_id),
+        )
+        db.commit()
 
     client.get("/logout")
-    response = client.post(
-        "/login",
-        data={"email": "member.temp@lab.local", "password": "SimplePass123"},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert b"Invalid login." in response.data
-    response = client.post(
-        "/activate",
-        data={"email": "member.temp@lab.local", "password": "SimplePass123", "name": "Member Temp"},
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert b"Account activated" in response.data
     login(client, "member.temp@lab.local")
     response = client.get(f"/attachments/{attachment['id']}/download")
     assert response.status_code == 403

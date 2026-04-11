@@ -69,12 +69,28 @@ least once in observed production runs and the resulting
 failure cost real cleanup time. They are non-negotiable for
 every agent, every task, every session:
 
-1. **Always start with a clean tree.** First command in any
-   session: `git status --short`. If the working tree is
-   dirty with files you did not create, STOP and surface to
-   the operator — you may be inheriting orphan WIP from a
-   killed previous agent. Never silently `git checkout --` a
-   file you don't own.
+1. **Start with a clean-or-claimed tree.** First command in
+   any session: `git status --short`. Inspect every dirty file
+   and every untracked file:
+   - If all dirty/untracked files correspond to files listed
+     in an **active claim row** in `CLAIMS.md`, proceed — they
+     are legitimate in-flight work from a concurrent agent and
+     will be cleaned up when that agent commits. Do not touch
+     them.
+   - If any dirty file does **not** correspond to an active
+     claim row, it is orphaned WIP (probably from a killed
+     agent). STOP and surface to the operator — never silently
+     `git checkout --` a file you don't own and can't explain.
+   - If your own claim surface is dirty, STOP. Your target
+     file may have been mid-edited by something you don't
+     know about. Surface to the operator.
+
+   This rule was tightened from "tree must be empty" after a
+   real race: a legitimate concurrent claim left a file dirty
+   for ~30s while it committed, and a fresh agent refused to
+   start during that window even though no orphan existed.
+   The claim-aware check is strictly more correct than the
+   emptiness check.
 2. **Never `git stash`.** `stash pop` has been observed
    silently dropping edits on this repo, probably because the
    harness interleaves edits from multiple sources between the

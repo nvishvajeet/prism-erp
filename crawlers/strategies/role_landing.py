@@ -36,6 +36,14 @@ ROLE_DISPLAY_NAMES: dict[str, str] = {
 
 LANDING_PATHS = ("/", "/sitemap")
 
+# W1.4.13 — the requester-pulse tile (shipped in W1.4.11, commit
+# 64c01b5) is rendered on `/` ONLY when the viewing user has role
+# `requester`. For every other role the `requester_pulse()` helper
+# returns None and the {% if req_pulse %} template guard skips it.
+# We assert both halves so a template edit that silently drops the
+# tile OR leaks it to other roles is caught.
+REQ_PULSE_TILE_CLASS = "tile-req-pulse"
+
 
 class RoleLandingStrategy(CrawlerStrategy):
     """Every role sees its own role-hint badge on /  and /sitemap.
@@ -59,6 +67,7 @@ class RoleLandingStrategy(CrawlerStrategy):
                 continue
 
             with harness.logged_in(email):
+                dashboard_body: str | None = None
                 for path in LANDING_PATHS:
                     resp = harness.get(path, note=f"role_landing:{role}",
                                        follow_redirects=True)
@@ -69,6 +78,8 @@ class RoleLandingStrategy(CrawlerStrategy):
                         )
                         continue
                     body = resp.get_data(as_text=True)
+                    if path == "/":
+                        dashboard_body = body
                     missing = []
                     if "role-hint-badge" not in body:
                         missing.append("role-hint-badge class")
@@ -82,10 +93,36 @@ class RoleLandingStrategy(CrawlerStrategy):
                     else:
                         result.passed += 1
 
+                # W1.4.13 — requester-pulse tile visibility contract.
+                # Counted as two separate pass rows (presence for
+                # requester, absence for everything else) so a future
+                # regression report shows which half broke.
+                if dashboard_body is not None:
+                    has_tile = REQ_PULSE_TILE_CLASS in dashboard_body
+                    if role == "requester":
+                        if has_tile:
+                            result.passed += 1
+                        else:
+                            result.failed += 1
+                            result.details.append(
+                                f"/ as requester: missing "
+                                f"{REQ_PULSE_TILE_CLASS!r} tile"
+                            )
+                    else:
+                        if not has_tile:
+                            result.passed += 1
+                        else:
+                            result.failed += 1
+                            result.details.append(
+                                f"/ as {role}: {REQ_PULSE_TILE_CLASS!r} "
+                                f"tile leaked (requester-only)"
+                            )
+
         result.metrics = {
             "roles": len(ROLE_PERSONAS),
             "paths": len(LANDING_PATHS),
-            "expected_checks": len(ROLE_PERSONAS) * len(LANDING_PATHS),
+            "expected_checks": len(ROLE_PERSONAS) * len(LANDING_PATHS)
+                + len(ROLE_PERSONAS),
         }
         return result
 

@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| claude-parallel-5pct-rule | infra/parallel-5pct-rule | 2026-04-11T13:14+02:00 | `docs/PARALLEL.md` | docs(parallel): codify the 5% merge-overhead rule for parallelism decisions |
 
 ## Stale-claim recovery
 

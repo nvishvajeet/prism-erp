@@ -317,6 +317,44 @@ E13 Portfolio ──► standalone (only depends on data/portfolio/*.json)
 
 ---
 
+## Shared database objects — reused across engines
+
+Some tables are read and written by multiple engines. These are the
+"wiring" of the system; any change to them ripples widely. They follow
+DATA_POLICY Rule 1 (single home) but are legitimately **shown** in
+many places.
+
+| Table | Owning engine | Also read by | Written by | Why it's shared |
+|---|---|---|---|---|
+| `users` | E2 User Admin | E1, E3, E4, E5, E6, E7, E9, E10, E13 | E1 (login), E2 (admin actions), E2 (password change) | Every authenticated request loads the session user |
+| `user_roles` (junction) | E2 User Admin | E1 (session `current_role_set`), E5 (approver candidates) | E2 `grant_user_role()` / `revoke_user_role()` only | Layered role grants |
+| `instruments` | E3 Instrument Registry | E4, E5, E7, E8, E9, E11 | E3 only | Every request references an instrument |
+| `instrument_admins` / `instrument_operators` / `instrument_faculty_admins` | E3 | E4 (permissions), E5 (approver candidates), E7 (operator assignment) | E3 via `sync_instrument_assignments()` only | Permission wiring |
+| `instrument_approval_config` | E3 Instrument Registry | E5 (`create_approval_chain` reads) | E3 `save_approval_config` only | Per-instrument approval chain config |
+| `sample_requests` | E4 Request Lifecycle | E5, E6, E7, E8, E9, E10, E11 | E4 only (via state machine in `assert_status_transition`) | The core record |
+| `approval_steps` | E5 Approval Engine | E4 (detail page render), E10 (timeline) | E5 actions `approve_step`/`reject_step`/`assign_approver` only | Multi-step approval progress |
+| `request_attachments` | E6 Attachments | E4 (detail), E11 (exports) | E6 `save_uploaded_attachment()` + `save_generated_attachment()` | File provenance |
+| `request_messages` | E6 | E4, E10 (timeline proxy) | E6 `post_message` / `save_note` | Conversation thread |
+| `request_issues` | E6 | E4, E10 | E6 `flag_issue` / `respond_issue` / `resolve_issue` / `reopen_issue` | Issue trail |
+| `audit_logs` | E10 Audit | **everyone reads, nobody else writes** | E10 `log_action()` / `log_action_at()` only | Hash-chained history; projected into timelines |
+| `instrument_downtime` | E3 | E7 (schedule gaps), E8 (calendar) | E3 `add_downtime` | Planned outage windows |
+| `generated_exports` | E11 | — | E11 `generate_export()` / `generate_visualization_export()` | Tracks generated files for download |
+| `announcements` | E12 | E1 (dashboard render) | E12 (currently minimal UI) | Banner content |
+| `instrument_group` / `instrument_group_member` | E3 | E2 (quick-grant shortcut) | E3 (admin edits) | Admin-curated bundles — bundles only, never grant permission directly |
+
+**Read this table before any schema change.** If you're adding a
+column to a shared table, you may be touching every engine in the
+right column. Use `git grep <table_name>` to find every reader before
+you migrate.
+
+**The single-writer rule** (DATA_POLICY §3) is especially strict for
+shared tables. Never write to `sample_requests.status` outside
+`assert_status_transition()`. Never write to `approval_steps.status`
+outside `approve_step` / `reject_step`. Never write to `audit_logs`
+outside `log_action()`.
+
+---
+
 ## Naming conventions (so you can grep)
 
 - **Actions** are POST form `action=...` strings. Grep `action == "xyz"` to find handlers.

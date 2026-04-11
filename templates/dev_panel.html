@@ -157,9 +157,11 @@
           {% set ns.last_line = t.line %}
         {% endif %}
         <li class="dev-timeline-item{% if t.is_latest %} dev-timeline-item-latest{% endif %}" data-vis="{{ V }}">
-          <code class="inline-code dev-timeline-tag" data-vis="{{ V }}">{{ t.tag }}</code>
-          {% if t.tagged_at %}<span class="hint dev-timeline-date" data-vis="{{ V }}">{{ t.tagged_at }}</span>{% endif %}
-          {% if t.is_latest %}<span class="dev-timeline-latest-chip" data-vis="{{ V }}">LATEST</span>{% endif %}
+          <a class="dev-timeline-link" href="{{ url_for('dev_panel_tag', tag=t.tag) }}" title="Drill into this tag" data-vis="{{ V }}">
+            <code class="inline-code dev-timeline-tag" data-vis="{{ V }}">{{ t.tag }}</code>
+            {% if t.tagged_at %}<span class="hint dev-timeline-date" data-vis="{{ V }}">{{ t.tagged_at }}</span>{% endif %}
+            {% if t.is_latest %}<span class="dev-timeline-latest-chip" data-vis="{{ V }}">LATEST</span>{% endif %}
+          </a>
         </li>
       {% endfor %}
       </ol>

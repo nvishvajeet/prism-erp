@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('dev_panel') }}" class="hover-back-btn" title="Back to Dev Panel">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}">← Dev Panel</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Tag {{ tag.name }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ tag.short_sha }}</span>
+  </div>
+</header>
+
+<section class="mc-drill-tiles" data-vis="{{ V }}">
+
+  {# ── Tile: Tag header + message ── #}
+  <article class="card tile tile-mc-header" data-vis="{{ V }}">
+    {{ card_heading("TAG", tag.name) }}
+    <div class="mc-header-body" data-vis="{{ V }}">
+      <p class="mc-subject" data-vis="{{ V }}">{{ tag.subject }}</p>
+      <dl class="mc-meta-grid" data-vis="{{ V }}">
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Tagged commit</dt>
+          <dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ tag.short_sha }}</code></dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Tagger</dt>
+          <dd data-vis="{{ V }}">{{ tag.tagger }}</dd>
+        </div>
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Tagged at</dt>
+          <dd data-vis="{{ V }}">{{ tag.tagged_at[:19]|replace("T", " ") }}</dd>
+        </div>
+        {% if prev_tag %}
+        <div class="mc-meta-cell" data-vis="{{ V }}">
+          <dt data-vis="{{ V }}">Previous tag</dt>
+          <dd data-vis="{{ V }}"><a class="text-link" href="{{ url_for('dev_panel_tag', tag=prev_tag) }}" data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ prev_tag }}</code></a></dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
+  </article>
+
+  {# ── Tile: Tag annotation body ── #}
+  <article class="card tile tile-mc-body" data-vis="{{ V }}">
+    {{ card_heading("ANNOTATION", "Full tag message") }}
+    {% if tag.body %}
+    <pre class="mc-commit-body" data-vis="{{ V }}">{{ tag.body }}</pre>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(no body — subject only)</p>
+    {% endif %}
+  </article>
+
+  {# ── Tile: Commits in this release ── #}
+  <article class="card tile tile-mc-commits" data-vis="{{ V }}">
+    {{ card_heading("COMMITS", prev_tag ~ " → " ~ tag.name if prev_tag else "Initial release") }}
+    {% if commits_in_range %}
+    <ul class="mc-commit-list" data-vis="{{ V }}">
+      {% for c in commits_in_range %}
+      <li class="mc-commit-row" data-vis="{{ V }}">
+        <a class="dp-commit-link" href="{{ url_for('dev_panel_commit', sha=c.sha) }}" data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ c.sha }}</code></a>
+        <span class="mc-commit-subject" data-vis="{{ V }}">{{ c.subject }}</span>
+        <span class="hint mc-commit-meta" data-vis="{{ V }}">{{ c.author }} · {{ c.at[:16]|replace("T", " ") }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(no prior tag — commit list not computable)</p>
+    {% endif %}
+  </article>
+
+  {# ── Tile: Diffstat since previous tag ── #}
+  <article class="card tile tile-mc-stat" data-vis="{{ V }}">
+    {{ card_heading("DIFFSTAT", "Files changed since " ~ (prev_tag or "initial")) }}
+    {% if stat_lines %}
+    <ul class="mc-stat-list" data-vis="{{ V }}">
+      {% for line in stat_lines %}
+      <li class="mc-stat-line" data-vis="{{ V }}"><code data-vis="{{ V }}">{{ line }}</code></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">(no diffstat)</p>
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

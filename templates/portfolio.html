@@ -78,9 +78,20 @@
 
 </div>
 
+{# ─── LLM commentary (written nightly by the scheduled task) ── #}
+{% if pf.commentary and pf.commentary.text %}
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("LLM", "Overnight commentary — " ~ (pf.commentary.generated_at or "")) }}
+  <div class="prose" style="white-space:pre-wrap;line-height:1.55" data-vis="{{ V }}">{{ pf.commentary.text }}</div>
+  {% if pf.commentary.verdict %}
+  <p class="hint" style="margin-top:10px" data-vis="{{ V }}"><strong>Verdict:</strong> {{ pf.commentary.verdict }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {# ─── Today's recommendation table + MTD bars ────────── #}
 <section class="card" data-vis="{{ V }}">
-  {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000) — tick what you bought") }}
+  {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000) — click a row to log it as bought") }}
   <form method="post" action="{{ url_for('portfolio_log_orders_bulk') }}" id="todayBuyForm" data-vis="{{ V }}">
   <table data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
@@ -122,10 +133,9 @@
     </tfoot>
   </table>
   <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap" data-vis="{{ V }}">
-    <button type="submit" class="link-button" data-vis="{{ V }}">✓ Log selected as bought (today's amounts at latest NAV)</button>
     <button type="button" class="link-button subtle" id="buyOneOfEach" data-vis="{{ V }}">✓✓ Buy one of each</button>
     <span class="hint" style="align-self:center" data-vis="{{ V }}">
-      Each row uses today's recommendation amount + the latest NAV from the morning data refresh.
+      Click a checkbox to instantly log that fund as bought (today's amount + latest NAV). Or use "Buy one of each" to log them all at once.
     </span>
   </div>
   </form>
@@ -135,12 +145,27 @@
 (function () {
   var all = document.getElementById('selectAllToday');
   var chks = document.querySelectorAll('.todayChk');
-  if (all) all.addEventListener('change', function () {
-    chks.forEach(function (c) { c.checked = all.checked; });
-  });
   var btn = document.getElementById('buyOneOfEach');
   var form = document.getElementById('todayBuyForm');
+  var submitting = false;
+  // Individual click = instant log of that one fund.
+  chks.forEach(function (c) {
+    c.addEventListener('change', function () {
+      if (submitting || !c.checked) return;
+      submitting = true;
+      form.submit();
+    });
+  });
+  // Select-all ticks everything, then submits once.
+  if (all && form) all.addEventListener('change', function () {
+    if (!all.checked) return;
+    submitting = true;
+    chks.forEach(function (c) { c.checked = true; });
+    form.submit();
+  });
+  // "Buy one of each" ticks everything, then submits once.
   if (btn && form) btn.addEventListener('click', function () {
+    submitting = true;
     chks.forEach(function (c) { c.checked = true; });
     form.submit();
   });

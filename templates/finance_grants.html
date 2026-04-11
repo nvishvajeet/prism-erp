@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_portal') }}" class="hover-back-btn" title="Back to Finance Portal">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">← Finance Portal</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Grants & Budgets</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ totals.grant_count }} grant{{ "s" if totals.grant_count != 1 else "" }}</span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+    {{ card_heading("BUDGET TOTAL", "Every grant combined") }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Total budget</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(totals.total_budget) }}</strong>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Spent (paid)</span>
+        <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(totals.total_paid) }}</strong>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Remaining</span>
+        <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(totals.total_remaining) }}</strong>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Burn rate</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">{% if totals.total_budget > 0 %}{{ "{:.0f}".format(totals.total_paid * 100 / totals.total_budget) }}%{% else %}—{% endif %}</strong>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+    {{ card_heading("GRANTS", "Click any grant to drill down") }}
+    {% if grants %}
+    <ul class="finance-grant-list" data-vis="{{ V }}">
+      {% for g in grants %}
+      {% set pct = (g.spend_paid * 100 / g.total_budget) if g.total_budget else 0 %}
+      {% set remaining = (g.total_budget or 0) - (g.spend_paid or 0) %}
+      <li class="finance-grant-row" data-vis="{{ V }}">
+        <a class="finance-grant-link" href="{{ url_for('finance_grant_detail', grant_id=g.id) }}" data-vis="{{ V }}">
+          <div class="finance-grant-head" data-vis="{{ V }}">
+            <code class="inline-code" data-vis="{{ V }}">{{ g.code }}</code>
+            <strong class="finance-grant-title" data-vis="{{ V }}">{{ g.name }}</strong>
+            <span class="hint" data-vis="{{ V }}">{{ g.sponsor }}</span>
+          </div>
+          <div class="finance-grant-meta hint" data-vis="{{ V }}">
+            PI {{ g.pi_name or 'unassigned' }} · {{ g.sample_count }} sample{{ 's' if g.sample_count != 1 else '' }} charged · {{ g.start_date or '?' }} → {{ g.end_date or '?' }}
+            {% if g.status != 'active' %} · <strong>{{ g.status|upper }}</strong>{% endif %}
+          </div>
+          <div class="finance-grant-bar-row" data-vis="{{ V }}">
+            <div class="finance-grant-bar" data-vis="{{ V }}">
+              <div class="finance-grant-bar-fill" style="width: {{ pct if pct <= 100 else 100 }}%" data-vis="{{ V }}"></div>
+            </div>
+            <span class="finance-grant-bar-text" data-vis="{{ V }}">
+              ₹{{ "{:,.0f}".format(g.spend_paid) }} / ₹{{ "{:,.0f}".format(g.total_budget) }}
+              ({{ "{:.0f}".format(pct) }}%)
+            </span>
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No grants seeded yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

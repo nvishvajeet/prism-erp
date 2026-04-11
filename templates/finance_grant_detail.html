@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_grants_list') }}" class="hover-back-btn" title="Back to Grants">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">← Grants</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ grant.name }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ grant.code }}</span>
+    <span class="operation-status operation-{{ 'active' if grant.status == 'active' else 'hold' }} operation-status-compact inst-header-status" data-vis="{{ V }}">
+      <span class="operation-dot" aria-hidden="true"></span>
+      <strong data-vis="{{ V }}">{{ grant.status|upper }}</strong>
+    </span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+    {{ card_heading("BUDGET", "Spend vs total") }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Total budget</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(grant.total_budget) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ grant.sponsor }}</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Paid so far</span>
+        <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(total_paid) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ charged|length }} sample{{ "s" if charged|length != 1 else "" }}</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Billed</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(total_billed) }}</strong>
+        <span class="hint" data-vis="{{ V }}">inc. pending</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Remaining</span>
+        <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(remaining) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ "{:.0f}".format(percent_used) }}% used</span>
+      </div>
+    </div>
+    <div class="finance-grant-bar-row" style="margin-top: 0.8rem;" data-vis="{{ V }}">
+      <div class="finance-grant-bar" data-vis="{{ V }}">
+        <div class="finance-grant-bar-fill" style="width: {{ percent_used if percent_used <= 100 else 100 }}%" data-vis="{{ V }}"></div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+    {{ card_heading("METADATA", "Grant header") }}
+    <dl class="mc-meta-grid" data-vis="{{ V }}">
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Code</dt><dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ grant.code }}</code></dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Sponsor</dt><dd data-vis="{{ V }}">{{ grant.sponsor }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Principal investigator</dt><dd data-vis="{{ V }}">{{ grant.pi_name or '—' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Start</dt><dd data-vis="{{ V }}">{{ grant.start_date or '—' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">End</dt><dd data-vis="{{ V }}">{{ grant.end_date or '—' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Status</dt><dd data-vis="{{ V }}">{{ grant.status|upper }}</dd></div>
+    </dl>
+    {% if grant.notes %}
+    <p class="hint" data-vis="{{ V }}" style="margin-top: 0.55rem;">{{ grant.notes }}</p>
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+    {{ card_heading("CHARGED SAMPLES", charged|length|string ~ " charged") }}
+    {% if charged %}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for inv in charged %}
+      <li class="finance-invoice-row finance-invoice-{{ inv.finance_status }}{% if inv.finance_status == 'paid' %} finance-invoice-paid-row{% endif %}" data-vis="{{ V }}">
+        <a href="{{ url_for('request_detail', request_id=inv.id) }}" class="finance-invoice-link" data-vis="{{ V }}">
+          <div class="finance-invoice-head" data-vis="{{ V }}">
+            <span class="finance-invoice-status notice-severity-{% if inv.finance_status == 'paid' %}info{% elif inv.finance_status in ('pending','partial') %}warning{% else %}info{% endif %}" data-vis="{{ V }}">{{ inv.finance_status|upper }}</span>
+            <strong class="finance-invoice-title" data-vis="{{ V }}">{{ inv.title }}</strong>
+            <span class="finance-invoice-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_paid or 0) }}{% if inv.amount_due and inv.amount_paid != inv.amount_due %} / ₹{{ "{:,.0f}".format(inv.amount_due) }}{% endif %}</span>
+          </div>
+          <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.request_no }}</code> ·
+            <code class="inline-code" data-vis="{{ V }}">{{ inv.instrument_code }}</code> ·
+            {{ inv.requester_name or 'external' }}{% if inv.receipt_number %} · receipt {{ inv.receipt_number }}{% endif %} ·
+            {{ inv.created_at[:10] }}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No samples charged to this grant yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

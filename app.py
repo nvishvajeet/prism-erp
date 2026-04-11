@@ -3616,6 +3616,28 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, read_at);
             CREATE INDEX IF NOT EXISTS idx_messages_sender    ON messages(sender_id);
             CREATE INDEX IF NOT EXISTS idx_messages_sent_at   ON messages(sent_at);
+
+            -- v1.7.0 — Grants + budgets. Every external sample_request
+            -- can be attached to a grant (optional FK on the request).
+            -- total_budget is in the same currency as sample_requests
+            -- amount_due/amount_paid (₹). spend is derived via SUM at
+            -- read time — no denormalized column that could drift.
+            CREATE TABLE IF NOT EXISTS grants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                sponsor TEXT NOT NULL DEFAULT '',
+                pi_user_id INTEGER,
+                total_budget REAL NOT NULL DEFAULT 0,
+                start_date TEXT,
+                end_date TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (pi_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status);
+            CREATE INDEX IF NOT EXISTS idx_grants_pi     ON grants(pi_user_id);
             """
         )
         columns = {row[1] for row in cur.execute("PRAGMA table_info(sample_requests)").fetchall()}
@@ -3636,6 +3658,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN sample_dropoff_note TEXT NOT NULL DEFAULT ''")
         if "received_by_operator_id" not in columns:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN received_by_operator_id INTEGER")
+        if "grant_id" not in columns:
+            cur.execute("ALTER TABLE sample_requests ADD COLUMN grant_id INTEGER REFERENCES grants(id) ON DELETE SET NULL")
         attachment_columns = {row[1] for row in cur.execute("PRAGMA table_info(request_attachments)").fetchall()}
         if "note" not in attachment_columns:
             cur.execute("ALTER TABLE request_attachments ADD COLUMN note TEXT NOT NULL DEFAULT ''")
@@ -3787,6 +3811,61 @@ def init_db() -> None:
     # v1.6.2 — seed demo messages between canonical personas so the
     # inbox tour shows real traffic. Idempotent, same gate as notices.
     _seed_demo_messages()
+    # v1.7.0 — seed demo grants + link some external requests to them
+    # so the /finance/grants portal renders populated budgets + spend.
+    _seed_demo_grants()
+
+
+def _seed_demo_grants() -> None:
+    """Seed 3 demo grants and attach a few existing external requests
+    to them so the finance portal's grants page shows real spend.
+    DEMO_MODE only, idempotent."""
+    if not DEMO_MODE:
+        return
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM grants").fetchone()["c"]
+        if existing:
+            return
+        admin_row = db.execute("SELECT id FROM users WHERE email = 'admin@lab.local'").fetchone()
+        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@lab.local'").fetchone()
+        pi_admin = admin_row["id"] if admin_row else None
+        pi_approver = approver_row["id"] if approver_row else None
+        now_iso = datetime.utcnow().isoformat(timespec="seconds")
+        seeds = [
+            ("DST-2026-001", "Nano-Materials Characterization", "Department of Science & Technology",
+             pi_approver, 2500000.0, "2026-01-01", "2027-03-31", "active",
+             "Phase 1 — FESEM + XRD + AFM characterization of functional coatings."),
+            ("CEFIPRA-2026-07", "Ceramic Phase Analysis Collaboration", "Indo-French Centre for Promotion of Advanced Research (CEFIPRA)",
+             pi_admin, 1800000.0, "2026-02-15", "2028-02-14", "active",
+             "Bilateral grant — XRD + Raman access for cross-institute samples."),
+            ("MITWPU-INT-24", "Internal MITWPU Materials Seed Grant", "MITWPU Internal",
+             pi_admin, 450000.0, "2026-04-01", "2026-09-30", "active",
+             "Small internal seed — supports pilot runs before external funding applications."),
+        ]
+        for code, name, sponsor, pi, total, start, end, status, notes in seeds:
+            db.execute(
+                """
+                INSERT INTO grants (code, name, sponsor, pi_user_id, total_budget, start_date, end_date, status, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (code, name, sponsor, pi, total, start, end, status, notes, now_iso),
+            )
+        # Attach existing external sample_requests to grants round-robin.
+        grant_ids = [r["id"] for r in db.execute("SELECT id FROM grants ORDER BY id").fetchall()]
+        if grant_ids:
+            external = db.execute(
+                "SELECT id FROM sample_requests WHERE sample_origin = 'external' AND (grant_id IS NULL) ORDER BY id"
+            ).fetchall()
+            for idx, row in enumerate(external):
+                gid = grant_ids[idx % len(grant_ids)]
+                db.execute("UPDATE sample_requests SET grant_id = ? WHERE id = ?", (gid, row["id"]))
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        db.close()
 
 
 def _seed_demo_messages() -> None:
@@ -5065,6 +5144,108 @@ def finance_portal():
         by_instrument=by_instrument,
         outstanding=outstanding,
         recently_paid=recently_paid,
+    )
+
+
+def _user_can_view_finance(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    roles = user_role_set(user)
+    return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+
+@app.route("/finance/grants")
+@login_required
+def finance_grants_list():
+    """Grant inventory with per-grant spend aggregation. Same finance
+    gate as the main portal. Spend is computed at read time as
+    SUM(amount_paid) over sample_requests.grant_id → no denormalized
+    spend column that could drift."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+    rows = query_all(
+        """
+        SELECT g.id, g.code, g.name, g.sponsor, g.total_budget,
+               g.start_date, g.end_date, g.status, g.notes,
+               pi.name AS pi_name, pi.email AS pi_email,
+               COALESCE((SELECT SUM(sr.amount_paid) FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS spend_paid,
+               COALESCE((SELECT SUM(sr.amount_due)  FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS spend_billed,
+               COALESCE((SELECT COUNT(*)            FROM sample_requests sr WHERE sr.grant_id = g.id), 0) AS sample_count
+          FROM grants g
+          LEFT JOIN users pi ON pi.id = g.pi_user_id
+         ORDER BY
+            CASE g.status WHEN 'active' THEN 0 ELSE 1 END,
+            g.end_date
+        """
+    )
+    totals_row = query_one(
+        """
+        SELECT
+            COALESCE(SUM(g.total_budget), 0) AS total_budget,
+            COALESCE(SUM((SELECT SUM(sr.amount_paid) FROM sample_requests sr WHERE sr.grant_id = g.id)), 0) AS total_paid,
+            COUNT(*) AS grant_count
+          FROM grants g
+        """
+    )
+    totals = dict(totals_row) if totals_row else {
+        "total_budget": 0, "total_paid": 0, "grant_count": 0,
+    }
+    totals["total_remaining"] = max(0, (totals["total_budget"] or 0) - (totals["total_paid"] or 0))
+    return render_template(
+        "finance_grants.html",
+        grants=rows,
+        totals=totals,
+    )
+
+
+@app.route("/finance/grants/<int:grant_id>")
+@login_required
+def finance_grant_detail(grant_id: int):
+    """Single-grant drill-down. Header KPIs + every sample_request
+    charged to it, newest first."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+    grant = query_one(
+        """
+        SELECT g.*, pi.name AS pi_name, pi.email AS pi_email
+          FROM grants g
+          LEFT JOIN users pi ON pi.id = g.pi_user_id
+         WHERE g.id = ?
+        """,
+        (grant_id,),
+    )
+    if not grant:
+        abort(404)
+    charged = query_all(
+        """
+        SELECT sr.id, sr.request_no, sr.title, sr.created_at,
+               sr.amount_due, sr.amount_paid, sr.finance_status,
+               sr.receipt_number, sr.sample_origin,
+               i.code AS instrument_code, i.name AS instrument_name,
+               u.name AS requester_name
+          FROM sample_requests sr
+          JOIN instruments i ON i.id = sr.instrument_id
+          LEFT JOIN users u ON u.id = sr.requester_id
+         WHERE sr.grant_id = ?
+         ORDER BY sr.created_at DESC
+         LIMIT 200
+        """,
+        (grant_id,),
+    )
+    total_paid = sum(r["amount_paid"] or 0 for r in charged)
+    total_billed = sum(r["amount_due"] or 0 for r in charged)
+    remaining = max(0, (grant["total_budget"] or 0) - total_paid)
+    percent_used = (total_paid / grant["total_budget"] * 100) if grant["total_budget"] else 0
+    return render_template(
+        "finance_grant_detail.html",
+        grant=grant,
+        charged=charged,
+        total_paid=total_paid,
+        total_billed=total_billed,
+        remaining=remaining,
+        percent_used=percent_used,
     )
 
 

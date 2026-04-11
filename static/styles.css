@@ -3670,12 +3670,24 @@ code {
 }
 
 .control-mode.is-active {
-  background: color-mix(in srgb, currentColor 10%, var(--panel));
+  background: color-mix(in srgb, currentColor 22%, var(--panel));
   border-color: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent);
+  border-width: 2.5px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, currentColor 28%, transparent),
+    0 8px 22px -14px currentColor;
+  transform: translateY(-1px);
 }
 
-.control-mode.is-active .control-mode-dot { opacity: 1; transform: scale(1.2); }
+.control-mode.is-active .control-mode-dot {
+  opacity: 1;
+  transform: scale(1.45);
+  box-shadow: 0 0 10px currentColor;
+}
+.control-mode.is-active .control-mode-label {
+  color: currentColor;
+  font-weight: 700;
+}
 
 /* W1.4.3 c1 — "armed" intermediate state for the 2-tap confirm.
    First click on a dangerous mode (on_hold / maintenance) arms the

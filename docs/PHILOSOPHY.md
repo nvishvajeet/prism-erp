@@ -136,7 +136,14 @@ The semantics are borrowed from iOS more than strict semver — the
 - **MAJOR (`1.x`, `2.x`)** — paradigm shift. `v1.3.0` was the
   first stable release. `2.0` is reserved for the ERP transition
   per `docs/ERP_VISION.md`. Major bumps are the only place hard
-  attributes (per §2) are allowed to move.
+  attributes (per §2) are allowed to move. **`v1.7.0` is the
+  ERP-ready proof point without being v2.0** — it shipped the
+  finance portal + grants/budgets as new capabilities on top of
+  the existing `sample_requests` single source of truth, showing
+  that "become an ERP" is a capability gradient, not a rebuild.
+  The v2.0 line stays reserved for the moment when PRISM stops
+  being "a scheduler that also tracks money" and becomes a new
+  class of system.
 - **MINOR (`1.X.y`, e.g. `v1.3.*` → `v1.4.*`)** — significant new
   capability or a hard-attribute-breaking internal refactor that
   justifies a `### Changed (BREAKING)` CHANGELOG entry. `1.3` →

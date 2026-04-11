@@ -646,13 +646,26 @@ internal ERP, integrating finance / inventory / HR / academic
 administration. All the hard attributes of `v1.x` are candidates
 for reshaping inside `v2.0`.
 
+**ERP-readiness proof point — `v1.7.0`.** The finance portal
+(`/finance`) and grants/budgets (`/finance/grants`) shipped in
+`v1.7.0` demonstrate that PRISM can absorb a new ERP domain as
+an additive capability on top of `sample_requests` — no schema
+rebuild, no role taxonomy change, no v2.0 required. That
+reframes the v2.0 question: it is no longer "can we become an
+ERP?" (answered: yes, capability by capability on the v1.x
+line). It is now "when does the current frame stop being the
+right frame?" — the paradigm-shift threshold, not a feature
+checklist.
+
 **Why it's a tech bet:** it's literally a major-version bump and
 a paradigm shift. Not a task; a direction of travel. Do not
 admit to the progress table — admit to a `v2.0.0-alpha` branch
 when the team is ready to start.
 
-**Blocked on:** `v1.4.x` stable for several weeks, `v1.5.x`
-schema waves landed, and a deliberate operator kickoff.
+**Blocked on:** deliberate operator kickoff. The old blockers
+(`v1.4.x` stable, `v1.5.x` schema waves landed) have all been
+crossed — we are running `v1.7.0` in production with multi-role,
+finance, messaging, and noticeboard all shipped on v1.x.
 
 ## Parallel task board
 

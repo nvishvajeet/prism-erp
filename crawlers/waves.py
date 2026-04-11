@@ -61,7 +61,7 @@ WAVES: dict[str, Wave] = {
     "coverage": Wave(
         name="coverage",
         description="Random-walk coverage + performance sampling",
-        strategies=("random_walk", "performance"),
+        strategies=("random_walk", "performance", "slow_queries"),
         stop_on_fail=False,
     ),
     "accessibility": Wave(

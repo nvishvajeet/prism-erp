@@ -1,10 +1,10 @@
-# PRISM roadmap — wave plan after v1.3.3
+# PRISM roadmap — wave plan after v1.3.5
 
 _Anchored on 2026-04-10. Each "wave" is a bounded, crawler-verified
 patch that lands on the `v1.3.x` line and keeps the sanity crawler
 green end-to-end._
 
-## Current state (v1.3.3)
+## Current state (v1.3.5)
 
 * Skeleton: tile grids on every page, `.inst-tiles` / `.dash-tiles`
   / `.users-tiles` / `.user-detail-tiles` fluid layouts.
@@ -19,25 +19,22 @@ green end-to-end._
 
 ## Wave backlog
 
-### W1.3.4 — dashboard role orientation (1-hour patch)
+### W1.3.4 — dashboard role orientation ✅ SHIPPED (commit 7a4d11c)
 
-* Use `current_role_display` + `current_role_hint` from the context
-  processor to render a single-line "You are viewing as X — do Y"
-  intro above the dashboard tiles.
-* Add the same hint to the `/sitemap` page so new users land with a
-  clear orientation.
-* Trim the Member Admin "Create / Invite" tile with an explicit
-  "next-step" arrow pointing at the newly-created user's profile
-  (where the new role + instrument tiles live).
+* Dashboard + sitemap render a `tile-dash-role-hint` /
+  `tile-sitemap-role-hint` badge using `current_role_display` +
+  `current_role_hint` from `inject_globals`. One shared badge style
+  in `static/styles.css`.
 
-### W1.3.5 — per-role landing crawler
+### W1.3.5 — per-role landing crawler ✅ SHIPPED (commit 7a4d11c)
 
-* New `crawlers/strategies/role_landing.py` that logs in as each
-  persona, hits `/`, `/schedule`, `/me`, and asserts the expected
-  tile markers exist (e.g. requester sees `tile-dash-week` but NOT
-  `tile-dash-quick-intake`; operator sees `tile-inst-queues`).
-* Wire it into a new `waves.py` entry called `landing` that runs
-  alongside `sanity` but is allowed to warn rather than fail.
+* `crawlers/strategies/role_landing.py` asserts `role-hint-badge` +
+  the display name render on `/` and `/sitemap` for every
+  `ROLE_PERSONAS` entry — 16 checks in ~1.3s.
+* Wired into the `sanity` wave as a hard gate and the `behavioral`
+  wave for completeness.
+* Harness bootstrap now forces persona roles via `UPDATE` after the
+  `INSERT OR IGNORE`, so ROLE_PERSONAS stays authoritative.
 
 ### W1.3.6 — instrument groups as first-class entities
 
@@ -61,15 +58,17 @@ green end-to-end._
 * Migration assigns each existing user a single-entry row in the
   new table to keep behaviour identical.
 
-### W1.3.8 — performance + cleanup
+### W1.3.8 — performance + cleanup (partial ✅)
 
-* Enable `PRAGMA journal_mode = WAL` permanently (currently sometimes
-  off during populate).
-* Add a `slow_queries` crawler that replays the canonical request
-  list page and times every SQL call, flagging anything over 50ms.
-* Retire the last known CSS fossils (~229 orphans still in the
-  allowlist as warnings — turn each into either a deletion or an
-  explicit prefix).
+* ✅ `PRAGMA journal_mode = WAL` + `synchronous = NORMAL` pinned in
+  both `init_db()` and `get_db()` so every connection PRISM opens
+  is born in WAL.
+* ✅ `crawlers/strategies/slow_queries.py` monkey-patches
+  `query_all` / `query_one` / `execute`, times every SQL call, and
+  flags distinct fingerprints over 50ms (warn) or 250ms (fail).
+  Baseline: 37 distinct queries across 5 hot routes, 0 over budget.
+* ⏳ CSS fossil retirement — still pending (~229 orphans in the
+  allowlist). Requires a careful grep-and-delete pass per prefix.
 
 ### W1.4.0 — stable release
 

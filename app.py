@@ -198,6 +198,13 @@ def get_db() -> sqlite3.Connection:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        # WAL journal mode — cheap, concurrent reads during writes, and
+        # it survives connection close (it's a file-level setting).
+        # Safe to re-apply on every connection; SQLite is a no-op if
+        # already in WAL. See PHILOSOPHY §3 — this is the single perf
+        # lever the hard-attribute contract permits.
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
         g.db = conn
     return g.db
 
@@ -3002,6 +3009,12 @@ def can_access_calendar(user: sqlite3.Row | None) -> bool:
 
 def init_db() -> None:
     db = sqlite3.connect(DB_PATH)
+    # Pin WAL mode at schema-creation time so every DB PRISM ever
+    # bootstraps is born in WAL. Also kick foreign_keys on for the
+    # init path itself (get_db() handles runtime connections).
+    db.execute("PRAGMA journal_mode = WAL")
+    db.execute("PRAGMA synchronous = NORMAL")
+    db.execute("PRAGMA foreign_keys = ON")
     with closing(db.cursor()) as cur:
         cur.executescript(
             """

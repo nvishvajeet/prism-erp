@@ -3965,144 +3965,213 @@ def _backfill_domain_split() -> None:
         if not required.issubset(tables):
             return
 
-        now_iso = datetime.utcnow().isoformat(timespec="seconds")
-
-        # Eligible requests: anything with billing activity.
+        # Eligible requests: anything with billing activity. Delegate
+        # per-request sync to sync_request_to_peer_aggregates() — same
+        # helper runtime write sites call, so backfill and runtime use
+        # exactly one code path.
         rows = db.execute(
             """
-            SELECT id, request_no, requester_id, title,
-                   amount_due, amount_paid, finance_status,
-                   receipt_number, grant_id, project_id, created_at
-            FROM sample_requests
-            WHERE amount_due > 0
-               OR grant_id IS NOT NULL
-               OR finance_status NOT IN ('n/a', '')
+            SELECT id
+              FROM sample_requests
+             WHERE amount_due > 0
+                OR grant_id IS NOT NULL
+                OR finance_status NOT IN ('n/a', '')
             """
         ).fetchall()
-
         for r in rows:
-            req_id = r["id"]
-            req_no = r["request_no"]
-            amount_due = float(r["amount_due"] or 0)
-            amount_paid = float(r["amount_paid"] or 0)
-            legacy_grant_id = r["grant_id"]
-            legacy_receipt = (r["receipt_number"] or "").strip()
-            created_at = r["created_at"] or now_iso
-
-            # 1. Project — one per legacy request, synthetic code.
-            project_code = f"PROJ-LEGACY-{req_no}"
-            proj_row = db.execute(
-                "SELECT id FROM projects WHERE code = ?", (project_code,)
-            ).fetchone()
-            if proj_row:
-                project_id = proj_row["id"]
-            else:
-                cur = db.execute(
-                    """
-                    INSERT INTO projects (code, name, pi_user_id, description, status, created_at)
-                    VALUES (?, ?, ?, ?, 'active', ?)
-                    """,
-                    (
-                        project_code,
-                        (r["title"] or req_no)[:200],
-                        r["requester_id"],
-                        f"Auto-created by v2.0.0-alpha.1 domain-split backfill from {req_no}.",
-                        created_at,
-                    ),
-                )
-                project_id = cur.lastrowid
-
-            # 2. Stitch sample_requests.project_id if still NULL.
-            if r["project_id"] is None:
-                db.execute(
-                    "UPDATE sample_requests SET project_id = ? WHERE id = ?",
-                    (project_id, req_id),
-                )
-
-            # 3. Invoice — one per legacy request iff amount_due > 0.
-            if amount_due > 0:
-                inv_row = db.execute(
-                    "SELECT id FROM invoices WHERE request_id = ?", (req_id,)
-                ).fetchone()
-                if inv_row:
-                    invoice_id = inv_row["id"]
-                else:
-                    status_map = {
-                        "paid": "paid",
-                        "partial": "partial",
-                        "pending": "pending",
-                        "n/a": "pending",
-                        "": "pending",
-                    }
-                    inv_status = status_map.get(r["finance_status"] or "", "pending")
-                    cur = db.execute(
-                        """
-                        INSERT INTO invoices
-                            (request_id, project_id, amount_due, status, issued_at, due_at, notes)
-                        VALUES (?, ?, ?, ?, ?, NULL, ?)
-                        """,
-                        (
-                            req_id,
-                            project_id,
-                            amount_due,
-                            inv_status,
-                            created_at,
-                            "Backfilled from v1.7.0 sample_requests row by v2.0.0-alpha.1.",
-                        ),
-                    )
-                    invoice_id = cur.lastrowid
-
-                # 4. Payment — one row collapsing the amount_paid column.
-                if amount_paid > 0:
-                    pay_row = db.execute(
-                        "SELECT id FROM payments WHERE invoice_id = ? AND notes LIKE 'Backfill%'",
-                        (invoice_id,),
-                    ).fetchone()
-                    if not pay_row:
-                        receipt = legacy_receipt or f"LEGACY-{req_id}"
-                        db.execute(
-                            """
-                            INSERT INTO payments
-                                (invoice_id, amount, method, receipt_number, paid_at, recorded_by_user_id, notes)
-                            VALUES (?, ?, 'legacy', ?, ?, NULL, ?)
-                            """,
-                            (
-                                invoice_id,
-                                amount_paid,
-                                receipt,
-                                created_at,
-                                "Backfilled from v1.7.0 amount_paid by v2.0.0-alpha.1.",
-                            ),
-                        )
-
-            # 5. Grant allocation — legacy grant FK moves to a project link.
-            if legacy_grant_id is not None:
-                alloc_row = db.execute(
-                    "SELECT id FROM grant_allocations WHERE grant_id = ? AND project_id = ?",
-                    (legacy_grant_id, project_id),
-                ).fetchone()
-                if not alloc_row:
-                    # Allocation amount = amount_due for this request (the
-                    # portion of the grant this request is charging). This
-                    # is the minimal correct mapping; alpha.3 will refine.
-                    db.execute(
-                        """
-                        INSERT INTO grant_allocations
-                            (grant_id, project_id, amount, allocated_at, notes)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                        (
-                            legacy_grant_id,
-                            project_id,
-                            amount_due,
-                            created_at,
-                            f"Backfilled from sample_requests.grant_id on {req_no}.",
-                        ),
-                    )
-
+            sync_request_to_peer_aggregates(db, r["id"])
         db.commit()
     finally:
         db.close()
+
+
+def sync_request_to_peer_aggregates(
+    db: sqlite3.Connection,
+    request_id: int,
+) -> None:
+    """v2.0.0-alpha.3 — Idempotent per-request mitosis sync.
+
+    Ensures a single sample_request's peer-aggregate rows (project,
+    invoice, payments, grant_allocation) match what the legacy finance
+    columns on the request say. Called from:
+
+      - _backfill_domain_split()        — at init_db time, every eligible row
+      - new_request POST handler        — immediately after INSERT
+      - resolve_sample POST handler     — after amount_paid / finance_status UPDATE
+      - _seed_demo_grants()             — after setting grant_id on seeded rows
+
+    Invariants this enforces (per-request):
+
+      - Exactly one Project exists with code PROJ-LEGACY-<request_no>.
+      - sample_requests.project_id is stitched to that project.
+      - Exactly one Invoice exists for the request if amount_due > 0.
+      - SUM(payments.amount) for that invoice == amount_paid on the
+        request. Top-up payments are added as delta rows; excess is
+        NOT reconciled (alpha.3 refuses to refund — humans do that).
+      - If grant_id is set, a grant_allocations row links grant →
+        project.
+
+    Not in scope: user-authored Projects. alpha.4 surfaces Project as
+    a first-class concept; until then every runtime write gets the
+    synthetic PROJ-LEGACY-* container, matching the backfill.
+
+    Idempotent: safe to call twice on the same request. Does NOT
+    commit — the caller owns the transaction boundary.
+    """
+    # Defensive: if the peer tables are missing (unlikely post-init_db
+    # but possible during test setup), silently no-op rather than
+    # crashing the caller.
+    tables = {row[0] for row in db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()}
+    if not {"projects", "invoices", "payments", "grant_allocations"}.issubset(tables):
+        return
+
+    r = db.execute(
+        """
+        SELECT id, request_no, requester_id, title,
+               amount_due, amount_paid, finance_status,
+               receipt_number, grant_id, project_id, created_at
+          FROM sample_requests
+         WHERE id = ?
+        """,
+        (request_id,),
+    ).fetchone()
+    if r is None:
+        return
+
+    req_id = r["id"]
+    req_no = r["request_no"]
+    amount_due = float(r["amount_due"] or 0)
+    amount_paid = float(r["amount_paid"] or 0)
+    legacy_grant_id = r["grant_id"]
+    legacy_receipt = (r["receipt_number"] or "").strip()
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    created_at = r["created_at"] or now
+
+    # Short-circuit: nothing to sync for a request with no billing
+    # activity and no grant. Avoids creating synthetic projects for
+    # pure-internal requests that will never charge money.
+    if amount_due == 0 and amount_paid == 0 and legacy_grant_id is None and r["project_id"] is None:
+        return
+
+    # 1. Project — one per request, idempotent via unique code.
+    project_code = f"PROJ-LEGACY-{req_no}"
+    proj_row = db.execute(
+        "SELECT id FROM projects WHERE code = ?", (project_code,)
+    ).fetchone()
+    if proj_row:
+        project_id = proj_row["id"]
+    else:
+        cur = db.execute(
+            """
+            INSERT INTO projects (code, name, pi_user_id, description, status, created_at)
+            VALUES (?, ?, ?, ?, 'active', ?)
+            """,
+            (
+                project_code,
+                (r["title"] or req_no)[:200],
+                r["requester_id"],
+                f"Auto-created by v2.0.0-alpha.3 runtime sync from {req_no}.",
+                created_at,
+            ),
+        )
+        project_id = cur.lastrowid
+
+    # 2. Stitch sample_requests.project_id if still NULL.
+    if r["project_id"] is None:
+        db.execute(
+            "UPDATE sample_requests SET project_id = ? WHERE id = ?",
+            (project_id, req_id),
+        )
+
+    # 3. Invoice — one per request iff amount_due > 0.
+    invoice_id = None
+    if amount_due > 0:
+        inv_row = db.execute(
+            "SELECT id, amount_due FROM invoices WHERE request_id = ?", (req_id,)
+        ).fetchone()
+        if inv_row:
+            invoice_id = inv_row["id"]
+            # If the legacy amount_due was edited upward, update the
+            # invoice to match. Downward edits are NOT applied — that
+            # would imply a credit, which humans handle.
+            if float(inv_row["amount_due"] or 0) < amount_due:
+                db.execute(
+                    "UPDATE invoices SET amount_due = ? WHERE id = ?",
+                    (amount_due, invoice_id),
+                )
+        else:
+            status_map = {
+                "paid": "paid",
+                "partial": "partial",
+                "pending": "pending",
+                "n/a": "pending",
+                "": "pending",
+            }
+            inv_status = status_map.get(r["finance_status"] or "", "pending")
+            cur = db.execute(
+                """
+                INSERT INTO invoices
+                    (request_id, project_id, amount_due, status, issued_at, due_at, notes)
+                VALUES (?, ?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    req_id,
+                    project_id,
+                    amount_due,
+                    inv_status,
+                    created_at,
+                    "Auto-created by v2.0.0-alpha.3 runtime sync.",
+                ),
+            )
+            invoice_id = cur.lastrowid
+
+        # 4. Payment — top-up delta so SUM(payments) == amount_paid.
+        if amount_paid > 0 and invoice_id is not None:
+            current_paid = db.execute(
+                "SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id = ?",
+                (invoice_id,),
+            ).fetchone()["s"]
+            delta = amount_paid - float(current_paid or 0)
+            if delta > 0.005:  # tolerance: half a paisa
+                receipt = legacy_receipt or f"LEGACY-{req_id}"
+                db.execute(
+                    """
+                    INSERT INTO payments
+                        (invoice_id, amount, method, receipt_number, paid_at, recorded_by_user_id, notes)
+                    VALUES (?, ?, 'legacy', ?, ?, NULL, ?)
+                    """,
+                    (
+                        invoice_id,
+                        delta,
+                        receipt,
+                        now,
+                        "Auto-created by v2.0.0-alpha.3 runtime sync (top-up delta).",
+                    ),
+                )
+
+    # 5. Grant allocation — legacy grant FK → project link.
+    if legacy_grant_id is not None:
+        alloc_row = db.execute(
+            "SELECT id FROM grant_allocations WHERE grant_id = ? AND project_id = ?",
+            (legacy_grant_id, project_id),
+        ).fetchone()
+        if not alloc_row:
+            db.execute(
+                """
+                INSERT INTO grant_allocations
+                    (grant_id, project_id, amount, allocated_at, notes)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    legacy_grant_id,
+                    project_id,
+                    amount_due,
+                    created_at,
+                    f"Auto-created by v2.0.0-alpha.3 runtime sync from {req_no}.",
+                ),
+            )
 
 
 # ── v2.0.0-alpha.1 dual-write helpers ────────────────────────────
@@ -6640,6 +6709,13 @@ def new_request():
                 "UPDATE sample_requests SET remarks = ?, updated_at = ? WHERE id = ?",
                 ("Lab is not currently accepting new jobs. Your request is queued and will be released when intake opens.", now_iso(), request_id),
             )
+        # v2.0.0-alpha.3 — runtime dual-write. The request just got
+        # inserted with its legacy finance columns populated; mirror
+        # those values into the peer aggregates (project, invoice,
+        # payment if amount_paid > 0). Idempotent: safe on any edit
+        # path that re-touches the same request_id.
+        sync_request_to_peer_aggregates(get_db(), request_id)
+        get_db().commit()
         created_request = query_one(
             """
             SELECT sr.id, sr.requester_id, sr.request_no, sr.sample_ref, sr.instrument_id, sr.sample_name, sr.sample_count, sr.created_at,
@@ -7364,6 +7440,12 @@ def request_detail(request_id: int):
                     (results_summary, remarks, amount_paid, finance_status, now_iso(), request_id),
                 )
                 log_action(user["id"], "sample_request", request_id, "resolution_saved", {"results_summary": results_summary})
+            # v2.0.0-alpha.3 — runtime dual-write. The resolve_sample
+            # branch (either mark_complete or plain) just updated
+            # amount_paid / finance_status on the legacy row; mirror
+            # the delta into payments so SUM(payments) == amount_paid.
+            sync_request_to_peer_aggregates(get_db(), request_id)
+            get_db().commit()
             if uploaded_resolution_file and uploaded_resolution_file.filename:
                 try:
                     save_uploaded_attachment(

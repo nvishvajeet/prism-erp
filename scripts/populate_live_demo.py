@@ -381,7 +381,11 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
         ("scheduled", "fully_approved"),
         ("completed", "fully_approved"),
     ]
-    for idx in range(18):
+    # Was range(18) → ~30 total with the handcrafted set. Bumped to
+    # range(35) → ~47 total so the public demo queue on the github.io
+    # card looks realistically populated (~50 target) when a visitor
+    # lands on /schedule. Demo-only; operational never runs this.
+    for idx in range(35):
         requester = requesters[idx % len(requesters)]
         code = instruments_cycle[idx % len(instruments_cycle)]
         status, approval_state = statuses_cycle[idx % len(statuses_cycle)]

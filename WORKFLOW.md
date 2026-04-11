@@ -148,18 +148,51 @@ mini has pulled. See `docs/DEPLOY.md` for the full deploy recipe.
 ### 3.6  Pre-commit recipe
 
 ```bash
-cd ~/Library/CloudStorage/Dropbox/Scheduler/Main   # (or ~/Claude/lab-scheduler after migration)
-git pull origin
+cd ~/Documents/Scheduler/Main
+git pull origin v1.3.0-stable-release
 
 # ... make changes ...
 
 .venv/bin/python scripts/smoke_test.py             # MUST pass
 git add -p
 git commit -m "<imperative subject ≤ 70 chars>"
+git pull --rebase origin v1.3.0-stable-release     # absorb concurrent work
 git push origin v1.3.0-stable-release
 ```
 
 Commit rhythm is Level 1. Do not restate it here.
+
+### 3.7  Parallel agent work — claim before you edit
+
+Multiple Claude agents can now run concurrently against this
+repo (different chat sessions, same working copy). The
+coordination protocol is **advisory lock + git rebase +
+pre-receive sanity wave** — read `docs/PARALLEL.md` for the
+full spec. Minimum rules a fresh agent must obey:
+
+1. **Before any non-trivial work, claim your files.** Append a
+   row to `CLAIMS.md` at the repo root with your agent id, the
+   task id (lane-prefixed), an ISO-8601 timestamp, and the
+   files you intend to touch. Commit **`CLAIMS.md` alone** with
+   subject `claim: <agent-id> — <task-id>` and push. This is
+   your lock and must land on the central bare before you edit
+   anything else.
+2. **Do not touch files outside your claim.** If you discover
+   you need a file held by another claim, pause and surface the
+   collision to the user instead of widening the claim silently.
+3. **Pull --rebase before every push.** Absorb any concurrent
+   commits immediately before you push, so the pre-receive
+   hook sees a fast-forward. Never force-push, never
+   `--no-verify`.
+4. **Release the claim in the same commit as the work.** Remove
+   your row from `CLAIMS.md` and include it in the same
+   commit that ships the work; never leave a row behind.
+5. **Honour stale claims.** A row older than ~2 h with no
+   matching `git log` activity is stale, but **do not silently
+   clear it** — surface to the user first.
+
+Tasks available for claiming live in `docs/NEXT_WAVES.md`
+§"Parallel task board".
 
 ## 4. Docs-in-this-repo manifest
 
@@ -175,6 +208,9 @@ pick the relevant file for the task.
 | `docs/DEPLOY.md` | Mac mini deploy recipe + disaster checklist | Deploying, or when the mini misbehaves |
 | `docs/DATA_POLICY.md` | Single-source-of-truth rules for portfolio + scheduler state | Touching any JSON state file or the `/admin/portfolio` panel |
 | `docs/ROADMAP.md` | Forward plan, version-scoped | Starting a new feature — is it on the roadmap? |
+| `docs/NEXT_WAVES.md` | Active plan of record (supersedes ROADMAP.md backlog) | Picking the next task — has a "Parallel task board" section |
+| `docs/PARALLEL.md` | Parallel agent coordination protocol + lane taxonomy | When starting concurrent work or recovering from a claim conflict |
+| `CLAIMS.md` | Live advisory lock board for parallel agents | **Read at session start, every session** |
 | `CHANGELOG.md` | Release history, v1.3.0 baseline | Before a release bump or a BREAKING entry |
 
 Other docs under `docs/` (`COMPONENT_LIBRARY.md`,

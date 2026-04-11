@@ -487,42 +487,57 @@ run `scripts/tailscale_serve.sh`, flip `.env`, `launchctl kickstart`,
 on `nvishvajeet.github.io` and the `v1.4.2` tag. That is the only
 remaining critical-path work to demo-live.
 
-## Ship-today candidates (fresh)
+## Parallel task board
 
-Laptop-local work that can land without any ops dependency or
-external unblock:
+> **Fresh agents read this section to pick up work.** Each row is
+> an independent task that can run in parallel with other rows in
+> a different lane (see `docs/PARALLEL.md` §"Lane taxonomy"). To
+> start a task: read `CLAIMS.md`, confirm no active claim touches
+> your files, append a claim row, commit+push `CLAIMS.md` alone,
+> then do the work.
+>
+> The board is a living list — agents add tasks they discover
+> mid-flight, remove rows they ship, and never silently edit
+> someone else's row. Task IDs are stable once written.
 
-1. **Dev-mode overlay revival** (parked by explicit request
-   2026-04-11). See the "Deferred — dev mode overlay" section
-   below. Scope: six steps, no schema, no role bump. Sized for
-   one focused session. **Gated on explicit user approval to
-   un-park.**
-2. **Sample-page (`new_request.html`) layout pass** —
-   `.new-request-layout` currently splits 1.55fr : 0.85fr with
-   the right column holding only a 5-row instrument summary
-   card, wasting ~36% of the page below that card as empty
-   space. Either promote the instrument summary to a full-width
-   header card and let the form span the full page (mirroring
-   the `inst-header` → `inst-tiles` pattern from
-   `instrument_detail.html`), or fill the sidebar with something
-   useful. ~1 h, no schema, no crawler. See "UI uniformity
-   audit" proposal below for whether this should ship as a
-   one-off or as part of a broader per-role audit wave.
-3. **UI uniformity audit wave (proposal, unscoped)** — a new
-   `ui_uniformity` crawler that logs in as every role, visits
-   the ~8 canonical pages (`/`, `/instruments`,
-   `/instruments/<id>`, `/schedule`, `/requests/new`,
-   `/requests/<id>`, `/stats`, `/sitemap`), and asserts that
-   every page wrapper is `<main class="page">`, every hero is a
-   `.inst-header`-shaped header, every content region is a
-   `.tile`-family grid, and every form uses the shared
-   `.form-grid` macro. Goal: reject new pages that invent their
-   own layout. Size and whether it belongs in `sanity` or
-   `behavioral` is TBD — not a self-executable task until the
-   scope is locked.
+### Legend
 
-W1.3.9 + W1.4.2b are deliberately **not** on this list because
-they are ops-gated, not laptop-local.
+* **lane** — see `docs/PARALLEL.md` §"Lane taxonomy". Two rows in
+  the same lane should not run simultaneously unless they name
+  non-overlapping files.
+* **files** — exhaustive list of writeable files. If a task needs
+  more than this, it must be re-scoped before claiming.
+* **blocks** — rows listed here must ship first. Empty = ready now.
+* **est** — rough wall-clock for one focused agent session.
+
+### Available now (ready to claim)
+
+| task-id                                                    | lane               | files                                                                                                                         | blocks              | est    | notes                                                                                                                                                                                                |
+|------------------------------------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------|---------------------|--------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `crawler-expansion/ui-uniformity-v1`                       | crawler-expansion  | `crawlers/strategies/ui_uniformity.py` (new), `crawlers/strategies/__init__.py`, `crawlers/waves.py`                          | —                   | ~1 h   | New strategy asserting every non-exempt template has `<main class="page">`, a `.*-tiles` grid, and uses shared macros. Wire into `behavioral` (not `sanity` — polish not correctness). ~60 lines.    |
+| `docs-freshness/project-md-tile-pattern`                   | docs-freshness     | `docs/PROJECT.md`                                                                                                             | —                   | ~20 m  | Document the `.inst-tiles` / `.request-tiles` / `.new-request-tiles` family as a reusable abstraction in §11. Reference `a9825b8` as the graduation commit.                                          |
+| `docs-freshness/philosophy-md-parallel-rules`              | docs-freshness     | `docs/PHILOSOPHY.md`                                                                                                          | —                   | ~30 m  | Add a §"Parallel agents" appendix referencing `docs/PARALLEL.md`. Explain how the claim board composes with the hard/soft contract.                                                                  |
+| `css-hygiene/orphan-allowlist-audit`                       | css-hygiene        | `static/styles.css` (read-only probe), `crawlers/strategies/css_orphan.py`                                                    | —                   | ~45 m  | W1.3.8 left ~229 orphans on the allowlist. Walk the list, grep each selector against templates, drop the truly unused ones, document why survivors stay. No new orphans, `css_orphan` stays green.  |
+| `tests/request-status-transitions`                         | tests              | `tests/test_request_status_transitions.py` (new)                                                                              | —                   | ~45 m  | Unit-test the `REQUEST_STATUS_TRANSITIONS` state machine in `app.py` without a Flask context, mirroring `tests/test_time_ago.py` from `72b5821`. At least the 9 valid transitions + 3 rejections.  |
+| `ops-infra/launchd-stdout-rotation`                        | ops-infra          | `ops/launchd/local.prism.plist`, `scripts/install_launchd.sh`                                                                 | —                   | ~30 m  | `logs/server.log` will grow unbounded on the mini. Add a logrotate-friendly `StandardOutPath` rotation hint and a helper in `install_launchd.sh` that sets up a daily rotation. No app code.          |
+| `template-polish/sitemap-hover-polish`                     | template-polish    | `templates/sitemap.html`, `static/styles.css`                                                                                 | (css-hygiene lane)  | ~30 m  | Hover-state polish on the role-scoped link grid. CSS collides with css-hygiene lane — coordinate via claim.                                                                                          |
+| `docs-freshness/changelog-archaeology-1.3.1-1.3.3`         | docs-freshness     | `CHANGELOG.md`                                                                                                                | —                   | ~45 m  | `535b2dc` backfilled some of 1.3.1–1.3.7; finish the specific 1.3.1–1.3.3 detail passes. Per-version entry, grouped Added/Changed.                                                                   |
+
+### Blocked / parked (not ready to claim)
+
+| task-id                                                | lane               | reason blocked                                                                                                                                    |
+|--------------------------------------------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `dev-overlay/revival-six-step`                         | template-polish + crawler-expansion + docs-freshness | Explicitly parked by user 2026-04-11. Un-park only with explicit user go-ahead. See "Deferred — dev mode overlay" below.                           |
+| `ops-infra/tailscale-serve-https`                      | ops-infra          | W1.3.9. Blocked on user clicking `https://login.tailscale.com/f/serve`. All code landed in `5bc3142`.                                              |
+| `docs-freshness/portfolio-button-link`                 | docs-freshness     | W1.4.2b. Blocked on W1.3.9 producing a live HTTPS URL to point at.                                                                                 |
+| `schema/multi-role-users-w1.5.0`                       | schema             | Single-agent lane, post-v1.4.2. Do not claim before `v1.4.2` tags.                                                                                 |
+| `schema/instrument-groups-w1.5.1`                      | schema             | Depends on `schema/multi-role-users-w1.5.0`. Single-agent.                                                                                         |
+
+### Ops-blocked gate (still here for visibility)
+
+W1.3.9 + W1.4.2b are deliberately **not** in the "available now"
+table above because they are ops-gated, not laptop-local. The
+moment the Tailscale Serve click lands they move up.
 
 ## Guardrails (unchanged from `ROADMAP.md`)
 

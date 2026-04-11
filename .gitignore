@@ -11,8 +11,11 @@ build/
 venv/
 env/
 
-# Database (regenerated from code)
+# Database (regenerated from code) + SQLite WAL/rollback sidecar files
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 
 # OS files
 .DS_Store
@@ -23,6 +26,9 @@ Thumbs.db
 .idea/
 *.xcworkspace/
 *.xcodeproj/
+
+# Claude Code per-project state (local-only, never shared)
+.claude/
 
 # Uploads and exports (user data, not code)
 uploads/

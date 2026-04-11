@@ -161,7 +161,55 @@ verify via `ssh mini curl http://127.0.0.1:5055/login` → 200.
 
 Commits: 2 (plist+scripts, DEPLOY.md rewrite). Tag **v1.3.8**.
 
-### W1.3.9 — tailnet serve HTTP→HTTPS one-shot (~15 min ops, post-click)
+### W1.3.9 — bare-minimum HTTPS (one click + one command)
+
+**Reduced to two actions total** (W1.4.9, 2026-04-11). Everything
+else is automated and idempotent.
+
+**Action 1 — browser, once:** click **Enable Tailscale Serve** at
+https://login.tailscale.com/f/serve?node=nMGwQBMvoB21CNTRL .
+This is the one step no automation can do (it's a tailnet-wide
+admin toggle). One click. ~15 seconds including page load.
+
+**Action 2 — SSH to the mini and run one command:**
+
+```bash
+bash ~/Scheduler/Main/scripts/ship_https.sh
+```
+
+That script does steps 2-6 of the old recipe in one shot:
+
+1. Probes `tailscale serve --https=443 5055` up-front. If the
+   click in Action 1 hasn't happened yet, it bails cleanly
+   before touching anything else and prints the activation URL.
+2. Rewrites `.env` idempotently: comments
+   `LAB_SCHEDULER_HOST=0.0.0.0`, appends `LAB_SCHEDULER_HTTPS=true`
+   and `LAB_SCHEDULER_COOKIE_SECURE=true` if absent. Re-running
+   is a no-op — safe to try multiple times.
+3. `launchctl kickstart -k gui/$(id -u)/local.prism` so Flask
+   picks up the new env.
+4. Prints the MagicDNS HTTPS URL + the laptop-side `deploy_smoke`
+   verification command.
+
+**Action 3 (verify from laptop, 5 s):** run the exact command
+the mini printed at the end of step 4. Expect
+`PASS 3  FAIL 0  WARN 0` with a valid cert chain.
+
+**Simulated locally** (2026-04-11): the `.env` rewrite pass was
+tested against a synthetic `.env` on the laptop with both a
+fresh file and a re-run — result is idempotent. Tailscale /
+launchctl steps can only run on the mini itself, which is why
+Action 2 is a single command rather than a dry-run we could
+gate on the laptop.
+
+---
+
+### W1.3.9 (old recipe, kept for reference)
+
+_Replaced by the one-shot above. Left in place so agents reading
+git history can follow the original step-by-step._
+
+~~W1.3.9 — tailnet serve HTTP→HTTPS one-shot~~ (~15 min ops, post-click)
 
 *All code is already landed in `5bc3142` (`scripts/tailscale_serve.sh`*
 _+ `docs/HTTPS.md`). The two former waves W1.3.9 (HTTP) + W1.4.0_

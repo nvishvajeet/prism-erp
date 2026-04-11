@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PRISM / lab-scheduler — LaunchDaemon (system-scoped) for the Mac mini.
+
+  This is the SYSTEM-domain variant of ops/launchd/local.prism.plist.
+  Use this plist on the mini because:
+
+    * LaunchAgents live in gui/<uid> and can only be bootstrapped
+      from a macOS console (Aqua) session. An SSH session has
+      no access to that domain, so `launchctl bootstrap gui/<uid>`
+      from SSH fails with error 125 "Domain does not support
+      specified action".
+    * LaunchDaemons live in system/, which IS reachable from any
+      root context, including an SSH session with sudo.
+    * A LaunchDaemon survives user logout and reboot cleanly,
+      which is exactly what a headless production server needs.
+
+  The daemon itself runs as user `vishwajeet` (not root) via
+  UserName/GroupName, so file permissions on ~/Scheduler/Main,
+  logs/, data/, and .env work identically to the previous
+  orphaned-process setup.
+
+  Install (on the mini, from a terminal where you can type sudo):
+    sudo cp ops/launchd/local.prism.daemon.plist /Library/LaunchDaemons/local.prism.plist
+    sudo chown root:wheel /Library/LaunchDaemons/local.prism.plist
+    sudo chmod 644 /Library/LaunchDaemons/local.prism.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/local.prism.plist
+    sudo launchctl kickstart -k system/local.prism
+
+  Uninstall:
+    sudo launchctl bootout system/local.prism
+    sudo rm /Library/LaunchDaemons/local.prism.plist
+
+  Check status:
+    sudo launchctl print system/local.prism
+    tail -f /Users/vishwajeet/Scheduler/Main/logs/server.log
+
+  Deploy a new release (atomic restart, no downtime gap):
+    sudo launchctl kickstart -k system/local.prism
+
+  Notes:
+    * StandardOutPath / StandardErrorPath both point at
+      logs/server.log so one file captures both streams.
+    * KeepAlive=true restarts the process on any exit.
+    * ThrottleInterval=10 caps crash-loop frequency.
+    * RunAtLoad=true starts the service when the daemon is
+      bootstrapped AND on every reboot automatically.
+    * WorkingDirectory is hard-coded to /Users/vishwajeet/Scheduler/Main
+      on the mini. If the working copy ever moves, update this file
+      and re-bootstrap.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.prism</string>
+
+    <key>UserName</key>
+    <string>vishwajeet</string>
+
+    <key>GroupName</key>
+    <string>staff</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vishwajeet/Scheduler/Main/scripts/start.sh</string>
+        <string>--service</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishwajeet/Scheduler/Main</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

@@ -15,6 +15,80 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [1.4.10] — 2026-04-11
+
+**Service-mode hardening + protocol deep-review.** Tenth
+iOS-cadence patch. End-of-sprint capstone bundling one
+service-mode bug-fix and the parallel-work protocol's biggest
+doctrinal update of the session.
+
+### Added
+
+- **`docs/PARALLEL.md` read vs write agent distinction**
+  (`74dd677`) — read agents run unlimited concurrent, write
+  agents capped at 2 (lowered from 3). Crawler runs are
+  explicitly read agents because `reports/` + `logs/` are
+  gitignored. Unlocks N concurrent `wave all` invocations.
+- **`docs/PARALLEL.md` hardening — stash / index-pollution /
+  NOOP** (`2d8b32c`) — every rule now tied to an observed
+  2026-04-11 production incident. Rule 2 (`never git stash`)
+  strengthened with the 4-violations-in-one-day observation
+  and the "STOP, surface, wait" recovery. New rule 11 for
+  index-pollution recovery via `git reset HEAD <file>`. New
+  rule 12 explicit on shared filesystem. New "NOOP is a
+  first-class success" section documenting 4 correct NOOPs.
+
+### Fixed
+
+- **`scripts/start.sh --service` pins `LAB_SCHEDULER_AUTORELOAD=0`
+  unconditionally** (`ccf5751`) — belt-and-suspenders for the
+  launchd bootstrap path. The Werkzeug reloader forks a child
+  and exits the parent, which makes launchd mark the service
+  `EX_CONFIG` (exit 78). Observed during the attempted launchd
+  bootstrap this session. Setting it in `start.sh` guarantees
+  service mode always turns the reloader off regardless of
+  how the script was launched. (Launchd bootstrap itself still
+  fails silently for an unrelated reason — tracked separately
+  as a follow-up.)
+
+## [1.4.9] — 2026-04-11
+
+**5 parallel streams shipped in one sprint.** Ninth
+iOS-cadence patch. Three background agents + two in-session
+lanes running concurrently on disjoint file surfaces.
+
+### Added
+
+- **`future_fixes_placeholder` counter tile on dev panel**
+  (`8e3a0c8`) — new `tile-dev-future-fixes` tile between
+  STABLE RELEASE / LATEST SHIPPED and the NOW SHIPPING hero,
+  headlining the remaining v1.5.0 TODO count (106 on first
+  render). Reads from a new `_dev_panel_future_fixes_count`
+  helper that re-runs the seed_fixes regex against `app.py`
+  at render time.
+- **`tests/test_seed_fixes.py`** (`420735b`) — unit tests for
+  `scripts/seed_fixes.py` locking the regex + `already_marked`
+  idempotency + triple-quote-block skip + `--dry-run` read-only
+  + `--apply` writes + second-apply idempotency. 5 check
+  functions, ~20 assertions, plain-script shape (no pytest
+  needed).
+- **CHANGELOG backfill [1.4.6] [1.4.7] [1.4.8]** (`d42f08d`) —
+  CHANGELOG caught up to git tags, 76 lines added.
+- **Demo data expansion from ~30 to ~47 sample requests**
+  (`72a4b84`) — `populate_live_demo.py` auto-generative loop
+  bumped from `range(18)` to `range(35)` so the public demo
+  queue looks realistically populated when visitors land on
+  `/schedule`.
+- **`docs/PARALLEL.md` read vs write agent section** (`74dd677`
+  — also captured in [1.4.10] above because the refinement
+  commit landed between the two tags).
+
+### Notes
+
+Sprint merge overhead: one index-pollution incident
+(concurrent agent left CHANGELOG.md staged) resolved via
+`git reset HEAD`. Within the 5% soft target. Protocol worked.
+
 ## [1.4.8] — 2026-04-11
 
 **Sitemap tile graduation + v1.5.0 progress counter.** Eighth

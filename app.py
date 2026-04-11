@@ -5801,16 +5801,33 @@ def _dev_panel_waves() -> list[dict]:
     """Parse the 'Time budget summary' table from docs/NEXT_WAVES.md.
 
     Each row becomes a dict with keys: wave, track, est, blocks, tag,
-    status. Status is 'shipped' if the row's tag appears as a git tag,
-    'hot' if the wave is the first unshipped row, 'pending' otherwise.
+    status. A wave is 'shipped' if either (a) its tag appears as a git
+    tag, or (b) its section header in NEXT_WAVES.md carries a
+    '✅ SHIPPED' marker — the second path covers waves the plan
+    explicitly leaves untagged (rolled up into a later tag). A wave is
+    'hot' if it is the first unshipped row, 'pending' otherwise.
     Dev portal uses this to drive the WAVES tile.
     """
+    import re
+
     path = BASE_DIR / "docs" / "NEXT_WAVES.md"
     if not path.exists():
         return []
+    text = path.read_text(errors="ignore")
+
+    # Pass 1: collect wave-id → shipped flag from section headers like
+    # '### W1.3.7 — title ✅ SHIPPED'. The marker is case-insensitive.
+    shipped_via_marker: set[str] = set()
+    header_re = re.compile(r"^#{2,4}\s*(W\d+(?:\.\d+){1,3})\b.*", re.MULTILINE)
+    for match in header_re.finditer(text):
+        header_line = match.group(0)
+        if "✅" in header_line or "SHIPPED" in header_line.upper():
+            shipped_via_marker.add(match.group(1))
+
+    # Pass 2: parse the budget-summary table.
     rows: list[dict] = []
     in_table = False
-    for raw in path.read_text(errors="ignore").splitlines():
+    for raw in text.splitlines():
         line = raw.strip()
         if line.startswith("| wave") and "track" in line:
             in_table = True
@@ -5831,13 +5848,15 @@ def _dev_panel_waves() -> list[dict]:
                 "tag": cells[4],
                 "status": "pending",
             })
+
     shipped_tags = set(_dev_panel_git("tag", "--list").splitlines())
     first_unshipped = True
     for row in rows:
         tag_clean = row["tag"].replace("v", "")
-        if row["tag"] and row["tag"] not in ("—", "-") and (
+        tagged_shipped = row["tag"] and row["tag"] not in ("—", "-") and (
             row["tag"] in shipped_tags or ("v" + tag_clean) in shipped_tags
-        ):
+        )
+        if tagged_shipped or row["wave"] in shipped_via_marker:
             row["status"] = "shipped"
         elif first_unshipped and row["wave"].startswith("W"):
             row["status"] = "hot"

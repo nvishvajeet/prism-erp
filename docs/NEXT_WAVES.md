@@ -61,7 +61,7 @@ W1.5.1  instrument groups       ← schema, depends on W1.5.0
 
 ## Track A — infrastructure (sequential, 1 day)
 
-### W1.3.7 — `deploy_smoke` crawler (½ hour)
+### W1.3.7 — `deploy_smoke` crawler (½ hour) ✅ SHIPPED
 
 *The verification tool that every later infra wave lands against.*
 
@@ -81,7 +81,7 @@ W1.5.1  instrument groups       ← schema, depends on W1.5.0
 
 Exit tag: no tag, one commit.
 
-### W1.3.8 — launchd service for Flask on the mini (1-2 hours)
+### W1.3.8 — launchd service for Flask on the mini (1-2 hours) ✅ SHIPPED
 
 *Turns the `nohup` dance into a real service that survives reboots.*
 

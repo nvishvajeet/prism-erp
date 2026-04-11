@@ -53,7 +53,15 @@ Hard attributes are the load-bearing skeleton. Changing one is a
   `/admin/*`. URL shapes do not drift.
 - **Authentication + authorisation.** The role set
   (owner, finance_admin, professor_approver, instrument_admin,
-  operator, requester, academic_admin, guest). The
+  operator, requester, academic_admin, guest) — **9 canonical
+  roles, locked**. The `user_roles(user_id, role)` junction
+  table shipped in `v1.5.0` layers multiple roles onto the
+  existing 9 without adding new ones; multi-role assignment is
+  additive. `user_role_set(user)` / `user_has_role(user, role)`
+  are the canonical membership helpers; every
+  `user["role"] ==` comparison is a legacy pattern queued for
+  retirement on the v1.5.x patch stream. Adding a new canonical
+  role still requires a major bump. The
   `@instrument_access_required(level)` decorator. The
   `request_card_policy()` / `request_scope_sql()` visibility gate.
 - **Audit chain.** SHA-256 linkage, `verify_audit_chain()`,

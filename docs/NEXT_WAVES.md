@@ -603,25 +603,23 @@ makes the strategic nature explicit: HTTPS is a goal, not a todo.
 - **`deploy_smoke` on `PRISM_DEPLOY_URL`** moves from skip to 3
   passing checks in the sanity wave.
 
-### Tech bet — Multi-role users (`v1.5.0`)
+### Multi-role users — ✅ SHIPPED in `v1.5.0`
 
-**Goal:** drop the single-`users.role` column in favour of a
-`user_roles(user_id, role)` junction table. Users can hold
-multiple roles simultaneously; `primary_role(user)` returns
-the highest privilege for display; permission functions iterate
-the role set and accept if any single role passes. New
-`multi_role` crawler asserts both role paths work per user.
+Tagged 2026-04-11. Additive, non-breaking — `users.role` stays
+as the primary role, `user_roles(user_id, role)` junction layers
+additional roles on top. Helpers live at `app.py:3965-4008`:
+`user_role_set(user)`, `user_has_role(user, role)`,
+`grant_user_role()`, `revoke_user_role()`. Test contract locked
+in `tests/test_multi_role.py` (13 assertions). See CHANGELOG
+`[1.5.0]` for the full delta.
 
-**Why it's a tech bet:** the migration touches `users` (a hard
-attribute — 9 roles, locked) and every `user["role"] ==`
-comparison in `app.py`. It is the first deliberate hard-attribute
-bump on the `v1.4.x` line and therefore needs a major-version
-decision: is this `v1.5.0`, or does it wait for the `v2.0` ERP
-transition? Operator call, not agent call.
-
-**Blocked on:** operator decision + `v1.4.x` being "in the wild
-for a week" with no critical bug reports. The week-long soak is
-the acceptance gate.
+**Follow-up patches on the v1.5.x line:** retire the 106
+`# TODO [v1.5.0 multi-role]` markers seeded in `d9297e6`. Each
+is a `user["role"] ==` call site that should become
+`user_has_role(user, ...)`. The `future_fixes_placeholder`
+crawler + dev-panel tile surfaces the decrementing count.
+Planned: `v1.5.1` retires the 30 easiest single-role
+comparisons, `v1.5.2` retires the set-membership patterns, etc.
 
 ### Tech bet — Instrument groups as first-class entities (`v1.5.1`)
 

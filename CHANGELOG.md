@@ -15,6 +15,84 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [1.5.0] — 2026-04-11
+
+**First minor bump on the `v1.4.x` → `v1.5.x` line.**
+**Multi-role users land as a first-class hard attribute.** This
+is the capability release that unblocks every pending
+`user["role"] ==` migration — individual call-site rewrites ship
+as patches on the v1.5.x line over the coming days.
+
+### Added (hard — see `docs/PHILOSOPHY.md` §2 update)
+
+- **`user_roles(user_id, role, granted_at, granted_by_user_id)`
+  junction table** (`app.py:3539`) — additive new hard attribute.
+  Every user may hold multiple roles simultaneously. `PRIMARY KEY
+  (user_id, role)` enforces uniqueness. Foreign keys cascade on
+  user deletion. The legacy `users.role` column remains as the
+  canonical **primary role** (display + topbar label); the
+  junction layers additional roles on top without breaking any
+  existing permission check.
+- **`user_role_set(user) → frozenset[str]`** (`app.py:3965`) —
+  returns every role assigned to `user`, primary + additional.
+  Graceful degradation if the junction table is missing
+  (returns the primary role alone). Idempotent, no side effects.
+- **`user_has_role(user, role) → bool`** (`app.py:3989`) — the
+  canonical membership check. Replaces every
+  `user["role"] == "admin"` pattern at call sites.
+- **`grant_user_role(user_id, role, granted_by=None)`** — idempotent
+  insert into `user_roles`. Safe to call repeatedly.
+- **`revoke_user_role(user_id, role)`** — removes a role from the
+  junction. Does not touch `users.role` — callers that want to
+  change the primary role must update that column separately.
+- **`_backfill_user_roles()` second-pass at end of `seed_data()`**
+  (`app.py`, this tag) — the first-pass backfill in `init_db()`
+  ran before `seed_data()` created demo users, so `user_roles`
+  stayed empty on fresh DBs. The second pass reruns the
+  idempotent `INSERT OR IGNORE` after seeding. **This is the
+  v1.5.0 acceptance gate bug-fix** — the helpers technically
+  still worked because `user_role_set()` falls back to
+  `users.role` as the primary, but the junction was never
+  actually populated, which meant multi-role assignment had no
+  working backing store.
+- **`tests/test_multi_role.py`** — 13 assertions locking every
+  helper: backfill populates, role set includes primary +
+  additional, `has_role` true/false paths, grant is idempotent,
+  revoke preserves primary, None-user safety. Pure function +
+  tmp DB shape, no Flask request context.
+
+### Changed (soft)
+
+- **`docs/PHILOSOPHY.md` §2 hard-attribute table** — row
+  "9 roles" → "9 roles + `user_roles` junction". The role set
+  itself is still locked at 9 (multi-role is additive: a user
+  can hold *more than one* of the existing 9, not a new role
+  outside them). Any new canonical role still requires a major
+  version bump.
+- **`docs/NEXT_WAVES.md` § Future technology bets** — the
+  "Tech bet — Multi-role users (v1.5.0)" row moves out of the
+  tech-bets backlog and into shipped history. The related
+  "Tech bet — Instrument groups (v1.5.1)" row stays parked —
+  its schema (`instrument_group` + `instrument_group_member`)
+  is already in `init_db` alongside `user_roles`, but the
+  assignment-matrix UX and `group_visibility` crawler are
+  deferred to the v1.5.x patch stream.
+
+### Not done in this tag (follow-up patches on the v1.5.x line)
+
+- **Retire the 106 `# TODO [v1.5.0 multi-role]` markers** seeded
+  in `d9297e6`. Each is a call-site where `user["role"] == X`
+  should become `user_has_role(user, X)`. The `future_fixes_placeholder`
+  crawler surfaces the remaining count on the dev panel and
+  the number decrements as each site lands. Planned tags:
+  `v1.5.1` retires the 30 easiest call sites (single-role
+  comparisons in `app.py:1000-2000`), `v1.5.2` retires the
+  set-membership patterns (`user["role"] in {...}`), etc.
+- **`multi_role` behavioral crawler** — asserts both role-path
+  resolution for every seeded persona. Scaffolded in the
+  `NEXT_WAVES.md` proposal, implementation shipping as a
+  v1.5.x patch.
+
 ## [1.4.10] — 2026-04-11
 
 **Service-mode hardening + protocol deep-review.** Tenth

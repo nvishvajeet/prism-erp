@@ -66,6 +66,74 @@ line is **v1.4.2** once Tailscale Serve is unblocked.
   W1.4.2a + post-ops W1.4.2b. Net: critical path to demo-live
   dropped from ~4 days calendar to ~2.5 h focused work.
 
+## [1.3.12] — 2026-04-11
+
+**Retire the stunnel/Caddy self-signed HTTPS fallback.** Tailscale
+Serve is now the only HTTPS path — one fewer moving piece.
+
+### Removed
+
+- **`ops/Caddyfile`, `ops/certs/cert.pem`, `ops/certs/key.pem`**
+  (`929911d`) — the self-signed reverse-proxy stack has no consumer
+  left after W1.3.9.
+- **`scripts/start.sh --https` and `--trust` modes** — remaining
+  modes are dev (Chrome auto-open) and `--service` (launchd).
+
+### Changed
+
+- **`README.md`, `docs/DEPLOY.md` §5, `docs/HANDOVER.md` 2.1,
+  `docs/PROJECT.md` §13–14** — every doc reference to the stunnel/
+  Caddy path rewritten to point at `docs/HTTPS.md` (Tailscale
+  Serve). Sanity wave still 160/0/0.
+
+## [1.3.11] — 2026-04-11
+
+**CSS fossil backlog wiped.** Every line should serve a purpose.
+
+### Removed
+
+- **194 dead CSS selectors + ~1700 lines of rule-body dead weight**
+  (`0d3102e`) from `static/styles.css`. File went from 7382 →
+  5636 lines. Brace-tracking parser (not sed) handled multi-
+  selector lists and `@media` variants correctly. Also killed a
+  malformed `/* Badge — semi-transparent{ ... }` block whose
+  opening comment was never closed.
+
+### Changed
+
+- **`css_orphan` crawler allowlist** — 13 selectors were false-
+  positives emitted at runtime via `{{ }}` template interpolation.
+  Added prefixes for `status-`, `stat-tone-`, `dp-wave-`,
+  `month_white_`, and bare `fc`. Threshold dropped from 260 → 20
+  so any regression fails loudly. Crawler now reports 548/0/0.
+
+## [1.3.9] — 2026-04-11
+
+**Tailnet HTTPS code prep (W1.3.9 + W1.4.0).** Laptop-side
+deliverables for tailnet HTTPS; execution is blocked on one
+operator click at the Tailscale admin console.
+
+### Added
+
+- **`scripts/tailscale_serve.sh`** (`5bc3142`) — three-verb
+  wrapper (up / down / status) around
+  `tailscale serve --bg --https=443 5055`, using the full
+  `/opt/homebrew/bin/tailscale` path since launchd/ssh sessions
+  don't inherit the interactive PATH.
+- **`docs/HTTPS.md`** (~150 lines) — full Plan-A recipe: enable
+  Serve, revert loopback binding, run the helper, flip cookie
+  flags, verify with `deploy_smoke`, revert the firewall
+  exception, re-bookmark. Plan-B mkcert fallback stub for the
+  extreme case where Serve cannot be enabled at all. Current-state
+  table at the bottom makes the blocker explicit.
+
+### Blocked on
+
+- **One operator click** at
+  https://login.tailscale.com/f/serve to enable Tailscale Serve
+  tailnet-wide. Once clicked, the rest collapses to ~10 min of
+  ops work. Sanity wave is 160/0/0 (no Flask surface touched).
+
 ## [1.3.8] — 2026-04-11
 
 **W1.3.8 — launchd service for Flask on the mini.** Turns the

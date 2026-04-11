@@ -5930,8 +5930,11 @@ def _dev_panel_waves() -> list[dict]:
 
     # Pass 1: collect wave-id → shipped flag from section headers like
     # '### W1.3.7 — title ✅ SHIPPED'. The marker is case-insensitive.
+    # Wave id: W + dotted numeric segments + optional letter suffix
+    # (e.g. W1.3.7, W1.4.2a, W1.4.2b). The suffix lets us split a
+    # single tagged version into multiple work slices in the plan.
     shipped_via_marker: set[str] = set()
-    header_re = re.compile(r"^#{2,4}\s*(W\d+(?:\.\d+){1,3})\b.*", re.MULTILINE)
+    header_re = re.compile(r"^#{2,4}\s*(W\d+(?:\.\d+){1,3}[a-z]*)\b.*", re.MULTILINE)
     for match in header_re.finditer(text):
         header_line = match.group(0)
         if "✅" in header_line or "SHIPPED" in header_line.upper():

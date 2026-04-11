@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude-flask-autoreload | fix/flask-autoreload-loopback-heuristic | 2026-04-11T13:22+02:00 | `app.py` (app.run block only, ~10 lines) | fix(flask): auto-reload ON for loopback binds, OFF for LAN-facing prod |
+| _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery
 

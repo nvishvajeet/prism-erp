@@ -8421,23 +8421,42 @@ if __name__ == "__main__":
     # Always auto-reload templates so changes appear without server restart
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.jinja_env.auto_reload = True
-    # Static files are served fresh by Flask dev server (no caching)
-    # use_reloader watches .py files and auto-restarts on code changes
-    # Set LAB_SCHEDULER_DEBUG=1 for verbose Flask debug + auto-reloader.
-    # Service mode (start.sh --service under launchd) exports
-    # LAB_SCHEDULER_DEBUG=0 so the reloader does NOT fork a grandchild
-    # — that fork-and-exit pattern makes launchd mark the service as
-    # EX_CONFIG-crashed because the parent PID vanishes. Debug-off is
-    # also the right choice for a persistent local deploy: no code
-    # auto-restart on every file touch, no debugger PIN exposed.
+
+    # LAB_SCHEDULER_DEBUG gates the Flask debug toolbar + debugger PIN.
+    # Heavyweight, opt-in only, never on in production or under launchd.
     is_debug = os.environ.get("LAB_SCHEDULER_DEBUG", "0") == "1"
+
     # LAB_SCHEDULER_HOST controls the bind address. Default is loopback
     # (127.0.0.1) so `python app.py` on a laptop does not accidentally
     # expose the dev server to the LAN. On the Mac mini production
     # host, set LAB_SCHEDULER_HOST=0.0.0.0 in .env so Tailscale and LAN
     # devices can reach it at http://<host>:5055/.
     bind_host = os.environ.get("LAB_SCHEDULER_HOST", "127.0.0.1")
-    app.run(debug=is_debug, use_reloader=is_debug, host=bind_host, port=5055,
+
+    # use_reloader watches .py files and auto-restarts on code changes.
+    # Decoupled from LAB_SCHEDULER_DEBUG as of v1.4.5 — a laptop
+    # operator editing app.py wants reload even without the debug
+    # toolbar. Resolution order:
+    #   1. LAB_SCHEDULER_AUTORELOAD=1 → force ON (explicit opt-in)
+    #   2. LAB_SCHEDULER_AUTORELOAD=0 → force OFF (explicit opt-out,
+    #      e.g. launchd service plist — the reloader's fork-and-exit
+    #      pattern makes launchd mark the service EX_CONFIG-crashed
+    #      because the parent PID vanishes, so service-mode MUST
+    #      set this to 0).
+    #   3. Unset → smart default: ON when bound to loopback
+    #      (127.0.0.1 / localhost / ::1), OFF when LAN-facing. The
+    #      heuristic matches the typical dev vs. prod split: if
+    #      nobody outside your machine can reach you, you're in dev
+    #      and auto-reload is the expected behaviour.
+    _autoreload_env = os.environ.get("LAB_SCHEDULER_AUTORELOAD", "").strip()
+    if _autoreload_env == "1":
+        auto_reload = True
+    elif _autoreload_env == "0":
+        auto_reload = False
+    else:
+        auto_reload = bind_host in ("127.0.0.1", "localhost", "::1")
+
+    app.run(debug=is_debug, use_reloader=auto_reload, host=bind_host, port=5055,
             extra_files=[
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),

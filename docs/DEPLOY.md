@@ -161,12 +161,14 @@ GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
 ## 5. The access surface
 
 - **Tailscale network:** every user on the lab's Tailscale tailnet
-  reaches PRISM at `http://100.115.176.118:5055/`.
+  reaches PRISM at `http://100.115.176.118:5055/` (plain HTTP
+  until Serve is enabled).
+- **Tailscale Serve (HTTPS):** see `docs/HTTPS.md` for the Plan-A
+  recipe that puts a real Let's Encrypt cert in front of Flask on
+  `https://<magicdns>.ts.net/`. This replaces the old Caddy +
+  self-signed flow that lived in `ops/Caddyfile` + `ops/certs/`.
 - **LAN:** when the mini is on the same LAN as the users, it also
   serves on its local IP on port 5055.
-- **Reverse proxy (optional):** `backend/Caddyfile` terminates
-  HTTPS on :443 and forwards to 127.0.0.1:5055. Enable by starting
-  `caddy run --config backend/Caddyfile`.
 
 ---
 

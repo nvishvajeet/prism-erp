@@ -124,7 +124,7 @@ grep -q '^LAB_SCHEDULER_DEMO_MODE=' .env || echo 'LAB_SCHEDULER_DEMO_MODE=0' >> 
 # smoke test runs in demo mode by default, so skip it here OR run it
 # against a throwaway DB copy. In production we trust the pre-push
 # smoke from the MacBook.
-./start.sh --https    # or: launchctl kickstart -k gui/$(id -u)/local.prism
+launchctl kickstart -k gui/$(id -u)/local.prism   # HTTPS via tailscale serve — see docs/HTTPS.md
 ```
 
 ### 2.2 One-liner (runs from your MacBook terminal)

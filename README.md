@@ -136,16 +136,15 @@ cd Main
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-./scripts/start.sh              # development (HTTP, localhost)
-./scripts/start.sh --https      # production-style HTTPS on the LAN
-./scripts/start.sh --trust      # trust the self-signed cert (one-time, sudo)
+./scripts/start.sh              # development (HTTP, localhost, Chrome auto-open)
+./scripts/start.sh --service    # launchd/systemd foreground (no Chrome, .env sourced)
 ```
 
 Open `http://127.0.0.1:5055`.
 
-`scripts/start.sh` auto-restarts on crash with exponential backoff,
-kills any stale process on port 5055 first, and writes everything
-to `logs/server.log` with timestamps.
+For HTTPS on the tailnet, `scripts/start.sh` is **not** the right
+place — `tailscale serve` fronts Flask with a real Let's Encrypt
+cert. See `docs/HTTPS.md` + `scripts/tailscale_serve.sh`.
 
 ### Production (Mac mini)
 
@@ -191,9 +190,9 @@ Everything else is either assets (templates, css, images), data
 | `app.py` | The Flask engine | Routes, views, DB schema, state machine, audit chain, email, exports, auth, CSRF. This is the product. |
 | `scripts/smoke_test.py` | End-to-end health check | ~5-second smoke test. Pre-commit gate. Exercises every hot route under every role and asserts real writes land. |
 | `scripts/populate_live_demo.py` | Demo data seeder | Populates `data/demo/lab_scheduler.db` with 24 users, 10 instruments, 33 requests. Demo-only — never runs in production mode. |
-| `scripts/start.sh` | Launcher | Dev/HTTPS/cert-trust modes. Always `cd`'s to repo root before `python app.py`. |
-| `ops/Caddyfile` | Reverse proxy config | LAN HTTPS with self-signed cert, subnet-gated. |
-| `ops/certs/` | TLS certificates | Self-signed cert + key used by `--https` mode. Gitignored in production. |
+| `scripts/start.sh` | Launcher | Dev mode (Chrome) + `--service` mode (launchd). Always `cd`'s to repo root before `python app.py`. HTTPS is delegated to `tailscale serve` — see `docs/HTTPS.md`. |
+| `scripts/tailscale_serve.sh` | Tailscale Serve wrapper | `up`/`down`/`status` helper for the Let's Encrypt TLS frontend on the tailnet. |
+| `ops/launchd/local.prism.plist` | LaunchAgent | Production service definition on the Mac mini. Installed via `scripts/install_launchd.sh`. |
 | `crawlers/` | QA crawler suite | 13 strategies + 8 wave pipelines. `python -m crawlers wave sanity` is the slightly-stronger pre-commit gate; `wave all` runs at release boundaries. |
 | `tests/test_status_transitions.py` | State-machine unit test | Validates every allowed transition in `REQUEST_STATUS_TRANSITIONS`. Runs under `pytest` or directly. |
 | `templates/` | Jinja templates | Tile-architected HTML. 28 pages + `_page_macros.html` (9 canonical widgets). |

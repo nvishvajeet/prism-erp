@@ -615,7 +615,7 @@ summary under `reports/`.
 |--------------------------------|--------------------------|----------------------------------------------------------|
 | `LAB_SCHEDULER_SECRET_KEY`     | dev secret               | Flask session signing key. Set in production.            |
 | `LAB_SCHEDULER_COOKIE_SECURE`  | off                      | Set to `1` when serving HTTPS so cookies get `Secure`.   |
-| `LAB_SCHEDULER_HTTPS`          | off                      | Used by `start.sh --https` to enable TLS.                |
+| `LAB_SCHEDULER_HTTPS`          | off                      | Tells Flask it is behind an HTTPS frontend (trust `X-Forwarded-Proto`, emit `https://` in `url_for`). Set when `tailscale serve` is in front. |
 | `LAB_SCHEDULER_DEBUG`          | off                      | Flask debug mode + auto-reload.                          |
 | `LAB_SCHEDULER_CSRF`           | off                      | Enable CSRF enforcement (machinery is always present).   |
 | `LAB_SCHEDULER_DEMO_MODE`      | on                       | Demo accounts + `/demo/switch`. Set to `0` in prod.      |
@@ -631,25 +631,21 @@ exports the rest from environment as-is.
 
 ```bash
 cd Main
-python3 -m venv venv
-venv/bin/pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 
-# Development
-./start.sh
+# Development (Chrome auto-open)
+./scripts/start.sh
 
-# Production HTTPS
-./start.sh --https
-
-# Trust the self-signed cert (one-time, needs sudo)
-./start.sh --trust
+# launchd/systemd foreground service mode (no Chrome, .env sourced)
+./scripts/start.sh --service
 ```
-
-`start.sh` auto-restarts on crash with exponential backoff, kills
-any stale process on port 5055 first, and writes everything to
-`logs/server.log` with timestamps.
 
 Open `http://127.0.0.1:5055`. Demo password for the seeded accounts
 is `SimplePass123` (only present when `DEMO_MODE` is on).
+
+HTTPS on the tailnet is delegated to `tailscale serve`; see
+`docs/HTTPS.md` and `scripts/tailscale_serve.sh` for the recipe.
 
 ---
 

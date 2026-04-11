@@ -183,6 +183,8 @@
             {% else %}
               {{ meta_link(row, format_dt(row["created_at"])) if row["created_at"] else meta_link(row, '-') }}
             {% endif %}
+            {% set _hint = time_ago(row_time_value) %}
+            {% if _hint %}<span class="row-time-hint" data-vis="{{ V }}">{{ _hint }}</span>{% endif %}
           </td>
           <td data-vis="{{ V }}">{{ attachment_list(row, attachment_map, limit=3) }}</td>
           {% if can_operate_queue %}

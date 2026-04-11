@@ -1055,6 +1055,14 @@ a:hover {
   opacity: 0.78;
 }
 
+.row-time-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7684);
+  font-variant-numeric: tabular-nums;
+}
+
 .stat,
 .card {
   background: var(--panel);

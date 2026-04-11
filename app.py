@@ -821,6 +821,59 @@ def format_dt(value: object | None) -> str:
     return dt.strftime("%d/%m/%Y %H:%M:%S")
 
 
+def time_ago(value: object | None) -> str:
+    """Short humanised 'x ago' hint for a timestamp. '' on parse failure.
+
+    Used by `.row-time-hint` spans in list templates to give a warmth
+    cue next to the exact timestamp. Server-side, no JS.
+    """
+    if value in {None, "", "-"}:
+        return ""
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return ""
+        dt = None
+        for candidate in (text.replace("Z", "+00:00"), text):
+            try:
+                dt = datetime.fromisoformat(candidate)
+                break
+            except ValueError:
+                pass
+        if dt is None:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+                try:
+                    dt = datetime.strptime(text, fmt)
+                    break
+                except ValueError:
+                    continue
+        if dt is None:
+            return ""
+    now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+    delta = now - dt
+    seconds = int(delta.total_seconds())
+    if seconds < 0:
+        # Future timestamps (scheduled_for) render as "in 3h".
+        seconds = -seconds
+        prefix, suffix = "in ", ""
+    else:
+        prefix, suffix = "", " ago"
+    if seconds < 45:
+        return "in moments" if prefix else "just now"
+    if seconds < 3600:
+        return f"{prefix}{seconds // 60}m{suffix}"
+    if seconds < 86400:
+        return f"{prefix}{seconds // 3600}h{suffix}"
+    days = seconds // 86400
+    if days < 30:
+        return f"{prefix}{days}d{suffix}"
+    if days < 365:
+        return f"{prefix}{days // 30}mo{suffix}"
+    return f"{prefix}{days // 365}y{suffix}"
+
+
 def format_date(value: object | None) -> str:
     if value in {None, "", "-"}:
         return "-"
@@ -3850,6 +3903,7 @@ def inject_globals():
         "request_status_summary": request_status_summary,
         "request_lifecycle_steps": request_lifecycle_steps,
         "format_dt": format_dt,
+        "time_ago": time_ago,
         "format_date": format_date,
         "format_duration_short": format_duration_short,
         "format_duration_days": format_duration_days,

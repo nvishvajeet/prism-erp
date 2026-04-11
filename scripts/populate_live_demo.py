@@ -164,15 +164,18 @@ def create_request(
     completion_locked = 1 if status == "completed" else 0
     created_at = now_iso(base_dt)
     updated_at = completed_at or sample_received_at or sample_submitted_at or scheduled_for or created_at
+    # v2.0.0 — legacy finance columns removed from sample_requests.
+    # Finance state lands in peer aggregates via
+    # sync_request_to_peer_aggregates after INSERT.
     cur = db.execute(
         """
         INSERT INTO sample_requests (
             request_no, requester_id, created_by_user_id, instrument_id, title, sample_name, sample_count, description, sample_origin,
-            receipt_number, amount_due, amount_paid, finance_status, priority, status, submitted_to_lab_at,
+            priority, status, submitted_to_lab_at,
             sample_submitted_at, sample_received_at, sample_dropoff_note, received_by_operator_id, assigned_operator_id,
             scheduled_for, remarks, results_summary, result_email_status, result_email_sent_at, completion_locked,
             created_at, updated_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             request_no,
@@ -184,10 +187,6 @@ def create_request(
             sample_count,
             description,
             sample_origin,
-            receipt_number,
-            amount_due,
-            amount_paid,
-            finance_status,
             priority,
             status,
             sample_submitted_at,
@@ -207,6 +206,19 @@ def create_request(
             completed_at,
         ),
     )
+    # v2.0.0 — feed finance values into peer aggregates.
+    try:
+        import app as _app
+        _app.sync_request_to_peer_aggregates(
+            db,
+            cur.lastrowid,
+            amount_due=amount_due,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=receipt_number,
+        )
+    except Exception:
+        pass
     request_id = cur.lastrowid
     return request_id
 

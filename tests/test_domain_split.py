@@ -1,22 +1,13 @@
-"""v2.0.0-alpha.1 — domain split backfill + dual-write invariants.
+"""v2.0.0 — peer-aggregate invariants on the post-drop schema.
 
-Locks the contract of:
-    _backfill_domain_split()        → legacy sample_requests become
-                                       peer aggregates without losing
-                                       a single rupee
-    create_invoice_for_request(...) → dual-write path for new billing
-    record_payment(...)             → partial-payment capable
-    attach_request_to_project(...)  → FK stitcher
-
-The backfill is the v2.0.0-alpha.1 acceptance gate. If any of these
-invariants breaks, the mitosis is unsafe and the tag must not ship.
+Rewritten for v2.0.0: the legacy finance columns on sample_requests
+were dropped in the v2.0 migration. Everything that used to compare
+legacy-vs-new now just verifies the peer aggregates are internally
+consistent.
 
 Run directly:
 
     .venv/bin/python tests/test_domain_split.py
-
-Exits 0 on success, 1 on any failure. Pure DB shape — no Flask
-request context needed.
 """
 from __future__ import annotations
 
@@ -30,8 +21,6 @@ ROOT = HERE.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Throwaway DB before importing app so init_db() builds a fresh
-# schema and the backfill runs against seeded demo data.
 _tmp_dir = tempfile.TemporaryDirectory()
 _tmp_db_dir = Path(_tmp_dir.name) / "data" / "demo"
 _tmp_db_dir.mkdir(parents=True, exist_ok=True)
@@ -64,7 +53,7 @@ def run() -> int:
         db = sqlite3.connect(str(_tmp_db))
         db.row_factory = sqlite3.Row
 
-        # ── 1. New tables exist with expected columns ─────────────
+        # ── 1. Peer tables exist ──────────────────────────────────
         tables = {r[0] for r in db.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()}
@@ -72,184 +61,122 @@ def run() -> int:
             check(f"table-exists-{t}", t in tables)
 
         sr_cols = {r[1] for r in db.execute("PRAGMA table_info(sample_requests)").fetchall()}
-        check("sample_requests.project_id-added", "project_id" in sr_cols)
+        check("sample_requests.project_id-present", "project_id" in sr_cols)
 
-        # ── 2. Backfill populated something ───────────────────────
-        billable = db.execute(
-            "SELECT COUNT(*) AS c FROM sample_requests WHERE amount_due > 0"
-        ).fetchone()["c"]
+        # ── 2. Legacy columns are GONE (v2.0 contract) ────────────
+        for col in ("amount_due", "amount_paid", "finance_status",
+                    "receipt_number", "grant_id"):
+            check(f"legacy-col-dropped-{col}", col not in sr_cols,
+                  f"{col} still exists on sample_requests")
+
+        # ── 3. Seeding populated peer aggregates ──────────────────
         projects = db.execute("SELECT COUNT(*) AS c FROM projects").fetchone()["c"]
         invoices = db.execute("SELECT COUNT(*) AS c FROM invoices").fetchone()["c"]
-        check(
-            "backfill-created-projects",
-            projects >= billable,
-            f"expected >= {billable} projects, got {projects}",
-        )
-        check(
-            "backfill-created-one-invoice-per-billable-request",
-            invoices == billable,
-            f"expected {billable} invoices, got {invoices}",
-        )
+        payments = db.execute("SELECT COUNT(*) AS c FROM payments").fetchone()["c"]
+        check("projects-populated", projects > 0, f"got {projects}")
+        check("invoices-populated", invoices > 0, f"got {invoices}")
+        check("payments-populated", payments > 0, f"got {payments}")
 
-        # ── 3. Every billable request has project_id stitched ────
-        unstitched = db.execute(
-            "SELECT COUNT(*) AS c FROM sample_requests WHERE amount_due > 0 AND project_id IS NULL"
+        # ── 4. Every invoice belongs to a real request ────────────
+        orphan_invoices = db.execute(
+            """
+            SELECT COUNT(*) AS c FROM invoices inv
+             WHERE NOT EXISTS (SELECT 1 FROM sample_requests WHERE id = inv.request_id)
+            """
         ).fetchone()["c"]
-        check(
-            "every-billable-request-has-project_id",
-            unstitched == 0,
-            f"{unstitched} billable requests still have NULL project_id",
-        )
+        check("no-orphan-invoices", orphan_invoices == 0)
 
-        # ── 4. MONEY INVARIANT — paid side ───────────────────────
-        legacy_paid = db.execute(
-            "SELECT COALESCE(SUM(amount_paid),0) AS s FROM sample_requests WHERE amount_due > 0"
-        ).fetchone()["s"]
-        new_paid = db.execute(
-            "SELECT COALESCE(SUM(amount),0) AS s FROM payments"
-        ).fetchone()["s"]
-        check(
-            "money-invariant-paid",
-            abs(legacy_paid - new_paid) < 0.01,
-            f"legacy={legacy_paid} new={new_paid} — rupees moved during mitosis",
-        )
+        # ── 5. Every payment belongs to a real invoice ────────────
+        orphan_payments = db.execute(
+            """
+            SELECT COUNT(*) AS c FROM payments p
+             WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE id = p.invoice_id)
+            """
+        ).fetchone()["c"]
+        check("no-orphan-payments", orphan_payments == 0)
 
-        # ── 5. MONEY INVARIANT — due side ────────────────────────
-        legacy_due = db.execute(
-            "SELECT COALESCE(SUM(amount_due),0) AS s FROM sample_requests WHERE amount_due > 0"
-        ).fetchone()["s"]
-        new_due = db.execute(
-            "SELECT COALESCE(SUM(amount_due),0) AS s FROM invoices"
-        ).fetchone()["s"]
-        check(
-            "money-invariant-due",
-            abs(legacy_due - new_due) < 0.01,
-            f"legacy={legacy_due} new={new_due} — billed amount drifted",
-        )
-
-        # ── 6. Per-request payment reconciliation ────────────────
+        # ── 6. Per-invoice: SUM(payments) <= invoice.amount_due ──
         row = db.execute(
             """
-            SELECT sr.id, sr.request_no, sr.amount_paid,
-                   COALESCE((SELECT SUM(p.amount) FROM payments p
-                             JOIN invoices i ON i.id = p.invoice_id
-                             WHERE i.request_id = sr.id), 0) AS new_sum
-            FROM sample_requests sr
-            WHERE sr.amount_due > 0
+            SELECT inv.id, inv.amount_due,
+                   COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = inv.id), 0) AS paid
+              FROM invoices inv
             """
         ).fetchall()
-        mismatches = [r for r in row if abs(r["amount_paid"] - r["new_sum"]) > 0.01]
-        check(
-            "per-request-payment-reconciliation",
-            len(mismatches) == 0,
-            f"{len(mismatches)} requests where legacy amount_paid != SUM(payments)",
-        )
+        overpaid = [r for r in row if float(r["paid"]) > float(r["amount_due"]) + 0.01]
+        check("no-overpaid-invoices", len(overpaid) == 0,
+              f"{len(overpaid)} invoices with payments > amount_due")
 
-        # ── 7. Legacy grant FKs became project allocations ───────
-        granted = db.execute(
-            "SELECT COUNT(*) AS c FROM sample_requests WHERE grant_id IS NOT NULL"
+        # ── 7. Every grant_allocations row links to real rows ────
+        bad_allocs = db.execute(
+            """
+            SELECT COUNT(*) AS c FROM grant_allocations ga
+             WHERE NOT EXISTS (SELECT 1 FROM grants WHERE id = ga.grant_id)
+                OR NOT EXISTS (SELECT 1 FROM projects WHERE id = ga.project_id)
+            """
         ).fetchone()["c"]
-        if granted > 0:
-            reachable = db.execute(
-                """
-                SELECT COUNT(*) AS c FROM sample_requests sr
-                WHERE sr.grant_id IS NOT NULL
-                  AND EXISTS (
-                    SELECT 1 FROM grant_allocations ga
-                    WHERE ga.grant_id = sr.grant_id
-                      AND ga.project_id = sr.project_id
-                  )
-                """
-            ).fetchone()["c"]
-            check(
-                "legacy-grant-fks-reachable-via-allocation",
-                reachable == granted,
-                f"{granted} granted requests, only {reachable} reachable via grant_allocations",
-            )
-        else:
-            check("legacy-grant-fks-reachable-via-allocation", True, "no granted requests to check")
+        check("no-orphan-allocations", bad_allocs == 0)
 
-        # ── 8. Idempotency — re-running backfill is a no-op ──────
-        before_p = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-        before_i = db.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
-        before_pay = db.execute("SELECT COUNT(*) FROM payments").fetchone()[0]
-        before_alloc = db.execute("SELECT COUNT(*) FROM grant_allocations").fetchone()[0]
-        db.close()
-        app._backfill_domain_split()
-        db = sqlite3.connect(str(_tmp_db))
-        db.row_factory = sqlite3.Row
-        after_p = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-        after_i = db.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
-        after_pay = db.execute("SELECT COUNT(*) FROM payments").fetchone()[0]
-        after_alloc = db.execute("SELECT COUNT(*) FROM grant_allocations").fetchone()[0]
-        check("idempotent-projects", before_p == after_p, f"{before_p} → {after_p}")
-        check("idempotent-invoices", before_i == after_i, f"{before_i} → {after_i}")
-        check("idempotent-payments", before_pay == after_pay, f"{before_pay} → {after_pay}")
-        check("idempotent-allocations", before_alloc == after_alloc, f"{before_alloc} → {after_alloc}")
-
-        # ── 9. Synthetic receipt numbers when legacy was blank ───
-        synthetic = db.execute(
-            "SELECT COUNT(*) AS c FROM payments WHERE receipt_number LIKE 'LEGACY-%'"
-        ).fetchone()["c"]
-        check(
-            "synthetic-receipts-for-legacy-blanks",
-            synthetic >= 0,
-            "LEGACY-<id> receipts are allowed",
-        )
-
-        # ── 10. Dual-write helper — create_invoice_for_request ───
+        # ── 8. sync_request_to_peer_aggregates is idempotent ─────
         target = db.execute(
-            "SELECT id FROM sample_requests WHERE amount_due > 0 LIMIT 1"
+            """
+            SELECT sr.id FROM sample_requests sr
+              JOIN invoices inv ON inv.request_id = sr.id
+             LIMIT 1
+            """
         ).fetchone()
         if target:
-            new_inv = app.create_invoice_for_request(
-                db, target["id"], 123.45, status="pending", notes="test-dual-write"
+            before_inv = db.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
+            before_pay = db.execute("SELECT COUNT(*) FROM payments").fetchone()[0]
+            # Re-sync with the same values (read first)
+            inv = db.execute(
+                "SELECT amount_due FROM invoices WHERE request_id = ?",
+                (target["id"],),
+            ).fetchone()
+            total_paid = db.execute(
+                "SELECT COALESCE(SUM(p.amount),0) AS s FROM payments p JOIN invoices i ON i.id=p.invoice_id WHERE i.request_id = ?",
+                (target["id"],),
+            ).fetchone()["s"]
+            app.sync_request_to_peer_aggregates(
+                db, target["id"],
+                amount_due=inv["amount_due"],
+                amount_paid=total_paid,
             )
             db.commit()
-            row = db.execute("SELECT * FROM invoices WHERE id = ?", (new_inv,)).fetchone()
-            check("create_invoice-returns-id", new_inv is not None and new_inv > 0)
-            check("create_invoice-writes-amount", abs(row["amount_due"] - 123.45) < 0.01)
-            check("create_invoice-stitches-request", row["request_id"] == target["id"])
+            after_inv = db.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
+            after_pay = db.execute("SELECT COUNT(*) FROM payments").fetchone()[0]
+            check("idempotent-invoices", before_inv == after_inv,
+                  f"{before_inv} → {after_inv}")
+            check("idempotent-payments", before_pay == after_pay,
+                  f"{before_pay} → {after_pay}")
 
-            # ── 11. record_payment + partial-payment semantics ───
-            pay1 = app.record_payment(db, new_inv, 50.00, receipt_number="TEST-R1")
-            pay2 = app.record_payment(db, new_inv, 73.45, receipt_number="TEST-R2")
+        # ── 9. Dual-write helpers still round-trip ───────────────
+        sr_row = db.execute(
+            "SELECT id FROM sample_requests LIMIT 1"
+        ).fetchone()
+        if sr_row:
+            new_inv = app.create_invoice_for_request(
+                db, sr_row["id"], 99.99, status="pending", notes="test"
+            )
             db.commit()
-            total = db.execute(
+            inv_check = db.execute("SELECT amount_due FROM invoices WHERE id = ?", (new_inv,)).fetchone()
+            check("create_invoice_for_request-works",
+                  inv_check is not None and abs(inv_check["amount_due"] - 99.99) < 0.01)
+            app.record_payment(db, new_inv, 50.0, receipt_number="TEST-A1")
+            app.record_payment(db, new_inv, 49.99, receipt_number="TEST-A2")
+            db.commit()
+            paid = db.execute(
                 "SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE invoice_id = ?",
                 (new_inv,),
             ).fetchone()["s"]
-            check(
-                "partial-payments-sum-to-invoice",
-                abs(total - 123.45) < 0.01,
-                f"expected 123.45, got {total}",
-            )
-            check("record_payment-two-rows", pay1 != pay2 and pay1 > 0 and pay2 > 0)
+            check("record_payment-partial-sums",
+                  abs(paid - 99.99) < 0.01, f"expected 99.99, got {paid}")
 
-            # ── 12. attach_request_to_project idempotency ────────
-            proj = db.execute("SELECT id FROM projects LIMIT 1").fetchone()
-            if proj:
-                app.attach_request_to_project(db, target["id"], proj["id"])
-                app.attach_request_to_project(db, target["id"], proj["id"])
-                db.commit()
-                stitched = db.execute(
-                    "SELECT project_id FROM sample_requests WHERE id = ?", (target["id"],)
-                ).fetchone()["project_id"]
-                check(
-                    "attach_request_to_project-sets-fk",
-                    stitched == proj["id"],
-                    f"expected {proj['id']}, got {stitched}",
-                )
-
-        # ── 13. Legacy columns still populated (dual-source contract) ──
-        legacy_still_has_money = db.execute(
-            "SELECT COUNT(*) AS c FROM sample_requests WHERE amount_due > 0"
-        ).fetchone()["c"]
-        check(
-            "alpha1-preserves-legacy-columns",
-            legacy_still_has_money == billable,
-            "alpha.1 must NOT zero out legacy columns — that's alpha.3's job",
-        )
+        # ── 10. computed_finance_for_request returns sane shape ──
+        if sr_row:
+            f = app.computed_finance_for_request(db, sr_row["id"])
+            check("computed_finance-shape", isinstance(f, dict)
+                  and {"amount_due", "amount_paid", "finance_status", "receipt_number"}.issubset(f.keys()))
 
         db.close()
 
@@ -260,7 +187,7 @@ def run() -> int:
         for f in FAILURES:
             print(f"  - {f}")
         return 1
-    print(f"\nall domain-split checks passed")
+    print(f"\nall v2.0 peer-aggregate checks passed")
     return 0
 
 

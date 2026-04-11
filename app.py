@@ -111,8 +111,9 @@ def generate_receipt_reference(sample_origin: str) -> str:
     }.get((sample_origin or "").strip().lower(), "17")
     while True:
         candidate = f"RCPT-{first_two}{random.randint(1000, 9999)}"
+        # v2.0.0 — receipts live in payments, not sample_requests.
         existing = db.execute(
-            "SELECT 1 FROM sample_requests WHERE receipt_number = ? LIMIT 1",
+            "SELECT 1 FROM payments WHERE receipt_number = ? LIMIT 1",
             (candidate,),
         ).fetchone()
         if existing is None:
@@ -1376,6 +1377,9 @@ def write_request_metadata_snapshot(request_id: int) -> None:
     attachments = get_request_attachments(request_id)
     notes = get_request_notes(request_id)
     issues = get_request_issues(request_id)
+    # v2.0.0 — finance state derived from peer aggregates since the
+    # legacy columns on sample_requests were dropped.
+    _finance_snapshot = computed_finance_for_request(get_db(), request_id)
     approval_steps = query_all(
         """
         SELECT step_order, approver_role, status, remarks, acted_at
@@ -1422,10 +1426,10 @@ def write_request_metadata_snapshot(request_id: int) -> None:
             "name": request_row["received_by_name"],
         },
         "finance": {
-            "receipt_number": request_row["receipt_number"],
-            "amount_due": request_row["amount_due"],
-            "amount_paid": request_row["amount_paid"],
-            "finance_status": request_row["finance_status"],
+            "receipt_number": _finance_snapshot["receipt_number"],
+            "amount_due": _finance_snapshot["amount_due"],
+            "amount_paid": _finance_snapshot["amount_paid"],
+            "finance_status": _finance_snapshot["finance_status"],
         },
         "timing": {
             "created_at": request_row["created_at"],
@@ -2315,6 +2319,8 @@ def request_history_query(
     query_params = list(params or [])
     active_filters = filters or {}
     if active_filters.get("q"):
+        # v2.0.0 — receipt_number / finance_status removed from
+        # sample_requests; receipt search now hits payments via EXISTS.
         clauses.append(
             """
             (
@@ -2323,8 +2329,6 @@ def request_history_query(
                 sr.title LIKE ? OR
                 sr.sample_name LIKE ? OR
                 COALESCE(sr.description, '') LIKE ? OR
-                COALESCE(sr.receipt_number, '') LIKE ? OR
-                COALESCE(sr.finance_status, '') LIKE ? OR
                 COALESCE(sr.priority, '') LIKE ? OR
                 COALESCE(sr.remarks, '') LIKE ? OR
                 COALESCE(sr.results_summary, '') LIKE ? OR
@@ -2332,12 +2336,17 @@ def request_history_query(
                 COALESCE(i.code, '') LIKE ? OR
                 COALESCE(r.name, '') LIKE ? OR
                 COALESCE(c.name, '') LIKE ? OR
-                COALESCE(op.name, '') LIKE ?
+                COALESCE(op.name, '') LIKE ? OR
+                EXISTS (
+                    SELECT 1 FROM payments p
+                    JOIN invoices inv ON inv.id = p.invoice_id
+                    WHERE inv.request_id = sr.id AND p.receipt_number LIKE ?
+                )
             )
             """
         )
         token = f"%{active_filters['q']}%"
-        query_params.extend([token] * 15)
+        query_params.extend([token] * 14)
     if active_filters.get("status"):
         clauses.append("sr.status = ?")
         query_params.append(active_filters["status"])
@@ -2679,10 +2688,34 @@ def generate_export_workbook(
     clauses, params = scoped_stats_filters(user, instrument_id=instrument_id, group_name=group_name)
     clauses, params, report_window = apply_report_window(clauses, params, "sr.created_at", report_filters)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    # v2.0.0 — finance columns come from peer aggregates via LEFT JOINs.
+    # amount_due from invoices; amount_paid as SUM(payments); finance_status
+    # derived at read time; receipt_number from the most recent payment row.
     rows = query_all(
         f"""
         SELECT sr.request_no, sr.status, sr.priority, sr.sample_name, sr.sample_count, sr.sample_origin,
-               sr.receipt_number, sr.amount_due, sr.amount_paid, sr.finance_status, sr.created_at,
+               (SELECT receipt_number FROM payments p
+                 JOIN invoices inv ON inv.id = p.invoice_id
+                 WHERE inv.request_id = sr.id
+                 ORDER BY p.paid_at DESC LIMIT 1) AS receipt_number,
+               COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
+                           WHERE inv.request_id = sr.id), 0) AS amount_due,
+               COALESCE((SELECT SUM(p.amount) FROM payments p
+                           JOIN invoices inv ON inv.id = p.invoice_id
+                           WHERE inv.request_id = sr.id), 0) AS amount_paid,
+               CASE
+                 WHEN NOT EXISTS (SELECT 1 FROM invoices WHERE request_id = sr.id) THEN 'n/a'
+                 WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
+                                  JOIN invoices inv ON inv.id = p.invoice_id
+                                  WHERE inv.request_id = sr.id), 0) = 0 THEN 'pending'
+                 WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
+                                  JOIN invoices inv ON inv.id = p.invoice_id
+                                  WHERE inv.request_id = sr.id), 0)
+                      < COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
+                                    WHERE inv.request_id = sr.id), 0) THEN 'partial'
+                 ELSE 'paid'
+               END AS finance_status,
+               sr.created_at,
                sr.sample_submitted_at, sr.sample_received_at, sr.scheduled_for, sr.completed_at,
                sr.remarks, sr.results_summary,
                i.name AS instrument_name, i.faculty_group, r.name AS requester_name, r.email AS requester_email,
@@ -3386,10 +3419,8 @@ def init_db() -> None:
                 sample_count INTEGER NOT NULL DEFAULT 1,
                 description TEXT NOT NULL,
                 sample_origin TEXT NOT NULL DEFAULT 'internal',
-                receipt_number TEXT NOT NULL DEFAULT '',
-                amount_due REAL NOT NULL DEFAULT 0,
-                amount_paid REAL NOT NULL DEFAULT 0,
-                finance_status TEXT NOT NULL DEFAULT 'n/a',
+                -- v2.0.0 — legacy finance columns removed.
+                -- Money lives in invoices + payments (peer aggregates).
                 priority TEXT NOT NULL DEFAULT 'normal',
                 status TEXT NOT NULL DEFAULT 'submitted',
                 submitted_to_lab_at TEXT,
@@ -3752,8 +3783,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN sample_dropoff_note TEXT NOT NULL DEFAULT ''")
         if "received_by_operator_id" not in columns:
             cur.execute("ALTER TABLE sample_requests ADD COLUMN received_by_operator_id INTEGER")
-        if "grant_id" not in columns:
-            cur.execute("ALTER TABLE sample_requests ADD COLUMN grant_id INTEGER REFERENCES grants(id) ON DELETE SET NULL")
+        # v2.0.0 — legacy grant_id ALTER removed. Dropped in
+        # _drop_legacy_finance_columns() which runs after init_db.
         attachment_columns = {row[1] for row in cur.execute("PRAGMA table_info(request_attachments)").fetchall()}
         if "note" not in attachment_columns:
             cur.execute("ALTER TABLE request_attachments ADD COLUMN note TEXT NOT NULL DEFAULT ''")
@@ -3908,56 +3939,59 @@ def init_db() -> None:
     # v1.7.0 — seed demo grants + link some external requests to them
     # so the /finance/grants portal renders populated budgets + spend.
     _seed_demo_grants()
-    # v2.0.0-alpha.1 — domain split backfill. Every legacy sample_request
-    # with amount_due > 0 gets an implicit Project, one Invoice, and one
-    # Payment per unit of amount_paid. Grant FKs move from request →
-    # project via allocation. Idempotent and read-only-reversible: the
-    # old columns on sample_requests stay populated. Safe to re-run.
+    # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
+    # columns if present, hands them to sync_request_to_peer_aggregates,
+    # then drops the columns. Second run is a no-op.
     _backfill_domain_split()
+    _drop_legacy_finance_columns()
+
+
+def _drop_legacy_finance_columns() -> None:
+    """v2.0.0 — the irreversible beat. Drops amount_due, amount_paid,
+    finance_status, receipt_number, grant_id from sample_requests.
+
+    Runs AFTER _backfill_domain_split has moved the values into the
+    peer aggregates. Idempotent via PRAGMA table_info — if the column
+    is already gone, skip it.
+
+    SQLite >= 3.35 supports DROP COLUMN natively. Python 3.11+ ships
+    with 3.35+, so this is safe on every supported interpreter.
+    """
+    db = sqlite3.connect(DB_PATH)
+    try:
+        sr_cols = {row[1] for row in db.execute(
+            "PRAGMA table_info(sample_requests)"
+        ).fetchall()}
+        for col in ("amount_due", "amount_paid", "finance_status",
+                    "receipt_number", "grant_id"):
+            if col in sr_cols:
+                try:
+                    db.execute(f"ALTER TABLE sample_requests DROP COLUMN {col}")
+                except sqlite3.OperationalError:
+                    # Column can't be dropped (index / FK dependency) —
+                    # leave it. The runtime never reads it anyway.
+                    pass
+        db.commit()
+    finally:
+        db.close()
 
 
 def _backfill_domain_split() -> None:
-    """v2.0.0-alpha.1 domain-split backfill.
+    """v2.0.0 — one-shot pre-drop migration.
 
-    Mitosis step: every legacy sample_request with billing activity gets
-    the peer-aggregate rows it should have had if v2.0 had been the
-    schema from day one.
+    The only path that ever reads the legacy finance columns on
+    sample_requests. Runs exactly once per existing DB: reads the
+    pre-v2.0 values, hands them to sync_request_to_peer_aggregates
+    via explicit args, then the caller (init_db) drops the columns.
 
-    Per-request mapping:
-      - If amount_due > 0 OR grant_id IS NOT NULL OR finance_status != 'n/a':
-          ensure a Project exists (synthetic code PROJ-LEGACY-<request_no>)
-          stitch sample_requests.project_id → projects.id
-          ensure one Invoice (amount = amount_due, status from finance_status)
-          if amount_paid > 0: ensure one Payment (amount = amount_paid,
-              receipt_number = original OR 'LEGACY-<request_id>')
-          if original grant_id: ensure one grant_allocation row linking
-              grant → project for the full grant budget (one project per
-              grant in the legacy mapping; alpha.3 will refine this
-              many-to-many properly)
-
-    Invariants locked by tests/test_domain_split.py:
-      - Every legacy request with amount_due > 0 has exactly one invoice
-      - SUM(payments.amount) == sample_requests.amount_paid per request
-      - No money is created or destroyed by the backfill
-      - Every request with an old grant_id ends up reachable via
-        project → grant_allocation → grant
-      - Re-running is a no-op (INSERT OR IGNORE semantics via lookup-
-        then-insert, not via unique constraint violations)
-
-    Safety:
-      - Touches only rows with billing activity; purely-internal
-        requests with amount_due == 0 and grant_id IS NULL are ignored.
-      - Does NOT touch legacy columns (amount_due, amount_paid,
-        finance_status, receipt_number, grant_id). Dual-sourcing is
-        the whole point of alpha.1.
-      - Wrapped in a single transaction; failure rolls back cleanly.
+    After the DROP, this function is a no-op — the SELECT finds no
+    legacy columns and bails out immediately. Fresh databases never
+    create the columns in the first place, so backfill has nothing
+    to read and exits clean.
     """
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     try:
-        # Bail fast if the new tables don't exist yet — defensive, this
-        # function runs after init_db() so they always should, but if
-        # someone calls it early, fail loud not silent.
         tables = {row[0] for row in db.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()}
@@ -3965,13 +3999,20 @@ def _backfill_domain_split() -> None:
         if not required.issubset(tables):
             return
 
-        # Eligible requests: anything with billing activity. Delegate
-        # per-request sync to sync_request_to_peer_aggregates() — same
-        # helper runtime write sites call, so backfill and runtime use
-        # exactly one code path.
+        # Check if legacy columns still exist. If they don't (fresh
+        # v2.0 DB or post-drop second run), nothing to backfill.
+        sr_cols = {row[1] for row in db.execute(
+            "PRAGMA table_info(sample_requests)"
+        ).fetchall()}
+        legacy_cols = {"amount_due", "amount_paid", "finance_status",
+                       "receipt_number", "grant_id"}
+        if not legacy_cols.issubset(sr_cols):
+            return
+
         rows = db.execute(
             """
-            SELECT id
+            SELECT id, amount_due, amount_paid, finance_status,
+                   receipt_number, grant_id
               FROM sample_requests
              WHERE amount_due > 0
                 OR grant_id IS NOT NULL
@@ -3979,48 +4020,97 @@ def _backfill_domain_split() -> None:
             """
         ).fetchall()
         for r in rows:
-            sync_request_to_peer_aggregates(db, r["id"])
+            sync_request_to_peer_aggregates(
+                db,
+                r["id"],
+                amount_due=float(r["amount_due"] or 0),
+                amount_paid=float(r["amount_paid"] or 0),
+                finance_status=r["finance_status"],
+                receipt_number=r["receipt_number"],
+                grant_id=r["grant_id"],
+            )
         db.commit()
     finally:
         db.close()
 
 
+def computed_finance_for_request(
+    db: sqlite3.Connection,
+    request_id: int,
+) -> dict:
+    """v2.0.0 — derive finance state for a request from the peer
+    aggregates. Returns the same shape the legacy columns used to
+    expose so form-prefill call sites can swap transparently:
+
+        {amount_due, amount_paid, finance_status, receipt_number}
+
+    Empty/zero defaults when no invoice exists yet (e.g. internal
+    request with no billing)."""
+    row = db.execute(
+        """
+        SELECT inv.id AS invoice_id,
+               COALESCE(inv.amount_due, 0) AS amount_due,
+               COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = inv.id), 0) AS amount_paid,
+               (SELECT receipt_number FROM payments
+                 WHERE invoice_id = inv.id
+                 ORDER BY paid_at DESC LIMIT 1) AS receipt_number
+          FROM invoices inv
+         WHERE inv.request_id = ?
+         LIMIT 1
+        """,
+        (request_id,),
+    ).fetchone()
+    if row is None:
+        return {"amount_due": 0.0, "amount_paid": 0.0,
+                "finance_status": "n/a", "receipt_number": ""}
+    amount_due = float(row["amount_due"] or 0)
+    amount_paid = float(row["amount_paid"] or 0)
+    if amount_paid <= 0:
+        status = "pending" if amount_due > 0 else "n/a"
+    elif amount_paid < amount_due:
+        status = "partial"
+    else:
+        status = "paid"
+    return {
+        "amount_due": amount_due,
+        "amount_paid": amount_paid,
+        "finance_status": status,
+        "receipt_number": row["receipt_number"] or "",
+    }
+
+
 def sync_request_to_peer_aggregates(
     db: sqlite3.Connection,
     request_id: int,
+    *,
+    amount_due: float | None = None,
+    amount_paid: float | None = None,
+    finance_status: str | None = None,
+    receipt_number: str | None = None,
+    grant_id: int | None = None,
 ) -> None:
-    """v2.0.0-alpha.3 — Idempotent per-request mitosis sync.
+    """v2.0.0 — per-request mitosis sync, explicit-args edition.
 
-    Ensures a single sample_request's peer-aggregate rows (project,
-    invoice, payments, grant_allocation) match what the legacy finance
-    columns on the request say. Called from:
+    The legacy finance columns on sample_requests are dropped in v2.0,
+    so the helper cannot fall back to reading them. Callers MUST pass
+    the authoritative values via keyword args.
 
-      - _backfill_domain_split()        — at init_db time, every eligible row
-      - new_request POST handler        — immediately after INSERT
-      - resolve_sample POST handler     — after amount_paid / finance_status UPDATE
-      - _seed_demo_grants()             — after setting grant_id on seeded rows
+    Called from:
+      - new_request POST           (after INSERT)
+      - resolve_sample / admin_complete_override / complete / finish_now
+      - _seed_demo_grants          (to create grant_allocations rows)
+      - _backfill_domain_split     (one-shot pre-drop migration)
 
-    Invariants this enforces (per-request):
-
+    Invariants (per-request):
       - Exactly one Project exists with code PROJ-LEGACY-<request_no>.
       - sample_requests.project_id is stitched to that project.
-      - Exactly one Invoice exists for the request if amount_due > 0.
-      - SUM(payments.amount) for that invoice == amount_paid on the
-        request. Top-up payments are added as delta rows; excess is
-        NOT reconciled (alpha.3 refuses to refund — humans do that).
-      - If grant_id is set, a grant_allocations row links grant →
-        project.
+      - Exactly one Invoice exists iff amount_due > 0.
+      - SUM(payments.amount) == amount_paid.
+      - If grant_id is set, grant_allocations row links grant → project.
 
-    Not in scope: user-authored Projects. alpha.4 surfaces Project as
-    a first-class concept; until then every runtime write gets the
-    synthetic PROJ-LEGACY-* container, matching the backfill.
-
-    Idempotent: safe to call twice on the same request. Does NOT
-    commit — the caller owns the transaction boundary.
+    Idempotent: safe to call twice. Does NOT commit — caller owns the
+    transaction boundary.
     """
-    # Defensive: if the peer tables are missing (unlikely post-init_db
-    # but possible during test setup), silently no-op rather than
-    # crashing the caller.
     tables = {row[0] for row in db.execute(
         "SELECT name FROM sqlite_master WHERE type='table'"
     ).fetchall()}
@@ -4029,9 +4119,7 @@ def sync_request_to_peer_aggregates(
 
     r = db.execute(
         """
-        SELECT id, request_no, requester_id, title,
-               amount_due, amount_paid, finance_status,
-               receipt_number, grant_id, project_id, created_at
+        SELECT id, request_no, requester_id, title, project_id, created_at
           FROM sample_requests
          WHERE id = ?
         """,
@@ -4040,18 +4128,20 @@ def sync_request_to_peer_aggregates(
     if r is None:
         return
 
+    # Caller values take precedence; missing args default to zero/empty.
+    amount_due = float(amount_due if amount_due is not None else 0)
+    amount_paid = float(amount_paid if amount_paid is not None else 0)
+    finance_status = finance_status or "n/a"
+    legacy_receipt = (receipt_number or "").strip()
+    legacy_grant_id = grant_id
+
     req_id = r["id"]
     req_no = r["request_no"]
-    amount_due = float(r["amount_due"] or 0)
-    amount_paid = float(r["amount_paid"] or 0)
-    legacy_grant_id = r["grant_id"]
-    legacy_receipt = (r["receipt_number"] or "").strip()
     now = datetime.utcnow().isoformat(timespec="seconds")
     created_at = r["created_at"] or now
 
-    # Short-circuit: nothing to sync for a request with no billing
-    # activity and no grant. Avoids creating synthetic projects for
-    # pure-internal requests that will never charge money.
+    # Short-circuit: nothing to sync when there's no billing signal
+    # and no pre-existing project stitch.
     if amount_due == 0 and amount_paid == 0 and legacy_grant_id is None and r["project_id"] is None:
         return
 
@@ -4109,7 +4199,7 @@ def sync_request_to_peer_aggregates(
                 "n/a": "pending",
                 "": "pending",
             }
-            inv_status = status_map.get(r["finance_status"] or "", "pending")
+            inv_status = status_map.get(finance_status or "", "pending")
             cur = db.execute(
                 """
                 INSERT INTO invoices
@@ -4284,15 +4374,25 @@ def _seed_demo_grants() -> None:
                 """,
                 (code, name, sponsor, pi, total, start, end, status, notes, now_iso),
             )
-        # Attach existing external sample_requests to grants round-robin.
+        # v2.0.0 — attach external sample_requests to grants via the
+        # sync helper, which creates a grant_allocations row instead
+        # of writing to the now-dropped sample_requests.grant_id column.
         grant_ids = [r["id"] for r in db.execute("SELECT id FROM grants ORDER BY id").fetchall()]
         if grant_ids:
             external = db.execute(
-                "SELECT id FROM sample_requests WHERE sample_origin = 'external' AND (grant_id IS NULL) ORDER BY id"
+                """
+                SELECT sr.id FROM sample_requests sr
+                 WHERE sr.sample_origin = 'external'
+                   AND NOT EXISTS (
+                     SELECT 1 FROM grant_allocations ga
+                      WHERE ga.project_id = sr.project_id
+                   )
+                 ORDER BY sr.id
+                """
             ).fetchall()
             for idx, row in enumerate(external):
                 gid = grant_ids[idx % len(grant_ids)]
-                db.execute("UPDATE sample_requests SET grant_id = ? WHERE id = ?", (gid, row["id"]))
+                sync_request_to_peer_aggregates(db, row["id"], grant_id=gid)
         db.commit()
     except sqlite3.OperationalError:
         pass
@@ -4549,14 +4649,16 @@ def seed_data() -> None:
         if operator_email:
             operator_id = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()[0]
         created = now_iso()
+        # v2.0.0 — legacy finance columns removed. Sync helper below
+        # pipes values into invoices/payments.
         cur = db.execute(
             """
             INSERT OR IGNORE INTO sample_requests
             (request_no, requester_id, created_by_user_id, instrument_id, title, sample_name, sample_count, description, sample_origin,
-             receipt_number, amount_due, amount_paid, finance_status, priority, status, sample_submitted_at, sample_received_at,
+             priority, status, sample_submitted_at, sample_received_at,
              received_by_operator_id, assigned_operator_id, scheduled_for,
              remarks, results_summary, result_email_status, result_email_sent_at, completion_locked, created_at, updated_at, completed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 req_no,
@@ -4568,10 +4670,6 @@ def seed_data() -> None:
                 sample_count,
                 f"Demo request for {title}.",
                 sample_origin,
-                receipt_number,
-                amount_due,
-                amount_paid,
-                finance_status,
                 "normal",
                 status,
                 sample_submitted_at,
@@ -4595,6 +4693,12 @@ def seed_data() -> None:
             if existing_request is None:
                 continue
             request_id = existing_request["id"]
+        # v2.0.0 — feed finance values into peer aggregates.
+        sync_request_to_peer_aggregates(
+            db, request_id,
+            amount_due=amount_due, amount_paid=amount_paid,
+            finance_status=finance_status, receipt_number=receipt_number,
+        )
         create_approval_chain(db, request_id, instrument_id)
         if status in {"awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "completed"}:
             db.execute(
@@ -6670,12 +6774,15 @@ def new_request():
         sample_ref = generate_sample_reference(instrument["name"], sample_origin)
         created = now_iso()
         initial_status = "submitted"
+        # v2.0.0 — INSERT skips legacy finance columns (dropped in
+        # v2.0 migration). Billing lands in peer aggregates via
+        # sync_request_to_peer_aggregates() below.
         request_id = execute(
             """
             INSERT INTO sample_requests
             (request_no, sample_ref, requester_id, created_by_user_id, originator_note, instrument_id, title, sample_name, sample_count, description, sample_origin,
-             receipt_number, amount_due, amount_paid, finance_status, priority, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             priority, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request_no,
@@ -6689,10 +6796,6 @@ def new_request():
                 sample_count,
                 description,
                 sample_origin,
-                receipt_number,
-                amount_due,
-                amount_paid,
-                finance_status,
                 priority,
                 initial_status,
                 created,
@@ -6709,12 +6812,18 @@ def new_request():
                 "UPDATE sample_requests SET remarks = ?, updated_at = ? WHERE id = ?",
                 ("Lab is not currently accepting new jobs. Your request is queued and will be released when intake opens.", now_iso(), request_id),
             )
-        # v2.0.0-alpha.3 — runtime dual-write. The request just got
-        # inserted with its legacy finance columns populated; mirror
-        # those values into the peer aggregates (project, invoice,
-        # payment if amount_paid > 0). Idempotent: safe on any edit
-        # path that re-touches the same request_id.
-        sync_request_to_peer_aggregates(get_db(), request_id)
+        # v2.0.0 — billing goes directly into peer aggregates. The
+        # INSERT above omitted the legacy finance columns; this call
+        # creates the Project + Invoice + Payment rows if the form
+        # submitted non-zero values.
+        sync_request_to_peer_aggregates(
+            get_db(),
+            request_id,
+            amount_due=amount_due,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=receipt_number,
+        )
         get_db().commit()
         created_request = query_one(
             """
@@ -7293,8 +7402,10 @@ def request_detail(request_id: int):
         elif action == "complete" and (can_operate or can_manage):
             results_summary = request.form["results_summary"].strip()
             remarks = request.form.get("remarks", "").strip()
-            amount_paid = float(request.form.get("amount_paid") or sample_request["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", sample_request["finance_status"])
+            # v2.0.0 — finance values come from the form + peer aggregates
+            _finance = computed_finance_for_request(get_db(), request_id)
+            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+            finance_status = request.form.get("finance_status", _finance["finance_status"])
             email_ok, email_message = send_completion_email(sample_request, results_summary)
             now_value = now_iso()
             completion_fields = completion_override_fields(sample_request, user["id"], now_value)
@@ -7302,7 +7413,7 @@ def request_detail(request_id: int):
             execute(
                 """
                 UPDATE sample_requests
-                SET status = 'completed', results_summary = ?, remarks = ?, amount_paid = ?, finance_status = ?,
+                SET status = 'completed', results_summary = ?, remarks = ?,
                     result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
                     submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
                     scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
@@ -7311,8 +7422,6 @@ def request_detail(request_id: int):
                 (
                     results_summary,
                     remarks,
-                    amount_paid,
-                    finance_status,
                     email_message,
                     now_value if email_ok else None,
                     completion_fields["submitted_to_lab_at"],
@@ -7326,6 +7435,14 @@ def request_detail(request_id: int):
                     request_id,
                 ),
             )
+            sync_request_to_peer_aggregates(
+                get_db(), request_id,
+                amount_due=_finance["amount_due"] or amount_paid,
+                amount_paid=amount_paid,
+                finance_status=finance_status,
+                receipt_number=_finance["receipt_number"],
+            )
+            get_db().commit()
             log_completion_override_events(
                 user["id"],
                 sample_request,
@@ -7337,8 +7454,9 @@ def request_detail(request_id: int):
         elif action == "admin_complete_override" and can_manage:
             results_summary = request.form["results_summary"].strip()
             remarks = request.form.get("remarks", "").strip()
-            amount_paid = float(request.form.get("amount_paid") or sample_request["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", sample_request["finance_status"])
+            _finance = computed_finance_for_request(get_db(), request_id)
+            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+            finance_status = request.form.get("finance_status", _finance["finance_status"])
             operator_id = int(request.form["assigned_operator_id"]) if request.form.get("assigned_operator_id") else (sample_request["assigned_operator_id"] or user["id"])
             email_ok, email_message = send_completion_email(sample_request, results_summary)
             now_value = now_iso()
@@ -7349,7 +7467,7 @@ def request_detail(request_id: int):
                 UPDATE sample_requests
                 SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?,
                     received_by_operator_id = ?, scheduled_for = ?,
-                    results_summary = ?, remarks = ?, amount_paid = ?, finance_status = ?,
+                    results_summary = ?, remarks = ?,
                     result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
                 WHERE id = ?
                 """,
@@ -7362,8 +7480,6 @@ def request_detail(request_id: int):
                     completion_fields["scheduled_for"],
                     results_summary,
                     remarks,
-                    amount_paid,
-                    finance_status,
                     email_message,
                     now_value if email_ok else None,
                     completion_fields["completed_at"],
@@ -7371,6 +7487,14 @@ def request_detail(request_id: int):
                     request_id,
                 ),
             )
+            sync_request_to_peer_aggregates(
+                get_db(), request_id,
+                amount_due=_finance["amount_due"] or amount_paid,
+                amount_paid=amount_paid,
+                finance_status=finance_status,
+                receipt_number=_finance["receipt_number"],
+            )
+            get_db().commit()
             execute(
                 "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Admin override' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
                 (now_value, request_id),
@@ -7386,8 +7510,9 @@ def request_detail(request_id: int):
         elif action == "resolve_sample" and (can_operate or can_manage):
             results_summary = request.form.get("results_summary", "").strip()
             remarks = request.form.get("remarks", "").strip()
-            amount_paid = float(request.form.get("amount_paid") or sample_request["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", sample_request["finance_status"])
+            _finance = computed_finance_for_request(get_db(), request_id)
+            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+            finance_status = request.form.get("finance_status", _finance["finance_status"])
             mark_complete = request.form.get("mark_complete") == "1"
             uploaded_resolution_file = request.files.get("resolution_attachment")
             resolution_upload_error = None
@@ -7400,7 +7525,7 @@ def request_detail(request_id: int):
                     """
                     UPDATE sample_requests
                     SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?,
-                        sample_received_at = ?, received_by_operator_id = ?, scheduled_for = ?, results_summary = ?, remarks = ?, amount_paid = ?, finance_status = ?,
+                        sample_received_at = ?, received_by_operator_id = ?, scheduled_for = ?, results_summary = ?, remarks = ?,
                         result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
                     WHERE id = ?
                     """,
@@ -7413,8 +7538,6 @@ def request_detail(request_id: int):
                         completion_fields["scheduled_for"],
                         final_summary,
                         remarks,
-                        amount_paid,
-                        finance_status,
                         email_message,
                         now_value if email_ok else None,
                         completion_fields["completed_at"],
@@ -7436,15 +7559,20 @@ def request_detail(request_id: int):
                 )
             else:
                 execute(
-                    "UPDATE sample_requests SET results_summary = ?, remarks = ?, amount_paid = ?, finance_status = ?, updated_at = ? WHERE id = ?",
-                    (results_summary, remarks, amount_paid, finance_status, now_iso(), request_id),
+                    "UPDATE sample_requests SET results_summary = ?, remarks = ?, updated_at = ? WHERE id = ?",
+                    (results_summary, remarks, now_iso(), request_id),
                 )
                 log_action(user["id"], "sample_request", request_id, "resolution_saved", {"results_summary": results_summary})
-            # v2.0.0-alpha.3 — runtime dual-write. The resolve_sample
-            # branch (either mark_complete or plain) just updated
-            # amount_paid / finance_status on the legacy row; mirror
-            # the delta into payments so SUM(payments) == amount_paid.
-            sync_request_to_peer_aggregates(get_db(), request_id)
+            # v2.0.0 — finance state lives in peer aggregates now. The
+            # sync call creates/updates Invoice + Payment rows so the
+            # finance portal reflects the new amount_paid.
+            sync_request_to_peer_aggregates(
+                get_db(), request_id,
+                amount_due=_finance["amount_due"] or amount_paid,
+                amount_paid=amount_paid,
+                finance_status=finance_status,
+                receipt_number=_finance["receipt_number"],
+            )
             get_db().commit()
             if uploaded_resolution_file and uploaded_resolution_file.filename:
                 try:
@@ -9022,8 +9150,9 @@ def schedule_actions():
             flash("Please add a short result summary before finishing.", "error")
             return redirect_to_queue()
         remarks = request.form.get("remarks", "").strip()
-        amount_paid = float(request.form.get("amount_paid") or sample_request["amount_paid"] or 0)
-        finance_status = request.form.get("finance_status", sample_request["finance_status"])
+        _finance = computed_finance_for_request(get_db(), request_id)
+        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+        finance_status = request.form.get("finance_status", _finance["finance_status"])
         email_ok, email_message = send_completion_email(sample_request, results_summary)
         now_value = now_iso()
         completion_fields = completion_override_fields(sample_request, user["id"], now_value)
@@ -9031,7 +9160,7 @@ def schedule_actions():
         execute(
             """
             UPDATE sample_requests
-            SET status = 'completed', results_summary = ?, remarks = ?, amount_paid = ?, finance_status = ?,
+            SET status = 'completed', results_summary = ?, remarks = ?,
                 result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
                 submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
                 scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
@@ -9040,8 +9169,6 @@ def schedule_actions():
             (
                 results_summary,
                 remarks,
-                amount_paid,
-                finance_status,
                 email_message,
                 now_value if email_ok else None,
                 completion_fields["submitted_to_lab_at"],
@@ -9055,6 +9182,14 @@ def schedule_actions():
                 request_id,
             ),
         )
+        sync_request_to_peer_aggregates(
+            get_db(), request_id,
+            amount_due=_finance["amount_due"] or amount_paid,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=_finance["receipt_number"],
+        )
+        get_db().commit()
         log_completion_override_events(
             user["id"],
             sample_request,

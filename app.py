@@ -1224,6 +1224,7 @@ def nav_pending_counts(user) -> dict[str, int]:
     ).fetchone()
     if step_row and step_row[0]:
         queue_total += int(step_row[0])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester":
         own = db.execute(
             "SELECT COUNT(*) FROM sample_requests "
@@ -1491,8 +1492,10 @@ def can_view_request(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
         return True
     if request_row["requester_id"] == user["id"]:
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_operate_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return True
     if profile["can_view_finance_stage"]:
@@ -1539,14 +1542,19 @@ def can_upload_attachment(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
     if profile["can_view_all_requests"]:
         return True
     if request_row["completion_locked"]:
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return user["role"] in POST_COMPLETION_UPLOAD_ROLES and (
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             can_manage_instrument(user["id"], request_row["instrument_id"], user["role"])
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             or can_operate_instrument(user["id"], request_row["instrument_id"], user["role"])
         )
     if request_row["requester_id"] == user["id"]:
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_operate_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return True
     return False
@@ -1577,7 +1585,9 @@ def can_edit_request_note(user: sqlite3.Row, request_row: sqlite3.Row, note_kind
     if user_access_profile(user)["can_view_all_requests"]:
         return True
     if note_kind in {"lab_reply", "operator_note", "final_note"}:
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]) or can_operate_instrument(
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             user["id"], request_row["instrument_id"], user["role"]
         )
     return False
@@ -1602,8 +1612,10 @@ def request_card_viewer_kind(user: sqlite3.Row, request_row: sqlite3.Row) -> str
         return "faculty_admin"
     if profile["can_view_finance_stage"]:
         return "finance"
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return "instrument_admin"
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_operate_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return "operator"
     if request_row["requester_id"] == user["id"]:
@@ -1644,12 +1656,15 @@ def request_card_field_allowed(user: sqlite3.Row, request_row: sqlite3.Row, fiel
 
 def request_card_actions(user: sqlite3.Row, request_row: sqlite3.Row) -> dict[str, bool]:
     profile = user_access_profile(user)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], request_row["instrument_id"], user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], request_row["instrument_id"], user["role"])
     return {
         "reply": "reply" in set(profile["card_action_fields"]) and can_post_message(user, request_row),
         "upload_attachment": "upload_attachment" in set(profile["card_action_fields"]) and can_upload_attachment(user, request_row),
         "mark_submitted": "mark_submitted" in set(profile["card_action_fields"])
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         and user["role"] == "requester"
         and request_row["requester_id"] == user["id"]
         and request_row["status"] == "awaiting_sample_submission"
@@ -1786,17 +1801,23 @@ def request_card_policy(user: sqlite3.Row, request_row: sqlite3.Row) -> dict:
 def can_flag_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
     if request_row["requester_id"] == user["id"]:
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "super_admin":
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]) or can_operate_instrument(
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         user["id"], request_row["instrument_id"], user["role"]
     )
 
 
 def can_respond_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "super_admin":
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]) or can_operate_instrument(
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         user["id"], request_row["instrument_id"], user["role"]
     )
 
@@ -1861,6 +1882,7 @@ def can_view_instrument_history(user: sqlite3.Row, instrument_id: int) -> bool:
         return True
     if not profile["can_access_instruments"]:
         return False
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(user["id"], instrument_id, user["role"]) or can_operate_instrument(user["id"], instrument_id, user["role"])
 
 
@@ -1876,6 +1898,7 @@ def can_open_instrument_detail(user: sqlite3.Row, instrument_id: int) -> bool:
 def can_view_group_visualization(user: sqlite3.Row, group_name: str) -> bool:
     if not can_access_stats(user):
         return False
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin"}:
         return True
     ids = assigned_instrument_ids(user)
@@ -1933,8 +1956,10 @@ def candidate_allowed_for_step(candidate: sqlite3.Row | None, step_role: str, in
     if candidate is None:
         return False
     if step_role == "finance":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return candidate["role"] in {"finance_admin", "super_admin", "site_admin"}
     if step_role == "professor":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         if candidate["role"] in {"professor_approver", "super_admin", "site_admin"}:
             return True
         row = query_one(
@@ -1942,8 +1967,10 @@ def candidate_allowed_for_step(candidate: sqlite3.Row | None, step_role: str, in
             (candidate["id"], instrument_id),
         )
         return row is not None
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if candidate["role"] in {"super_admin", "site_admin"}:
         return True
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(candidate["id"], instrument_id, candidate["role"]) or can_operate_instrument(candidate["id"], instrument_id, candidate["role"])
 
 
@@ -2532,6 +2559,7 @@ def requester_pulse(user: sqlite3.Row) -> dict | None:
     Single SQL query with conditional aggregates; returns None for
     non-requester roles so the template skips rendering.
     """
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] != "requester":
         return None
     row = query_one(
@@ -2751,6 +2779,7 @@ def generate_export_workbook(
     filename = f"{filename_prefix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     path = EXPORT_DIR / filename
     workbook.save(path)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     scope_label = f"{user['role'] if user['role'] != 'requester' else 'requester-self'} | {report_window['label']}"
     existing = query_one("SELECT id FROM generated_exports WHERE filename = ?", (filename,))
     if existing is None:
@@ -2917,12 +2946,14 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
             "card_visible_fields": set(),
             "card_action_fields": set(),
         }
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     preset = ROLE_ACCESS_PRESETS.get(user["role"], ROLE_ACCESS_PRESETS["requester"])
     instrument_ids = assigned_instrument_ids(user)
     is_owner_user = is_owner(user)
     card_fields = set(preset["card_visible_fields"])
     card_actions = set(preset["card_action_fields"])
     profile = {
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "role": user["role"],
         "is_owner": is_owner_user,
         "assigned_instrument_ids": instrument_ids,
@@ -2965,13 +2996,17 @@ def can_use_role_switcher(user: sqlite3.Row | None) -> bool:
 
 
 def can_approve_step(user: sqlite3.Row, step: sqlite3.Row, instrument_id: int) -> bool:
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin"}:
         return True
     if step["approver_role"] == "finance":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return user["role"] == "finance_admin"
     if step["approver_role"] == "professor":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return user["role"] in {"professor_approver", "super_admin", "site_admin"}
     if step["approver_role"] == "operator":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return can_operate_instrument(user["id"], instrument_id, user["role"])
     return False
 
@@ -3002,6 +3037,7 @@ def role_required(*roles: str):
             user = current_user()
             if user is None:
                 return redirect(url_for("login"))
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if user["role"] not in roles:
                 abort(403)
             return view(**kwargs)
@@ -3051,8 +3087,10 @@ def instrument_access_required(level: str = "view"):
             elif level == "open":
                 allowed = can_open_instrument_detail(user, instrument_id)
             elif level == "manage":
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 allowed = can_manage_instrument(user["id"], instrument_id, user["role"])
             elif level == "operate":
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 allowed = can_operate_instrument(user["id"], instrument_id, user["role"])
             else:
                 raise ValueError(f"Unknown instrument access level: {level}")
@@ -3109,6 +3147,7 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
     if cache is not None and user_id in cache:
         return cache[user_id]
 
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
         rows = query_all("SELECT id FROM instruments ORDER BY id")
         result = [row["id"] for row in rows]
@@ -3156,6 +3195,7 @@ def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.R
 
 
 def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) -> list[sqlite3.Row]:
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     role = user["role"]
     status_clause = "WHERE status = 'active'" if active_only else ""
     if role in {"super_admin", "site_admin", "professor_approver"}:
@@ -3191,6 +3231,7 @@ def sync_instrument_assignments(table: str, instrument_id: int, user_ids: list[i
 def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], list]:
     clauses: list[str] = []
     params: list = []
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
         return clauses, params
     instrument_ids = assigned_instrument_ids(user)
@@ -3199,16 +3240,19 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
         clauses.append(f"{alias}.instrument_id IN ({placeholders})")
         params.extend(instrument_ids)
         return clauses, params
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester":
         clauses.append(f"{alias}.requester_id = ?")
         params.append(user["id"])
         return clauses, params
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "finance_admin":
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
             f"EXISTS (SELECT 1 FROM approval_steps aps WHERE aps.sample_request_id = {alias}.id AND aps.approver_role = 'finance')"
         )
         return clauses, params
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "professor_approver":
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
@@ -3220,6 +3264,7 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
 
 
 def scoped_instrument_count(user: sqlite3.Row) -> int:
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
         return query_one("SELECT COUNT(*) AS c FROM instruments WHERE status = 'active'")["c"]
     instrument_ids = assigned_instrument_ids(user)
@@ -3227,8 +3272,10 @@ def scoped_instrument_count(user: sqlite3.Row) -> int:
         placeholders = ",".join("?" for _ in instrument_ids)
         row = query_one(f"SELECT COUNT(*) AS c FROM instruments WHERE status = 'active' AND id IN ({placeholders})", tuple(instrument_ids))
         return row["c"] if row else 0
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester":
         return query_one("SELECT COUNT(DISTINCT instrument_id) AS c FROM sample_requests WHERE requester_id = ?", (user["id"],))["c"]
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"finance_admin", "professor_approver"}:
         clauses, params = request_scope_sql(user, "sr")
         row = query_one(
@@ -3882,6 +3929,7 @@ def user_role_set(user: sqlite3.Row | None) -> frozenset[str]:
     if not user:
         return frozenset()
     roles: set[str] = set()
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     primary = user["role"] if "role" in user.keys() else None
     if primary:
         roles.add(primary)
@@ -3890,7 +3938,9 @@ def user_role_set(user: sqlite3.Row | None) -> frozenset[str]:
             "SELECT role FROM user_roles WHERE user_id = ?", (user["id"],)
         )
         for row in extra:
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if row["role"]:
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 roles.add(row["role"])
     except sqlite3.OperationalError:
         # Table may not exist on first run before init_db; degrade gracefully.
@@ -3969,7 +4019,9 @@ def inject_globals():
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_display": role_display_name(user["role"]) if user else "",
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_hint": role_next_action(user["role"]) if user else "",
         "current_role_set": user_role_set(user),
         "user_has_role": lambda role: user_has_role(user, role),
@@ -4021,6 +4073,7 @@ def index():
                 f"SELECT COUNT(*) FROM sample_requests sr WHERE status NOT IN ('completed', 'rejected'){where_sql}",
                 tuple(params),
             ).fetchone()[0]
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if user["role"] == "requester" and not has_instrument_area_access(user)
             else db.execute(
                 f"SELECT COUNT(*) FROM sample_requests sr WHERE status IN ({','.join('?' for _ in queue_statuses)}){where_sql}",
@@ -4034,6 +4087,7 @@ def index():
         ).fetchone()[0],
     }
     recent_per_page = 5
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester" and not has_instrument_area_access(user):
         recent_total = db.execute(
             "SELECT COUNT(*) FROM sample_requests sr WHERE sr.requester_id = ?",
@@ -4099,6 +4153,7 @@ def index():
             tuple(params) + (recent_per_page, (recent_page - 1) * recent_per_page),
         )
     instruments = query_all("SELECT * FROM instruments ORDER BY name")
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester" and not has_instrument_area_access(user):
         instruments = []
     instrument_fifo_queue: list[dict] = []
@@ -4211,6 +4266,7 @@ def sitemap():
     ]
     core_info = [
         {"label": "Logged in as", "type": "text", "value": user["name"]},
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         {"label": "Role", "type": "badge", "value": user["role"].replace("_", " ").title(), "status": "submitted"},
         {"label": "Email", "type": "text", "value": user["email"]},
     ]
@@ -4411,7 +4467,9 @@ def quick_receive_request(request_id: int):
     sample_request = query_one("SELECT * FROM sample_requests WHERE id = ?", (request_id,))
     if sample_request is None:
         return jsonify({"ok": False, "error": "Request not found."}), 404
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     if not (can_operate or can_manage):
         return jsonify({"ok": False, "error": "Forbidden."}), 403
@@ -4489,6 +4547,7 @@ def instruments():
     user = current_user()
     if not user_access_profile(user)["can_access_instruments"]:
         abort(403)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_add_instrument = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     if request.method == "POST":
         action = request.form.get("action", "").strip()
@@ -4617,10 +4676,15 @@ def instrument_detail(instrument_id: int):
     if instrument is None:
         abort(404)
 
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_edit = user["role"] in {"super_admin", "site_admin"} or can_manage_instrument(user["id"], instrument_id, user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_edit_assignments = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_archive_instrument = user["role"] == "super_admin"
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_restore_instrument = user["role"] == "super_admin"
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_add_downtime_here = user["role"] == "super_admin" or can_manage_instrument(user["id"], instrument_id, user["role"])
     if request.method == "POST":
         action = request.form.get("action", "update_metadata")
@@ -4771,6 +4835,7 @@ def instrument_detail(instrument_id: int):
             flash("Downtime block added.", "success")
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         if action == "save_approval_config":
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if not (is_owner(user) or user["role"] == "super_admin"):
                 abort(403)
             db = get_db()
@@ -4933,6 +4998,7 @@ def instrument_detail(instrument_id: int):
         """,
         (instrument_id,),
     )
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_edit_approval_config = is_owner(user) or user["role"] == "super_admin"
     approval_role_candidates = query_all(
         "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
@@ -5193,7 +5259,9 @@ def request_detail(request_id: int):
     if not can_view_request(user, sample_request):
         abort(403)
 
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     can_upload_files = can_upload_attachment(user, sample_request)
     can_flag_issue = can_flag_request_issue(user, sample_request)
@@ -6965,7 +7033,9 @@ def schedule_bulk_actions():
                 skipped_perm += 1
                 continue
             if not (
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 can_manage_instrument(user["id"], sr["instrument_id"], user["role"])
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 or can_operate_instrument(user["id"], sr["instrument_id"], user["role"])
             ):
                 skipped_perm += 1
@@ -7025,7 +7095,9 @@ def schedule_actions():
         abort(404)
     if not can_view_request(user, sample_request):
         abort(403)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     if not (can_manage or can_operate):
         abort(403)
@@ -7348,6 +7420,7 @@ def user_profile(user_id: int):
         if action == "remove_access":
             if not can_manage_members(viewer):
                 abort(403)
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if target_user["role"] != "requester" or is_owner(target_user) or target_user["id"] == viewer["id"]:
                 abort(403)
             execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
@@ -7366,6 +7439,7 @@ def user_profile(user_id: int):
                 abort(403)
             if is_owner(target_user) and not is_owner(viewer):
                 abort(403)
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
                 abort(403)
             temp_password = generate_temp_password()
@@ -7393,6 +7467,7 @@ def user_profile(user_id: int):
                 abort(403)
             if is_owner(target_user) and not is_owner(viewer):
                 abort(403)
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
                 abort(403)
             new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
@@ -7443,8 +7518,10 @@ def user_profile(user_id: int):
                     return jsonify({"ok": False, "error": "invalid_role"}), 400
                 flash("Pick a valid role.", "error")
                 return redirect(url_for("user_profile", user_id=user_id))
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
                 abort(403)
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
                 abort(403)
             execute(
@@ -7453,6 +7530,7 @@ def user_profile(user_id: int):
             )
             log_action(
                 viewer["id"], "user", user_id, "user_role_changed",
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 {"from_role": target_user["role"], "to_role": new_role, "email": target_user["email"]},
             )
             # Make sure the new primary role is also in the role set.
@@ -7481,6 +7559,7 @@ def user_profile(user_id: int):
                 abort(403)
             if is_owner(target_user) and not is_owner(viewer):
                 abort(403)
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
                 abort(403)
             checked = set(request.form.getlist("extra_roles"))
@@ -7489,13 +7568,16 @@ def user_profile(user_id: int):
                 "professor_approver", "finance_admin",
             }
             # site_admin / super_admin can only be granted by a super_admin
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if viewer["role"] == "super_admin":
                 layered_roles |= {"site_admin"}
             # Force-grant the primary role; sync the rest from checked.
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             grant_user_role(user_id, target_user["role"], viewer["id"])
             for r in layered_roles:
                 if r in checked:
                     grant_user_role(user_id, r, viewer["id"])
+                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                 elif r != target_user["role"]:
                     revoke_user_role(user_id, r)
             log_action(
@@ -7526,9 +7608,11 @@ def user_profile(user_id: int):
             manageable_rows = query_all(
                 "SELECT id FROM instruments WHERE status = 'active'"
             )
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if viewer["role"] != "super_admin":
                 manageable_rows = [
                     row for row in manageable_rows
+                    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
                     if can_manage_instrument(viewer["id"], row["id"], viewer["role"])
                 ]
             manageable_ids = {row["id"] for row in manageable_rows}
@@ -7628,6 +7712,7 @@ def user_profile(user_id: int):
     can_edit_user_value = (
         can_manage_members(viewer)
         and (not is_owner(target_user) or is_owner(viewer))
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
     )
     instrument_roster: list[sqlite3.Row] = []
@@ -7660,6 +7745,7 @@ def user_profile(user_id: int):
     if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
         base_roles = ["requester", "operator", "instrument_admin", "faculty_in_charge",
                       "professor_approver", "finance_admin"]
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         if viewer["role"] == "super_admin":
             base_roles += ["site_admin", "super_admin"]
         role_choices = [(r, role_display_name(r)) for r in base_roles]
@@ -7672,11 +7758,13 @@ def user_profile(user_id: int):
         handled_summary=handled_summary,
         originated_count=originated_count,
         is_self=viewer["id"] == target_user["id"],
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
         can_reset_password=(
             can_manage_members(viewer)
             and target_user["id"] != viewer["id"]
             and (not is_owner(target_user) or is_owner(viewer))
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
         ),
         can_edit_user=can_edit_user_value,
@@ -7695,6 +7783,7 @@ def user_profile(user_id: int):
             ("finance_admin", "Finance Admin"),
         ] + (
             [("site_admin", "Site Admin")]
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if viewer["role"] == "super_admin" else []
         ),
         instrument_groups=instrument_groups_all(),
@@ -7739,6 +7828,7 @@ def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_st
         placeholders = ",".join("?" for _ in instrument_ids)
         clauses.append(f"sr.instrument_id IN ({placeholders})")
         params.extend(instrument_ids)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     elif user["role"] == "requester":
         clauses.append("sr.requester_id = ?")
         params.append(user["id"])
@@ -7780,6 +7870,7 @@ def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_st
         downtime_clauses.append(f"idt.instrument_id IN ({placeholders})")
         downtime_params.extend(instrument_ids)
     downtime_rows = []
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if filters.get("show_maintenance", "1") == "1" and (user["role"] != "requester" or instrument_ids):
         downtime_rows = query_all(
             f"""
@@ -7883,9 +7974,11 @@ def calendar():
     if len(visible_instruments) == 1 and not filters.get("instrument_id"):
         filters["instrument_id"] = str(visible_instruments[0]["id"])
     if request.method == "POST":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         if user["role"] != "super_admin" and not assigned_instrument_ids(user):
             abort(403)
         instrument_id = int(request.form["instrument_id"])
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         if user["role"] != "super_admin" and not can_manage_instrument(user["id"], instrument_id, user["role"]):
             abort(403)
         start_time = request.form["start_time"]
@@ -7907,7 +8000,9 @@ def calendar():
     context = calendar_data(filters)
     instruments = visible_instruments
     operators = query_all("SELECT id, name FROM users WHERE role IN ('operator', 'instrument_admin', 'super_admin') ORDER BY name")
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_add_downtime = user["role"] == "super_admin" or bool(assigned_instrument_ids(user))
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     managed_instruments = instruments if user["role"] == "super_admin" else [i for i in instruments if can_manage_instrument(user["id"], i["id"], user["role"])]
     return render_template(
         "calendar.html",
@@ -8188,6 +8283,7 @@ def generate_visualization_export():
     instrument_id_value = request.form.get("instrument_id", "").strip()
     group_name = request.form.get("group_name", "").strip()
     instrument_id = int(instrument_id_value) if instrument_id_value else None
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if instrument_id is not None and not (can_view_instrument_history(user, instrument_id) or user["role"] == "super_admin"):
         abort(403)
     if group_name and not can_view_group_visualization(user, group_name):
@@ -8224,6 +8320,7 @@ def download_export(filename: str):
     export_row = query_one("SELECT * FROM generated_exports WHERE filename = ?", (filename,))
     if export_row is None:
         abort(404)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] != "super_admin" and export_row["created_by_user_id"] != user["id"]:
         abort(403)
     return send_from_directory(EXPORT_DIR, filename, as_attachment=True)
@@ -8250,7 +8347,9 @@ def request_calendar_card(request_id: int):
         abort(404)
     if not can_view_request(user, sample_request):
         abort(403)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     operators = []
     if can_manage or can_operate:
@@ -8283,11 +8382,13 @@ def request_calendar_card(request_id: int):
 @login_required
 def admin_users():
     user = current_user()
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_open_user_admin = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     if not can_open_user_admin:
         abort(403)
     can_create_users = is_owner(user)
     can_delete_members = is_owner(user)
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_elevate_members = is_owner(user) or user["role"] == "super_admin"
     if request.method == "POST":
         action = request.form.get("action", "create_user")
@@ -8296,6 +8397,7 @@ def admin_users():
                 abort(403)
             name = request.form["name"].strip()
             email = request.form["email"].strip().lower()
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             role = request.form["role"]
             # Password hygiene (W1.3.8) — admins do NOT type passwords.
             # A random temporary password is generated; the admin sees
@@ -8326,6 +8428,7 @@ def admin_users():
         elif action == "delete_member":
             member_id = int(request.form["user_id"])
             member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
                 abort(403)
             execute("UPDATE users SET active = 0 WHERE id = ?", (member_id,))
@@ -8340,6 +8443,7 @@ def admin_users():
             if new_role not in allowed_roles:
                 abort(403)
             member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
+            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
                 abort(403)
             execute(
@@ -8351,7 +8455,9 @@ def admin_users():
         return redirect(url_for("admin_users"))
     rows = query_all("SELECT id, name, email, role, invite_status, active, member_code FROM users ORDER BY role, name")
     owners = [row for row in rows if row["email"].strip().lower() in OWNER_EMAILS]
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     members = [row for row in rows if row["role"] == "requester"]
+    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     admins = [row for row in rows if row["role"] != "requester" and row["email"].strip().lower() not in OWNER_EMAILS]
     return render_template(
         "users.html",

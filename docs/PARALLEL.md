@@ -192,11 +192,16 @@ hoping it'll settle.
   overhead of firing an agent alone is ≥1 minute, which
   violates the absolute cap for short tasks — serialize
   in-session instead).
-- **Cap concurrent agents at 3.** Race probability compounds
-  combinatorially; above 3 concurrent claims the expected
-  collision rate blows past the hard limit even on disjoint
-  lanes. If you need >3 workers, chain them: 3 run in parallel,
-  the 4th waits for a slot.
+- **Cap concurrent WRITE agents at 2.** Lowered from 3 on
+  2026-04-11 after observed friction: with 3 concurrent write
+  agents on disjoint lanes, the shared-filesystem dirty-tree
+  surface area grew enough that operators hit index-pollution
+  recovery twice in one sprint. 2 write agents + unlimited
+  read agents is the sweet spot — the write surface stays
+  small enough that `git status` is legible, and the readers
+  can fan out as wide as needed without collision. If you
+  need more writers, chain them: 2 run in parallel, the 3rd
+  waits for a slot.
 
 ### How to estimate merge cost before firing
 
@@ -213,10 +218,11 @@ order:
    add ~15 s for the "stage new files immediately" hygiene
    step (see git hygiene rule 3 below). Still well under
    budget for normal-length tasks.
-4. **Concurrent push rate** — are there already ≥2 active
-   claims? If yes, each new push has ~20% chance of
+4. **Concurrent push rate** — are there already ≥1 active
+   write claims? If yes, each new push has ~20% chance of
    non-fast-forward rejection and a rebase retry. Do not add
-   a third concurrent agent unless T is ≥20 min of work.
+   a second concurrent write agent unless T is ≥20 min of
+   work. (Read agents are exempt — they don't push.)
 
 Observed from the session that birthed this rule (2026-04-11):
 mixed in-session + 6-agent-parallel work over ~3 hours, merge
@@ -255,12 +261,24 @@ every agent, every task, every session:
    start during that window even though no orphan existed.
    The claim-aware check is strictly more correct than the
    emptiness check.
-2. **Never `git stash`.** `stash pop` has been observed
-   silently dropping edits on this repo, probably because the
-   harness interleaves edits from multiple sources between the
-   stash and the pop. The safe pattern is always
-   commit-then-rebase. If you need to park work, make a WIP
-   commit on top of your claim commit; never stash.
+2. **Never `git stash`. Ever. Under any circumstance.**
+   This is the most-violated rule in the protocol — **four
+   observed violations on 2026-04-11 alone**, all by agents
+   that had been explicitly told "never stash" in their brief.
+   Each violation happened the same way: the agent found
+   unexpected dirty state, panicked, stashed to "clean up,"
+   then popped and reported the violation. Two observations:
+   (a) `stash pop` has been observed silently dropping edits
+   on this repo; (b) even when it doesn't drop anything, it
+   papers over the real question — why is the tree dirty? —
+   which is a signal you needed to surface, not hide.
+   The correct move when you find unexpected dirty state is
+   **STOP, surface to the operator, and wait** — not stash,
+   not checkout, not reset. The operator decides. If you
+   need to park your own in-progress work before a rebase,
+   make a WIP commit on top of your claim commit; a WIP
+   commit is visible, reviewable, and recoverable. Stash is
+   invisible, silent, and fragile. **Never stash.**
 3. **Stage every new file immediately.** The moment you create
    `new_file.py`, run `git add new_file.py`. Untracked files
    block `git pull --rebase` — if another agent's concurrent
@@ -304,6 +322,34 @@ every agent, every task, every session:
     touched, run `git update-index --refresh` and re-check.
     Stale index state from concurrent agents is real and has
     been observed.
+
+11. **Recovering from index pollution by a concurrent agent.**
+    Observed twice on 2026-04-11: another agent left files
+    staged in the shared index (from an aborted or mid-flight
+    `ship.sh`), and a subsequent operator commit risked
+    absorbing those staged files. Recovery is a single
+    command per polluted file: `git reset HEAD <file>` to
+    unstage without touching the working tree, then stage
+    only your own files with `git add -- <your-file>`. Do
+    not `git checkout --` the foreign file — that would
+    clobber work the other agent is about to commit. The
+    `ship.sh` helper is now hardened against the common
+    case (`47dc29a`): it refuses to run `git add -A` and
+    bails with a hint when untracked files exist. But
+    staged-foreign-file is still an operator-recovery case —
+    the helper cannot distinguish your staged file from
+    someone else's.
+
+12. **The working copy is shared across concurrent agents.**
+    Every agent in this session sees the same filesystem.
+    Your `git status --short` will frequently show files
+    another agent is mid-editing. Cross-reference every dirty
+    file against `CLAIMS.md` active rows — if the file
+    matches a live claim, leave it alone and expect it to
+    disappear when that agent commits. If it does NOT match
+    any claim, it is either orphan WIP from a killed agent
+    or a protocol violation; either way, surface to the
+    operator rather than silently cleaning up.
 
 ## The canonical task lifecycle
 
@@ -372,6 +418,45 @@ follows this loop. Every step is mandatory. Skip nothing.
     read the output, fix the problem in a new commit on top,
     and push again. Never `--no-verify`, never force-push,
     never amend.
+
+## NOOP is a first-class success outcome
+
+A fired agent that discovers its task is already done, already
+shipped in a prior commit, or too ambiguous to execute safely
+**should report NOOP and stop**. NOOP means:
+
+- No claim row written
+- No file edited
+- No commit, no push
+- A short report to the operator explaining what the agent
+  found and why it declined to ship
+
+NOOP is not failure. It's the protocol working — an agent
+refusing to fabricate work is strictly better than an agent
+producing a redundant commit, a bad fix, or a spurious
+regression. Observed 2026-04-11: **4 NOOPs across 17 agent
+runs**, every one of them correct.
+
+Common NOOP patterns the operator should expect:
+
+- **Task already shipped.** `tests/request-status-transitions`
+  was fired as a new task, but `tests/test_status_transitions.py`
+  already existed from `397d963` with 101 test cases that
+  strictly exceeded the brief. Agent reported NOOP without
+  claiming or committing.
+- **Audit concluded "already tasteful."** `sitemap-hover-polish`
+  fired as "audit + improve", the agent audited the 4 existing
+  hover rules, concluded they were already uniform with the
+  top-nav tone family and accessibility-correct, reported NOOP.
+- **Pre-condition race.** `docs-freshness/ios-release-cadence`
+  fired, agent found a transient dirty tree from a concurrent
+  agent mid-shipping, correctly refused per the clean-tree
+  rule, reported STOP without claiming. Operator re-fired the
+  same task moments later against a clean tree; it shipped.
+
+Write briefs with an explicit "NOOP is a valid outcome; don't
+force a fake improvement if the audit says the work is already
+done" clause. Agents WILL take you up on it.
 
 ## Abort protocol (cutoff, operator kill, or scope blow-up)
 

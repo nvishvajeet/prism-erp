@@ -45,7 +45,11 @@
     }
   }
 
+  var busy = false;
+
   function commit(btn) {
+    if (busy) return;
+    busy = true;
     var mode = btn.dataset.intakeMode;
     message('Saving…');
     var body = new URLSearchParams({ action: 'update_operation', intake_mode: mode });
@@ -58,9 +62,14 @@
       .then(function (data) {
         setActive(data.intake_mode);
         var extra = data.released_count ? ' · released ' + data.released_count + ' queued' : '';
-        message('Now ' + data.label + extra, 'ok');
+        // Soft-reload so the Recent Activity tile (instrument_event_log)
+        // immediately reflects the new entry with the clicker's name,
+        // and any header badge / queue side-effect lands authoritative.
+        message('Now ' + data.label + extra + ' — refreshing…', 'ok');
+        setTimeout(function () { window.location.reload(); }, 450);
       })
       .catch(function (err) {
+        busy = false;
         message('Change failed (' + err + '). Reload and retry.', 'err');
       });
   }

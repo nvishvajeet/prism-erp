@@ -62,6 +62,82 @@ Timer starts on the `claim: <agent-id> — <task-id>` commit. If
 you hit 60 minutes, run the abort protocol — do not push
 half-finished work to free the lock.
 
+## The 5% rule — when to parallelize
+
+Parallelism is only worth it while merge overhead stays small
+relative to the work being done. Above the threshold, the
+ceremony (claim commits, rebase retries, conflict resolution,
+stale-claim cleanup) eats the wall-clock gain and you would
+have been better off serializing in-session.
+
+The rule is **soft-target + hard-limit**, not a bright line:
+
+| scope            | merge % of work | OR absolute cap |
+|------------------|-----------------|-----------------|
+| **soft target**  | ≤5 %            | ≤1 min          |
+| **hard limit**   | ≤10 %           | ≤2 min          |
+
+Either leg of the soft target is enough — a 20-minute task with
+a 45-second merge is fine (under 5%), a 5-minute task with a
+55-second merge is also fine (over 5% but under the 1-minute
+absolute). The soft target is a rough guide; deviations are
+expected and don't require stopping.
+
+The **hard limit** is a wall. If a single task's merge cost
+climbs above 2 minutes OR above 10% of the task's work time,
+**abort the parallelism attempt**, serialize the remaining work
+in-session, and surface the cause to the operator so the
+underlying friction (hot file, stale claim, broken reloader,
+whatever) can be addressed. Never grind past the hard limit
+hoping it'll settle.
+
+### Practical decision rules
+
+- **Always parallelize when:** the tasks touch strictly
+  disjoint files, each task is ≥15 minutes, and no task holds
+  a hot-shared file (`app.py`, `base.html`, `_page_macros.html`,
+  `static/styles.css`, `crawlers/waves.py`, `CLAIMS.md`). A
+  15-minute task has a 45-second soft budget and a 90-second
+  hard budget — easily met on disjoint lanes.
+- **Serialize when:** the only available tasks all touch the
+  same hot-shared file, OR a task is <5 minutes (the briefing
+  overhead of firing an agent alone is ≥1 minute, which
+  violates the absolute cap for short tasks — serialize
+  in-session instead).
+- **Cap concurrent agents at 3.** Race probability compounds
+  combinatorially; above 3 concurrent claims the expected
+  collision rate blows past the hard limit even on disjoint
+  lanes. If you need >3 workers, chain them: 3 run in parallel,
+  the 4th waits for a slot.
+
+### How to estimate merge cost before firing
+
+Before firing a background agent for task T, estimate in this
+order:
+
+1. **Lane collision** — does T's claim surface overlap any
+   active claim row? If yes → serialize, merge cost is 100%.
+2. **Hot-file concentration** — does T touch a file in the
+   hot-shared list above? If yes → expected merge cost ~60 s
+   (conflict resolution, not just rebase retry). Only parallel
+   if T is ≥20 min (so 60 s fits under the 5% soft target).
+3. **New-file creation** — does T create new files? If yes,
+   add ~15 s for the "stage new files immediately" hygiene
+   step (see git hygiene rule 3 below). Still well under
+   budget for normal-length tasks.
+4. **Concurrent push rate** — are there already ≥2 active
+   claims? If yes, each new push has ~20% chance of
+   non-fast-forward rejection and a rebase retry. Do not add
+   a third concurrent agent unless T is ≥20 min of work.
+
+Observed from the session that birthed this rule (2026-04-11):
+mixed in-session + 6-agent-parallel work over ~3 hours, merge
+overhead was estimated at <5% overall, dragged up primarily by
+one agent's `git stash` race (now forbidden by rule 2) and a
+stale-oracle `CHANGELOG.md` drift (now fixed by reading git
+tags directly in `_dev_panel_progress()`). Hardening those two
+specific causes kept the session-wide budget intact.
+
 ## Git hygiene — non-negotiable rules
 
 These rules exist because every one of them has been broken at

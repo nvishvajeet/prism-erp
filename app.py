@@ -7672,23 +7672,42 @@ def request_detail(request_id: int):
                 })
         elif action == "assign_approver" and can_manage:
             step_id = int(request.form["step_id"])
-            approver_user_id = int(request.form["approver_user_id"])
+            raw_approver = request.form.get("approver_user_id", "").strip()
             step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
-            candidate = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (approver_user_id,))
-            if step is None or not candidate_allowed_for_step(candidate, step["approver_role"], sample_request["instrument_id"]):
+            if step is None:
                 abort(403)
-            execute(
-                "UPDATE approval_steps SET approver_user_id = ?, acted_at = NULL WHERE id = ?",
-                (approver_user_id, step_id),
-            )
-            log_action(
-                user["id"],
-                "sample_request",
-                request_id,
-                "approval_assigned",
-                {"step_id": step_id, "approver_role": step["approver_role"], "approver_user_id": approver_user_id},
-            )
-            flash(f"{approval_role_label(step['approver_role'])} approver updated.", "success")
+            # v2.1.4 — "0" means unassign: any person with the right
+            # role can pick up the step. NULL in the DB = role-based.
+            if raw_approver == "0" or not raw_approver:
+                execute(
+                    "UPDATE approval_steps SET approver_user_id = NULL, acted_at = NULL WHERE id = ?",
+                    (step_id,),
+                )
+                log_action(
+                    user["id"],
+                    "sample_request",
+                    request_id,
+                    "approval_unassigned",
+                    {"step_id": step_id, "approver_role": step["approver_role"]},
+                )
+                flash(f"{approval_role_label(step['approver_role'])} unassigned — any eligible person can approve.", "success")
+            else:
+                approver_user_id = int(raw_approver)
+                candidate = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (approver_user_id,))
+                if not candidate_allowed_for_step(candidate, step["approver_role"], sample_request["instrument_id"]):
+                    abort(403)
+                execute(
+                    "UPDATE approval_steps SET approver_user_id = ?, acted_at = NULL WHERE id = ?",
+                    (approver_user_id, step_id),
+                )
+                log_action(
+                    user["id"],
+                    "sample_request",
+                    request_id,
+                    "approval_assigned",
+                    {"step_id": step_id, "approver_role": step["approver_role"], "approver_user_id": approver_user_id},
+                )
+                flash(f"{approval_role_label(step['approver_role'])} approver updated.", "success")
             return redirect(url_for("request_detail", request_id=request_id))
         elif action == "mark_sample_submitted" and sample_request["requester_id"] == user["id"]:
             if sample_request["status"] != "awaiting_sample_submission":
@@ -8867,6 +8886,7 @@ def _portfolio_state() -> dict:
     snap = _portfolio_load_json("market_snapshot.json") or {}
     commentary = _portfolio_load_json("commentary_state.json") or {}
     peer_compare = _portfolio_load_json("peer_compare_state.json") or {}
+    horizon = _portfolio_load_json("horizon_state.json") or {}
     orders = _portfolio_load_orders()
 
     history = _portfolio_load_nav_history(max_days=365)
@@ -8929,6 +8949,38 @@ def _portfolio_state() -> dict:
             "next_trading_day": nxt.strftime("%A %Y-%m-%d"),
         }
 
+    # Build unified per-fund action lookup.
+    # peer_compare carries SWITCH for own funds that should be replaced;
+    # daily_state's fund_signals has BUY/SKIP from NAV z-score. We merge
+    # them so the template can just do `pf.fund_actions.get(tag)` for a
+    # single action/color pair per fund.
+    fund_actions: dict[str, dict] = {}
+    # Start from daily fund_signals
+    for tag, fs in (daily.get("fund_signals") or {}).items():
+        fund_actions[tag] = {
+            "action": fs.get("action") or ("SKIP" if (fs.get("z_1y") or 0) >= 0.5 else "BUY"),
+            "color": fs.get("action_color") or fs.get("color") or "#0a7c2f",
+            "reason": fs.get("action_reason") or "",
+            "swap_to": None,
+            "swap_gain": 0.0,
+        }
+    # Override with REVIEW from peer_compare — flags funds worth discussing
+    # but does NOT change BUY to something that blocks purchasing.
+    for _cat, rows in (peer_compare.get("categories") or {}).items():
+        if not isinstance(rows, list):
+            continue
+        for r in rows:
+            if r.get("is_own") and r.get("own_tag") and r.get("action") == "REVIEW":
+                tag = r["own_tag"]
+                fund_actions[tag] = {
+                    "action": "REVIEW",
+                    "color": "#b86e00",
+                    "reason": r.get("action_reason") or "Peers rank higher — worth reviewing.",
+                    "swap_to": r.get("swap_to"),
+                    "swap_gain": r.get("swap_gain") or 0.0,
+                    "review_discussion": r.get("review_discussion"),
+                }
+
     return {
         "exists": bool(daily or analysis),
         "portfolio_dir": str(PORTFOLIO_DIR),
@@ -8947,6 +8999,8 @@ def _portfolio_state() -> dict:
         "commentary_fresh": commentary_fresh,
         "weekend_banner": weekend_banner,
         "peer_compare": peer_compare,
+        "fund_actions": fund_actions,
+        "horizon": horizon,
     }
 
 

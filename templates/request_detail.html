@@ -241,6 +241,7 @@
             <input type="hidden" name="step_id" value="{{ step['id'] }}">
             <select name="approver_user_id" required data-vis="{{ V }}">
               <option value="">Reassign approver…</option>
+              <option value="0" data-vis="{{ V }}">Any {{ step['approver_role'].replace('_', ' ').title() }} (first available)</option>
               {% for candidate in approval_candidates[step['approver_role']] %}
               <option value="{{ candidate['id'] }}" {% if step['approver_user_id'] == candidate['id'] %}selected{% endif %}>{{ candidate["name"] }}</option>
               {% endfor %}

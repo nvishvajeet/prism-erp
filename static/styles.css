@@ -1572,6 +1572,28 @@ table td {
   align-items: center;
   margin: 0.2rem 0.2rem 0.2rem 0;
 }
+/* Stack action forms vertically inside table cells */
+td .inline-form {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0.15rem 0;
+}
+td .inline-form select {
+  max-width: 130px;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.4rem;
+}
+td .inline-form button {
+  font-size: 0.72rem;
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+}
+td .inline-form button.danger {
+  background: var(--danger, #db7474);
+  color: var(--ink);
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+}
 
 .checkbox-grid {
   display: grid;

@@ -389,29 +389,29 @@
   transcriptEl = document.createElement('div');
   transcriptPanel.appendChild(transcriptEl);
 
-  // Track toggle — continuously log mouse position when ON
+  // Track toggle — log mouse position only when it MOVES to a new grid cell
   var trackingOn = false;
+  var lastTrackedCell = '';
   var trackBtn = document.createElement('button');
   trackBtn.textContent = 'Track: OFF';
   trackBtn.style.cssText = btnCss + ';background:#757575;font-size:11px;padding:5px 10px';
   trackBtn.addEventListener('click', function () {
     trackingOn = !trackingOn;
+    lastTrackedCell = '';
     trackBtn.textContent = trackingOn ? 'Track: ON' : 'Track: OFF';
     trackBtn.style.background = trackingOn ? '#e65100' : '#757575';
   });
-  // When tracking is ON, log position continuously (like holding C)
+  // Only logs when the pointer moves to a DIFFERENT grid cell
   document.addEventListener('mousemove', function (e) {
     if (!isRecording || !trackingOn) return;
-    var now = Date.now();
-    if (now - lastTrackTime < 200) return;
-    lastTrackTime = now;
     var g = gridCoords(e.clientX, e.clientY);
-    var label = 'R' + g.row + ',C' + g.col;
+    var cellKey = 'R' + g.row + ',C' + g.col;
+    if (cellKey === lastTrackedCell) return; // same cell — skip
+    lastTrackedCell = cellKey;
     var nearest = e.target.closest('[class]');
     var context = nearest ? '.' + nearest.className.split(/\s+/)[0] : e.target.tagName.toLowerCase();
-    transcript += '[Hover: ' + label + ' on ' + context + '] ';
-    clickEvents.push({ grid: label, element: context, x: e.clientX, y: e.clientY + window.scrollY, page: window.location.pathname, type: 'hover' });
-    placeClickMarker(e.clientX, e.clientY, label);
+    transcript += '[Hover: ' + cellKey + ' on ' + context + ' (' + window.location.pathname + ')] ';
+    clickEvents.push({ grid: cellKey, element: context, x: e.clientX, y: e.clientY + window.scrollY, page: window.location.pathname, type: 'hover' });
     updateTranscriptDisplay();
   });
 

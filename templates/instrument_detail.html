@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, empty_state, metadata_grid, person_chip, status_pills_row, queue_action_stack with context %}
 {% from "_request_macros.html" import request_identity, status_block with context %}
-{% block hover_back %}<a href="{{ url_for('instruments') }}" class="hover-back-btn" title="Back to Instruments">←</a>{% endblock %}
+{% block breadcrumb_instrument %}{{ instrument["name"] }}{% endblock %}
+{% block hover_back %}{% endblock %}
 {% block content %}
 
 {# ─── Header ─────────────────────────────────────────── #}
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('instruments') }}" data-vis="{{ V }}">← Instruments</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">{{ instrument["name"] }}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ instrument["code"] }}</span>
     <span class="operation-status operation-{{ intake_mode }} operation-status-compact inst-header-status" data-vis="{{ V }}">

@@ -1591,6 +1591,20 @@ table td {
 .col-files      { width: 10%; }
 .col-action     { width: 10%; }
 
+/* Instrument row: whole-row hover highlight (Apple-style click target) */
+.instruments-table tbody tr:not(.category-header-row):hover {
+  background: var(--hover-row, rgba(80, 140, 255, 0.06));
+  cursor: pointer;
+}
+
+/* Links column: compact inline row of Detail / History / Queue */
+.inst-links-row {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+.inst-links-row .text-link { white-space: nowrap; }
+
 .instruments-table th,
 .instruments-table td {
   padding-top: 0.46rem;

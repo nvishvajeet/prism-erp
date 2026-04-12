@@ -55,7 +55,11 @@
   </td>
   <td data-vis="{{ V }}">
     {% if visible_links[instrument['id']] %}
-    <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">View →</a>
+    <span class="inst-links-row" data-vis="{{ V }}">
+      <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Detail</a>
+      <a class="text-link" href="{{ url_for('instrument_history', instrument_id=instrument['id']) }}" data-vis="{{ V }}">History</a>
+      <a class="text-link" href="{{ url_for('schedule', instrument=instrument['id']) }}" data-vis="{{ V }}">Queue</a>
+    </span>
     {% else %}
     <span class="hint" data-vis="{{ V }}">{% if archived %}Restricted{% else %}—{% endif %}</span>
     {% endif %}

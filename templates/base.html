@@ -148,7 +148,7 @@
     {% if endpoint in ['instrument_detail', 'instrument_history', 'instrument_calendar'] %}
       <a href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
       <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
-      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Detail' }}</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">{% block breadcrumb_instrument %}{{ title or 'Detail' }}{% endblock %}</span>
     {% elif endpoint == 'request_detail' %}
       <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
       <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>

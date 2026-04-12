@@ -6180,11 +6180,13 @@ def message_detail(message_id: int):
     )
     if not row:
         abort(404)
-    # Only sender or recipient may read. Everyone else → 403.
-    if user["id"] not in (row["sender_id"], row["recipient_id"]):
+    # Sender, recipient, or owner (read-only oversight) may read.
+    is_own_message = user["id"] in (row["sender_id"], row["recipient_id"])
+    if not is_own_message and not is_owner(user):
         abort(403)
     # Auto-mark-read on first view when the viewer is the recipient.
-    if user["id"] == row["recipient_id"] and not row["read_at"]:
+    # Owner viewing someone else's mail does NOT mark it read.
+    if is_own_message and user["id"] == row["recipient_id"] and not row["read_at"]:
         now_iso = datetime.utcnow().isoformat(timespec="seconds")
         execute(
             "UPDATE messages SET read_at = ? WHERE id = ?",
@@ -6218,6 +6220,7 @@ def message_detail(message_id: int):
         message=row,
         attachments=attachments,
         parent_message=parent_message,
+        is_own_message=is_own_message,
     )
 
 

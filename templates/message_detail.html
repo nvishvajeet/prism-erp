@@ -9,9 +9,15 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">Message</h2>
     <span class="inst-header-code" data-vis="{{ V }}">#{{ message.id }}</span>
   </div>
+  {% if is_own_message|default(true) %}
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn btn-primary" href="{{ url_for('message_compose', to=message.sender_id) }}" data-vis="{{ V }}">Reply</a>
   </div>
+  {% else %}
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <span class="badge badge-role" data-vis="{{ V }}">Owner view (read-only)</span>
+  </div>
+  {% endif %}
 </header>
 
 <section class="message-tiles" data-vis="{{ V }}">
@@ -66,6 +72,7 @@
     {% endif %}
   </article>
 
+  {% if is_own_message|default(true) %}
   <article class="card tile tile-message-body message-reply-section" data-vis="{{ V }}">
     {% call toggleable_form('replyForm', 'Reply to this message', variant='default') %}
     <form method="post" action="{{ url_for('message_reply', message_id=message.id) }}" enctype="multipart/form-data" class="form-grid message-reply-form" data-vis="{{ V }}">
@@ -89,5 +96,6 @@
       <button type="submit" class="message-delete-btn" data-vis="{{ V }}">Delete</button>
     </form>
   </div>
+  {% endif %}
 </section>
 {% endblock %}

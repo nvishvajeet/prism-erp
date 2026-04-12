@@ -89,7 +89,8 @@
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
+    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications</a>
+    <span class="nav-spacer"></span>
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% else %}
 

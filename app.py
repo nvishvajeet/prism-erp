@@ -5661,7 +5661,14 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
         "eyebrow": "MESSAGES",
         "accent": "ghost" if unread == 0 else "primary",
     })
-    return uniq[:5]
+    # v2.2.1 — Notifications quick action
+    uniq.append({
+        "label": "Notifications",
+        "href": url_for("notifications_page"),
+        "eyebrow": "ALERTS",
+        "accent": "ghost",
+    })
+    return uniq[:6]
 
 
 # ─── v1.6.2 user-to-user messaging helpers ──────────────────────────
@@ -6346,6 +6353,8 @@ def sitemap():
     core_items = [
         {"label": "Home", "hint": "Dashboard and overview", "type": "link", "href": url_for("index")},
         {"label": "New Request", "hint": "Submit a new sample request", "type": "link", "href": url_for("new_request")},
+        {"label": "Notifications", "hint": "All active notices", "type": "link", "href": url_for("notifications_page")},
+        {"label": "Inbox", "hint": "Direct messages", "type": "link", "href": url_for("inbox")},
         {"label": "My Profile", "hint": "View and manage your account", "type": "link", "href": url_for("user_profile", user_id=user["id"])},
     ]
     core_info = [
@@ -6374,6 +6383,8 @@ def sitemap():
             open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
             ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
             ops_items.append({"label": "Completed Jobs", "hint": "View processed history", "type": "link", "href": url_for("schedule", bucket="completed")})
+        if access_profile.get("can_view_finance_stage") or is_owner(user):
+            ops_items.append({"label": "Finance Portal", "hint": "Billing, invoices, grants", "type": "link", "href": url_for("finance_portal")})
         sections.append({
             "key": "operations",
             "title": "Operations",
@@ -6386,6 +6397,7 @@ def sitemap():
         report_items = []
         if access_profile["can_access_calendar"]:
             report_items.append({"label": "Calendar", "hint": "Weekly schedule and downtime", "type": "link", "href": url_for("calendar")})
+            report_items.append({"label": "Subscribe Calendar (.ics)", "hint": "Add to Google Calendar / Apple Calendar / Outlook", "type": "link", "href": url_for("calendar_ics")})
         if access_profile["can_access_stats"]:
             report_items.append({"label": "Statistics", "hint": "Operations control dashboard", "type": "link", "href": url_for("stats")})
             report_items.append({"label": "Data Export", "hint": "Generate Excel reports", "type": "link", "href": url_for("visualizations")})
@@ -6402,6 +6414,8 @@ def sitemap():
         invited_count = db.execute("SELECT COUNT(*) FROM users WHERE invite_status = 'invited'").fetchone()[0]
         admin_items = [
             {"label": "User Management", "hint": f"{user_count} active, {invited_count} pending invites", "type": "link", "href": url_for("admin_users")},
+            {"label": "Notices", "hint": "Post site-wide announcements", "type": "link", "href": url_for("admin_notices")},
+            {"label": "Calibrations Due", "hint": "NABL compliance — upcoming calibrations", "type": "link", "href": url_for("admin_calibrations_upcoming")},
         ]
         system_items = [
             {"label": "Server Port", "type": "text", "value": "5055"},

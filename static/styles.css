@@ -1164,6 +1164,23 @@ a:hover {
   font-weight: 500;
 }
 
+/* Payment instructions callout on new_request form */
+.payment-instructions-callout {
+  background: var(--tone-wait-bg, #fef9e7);
+  border: 1px solid var(--tone-wait-border, #f0dca0);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+:root[data-theme="dark"] .payment-instructions-callout {
+  background: var(--tone-wait-bg);
+  border-color: var(--tone-wait-border);
+}
+
 .is-muted {
   opacity: 0.78;
 }

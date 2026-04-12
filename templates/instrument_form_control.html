@@ -72,12 +72,32 @@
     </form>
   </section>
 
-  {# ── Tile 3: Overview (span 3) ── #}
+  {# ── Tile 3: Pricing & Payment Instructions (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Pricing & Payment Instructions") }}
+    <p class="tile-lead" data-vis="{{ V }}">Shown to requesters before they fill in the submission form. Editable by operator and area admins.</p>
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_pricing" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Price per sample
+        <input type="text" name="price_per_sample" value="{{ instrument.price_per_sample or '' }}" placeholder="e.g. Rs 500 per sample (internal), Rs 2000 (external)" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Payment instructions
+        <textarea name="payment_instructions" rows="4" placeholder="Step-by-step payment instructions shown to the requester before submission. E.g.: 'Generate a purchase order from your department finance office, attach the PO number in the finance section.'" data-vis="{{ V }}">{{ instrument.payment_instructions or '' }}</textarea>
+      </label>
+      <label data-vis="{{ V }}">Payment proof note
+        <input type="text" name="payment_proof_note" value="{{ instrument.payment_proof_note or '' }}" placeholder="e.g. 'Attach a scanned copy of the signed PO or payment receipt'" data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Pricing</button>
+    </form>
+  </section>
+
+  {# ── Tile 4: Overview (span 3) ── #}
   <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
     {{ card_heading("", "Overview") }}
     <ul class="tile-summary-list" data-vis="{{ V }}">
       <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ approval_config|length }}</strong> approval step{{ "s" if approval_config|length != 1 }} configured</li>
       <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ custom_fields|length }}</strong> custom field{{ "s" if custom_fields|length != 1 }} active</li>
+      <li data-vis="{{ V }}">Price: <strong data-vis="{{ V }}">{{ instrument.price_per_sample or '—' }}</strong></li>
     </ul>
     <a class="text-link top-gap" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">&larr; Back to {{ instrument["name"] }}</a>
   </section>

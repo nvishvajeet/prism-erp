@@ -114,6 +114,16 @@
         <div id="customFieldsContainer" data-vis="{{ V }}"></div>
       </section>
 
+      {# Payment instructions callout — populated by JS when instrument changes #}
+      <section class="form-section" id="paymentInstructionsCard" style="display:none" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Payment Instructions</h3>
+        <div class="payment-instructions-callout" data-vis="{{ V }}">
+          <div id="paymentPrice" data-vis="{{ V }}"></div>
+          <div id="paymentInstructions" data-vis="{{ V }}"></div>
+          <div id="paymentProofNote" class="hint" data-vis="{{ V }}"></div>
+        </div>
+      </section>
+
       <section class="form-section" id="financeFieldsCard" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Finance</h3>
         <div class="new-request-inline-grid" data-vis="{{ V }}">
@@ -182,42 +192,57 @@
 
     const cfSection = document.getElementById("customFieldsSection");
     const cfContainer = document.getElementById("customFieldsContainer");
+    const piCard = document.getElementById("paymentInstructionsCard");
+    const piPrice = document.getElementById("paymentPrice");
+    const piInstr = document.getElementById("paymentInstructions");
+    const piProof = document.getElementById("paymentProofNote");
+
     function loadCustomFields() {
       if (!instrumentSelect || !cfSection || !cfContainer) return;
       const instId = instrumentSelect.value;
       cfContainer.innerHTML = "";
       cfSection.style.display = "none";
+      if (piCard) piCard.style.display = "none";
       if (!instId) return;
       fetch("/instruments/" + instId + "/custom-fields")
         .then(function(r) { return r.json(); })
-        .then(function(fields) {
-          if (!fields.length) return;
-          cfSection.style.display = "";
-          fields.forEach(function(f) {
-            var wrap = document.createElement("label");
-            wrap.setAttribute("data-vis", "{{ V }}");
-            wrap.textContent = f.label + " ";
-            var el;
-            if (f.type === "select") {
-              el = document.createElement("select");
-              f.options.split("|").forEach(function(o) {
-                var opt = document.createElement("option");
-                opt.value = o.trim(); opt.textContent = o.trim();
-                el.appendChild(opt);
-              });
-            } else if (f.type === "file") {
-              el = document.createElement("input"); el.type = "file";
-            } else if (f.type === "number") {
-              el = document.createElement("input"); el.type = "number";
-            } else {
-              el = document.createElement("input"); el.type = "text";
-            }
-            el.name = "custom_" + f.id;
-            el.setAttribute("data-vis", "{{ V }}");
-            if (f.required) el.required = true;
-            wrap.appendChild(el);
-            cfContainer.appendChild(wrap);
-          });
+        .then(function(data) {
+          var fields = data.fields || data;
+          if (fields && fields.length) {
+            cfSection.style.display = "";
+            fields.forEach(function(f) {
+              var wrap = document.createElement("label");
+              wrap.setAttribute("data-vis", "{{ V }}");
+              wrap.textContent = f.label + " ";
+              var el;
+              if (f.type === "select") {
+                el = document.createElement("select");
+                f.options.split("|").forEach(function(o) {
+                  var opt = document.createElement("option");
+                  opt.value = o.trim(); opt.textContent = o.trim();
+                  el.appendChild(opt);
+                });
+              } else if (f.type === "file") {
+                el = document.createElement("input"); el.type = "file";
+              } else if (f.type === "number") {
+                el = document.createElement("input"); el.type = "number";
+              } else {
+                el = document.createElement("input"); el.type = "text";
+              }
+              el.name = "custom_" + f.id;
+              el.setAttribute("data-vis", "{{ V }}");
+              if (f.required) el.required = true;
+              wrap.appendChild(el);
+              cfContainer.appendChild(wrap);
+            });
+          }
+          var p = data.pricing;
+          if (p && piCard && (p.price_per_sample || p.payment_instructions || p.payment_proof_note)) {
+            piCard.style.display = "";
+            if (piPrice) piPrice.textContent = p.price_per_sample ? "Price: " + p.price_per_sample : "";
+            if (piInstr) piInstr.textContent = p.payment_instructions || "";
+            if (piProof) piProof.textContent = p.payment_proof_note || "";
+          }
         });
     }
     if (instrumentSelect) {

@@ -3940,6 +3940,19 @@ def init_db() -> None:
         if "soft_accept_enabled" not in instrument_columns:
             cur.execute("ALTER TABLE instruments ADD COLUMN soft_accept_enabled INTEGER NOT NULL DEFAULT 0")
 
+        # Pricing & payment instructions per instrument (Form Control panel)
+        inst_cols = {col[1] for col in cur.execute("PRAGMA table_info(instruments)").fetchall()}
+        for col_name, col_sql in [
+            ("price_per_sample", "ALTER TABLE instruments ADD COLUMN price_per_sample TEXT NOT NULL DEFAULT ''"),
+            ("payment_instructions", "ALTER TABLE instruments ADD COLUMN payment_instructions TEXT NOT NULL DEFAULT ''"),
+            ("payment_proof_note", "ALTER TABLE instruments ADD COLUMN payment_proof_note TEXT NOT NULL DEFAULT ''"),
+        ]:
+            if col_name not in inst_cols:
+                try:
+                    cur.execute(col_sql)
+                except Exception:
+                    pass
+
         # Migrate: add member_code column to users if it doesn't exist
         user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "member_code" not in user_columns:
@@ -7600,6 +7613,21 @@ def instrument_form_control(instrument_id: int):
             flash("Notification settings saved.", "success")
             return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
 
+        if action == "save_pricing":
+            price = request.form.get("price_per_sample", "").strip()
+            instructions = request.form.get("payment_instructions", "").strip()
+            proof_note = request.form.get("payment_proof_note", "").strip()
+            db.execute(
+                "UPDATE instruments SET price_per_sample = ?, payment_instructions = ?, payment_proof_note = ? WHERE id = ?",
+                (price, instructions, proof_note, instrument_id),
+            )
+            db.commit()
+            log_action(user["id"], "instrument", instrument_id, "pricing_updated", {
+                "price_per_sample": price,
+            })
+            flash("Pricing & payment instructions saved.", "success")
+            return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
+
         abort(400)
 
     approval_config = query_all(
@@ -7633,14 +7661,30 @@ def instrument_form_control(instrument_id: int):
 @app.route("/instruments/<int:instrument_id>/custom-fields")
 @login_required
 def instrument_custom_fields_json(instrument_id: int):
+    """Return custom fields + pricing info for an instrument as JSON.
+
+    Consumed by new_request.html to render dynamic custom fields and
+    show payment instructions before the finance section.
+    """
     rows = query_all(
         "SELECT id, field_label, field_type, is_required, field_options FROM instrument_custom_fields WHERE instrument_id = ? AND is_active = 1 ORDER BY display_order",
         (instrument_id,),
     )
-    return jsonify([
-        {"id": r["id"], "label": r["field_label"], "type": r["field_type"], "required": bool(r["is_required"]), "options": r["field_options"]}
-        for r in rows
-    ])
+    inst = query_one(
+        "SELECT price_per_sample, payment_instructions, payment_proof_note FROM instruments WHERE id = ?",
+        (instrument_id,),
+    )
+    return jsonify({
+        "fields": [
+            {"id": r["id"], "label": r["field_label"], "type": r["field_type"], "required": bool(r["is_required"]), "options": r["field_options"]}
+            for r in rows
+        ],
+        "pricing": {
+            "price_per_sample": inst["price_per_sample"] if inst else "",
+            "payment_instructions": inst["payment_instructions"] if inst else "",
+            "payment_proof_note": inst["payment_proof_note"] if inst else "",
+        } if inst else None,
+    })
 
 
 @app.route("/requests/new", methods=["GET", "POST"])

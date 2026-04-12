@@ -397,3 +397,123 @@ list + inline form. Link to the calendar route.
 New portals use the same `.inst-tiles` grid (or create an
 `.<portal>-tiles` alias). Each tile is `.card.tile` with a
 `grid-column: span N` to control width within the 6-column grid.
+
+---
+
+### 17. Inventory Tracking
+
+**What it does.** Tracks consumables, spare parts, reagents, and
+accessories for an entity with quantity, minimum-stock alerts, and
+unit costing.
+
+**Instrument implementation.**
+`instrument_detail.html` tile "Inventory" — table with item name,
+qty, min qty, unit cost, stock status badge (in stock / low stock /
+out of stock). Inline `<details>` add-item form. Table:
+`instrument_inventory(id, instrument_id, item_name, category,
+quantity, minimum_quantity, unit, unit_cost, notes, created_at,
+updated_at)`.
+
+**Wiring for a new portal.** Create an `<entity>_inventory` table
+with the same columns. Clone the tile-inventory markup. Add
+`add_inventory_item` POST action to the detail route.
+
+---
+
+### 18. Leave / Attendance
+
+**What it does.** Daily attendance marking (present/absent/leave),
+leave request workflow with team-manager and admin approval, leave
+balance tracking, and reporting-structure-based delegation.
+
+**Implementation.**
+`templates/attendance.html` — combined view with calendar grid,
+leave application form, team-leave approval queue.
+Tables: `attendance(id, user_id, date, status, marked_by,
+marked_at)`, `leave_requests(id, user_id, leave_type, start_date,
+end_date, reason, status, approved_by, ...)`,
+`reporting_structure(id, user_id, manager_id)`,
+`leave_balances(id, user_id, leave_type, balance, year)`.
+
+**Wiring for a new portal.** The attendance pattern is
+self-contained. Clone `attendance.html` and its routes
+(`/attendance`, `/attendance/mark`, `/attendance/apply-leave`,
+`/attendance/team-leave/<id>/approve`). Adapt
+`reporting_structure` for your entity's hierarchy.
+
+---
+
+### 19. Messaging / Inbox
+
+**What it does.** Internal threaded messaging with attachments,
+read/unread tracking, reply chains, and routing to specific users
+or roles.
+
+**Implementation.**
+`templates/inbox.html` — message list with unread count.
+`/messages/<id>` — threaded detail view.
+Tables: `messages(id, sender_id, recipient_id, subject, body,
+is_read, parent_id, ...)`, `message_attachments(id, message_id,
+filename, filepath, ...)`.
+Macros used: `input_dialog` for compose, `paginated_pane` for
+list, `activity_feed` (threaded=True) for conversation.
+
+**Wiring for a new portal.** Clone the inbox routes and templates.
+The pattern is generic — replace sender/recipient with any two
+entity roles.
+
+---
+
+### 20. Mailing Lists
+
+**What it does.** Named distribution lists with member management.
+Used by notification broadcast to reach groups of users
+(instrument subscribers, department members, grant team).
+
+**Implementation.**
+`/admin/mailing-lists` — CRUD interface.
+Tables: `mailing_lists(id, name, description, created_by,
+created_at)`, `mailing_list_members(id, list_id, user_id,
+added_at)`.
+
+**Wiring for a new portal.** Create `<entity>_mailing_lists` and
+`<entity>_mailing_list_members` tables, or reuse the global
+tables with a `context_type` discriminator column.
+
+---
+
+### 21. Grant Expenses
+
+**What it does.** Non-sample charges (equipment, reagents, vendor
+payments, travel) recorded against a grant budget with receipt
+tracking and expense-type categorisation.
+
+**Implementation.**
+`templates/finance_grant_expenses.html` — KPI summary + expense
+list + add-expense form.
+Table: `grant_expenses(id, grant_id, description, amount,
+expense_type, receipt_number, notes, recorded_by, recorded_at)`.
+Route: `/finance/grants/<id>/expenses` (GET + POST).
+
+**Wiring for a new portal.** Clone the expenses sub-page pattern.
+Create `<entity>_expenses` with the same columns. The KPI tile +
+list + add form is a reusable three-tile layout.
+
+---
+
+### 22. Email Templates
+
+**What it does.** Per-entity customisable email notification
+templates for workflow events (submitted, approved, completed).
+Admin edits subject and body templates with placeholder variables.
+
+**Implementation.**
+`instrument_form_control.html` tile 4 "Message Templates" —
+fieldset per event type with subject + body textarea.
+Table: `instrument_email_templates(id, instrument_id, event_type,
+subject_template, body_template, updated_at)`.
+
+**Wiring for a new portal.** Create `<entity>_email_templates`
+with the same schema. Clone the form-control tile. Define your
+event types (e.g. "expense_submitted", "budget_exceeded") and
+placeholder variables.

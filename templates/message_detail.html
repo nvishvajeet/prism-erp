@@ -9,11 +9,7 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">Message</h2>
     <span class="inst-header-code" data-vis="{{ V }}">#{{ message.id }}</span>
   </div>
-  {% if is_own_message|default(true) %}
-  <div class="inst-header-actions" data-vis="{{ V }}">
-    <a class="btn btn-primary" href="{{ url_for('message_compose', to=message.sender_id) }}" data-vis="{{ V }}">Reply</a>
-  </div>
-  {% else %}
+  {% if not is_own_message|default(true) %}
   <div class="inst-header-actions" data-vis="{{ V }}">
     <span class="badge badge-role" data-vis="{{ V }}">Owner view (read-only)</span>
   </div>

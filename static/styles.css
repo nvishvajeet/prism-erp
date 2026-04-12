@@ -7023,6 +7023,144 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   padding-top: 0.3rem;
 }
 
+/* v1.6.3 — Inbox mailbox enhancement: folder tabs, attachments,
+   reply section, delete button, wider click zones. */
+
+/* Inbox folder tabs */
+.inbox-folder-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.inbox-folder-tab {
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  background: transparent;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+.inbox-folder-tab:hover { background: var(--hover-soft, rgba(0,0,0,0.04)); color: var(--ink); }
+.inbox-folder-tab--active {
+  background: var(--accent-soft, rgba(76,110,245,0.1));
+  color: var(--accent, #4c6ef5);
+  border-color: var(--accent, #4c6ef5);
+  font-weight: 600;
+}
+
+/* Wider click zones on inbox rows */
+.inbox-row-link {
+  padding: 0.85rem 1rem;
+}
+
+/* Thread indicator */
+.message-thread-indicator {
+  margin: 0.4rem 0 0.2rem 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.message-thread-indicator a {
+  color: var(--accent, #4c6ef5);
+  text-decoration: underline;
+}
+
+/* Attachments list */
+.message-attachments {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line, rgba(0,0,0,0.08));
+}
+.message-attachments h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.message-attachments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.message-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel-soft, rgba(0,0,0,0.03));
+  font-size: 0.85rem;
+}
+.message-attachment-name { font-weight: 500; color: var(--ink); }
+.message-attachment-download {
+  margin-left: auto;
+  color: var(--accent, #4c6ef5);
+  text-decoration: none;
+  font-size: 0.8rem;
+}
+.message-attachment-download:hover { text-decoration: underline; }
+
+/* Reply section */
+.message-reply-section { grid-column: 1 / -1; }
+.message-reply-form { gap: 0.75rem; margin-top: 0.3rem; }
+
+/* Detail actions row (delete) */
+.message-detail-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+/* Delete button — small danger style */
+.message-delete-btn {
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid #c0392b;
+  background: transparent;
+  color: #c0392b;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.message-delete-btn:hover {
+  background: #c0392b;
+  color: #fff;
+}
+
+/* Dark-mode overrides for inbox mailbox enhancement */
+:root[data-theme="dark"] .inbox-folder-tab {
+  border-color: var(--line);
+  color: var(--muted);
+}
+:root[data-theme="dark"] .inbox-folder-tab:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .inbox-folder-tab--active {
+  background: rgba(76,110,245,0.18);
+  color: var(--accent, #6b8aff);
+  border-color: var(--accent, #6b8aff);
+}
+:root[data-theme="dark"] .message-attachment-item {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .message-delete-btn {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+:root[data-theme="dark"] .message-delete-btn:hover {
+  background: #e74c3c;
+  color: #fff;
+}
+
 /* v1.7.0 — Finance Portal (/finance). Ferrari-dashboard aesthetic:
    earthy outstanding accent, mint collected accent, monospaced
    amount columns, dense tight rows. */

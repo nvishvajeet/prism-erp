@@ -4001,6 +4001,29 @@ def init_db() -> None:
             """
         )
 
+        # Phase 1: Inbox mailbox enhancement — threading, soft-delete, attachments
+        for col_sql in [
+            "ALTER TABLE messages ADD COLUMN parent_message_id INTEGER REFERENCES messages(id)",
+            "ALTER TABLE messages ADD COLUMN deleted_by_sender INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE messages ADD COLUMN deleted_by_recipient INTEGER NOT NULL DEFAULT 0",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except Exception:
+                pass
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS message_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                filename TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                uploaded_at TEXT NOT NULL,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            )
+        """)
+
         # W1.3.7 backfill — every existing user gets a user_roles row
         # mirroring their primary users.role. Idempotent: only inserts
         # the pair (user_id, role) if it's not already present.
@@ -5974,30 +5997,85 @@ def notifications_page():
     )
 
 
+def _save_message_attachments(message_id: int, files, now_iso: str):
+    """Save uploaded files to disk and insert message_attachments rows."""
+    import time as _time
+    for f in files:
+        if not f or not f.filename:
+            continue
+        if not allowed_file(f.filename):
+            continue
+        original = secure_filename(f.filename)
+        stored = f"{int(_time.time())}_{original}"
+        dest_dir = UPLOAD_DIR / "messages" / str(message_id)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / stored
+        f.save(str(dest))
+        size = dest.stat().st_size
+        execute(
+            """INSERT INTO message_attachments
+               (message_id, filename, stored_name, size_bytes, uploaded_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (message_id, original, stored, size, now_iso),
+        )
+
+
 @app.route("/inbox", methods=["GET"])
 @login_required
 def inbox():
-    """List every message addressed to the current user, newest-first,
-    unread always on top. Sender names resolved via JOIN."""
+    """List messages for the current user. Supports folder query param:
+    inbox (default), sent, deleted."""
     user = current_user()
-    rows = query_all(
-        """
-        SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
-               u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
-          FROM messages m
-          LEFT JOIN users u ON u.id = m.sender_id
-         WHERE m.recipient_id = ?
-         ORDER BY
-            CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
-            m.sent_at DESC
-        """,
-        (user["id"],),
-    )
+    folder = request.args.get("folder", "inbox")
+    if folder not in ("inbox", "sent", "deleted"):
+        folder = "inbox"
+
+    if folder == "inbox":
+        rows = query_all(
+            """
+            SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+                   u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
+              FROM messages m
+              LEFT JOIN users u ON u.id = m.sender_id
+             WHERE m.recipient_id = ? AND m.deleted_by_recipient = 0
+             ORDER BY
+                CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
+                m.sent_at DESC
+            """,
+            (user["id"],),
+        )
+    elif folder == "sent":
+        rows = query_all(
+            """
+            SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+                   u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
+              FROM messages m
+              LEFT JOIN users u ON u.id = m.recipient_id
+             WHERE m.sender_id = ? AND m.deleted_by_sender = 0
+             ORDER BY m.sent_at DESC
+            """,
+            (user["id"],),
+        )
+    else:  # deleted
+        rows = query_all(
+            """
+            SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
+                   u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
+              FROM messages m
+              LEFT JOIN users u ON u.id = m.sender_id
+             WHERE (m.recipient_id = ? AND m.deleted_by_recipient = 1)
+                OR (m.sender_id = ? AND m.deleted_by_sender = 1)
+             ORDER BY m.sent_at DESC
+            """,
+            (user["id"], user["id"]),
+        )
+
     unread = sum(1 for r in rows if not r["read_at"])
     return render_template(
         "inbox.html",
         messages=rows,
         unread=unread,
+        folder=folder,
     )
 
 
@@ -6034,7 +6112,33 @@ def message_detail(message_id: int):
         )
         row = dict(row)
         row["read_at"] = now_iso
-    return render_template("message_detail.html", message=row)
+
+    # Fetch attachments for this message
+    attachments = query_all(
+        "SELECT id, filename, stored_name, size_bytes, uploaded_at FROM message_attachments WHERE message_id = ?",
+        (message_id,),
+    )
+
+    # Fetch parent message if this is a reply
+    parent_message = None
+    parent_id = query_one("SELECT parent_message_id FROM messages WHERE id = ?", (message_id,))
+    if parent_id and parent_id["parent_message_id"]:
+        parent_message = query_one(
+            """
+            SELECT m.id, m.subject, u.name AS sender_name
+              FROM messages m
+              LEFT JOIN users u ON u.id = m.sender_id
+             WHERE m.id = ?
+            """,
+            (parent_id["parent_message_id"],),
+        )
+
+    return render_template(
+        "message_detail.html",
+        message=row,
+        attachments=attachments,
+        parent_message=parent_message,
+    )
 
 
 @app.route("/messages/new", methods=["GET"])
@@ -6122,15 +6226,97 @@ def message_send():
         flash("You can't send a message to yourself.", "error")
         return redirect(url_for("message_compose"))
     now_iso = datetime.utcnow().isoformat(timespec="seconds")
-    execute(
+    message_id = execute(
         """
         INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at)
         VALUES (?, ?, ?, ?, ?, NULL)
         """,
         (user["id"], recipient["id"], subject, body, now_iso),
     )
+    # Handle file attachments
+    _save_message_attachments(message_id, request.files.getlist("attachments"), now_iso)
     flash(f"Message sent to {recipient['name']}.", "success")
     return redirect(url_for("inbox"))
+
+
+@app.route("/messages/<int:message_id>/reply", methods=["POST"])
+@login_required
+def message_reply(message_id: int):
+    """Reply to an existing message. Sets parent_message_id for threading."""
+    user = current_user()
+    original = query_one(
+        "SELECT id, sender_id, recipient_id, subject FROM messages WHERE id = ?",
+        (message_id,),
+    )
+    if not original:
+        abort(404)
+    if user["id"] not in (original["sender_id"], original["recipient_id"]):
+        abort(403)
+    # Reply goes to the other party
+    if user["id"] == original["sender_id"]:
+        reply_to_id = original["recipient_id"]
+    else:
+        reply_to_id = original["sender_id"]
+    subject = (request.form.get("subject") or "").strip()
+    if not subject:
+        orig_subj = original["subject"] or ""
+        subject = orig_subj if orig_subj.lower().startswith("re:") else f"Re: {orig_subj}"
+    body = (request.form.get("body") or "").strip()
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    new_id = execute(
+        """INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at, parent_message_id)
+           VALUES (?, ?, ?, ?, ?, NULL, ?)""",
+        (user["id"], reply_to_id, subject, body, now_iso, message_id),
+    )
+    _save_message_attachments(new_id, request.files.getlist("attachments"), now_iso)
+    flash("Reply sent.", "success")
+    return redirect(url_for("message_detail", message_id=new_id))
+
+
+@app.route("/messages/<int:message_id>/delete", methods=["POST"])
+@login_required
+def message_delete(message_id: int):
+    """Soft-delete a message for the current user."""
+    user = current_user()
+    msg = query_one(
+        "SELECT sender_id, recipient_id FROM messages WHERE id = ?",
+        (message_id,),
+    )
+    if not msg:
+        abort(404)
+    if user["id"] == msg["recipient_id"]:
+        execute("UPDATE messages SET deleted_by_recipient = 1 WHERE id = ?", (message_id,))
+    elif user["id"] == msg["sender_id"]:
+        execute("UPDATE messages SET deleted_by_sender = 1 WHERE id = ?", (message_id,))
+    else:
+        abort(403)
+    flash("Message deleted.", "success")
+    return redirect(url_for("inbox"))
+
+
+@app.route("/messages/<int:message_id>/attachment/<int:att_id>", methods=["GET"])
+@login_required
+def message_attachment(message_id: int, att_id: int):
+    """Serve a message attachment file. Only sender/recipient may access."""
+    user = current_user()
+    msg = query_one(
+        "SELECT sender_id, recipient_id FROM messages WHERE id = ?",
+        (message_id,),
+    )
+    if not msg:
+        abort(404)
+    if user["id"] not in (msg["sender_id"], msg["recipient_id"]):
+        abort(403)
+    att = query_one(
+        "SELECT filename, stored_name FROM message_attachments WHERE id = ? AND message_id = ?",
+        (att_id, message_id),
+    )
+    if not att:
+        abort(404)
+    file_path = UPLOAD_DIR / "messages" / str(message_id) / att["stored_name"]
+    if not file_path.exists():
+        abort(404)
+    return send_file(str(file_path), as_attachment=True, download_name=att["filename"])
 
 
 @app.route("/finance")

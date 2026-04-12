@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude-inbox-upgrade | feature/inbox-mailbox-phase1 | 2026-04-12T11:15+02:00 | `app.py` (init_db + inbox routes), `templates/inbox.html`, `templates/message_detail.html`, `templates/message_compose.html`, `static/styles.css` (inbox classes) | feat(inbox): reply + attachments + folder tabs + soft-delete |
+| _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery
 

@@ -14,6 +14,13 @@
   </div>
 </header>
 
+<nav class="inbox-folder-tabs" data-vis="{{ V }}">
+  {% set folder = folder|default('inbox') %}
+  <a class="inbox-folder-tab{% if folder == 'inbox' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='inbox') }}" data-vis="{{ V }}">Inbox</a>
+  <a class="inbox-folder-tab{% if folder == 'sent' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='sent') }}" data-vis="{{ V }}">Sent</a>
+  <a class="inbox-folder-tab{% if folder == 'deleted' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='deleted') }}" data-vis="{{ V }}">Deleted</a>
+</nav>
+
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-inbox-list" data-vis="{{ V }}">
     {{ card_heading("MESSAGES", unread|string ~ " unread") }}

@@ -171,4 +171,19 @@
   })();
 </script>
 {% endif %}
+
+{# Whole-row click: clicking anywhere on an instrument row navigates to detail #}
+<script>
+(function () {
+  document.querySelectorAll('.instruments-table tbody tr[data-pane-item]').forEach(function (row) {
+    var link = row.querySelector('a[href*="/instruments/"]');
+    if (!link) return;
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, input, select')) return;
+      window.location.href = link.href;
+    });
+  });
+})();
+</script>
 {% endblock %}

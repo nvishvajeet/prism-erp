@@ -49,7 +49,7 @@
        outlined-only. Never more than 4 actions — that's the point. ── #}
   {% if quick_actions %}
   <article class="card tile tile-dash-quick-actions" data-vis="{{ V }}">
-    {{ card_heading("QUICK ACTIONS", "Your next two clicks") }}
+    {{ card_heading("", "Quick Actions") }}
     <div class="qa-grid" data-vis="{{ V }}">
       {% for a in quick_actions %}
       <a class="qa-card qa-card-{{ a.accent }}" href="{{ a.href }}" data-vis="{{ V }}">

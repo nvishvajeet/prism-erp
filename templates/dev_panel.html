@@ -37,8 +37,24 @@
       <span class="mc-light-label" data-vis="{{ V }}">v1.5.0</span>
       <span class="mc-light-value" data-vis="{{ V }}">{{ progress.future_fixes.total }} TODO</span>
     </div>
+    <div class="mc-light mc-light-ok" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">SESSION</span>
+      <span class="mc-light-value" id="sessionTimer" data-vis="{{ V }}">0m</span>
+    </div>
   </div>
 </header>
+<script>
+(function () {
+  var start = Date.now();
+  var el = document.getElementById('sessionTimer');
+  if (!el) return;
+  setInterval(function () {
+    var mins = Math.floor((Date.now() - start) / 60000);
+    el.textContent = mins < 60 ? mins + 'm' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+  }, 30000);
+})();
+</script>
 
 {# ─── Tile Grid ──────────────────────────────────────── #}
 <div class="inst-tiles" data-vis="{{ V }}">

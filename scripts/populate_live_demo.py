@@ -81,15 +81,11 @@ def ensure_instrument(
 ) -> int:
     row = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()
     if row:
-        db.execute(
-            """
-            UPDATE instruments
-            SET name = ?, category = ?, location = ?, daily_capacity = ?, status = 'active', notes = ?,
-                manufacturer = ?, model_number = ?, capabilities_summary = ?, machine_photo_url = ?, reference_links = ?
-            WHERE code = ?
-            """,
-            (name, category, location, daily_capacity, notes, manufacturer, model_number, capabilities_summary, machine_photo_url, reference_links, code),
-        )
+        # v2.0.3 — respect existing instrument metadata. The CRF brochure
+        # data seeded by app.seed_data() is canonical; populate_live_demo
+        # only fills in missing rows, never overwrites a row that already
+        # exists. Previously this UPDATE clobbered the brochure
+        # manufacturer/model/category strings with placeholder text.
         return row["id"]
     cur = db.execute(
         """

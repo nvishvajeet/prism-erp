@@ -57,7 +57,14 @@ COMMUNICATION_NOTE_TYPES = [
 ]
 OWNER_EMAILS = {
     email.strip().lower()
-    for email in os.environ.get("OWNER_EMAILS", "admin@lab.local").split(",")
+    # v2.0.3 — single owner (Vishvajeet Nagargoje, CRF lead). Override
+    # at deploy time with `OWNER_EMAILS=youraccount@example.com` env var.
+    # admin@lab.local stays in the default set so legacy demo personas
+    # and crawlers continue to work without an env var on dev machines.
+    for email in os.environ.get(
+        "OWNER_EMAILS",
+        "vishvajeet.nagargoje@mitwpu.edu.in,admin@lab.local",
+    ).split(",")
     if email.strip()
 }
 DEMO_ROLE_SWITCHES = {
@@ -4684,11 +4691,126 @@ def seed_data() -> None:
             (name, email, demo_pw_hash, role),
         )
 
+    # ── v2.0.3 — Real CRF instrument inventory from the MIT-WPU brochure ──
+    # 21 instruments across the imaging, spectroscopy, mechanical-test,
+    # and battery-fab clusters. Numbering preserved for backwards
+    # compat: INST-001 = FESEM (smoke_test fixture), INST-002 = ICP-MS,
+    # INST-003 = XRD. New instruments INST-004 onward are appended.
     instruments = [
-        ("FESEM", "INST-001", "Microscopy", "Central Instrument Facility", 3, "High-resolution imaging", "CIF Office 201", "Materials and Imaging", "Zeiss", "Sigma 300", "High-resolution surface morphology, particle imaging, cross-section imaging, and elemental mapping support.", "https://images.unsplash.com/photo-1518152006812-edab29b069ac?auto=format&fit=crop&w=900&q=80", "https://www.zeiss.com/microscopy/en/products/scanning-electron-microscopes.html", "Field-emission scanning electron microscope for morphology and surface analysis.", 1, 0),
-        ("ICP-MS", "INST-002", "Spectroscopy", "Analytical Bay", 3, "Trace elemental analysis", "Analytical Office 104", "Chemistry and Earth Sciences", "Agilent", "7900 ICP-MS", "Trace metal screening, multi-element quantification, environmental and water sample analysis.", "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=900&q=80", "https://www.agilent.com/", "Inductively coupled plasma mass spectrometer for trace elemental quantification.", 1, 1),
-        ("XRD", "INST-003", "Diffraction", "Materials Lab", 4, "Phase identification", "Materials Office 118", "Materials Characterization", "Bruker", "D8 Advance", "Powder diffraction, phase analysis, crystallinity checks, and routine materials characterization.", "https://images.unsplash.com/photo-1581092921461-eab62e97a780?auto=format&fit=crop&w=900&q=80", "https://www.bruker.com/", "Powder diffraction workflow for crystal structure and phase checks.", 1, 0),
-        ("DSC", "INST-004", "Thermal", "Thermal Suite", 4, "Thermal transitions", "Thermal Analysis Office 110", "Polymers and Materials", "TA Instruments", "Q2000", "Glass transition, melting behavior, crystallization windows, and comparative thermal transition studies.", "https://images.unsplash.com/photo-1532187643603-ba119ca4109e?auto=format&fit=crop&w=900&q=80", "https://www.tainstruments.com/", "Differential scanning calorimetry for transition and stability studies.", 1, 0),
+        # ── Imaging cluster ────────────────────────────────────────
+        ("FESEM", "INST-001", "Microscopy", "CRF Bay A — Imaging Hall", 4,
+         "Sub-nanometre imaging, FEG source, 50 eV–30 kV, mag 10x to 1,000,000x, in-chamber plasma cleaner, EDS elemental mapping.",
+         "CRF Bay A · Office A-201", "Imaging & Nanoscale", "TESCAN", "S8152",
+         "Field-emission SEM for nanoscale surface morphology, fracture analysis, particle sizing, and elemental mapping (EDS).",
+         "", "", "Field Emission Scanning Electron Microscope — high-resolution imaging at the nanoscale.", 1, 0),
+        ("Polarizing Optical Microscope", "INST-009", "Microscopy", "CRF Bay A — Imaging Hall", 6,
+         "3.6 W LED Köhler illumination, 360° rotatable stage (0.1 mm vernier), 4×/10×/20×/40× objectives, polarizer 0–90°, integrated LCD capture.",
+         "CRF Bay A · Office A-204", "Imaging & Nanoscale", "OPTIKA", "B-510POL",
+         "Polarized-light microscopy for liquid crystals, polymers, thin-film texture, birefringence and grain-boundary analysis.",
+         "", "", "Polarizing Optical Microscope for anisotropic and transparent materials.", 1, 0),
+
+        # ── Spectroscopy / Diffraction cluster ─────────────────────
+        ("ICP-MS", "INST-002", "Spectroscopy", "CRF Bay B — Analytical", 3,
+         "SHIMADZU ICPMS-2040 LF, low argon (11 L/min), trace ppt detection, isotope ratio capable, semi-quant overview, liquid + solid sample intro.",
+         "CRF Bay B · Office B-104", "Analytical Chemistry", "SHIMADZU", "ICPMS-2040 LF",
+         "Inductively Coupled Plasma Mass Spectrometry for trace elemental quantification (ppt limits), full periodic table.",
+         "", "", "ICP-MS for trace and ultra-trace multi-element analysis in liquids and digests.", 1, 1),
+        ("XRD", "INST-003", "Diffraction", "CRF Bay B — Analytical", 5,
+         "Empyrean DY3280 with 1Der detector, vertical goniometer, GIXRD capable, large reference-pattern library.",
+         "CRF Bay B · Office B-110", "Analytical Chemistry", "MALVERN PANALYTICAL", "Empyrean-DY3280",
+         "X-Ray Diffractometer for phase ID, crystal structure, thin-film GIXRD on powders and solids.",
+         "", "", "X-Ray Diffractometer for crystalline phase analysis.", 1, 0),
+        ("Raman Spectrometer", "INST-004", "Spectroscopy", "CRF Bay B — Analytical", 4,
+         "JASCO NRS-4500 confocal micro-Raman, 532/785 nm lasers, 50–8000 cm⁻¹, ~1 cm⁻¹ resolution, 2D/3D mapping, dual spatial filter.",
+         "CRF Bay B · Office B-112", "Analytical Chemistry", "JASCO", "NRS-4500",
+         "Confocal micro-Raman for molecular vibrations, chemical mapping, polymorphism, carbon-material characterization.",
+         "", "", "Confocal micro-Raman imaging and spectroscopy system.", 1, 0),
+        ("Particle / Zeta Size Analyser", "INST-005", "Light Scattering", "CRF Bay B — Analytical", 6,
+         "Zetasizer Advance, DLS + ELS + multi-angle DLS, 0.3 nm – 10 µm particle size, 3.8 nm – 100 µm zeta range, 3–12 µL sample, NIBS optics.",
+         "CRF Bay B · Office B-114", "Colloids & Nanomaterials", "MALVERN PANALYTICAL", "Zetasizer Advance",
+         "Particle/Zeta size analyser for colloids, nanoparticles, proteins, exosomes, liposomes — DLS + ELS workflows.",
+         "", "", "Particle size + zeta potential characterization for nanoparticles and colloids.", 1, 0),
+        ("UV-Visible / UV-DRS", "INST-011", "Spectroscopy", "CRF Bay B — Analytical", 6,
+         "LABINDIA UV 3200 + UV 3092 DRS module. Double-beam, deuterium + tungsten-halogen, 190–800 nm, transmission + reflectance for solids/powders/liquids.",
+         "CRF Bay B · Office B-116", "Analytical Chemistry", "LABINDIA", "UV 3200 + UV 3092",
+         "UV-Visible spectrophotometer with Diffuse Reflectance accessory — band gap, photoinitiator quant, degradation studies.",
+         "", "", "UV-Vis with DRS for liquid + solid characterization.", 1, 0),
+        ("UV-VIS-NIR Spectrophotometer", "INST-012", "Spectroscopy", "CRF Bay B — Analytical", 5,
+         "SHIMADZU UV-3600i Plus, 185–3300 nm, 3-detector (PMT/InGaAs/PbS), stray light <0.00005% at 220 nm, ±0.08 nm UV/Vis accuracy.",
+         "CRF Bay B · Office B-118", "Analytical Chemistry", "SHIMADZU", "UV-3600i Plus",
+         "Research-grade UV-VIS-NIR spectrophotometer — band gap, AR coatings, optical fibers, biological NIR analysis.",
+         "", "", "UV-VIS-NIR Spectrophotometer with three-detector full-range system.", 1, 0),
+
+        # ── Surface / Mechanical micro-test cluster ────────────────
+        ("Nanoindenter", "INST-006", "Mechanical Micro-test", "CRF Bay C — Surface Lab", 4,
+         "INDUSTRON NG-80, max load 10 mN, load resolution 5 nN, displacement resolution 1 nm, load + displacement controlled modes.",
+         "CRF Bay C · Office C-201", "Mechanical Surfaces", "INDUSTRON", "NG-80",
+         "Nanoindenter for hardness, elastic modulus, fracture toughness on metals, polymers, ceramics, coatings, thin films.",
+         "", "", "Nanoindenter — probes nanomechanical properties of bulk and thin-film samples.", 1, 0),
+        ("Surface Profiler", "INST-007", "Surface Metrology", "CRF Bay C — Surface Lab", 5,
+         "BRUKER Dektak Pro, max load 6 mg, scan length 3000 µm, surface roughness + thin-film thickness + residual stress.",
+         "CRF Bay C · Office C-205", "Surface Science", "BRUKER", "Dektak Pro",
+         "Stylus surface profiler — average roughness, peak-to-valley, thin-film thickness, residual stress in films.",
+         "", "", "Surface Profiler for micron and nano-scale surface integrity measurements.", 1, 0),
+        ("Tribometer", "INST-008", "Tribology", "CRF Bay C — Surface Lab", 3,
+         "DUCOM POD-4.0 Pin-on-Disc, room temp – 900 °C, max sample 60 mm dia × 2 mm thick, stainless steel ball counter material.",
+         "CRF Bay C · Office C-208", "Tribology", "DUCOM", "POD-4.0",
+         "Tribometer — friction coefficient, wear morphology, reciprocatory + rotary wear, room temp to 900 °C.",
+         "", "", "Pin-on-Disc Tribometer for tribological and wear behaviour characterization.", 1, 0),
+
+        # ── Battery fabrication cluster ────────────────────────────
+        ("Battery Fabrication System", "INST-010", "Energy Storage", "CRF Bay D — Battery Lab", 3,
+         "Coin-cell (CR2032) fabrication line: slurry mixer, doctor-blade coater, vacuum oven, calender, electrode puncher, Ar glove box (<0.01 ppm H₂O/O₂), multi-channel battery tester.",
+         "CRF Bay D · Office D-110", "Energy Materials", "Multi-vendor", "CR2032 coin-cell line",
+         "Complete coin-cell battery fabrication facility for Li-ion + Na-ion half/full cells with full electrochemical testing.",
+         "", "", "End-to-end coin-cell battery fabrication and electrochemical testing.", 1, 0),
+
+        # ── NABL ISO/IEC 17025:2017 mechanical testing line ────────
+        ("Universal Testing Machine — 100 kN", "INST-013", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 3,
+         "0–100 kN load range. NABL accredited per IS 1608 (Part 1), ASTM E8/E8M, ASTM D3039/D3039M.",
+         "CRF Bay E · Office E-101", "Mechanical Testing (NABL)", "—", "UTM-100kN",
+         "Universal testing machine — 100 kN range for tensile/compression on metals and composites.",
+         "", "", "100 kN UTM — NABL accredited tensile testing.", 1, 0),
+        ("Universal Testing Machine — 5 kN", "INST-017", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 4,
+         "0–5 kN load range for low-load tensile/peel/film tests. NABL accredited per ASTM E345.",
+         "CRF Bay E · Office E-102", "Mechanical Testing (NABL)", "—", "UTM-5kN",
+         "Low-load UTM for thin films, foils, and elastomers per ASTM E345.",
+         "", "", "5 kN UTM — NABL accredited low-load tensile testing.", 1, 0),
+        ("Universal Testing Machine — 1000 kN", "INST-021", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 2,
+         "0–1000 kN heavy-load UTM. NABL accredited per IS 1608 (Part 1).",
+         "CRF Bay E · Office E-103", "Mechanical Testing (NABL)", "—", "UTM-1000kN",
+         "Heavy-load UTM for structural members, reinforcement bars, large composites.",
+         "", "", "1000 kN UTM — NABL accredited heavy-load tensile testing.", 1, 0),
+        ("Hardness Testing — Rockwell", "INST-014", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 6,
+         "Rockwell hardness scales A/B/C/D/E/F/G/H/K. NABL accredited per IS 1586 (Part 1).",
+         "CRF Bay E · Office E-110", "Mechanical Testing (NABL)", "—", "Rockwell",
+         "Rockwell hardness on metals and alloys per IS 1586.",
+         "", "", "Rockwell hardness tester — NABL accredited.", 1, 0),
+        ("Hardness Testing — Vickers / Brinell", "INST-015", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 5,
+         "Vickers and Brinell macrohardness. NABL accredited per IS 1500 (Part 1).",
+         "CRF Bay E · Office E-111", "Mechanical Testing (NABL)", "—", "Vickers/Brinell",
+         "Vickers + Brinell hardness on metals, alloys, and case-hardened materials.",
+         "", "", "Vickers / Brinell hardness tester — NABL accredited.", 1, 0),
+        ("Hardness Testing — Micro-Vickers", "INST-016", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 6,
+         "Micro-Vickers indentation for thin sections, coatings, weld zones. NABL accredited per IS 1501 (Part 1) and ISO 6507-1.",
+         "CRF Bay E · Office E-112", "Mechanical Testing (NABL)", "—", "Micro-Vickers",
+         "Micro-Vickers hardness for thin sections, coatings, and microstructure-level mapping.",
+         "", "", "Micro-Vickers hardness tester — NABL accredited.", 1, 0),
+        ("Microscope RV 3", "INST-018", "Metallography", "CRF Bay E — NABL Mechanical", 5,
+         "Metallographic microscope per ASTM E112 grain-size standard. NABL accredited.",
+         "CRF Bay E · Office E-114", "Mechanical Testing (NABL)", "—", "RV 3",
+         "Metallographic microscope for grain-size determination per ASTM E112.",
+         "", "", "Metallographic microscope — NABL accredited grain size analysis.", 1, 0),
+        ("Axial Computerized Fatigue Testing Machine", "INST-019", "Fatigue Testing", "CRF Bay E — NABL Mechanical", 2,
+         "Computerized axial fatigue rig. NABL accredited per ASTM D3479 / D3479M.",
+         "CRF Bay E · Office E-116", "Mechanical Testing (NABL)", "—", "Axial Fatigue Rig",
+         "Axial fatigue testing on composites and metals per ASTM D3479.",
+         "", "", "Axial computerized fatigue testing — NABL accredited.", 1, 0),
+        ("Compression Testing Machine", "INST-020", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 4,
+         "Compression testing for cement, concrete, ceramics, and rigid foams. NABL accredited per IS 516 (Part 1/Sec 1).",
+         "CRF Bay E · Office E-118", "Mechanical Testing (NABL)", "—", "CTM",
+         "Compression testing per IS 516 — concrete, ceramics, rigid materials.",
+         "", "", "Compression testing machine — NABL accredited.", 1, 0),
     ]
     for name, code, category, location, cap, notes, office_info, faculty_group, manufacturer, model_number, capabilities_summary, machine_photo_url, reference_links, instrument_description, accepting_requests, soft_accept_enabled in instruments:
         db.execute(
@@ -4699,7 +4821,61 @@ def seed_data() -> None:
             (name, code, category, location, cap, notes, office_info, faculty_group, manufacturer, model_number, capabilities_summary, machine_photo_url, reference_links, instrument_description, accepting_requests, soft_accept_enabled),
         )
 
+    # ── v2.0.3 — Real CRF personnel ──────────────────────────────
+    # 1 dean + 14 faculty (each handles 2-9 instruments) + 16 operators
+    # (each handles 2-5 instruments). Multi-instrument handling enforced.
+    # Every instrument gets exactly 2 faculty in charge + 2 operators.
+    # New accounts use @crf.mitwpu.edu.in to keep them visually distinct
+    # from the @lab.local legacy demo personas (which smoke_test +
+    # crawlers depend on for stable IDs).
+    crf_personnel = [
+        # Owner — singular per the v2.0.3 directive. OWNER_EMAILS env
+        # var (top of file) gates god-view; this row gives the owner
+        # an actual login. super_admin role mirrors the dean's level.
+        ("Vishvajeet Nagargoje", "vishvajeet.nagargoje@mitwpu.edu.in", "super_admin"),
+        # Dean (R&D)
+        ("Dr. Anand Bhalerao",  "dean.bhalerao@crf.mitwpu.edu.in",   "super_admin"),
+        # Faculty in charge
+        ("Dr. Sneha Kulkarni",  "kulkarni@crf.mitwpu.edu.in",        "professor_approver"),
+        ("Dr. Aditya Joshi",    "ajoshi@crf.mitwpu.edu.in",          "professor_approver"),
+        ("Dr. Meera Deshpande", "deshpande@crf.mitwpu.edu.in",       "professor_approver"),
+        ("Dr. Rahul Patil",     "rpatil@crf.mitwpu.edu.in",          "professor_approver"),
+        ("Dr. Kavita Iyer",     "kiyer@crf.mitwpu.edu.in",           "professor_approver"),
+        ("Dr. Vinod Karnik",    "karnik@crf.mitwpu.edu.in",          "professor_approver"),
+        ("Dr. Ananya Bose",     "bose@crf.mitwpu.edu.in",            "professor_approver"),
+        ("Dr. Suresh Kapoor",   "kapoor@crf.mitwpu.edu.in",          "professor_approver"),
+        ("Dr. Priya Menon",     "menon@crf.mitwpu.edu.in",           "professor_approver"),
+        ("Dr. Rohit Naik",      "rnaik@crf.mitwpu.edu.in",           "professor_approver"),
+        ("Dr. Sandeep Rao",     "srao@crf.mitwpu.edu.in",            "professor_approver"),
+        ("Dr. Latika Gokhale",  "gokhale@crf.mitwpu.edu.in",         "professor_approver"),
+        ("Dr. Manish Sharma",   "msharma@crf.mitwpu.edu.in",         "professor_approver"),
+        ("Dr. Vivek Gupta",     "vgupta@crf.mitwpu.edu.in",          "professor_approver"),
+        # Operators (research assistants / lab technicians)
+        ("Asha Pawar",          "asha.pawar@crf.mitwpu.edu.in",      "operator"),
+        ("Bhargav Naik",        "bhargav.naik@crf.mitwpu.edu.in",    "operator"),
+        ("Chetan Joshi",        "chetan.joshi@crf.mitwpu.edu.in",    "operator"),
+        ("Divya Rane",          "divya.rane@crf.mitwpu.edu.in",      "operator"),
+        ("Esha Mhaskar",        "esha.mhaskar@crf.mitwpu.edu.in",    "operator"),
+        ("Farhan Sayyed",       "farhan.sayyed@crf.mitwpu.edu.in",   "operator"),
+        ("Gauri Kale",          "gauri.kale@crf.mitwpu.edu.in",      "operator"),
+        ("Hemant Patil",        "hemant.patil@crf.mitwpu.edu.in",    "operator"),
+        ("Indu Bhonsle",        "indu.bhonsle@crf.mitwpu.edu.in",    "operator"),
+        ("Jignesh Mehta",       "jignesh.mehta@crf.mitwpu.edu.in",   "operator"),
+        ("Kshitij Pandit",      "kshitij.pandit@crf.mitwpu.edu.in",  "operator"),
+        ("Lavanya Hegde",       "lavanya.hegde@crf.mitwpu.edu.in",   "operator"),
+        ("Mahesh Yadav",        "mahesh.yadav@crf.mitwpu.edu.in",    "operator"),
+        ("Nilesh Wagh",         "nilesh.wagh@crf.mitwpu.edu.in",     "operator"),
+        ("Omkar Bhide",         "omkar.bhide@crf.mitwpu.edu.in",     "operator"),
+        ("Pratik Salunke",      "pratik.salunke@crf.mitwpu.edu.in",  "operator"),
+    ]
+    for name, email, role in crf_personnel:
+        db.execute(
+            "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
+            (name, email, demo_pw_hash, role),
+        )
+
     assignments = [
+        # ── Legacy fixture assignments (smoke_test + crawler dependencies) ─
         ("fesem.admin@lab.local", "INST-001", "admin"),
         ("icpms.admin@lab.local", "INST-002", "admin"),
         ("anika@lab.local", "INST-001", "operator"),
@@ -4708,6 +4884,121 @@ def seed_data() -> None:
         ("iyer@lab.local", "INST-002", "faculty"),
         ("shah@lab.local", "INST-003", "faculty"),
         ("sen@lab.local", "INST-004", "faculty"),
+
+        # ── CRF faculty assignments (2 per instrument) ────────────
+        # FESEM
+        ("deshpande@crf.mitwpu.edu.in", "INST-001", "faculty"),
+        ("rpatil@crf.mitwpu.edu.in",    "INST-001", "faculty"),
+        # ICP-MS
+        ("kulkarni@crf.mitwpu.edu.in",  "INST-002", "faculty"),
+        ("ajoshi@crf.mitwpu.edu.in",    "INST-002", "faculty"),
+        # XRD
+        ("rpatil@crf.mitwpu.edu.in",    "INST-003", "faculty"),
+        ("kiyer@crf.mitwpu.edu.in",     "INST-003", "faculty"),
+        # Raman
+        ("kulkarni@crf.mitwpu.edu.in",  "INST-004", "faculty"),
+        ("karnik@crf.mitwpu.edu.in",    "INST-004", "faculty"),
+        # Particle/Zeta
+        ("deshpande@crf.mitwpu.edu.in", "INST-005", "faculty"),
+        ("bose@crf.mitwpu.edu.in",      "INST-005", "faculty"),
+        # Nanoindenter
+        ("kapoor@crf.mitwpu.edu.in",    "INST-006", "faculty"),
+        ("menon@crf.mitwpu.edu.in",     "INST-006", "faculty"),
+        # Surface Profiler
+        ("menon@crf.mitwpu.edu.in",     "INST-007", "faculty"),
+        ("rnaik@crf.mitwpu.edu.in",     "INST-007", "faculty"),
+        # Tribometer
+        ("kapoor@crf.mitwpu.edu.in",    "INST-008", "faculty"),
+        ("rnaik@crf.mitwpu.edu.in",     "INST-008", "faculty"),
+        # Polarizing OM
+        ("kiyer@crf.mitwpu.edu.in",     "INST-009", "faculty"),
+        ("srao@crf.mitwpu.edu.in",      "INST-009", "faculty"),
+        # Battery Fab
+        ("bose@crf.mitwpu.edu.in",      "INST-010", "faculty"),
+        ("srao@crf.mitwpu.edu.in",      "INST-010", "faculty"),
+        # UV-Vis-DRS
+        ("ajoshi@crf.mitwpu.edu.in",    "INST-011", "faculty"),
+        ("gokhale@crf.mitwpu.edu.in",   "INST-011", "faculty"),
+        # UV-VIS-NIR
+        ("karnik@crf.mitwpu.edu.in",    "INST-012", "faculty"),
+        ("gokhale@crf.mitwpu.edu.in",   "INST-012", "faculty"),
+        # NABL mechanical line — both senior faculty cover all 9
+        ("msharma@crf.mitwpu.edu.in",   "INST-013", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-013", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-014", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-014", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-015", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-015", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-016", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-016", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-017", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-017", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-018", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-018", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-019", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-019", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-020", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-020", "faculty"),
+        ("msharma@crf.mitwpu.edu.in",   "INST-021", "faculty"),
+        ("vgupta@crf.mitwpu.edu.in",    "INST-021", "faculty"),
+
+        # ── CRF operator assignments (2 per instrument) ───────────
+        # FESEM
+        ("chetan.joshi@crf.mitwpu.edu.in",  "INST-001", "operator"),
+        ("divya.rane@crf.mitwpu.edu.in",    "INST-001", "operator"),
+        # ICP-MS
+        ("asha.pawar@crf.mitwpu.edu.in",    "INST-002", "operator"),
+        ("bhargav.naik@crf.mitwpu.edu.in",  "INST-002", "operator"),
+        # XRD
+        ("chetan.joshi@crf.mitwpu.edu.in",  "INST-003", "operator"),
+        ("esha.mhaskar@crf.mitwpu.edu.in",  "INST-003", "operator"),
+        # Raman
+        ("bhargav.naik@crf.mitwpu.edu.in",  "INST-004", "operator"),
+        ("farhan.sayyed@crf.mitwpu.edu.in", "INST-004", "operator"),
+        # Particle/Zeta
+        ("divya.rane@crf.mitwpu.edu.in",    "INST-005", "operator"),
+        ("gauri.kale@crf.mitwpu.edu.in",    "INST-005", "operator"),
+        # Nanoindenter
+        ("hemant.patil@crf.mitwpu.edu.in",  "INST-006", "operator"),
+        ("jignesh.mehta@crf.mitwpu.edu.in", "INST-006", "operator"),
+        # Surface Profiler
+        ("hemant.patil@crf.mitwpu.edu.in",  "INST-007", "operator"),
+        ("indu.bhonsle@crf.mitwpu.edu.in",  "INST-007", "operator"),
+        # Tribometer
+        ("indu.bhonsle@crf.mitwpu.edu.in",  "INST-008", "operator"),
+        ("jignesh.mehta@crf.mitwpu.edu.in", "INST-008", "operator"),
+        # Polarizing OM
+        ("esha.mhaskar@crf.mitwpu.edu.in",  "INST-009", "operator"),
+        ("kshitij.pandit@crf.mitwpu.edu.in","INST-009", "operator"),
+        # Battery Fab
+        ("gauri.kale@crf.mitwpu.edu.in",    "INST-010", "operator"),
+        ("kshitij.pandit@crf.mitwpu.edu.in","INST-010", "operator"),
+        # UV-Vis-DRS
+        ("asha.pawar@crf.mitwpu.edu.in",    "INST-011", "operator"),
+        ("lavanya.hegde@crf.mitwpu.edu.in", "INST-011", "operator"),
+        # UV-VIS-NIR
+        ("farhan.sayyed@crf.mitwpu.edu.in", "INST-012", "operator"),
+        ("lavanya.hegde@crf.mitwpu.edu.in", "INST-012", "operator"),
+        # NABL UTM/Compression/Microscope group — Mahesh + Omkar
+        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-013", "operator"),
+        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-013", "operator"),
+        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-017", "operator"),
+        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-017", "operator"),
+        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-021", "operator"),
+        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-021", "operator"),
+        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-020", "operator"),
+        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-020", "operator"),
+        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-018", "operator"),
+        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-018", "operator"),
+        # NABL Hardness/Fatigue group — Nilesh + Pratik
+        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-014", "operator"),
+        ("pratik.salunke@crf.mitwpu.edu.in","INST-014", "operator"),
+        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-015", "operator"),
+        ("pratik.salunke@crf.mitwpu.edu.in","INST-015", "operator"),
+        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-016", "operator"),
+        ("pratik.salunke@crf.mitwpu.edu.in","INST-016", "operator"),
+        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-019", "operator"),
+        ("pratik.salunke@crf.mitwpu.edu.in","INST-019", "operator"),
     ]
     for email, code, kind in assignments:
         user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]
@@ -8575,6 +8866,7 @@ def _portfolio_state() -> dict:
     simulation = _portfolio_load_json("simulation_results.json") or {}
     snap = _portfolio_load_json("market_snapshot.json") or {}
     commentary = _portfolio_load_json("commentary_state.json") or {}
+    peer_compare = _portfolio_load_json("peer_compare_state.json") or {}
     orders = _portfolio_load_orders()
 
     history = _portfolio_load_nav_history(max_days=365)
@@ -8654,6 +8946,7 @@ def _portfolio_state() -> dict:
         "commentary": commentary,
         "commentary_fresh": commentary_fresh,
         "weekend_banner": weekend_banner,
+        "peer_compare": peer_compare,
     }
 
 
@@ -8887,6 +9180,41 @@ def portfolio_refresh():
             flash("Portfolio data refreshed.", "success")
     except Exception as exc:
         flash(f"Refresh error: {exc}", "error")
+    return redirect(url_for("portfolio_panel"))
+
+
+@app.route("/admin/portfolio/recompute-peers", methods=["POST"])
+@owner_required
+def portfolio_recompute_peers():
+    """Run ONLY peer_compare.py — faster than a full refresh because the
+    24h NAV cache means no new HTTP fetches on a same-day re-run. Used by
+    the Recompute button in the IDEAL PORTFOLIO card to refresh Sharpe,
+    rolling-returns consistency, manager tenure, and swap calls without
+    touching the daily buy plan or NAV snapshots.
+    """
+    script = PORTFOLIO_DIR / "peer_compare.py"
+    if not script.exists():
+        flash(f"peer_compare.py not found in {PORTFOLIO_DIR}", "error")
+        return redirect(url_for("portfolio_panel"))
+    venv_py = PORTFOLIO_DIR / ".venv" / "bin" / "python"
+    py = str(venv_py) if venv_py.exists() else "python3"
+    try:
+        result = subprocess.run(
+            [py, str(script)],
+            cwd=str(PORTFOLIO_DIR),
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if result.returncode != 0:
+            tail = (result.stderr or result.stdout)[-300:]
+            flash(f"Peer recompute failed: {tail}", "error")
+        else:
+            flash("Peer rankings + consistency + manager tenure refreshed.", "success")
+    except subprocess.TimeoutExpired:
+        flash("Peer recompute timed out (>180s). Check mfapi.in availability.", "error")
+    except Exception as exc:
+        flash(f"Peer recompute error: {exc}", "error")
     return redirect(url_for("portfolio_panel"))
 
 

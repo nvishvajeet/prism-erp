@@ -131,37 +131,24 @@
     </div>
     {% endif %}
 
-    {# ── Finance module ── #}
-    {% if module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user) %}
-    <div class="nav-dropdown" data-vis="{{ V }}">
-      <a class="nav-trigger {% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}"
-         href="{{ url_for('finance_portal') }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}">Finance</a>
-      <div class="nav-menu" role="menu" aria-label="Finance" data-vis="{{ V }}">
-        <a href="{{ url_for('finance_portal') }}" data-vis="{{ V }}"><strong>Dashboard</strong></a>
-        <a href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants &amp; Budgets</a>
-      </div>
-    </div>
-    {% endif %}
-
-    {# ── HR module ── #}
-    {% if module_enabled('attendance') %}
-    <div class="nav-dropdown" data-vis="{{ V }}">
-      <a class="nav-trigger {% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}"
-         href="{{ url_for('attendance_page') }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}">HR</a>
-      <div class="nav-menu" role="menu" aria-label="HR" data-vis="{{ V }}">
-        <a href="{{ url_for('attendance_page') }}" data-vis="{{ V }}"><strong>Attendance</strong></a>
-      </div>
-    </div>
-    {% endif %}
-
-    {# ── Inbox ── #}
+    {# ── Inbox (universal) ── #}
     {% if module_enabled('inbox') %}
     <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
     {% endif %}
 
-    {# ── Notifications ── #}
+    {# ── Notifications (universal) ── #}
     {% if module_enabled('notifications') %}
     <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    {% endif %}
+
+    {# ── Finance (role-gated, less prominent) ── #}
+    {% if module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user) %}
+    <a class="{% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+    {% endif %}
+
+    {# ── HR/Attendance (operators + admins only) ── #}
+    {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
+    <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
     {% endif %}
 
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>

@@ -7674,6 +7674,18 @@ def new_request():
                 created,
             ),
         )
+        # Save custom field values for this instrument
+        custom_fields = query_all(
+            "SELECT id FROM instrument_custom_fields WHERE instrument_id = ? AND is_active = 1 ORDER BY display_order",
+            (instrument_id,),
+        )
+        for cf in custom_fields:
+            cf_val = request.form.get(f"custom_{cf['id']}", "").strip()
+            if cf_val:
+                execute(
+                    "INSERT INTO request_custom_field_values (request_id, custom_field_id, field_value) VALUES (?, ?, ?)",
+                    (request_id, cf["id"], cf_val),
+                )
         if instrument["accepting_requests"]:
             create_approval_chain(get_db(), request_id, instrument_id)
             # Just inserted with `initial_status='submitted'` above; transition is always submitted -> under_review.
@@ -8114,6 +8126,22 @@ def request_detail(request_id: int):
                 except ValueError as exc:
                     flash(f"Approved, but file upload failed: {exc}", "error")
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_approved", {"step_id": step_id})
+            # Phase 2 commit 5 — notify submitter via inbox if configured
+            notify_cfg = query_one(
+                "SELECT notify_submitter FROM instrument_approval_config WHERE instrument_id = ? AND step_order = ?",
+                (sample_request["instrument_id"], step["step_order"]),
+            )
+            if notify_cfg and notify_cfg["notify_submitter"]:
+                execute(
+                    "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at) VALUES (?, ?, ?, ?, ?, NULL)",
+                    (
+                        user["id"],
+                        sample_request["requester_id"],
+                        f"Request {sample_request['request_no']}: Step {step['step_order']} approved",
+                        f"Your request {sample_request['request_no']} ({sample_request['sample_name']}) has been approved at step {step['step_order']} ({step['approver_role'].replace('_', ' ').title()}). You may now proceed with the next stage.",
+                        now_iso(),
+                    ),
+                )
             # W1.4.6 — XHR branch: return JSON so approval-toggle.js can
             # refresh in place without a full-page reload round-trip.
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -8557,6 +8585,14 @@ def request_detail(request_id: int):
         (request_id,),
     )
     remarks_author = remarks_author_row["name"] if remarks_author_row else None
+    custom_field_values = query_all(
+        """SELECT icf.field_label, rcfv.field_value
+           FROM request_custom_field_values rcfv
+           JOIN instrument_custom_fields icf ON icf.id = rcfv.custom_field_id
+           WHERE rcfv.request_id = ?
+           ORDER BY icf.display_order""",
+        (request_id,),
+    )
     return render_template(
         "request_detail.html",
         sample_request=sample_request,
@@ -8588,6 +8624,7 @@ def request_detail(request_id: int):
         can_respond_issue=can_respond_issue,
         approval_candidates=approval_candidates,
         remarks_author=remarks_author,
+        custom_field_values=custom_field_values,
     )
 
 

@@ -109,6 +109,11 @@
         </label>
       </section>
 
+      <section class="form-section" id="customFieldsSection" style="display:none" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Instrument Fields</h3>
+        <div id="customFieldsContainer" data-vis="{{ V }}"></div>
+      </section>
+
       <section class="form-section" id="financeFieldsCard" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Finance</h3>
         <div class="new-request-inline-grid" data-vis="{{ V }}">
@@ -175,9 +180,50 @@
       financeCard.classList.toggle("is-muted", originSelect.value !== "external");
     }
 
+    const cfSection = document.getElementById("customFieldsSection");
+    const cfContainer = document.getElementById("customFieldsContainer");
+    function loadCustomFields() {
+      if (!instrumentSelect || !cfSection || !cfContainer) return;
+      const instId = instrumentSelect.value;
+      cfContainer.innerHTML = "";
+      cfSection.style.display = "none";
+      if (!instId) return;
+      fetch("/instruments/" + instId + "/custom-fields")
+        .then(function(r) { return r.json(); })
+        .then(function(fields) {
+          if (!fields.length) return;
+          cfSection.style.display = "";
+          fields.forEach(function(f) {
+            var wrap = document.createElement("label");
+            wrap.setAttribute("data-vis", "{{ V }}");
+            wrap.textContent = f.label + " ";
+            var el;
+            if (f.type === "select") {
+              el = document.createElement("select");
+              f.options.split("|").forEach(function(o) {
+                var opt = document.createElement("option");
+                opt.value = o.trim(); opt.textContent = o.trim();
+                el.appendChild(opt);
+              });
+            } else if (f.type === "file") {
+              el = document.createElement("input"); el.type = "file";
+            } else if (f.type === "number") {
+              el = document.createElement("input"); el.type = "number";
+            } else {
+              el = document.createElement("input"); el.type = "text";
+            }
+            el.name = "custom_" + f.id;
+            el.setAttribute("data-vis", "{{ V }}");
+            if (f.required) el.required = true;
+            wrap.appendChild(el);
+            cfContainer.appendChild(wrap);
+          });
+        });
+    }
     if (instrumentSelect) {
-      instrumentSelect.addEventListener("change", updateInstrumentSummary);
+      instrumentSelect.addEventListener("change", function() { updateInstrumentSummary(); loadCustomFields(); });
       updateInstrumentSummary();
+      loadCustomFields();
     }
     if (originSelect) {
       originSelect.addEventListener("change", updateOriginMode);

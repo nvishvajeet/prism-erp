@@ -120,6 +120,18 @@
     {% endif %}
   </article>
 
+  {# ── TILE 2b: custom field values ── #}
+  {% if custom_field_values %}
+  <article class="card tile tile-request-custom-fields" data-vis="{{ V }}">
+    {{ card_heading("", "Instrument Fields") }}
+    {% set _cf_items = [] %}
+    {% for cfv in custom_field_values %}
+      {% if _cf_items.append((cfv['field_label'], cfv['field_value'])) %}{% endif %}
+    {% endfor %}
+    {{ metadata_grid(_cf_items) }}
+  </article>
+  {% endif %}
+
   {# ── TILE 3: actions — primary + admin tools ── #}
   {% if _has_actions_tile %}
   <article class="card tile tile-request-actions" data-vis="{{ V }}">

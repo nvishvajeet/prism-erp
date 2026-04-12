@@ -7265,6 +7265,11 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   flex-wrap: wrap;
   font-size: 0.8rem;
 }
+/* Notification card body spacing */
+.notice-unread h3,
+.card.tile h3 + p { margin: 0.3rem 0 0.15rem; }
+.card.tile h3 ~ .hint { margin: 0.15rem 0 0; }
+.notice-mark-read-form { display: inline; margin-left: auto; }
 
 /* ── Calendar ────────────────────────────────────────────── */
 :root[data-theme="dark"] .calendar-shell .fc-button {

@@ -14,7 +14,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
 
   {% if upcoming_calibrations %}
-  <article class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("UPCOMING CALIBRATIONS", upcoming_calibrations|length|string ~ " due soon") }}
     <ul class="finance-invoice-list" data-vis="{{ V }}">
       {% for c in upcoming_calibrations %}
@@ -34,7 +34,7 @@
   {% endif %}
 
   {% if can_add %}
-  <article class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+  <article class="card tile" data-columns="3" data-vis="{{ V }}">
     {{ card_heading("LOG EVENT", "Add maintenance or calibration record") }}
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">

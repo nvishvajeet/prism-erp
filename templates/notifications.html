@@ -26,7 +26,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   {% if notices %}
   {% for n in notices %}
-  <article class="card tile{% if not n.is_read %} notice-unread{% endif %}" style="grid-column: span 6;" data-vis="{{ V }}">
+  <article class="card tile{% if not n.is_read %} notice-unread{% endif %}" data-columns="6" data-vis="{{ V }}">
     <div class="notice-row-header" data-vis="{{ V }}">
       <div class="notice-row-meta" data-vis="{{ V }}">
         {% if not n.is_read %}<span class="notice-unread-dot" data-vis="{{ V }}"></span>{% endif %}
@@ -34,7 +34,7 @@
         <code class="inline-code" data-vis="{{ V }}">{{ n.scope_label }}</code>
         <span class="hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
         {% if not n.is_read %}
-        <form method="post" action="{{ url_for('notification_mark_read') }}" style="display:inline;margin-left:auto;" data-vis="{{ V }}">
+        <form method="post" action="{{ url_for('notification_mark_read') }}" class="notice-mark-read-form" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="notice_id" value="{{ n.id }}">
           <button type="submit" class="text-link hint" data-vis="{{ V }}">mark read</button>
@@ -42,13 +42,13 @@
         {% endif %}
       </div>
     </div>
-    <h3 style="margin:0.3rem 0 0.15rem;" data-vis="{{ V }}">{{ n.subject }}</h3>
-    {% if n.body %}<p style="margin:0.2rem 0;" data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
-    {% if n.author_name %}<p class="hint" style="margin:0.15rem 0 0;" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
+    <h3 data-vis="{{ V }}">{{ n.subject }}</h3>
+    {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
+    {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
   </article>
   {% endfor %}
   {% else %}
-  <article class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
     {{ empty_state("No active notifications. You're all caught up.") }}
   </article>
   {% endif %}

@@ -6843,12 +6843,22 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   flex-direction: column;
   gap: 0.65rem;
 }
+/* Smooth dismiss: notice fades + collapses instead of jumping */
 .notice {
   padding: 0.75rem 0.95rem;
   border: 1px solid var(--line, rgba(0,0,0,0.08));
   border-left-width: 3px;
   border-radius: var(--radius-md, 8px);
   background: var(--panel);
+  transition: opacity 0.3s ease, max-height 0.3s ease, padding 0.3s ease, margin 0.3s ease;
+  overflow: hidden;
+}
+.notice.notice-dismissed {
+  opacity: 0;
+  max-height: 0;
+  padding: 0 0.95rem;
+  margin: 0;
+  border: none;
 }
 .notice-critical { border-left-color: #c0392b; background: color-mix(in srgb, #c0392b 5%, var(--panel)); }
 .notice-warning  { border-left-color: #d98b1c; background: color-mix(in srgb, #d98b1c 5%, var(--panel)); }

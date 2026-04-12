@@ -84,19 +84,37 @@ if [ "$STASHED" -eq 1 ]; then
   git stash pop -q 2>/dev/null || echo "  ⚠ Stash conflict — resolve manually with 'git stash show' + 'git stash drop'"
 fi
 
-# Restart if requested
+# Restart if requested — ZERO DOWNTIME via Gunicorn graceful reload
 if [ "$1" = "--restart" ]; then
   echo ""
-  echo "  Restarting Flask..."
-  kill -9 $(lsof -ti :5055) 2>/dev/null || true
-  sleep 1
-  nohup bash scripts/start.sh --service > logs/server.log 2>&1 &
-  disown
-  sleep 3
-  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5055/login | grep -q 200; then
-    echo "  ✓ Server restarted successfully"
+  MASTER_PID=$(pgrep -f "gunicorn.*app:app" | head -1)
+  PORT="${LAB_SCHEDULER_PORT:-5055}"
+  PROTO="http"
+  [ -f cert.pem ] && [ -f key.pem ] && PROTO="https"
+
+  if [ -n "$MASTER_PID" ]; then
+    # Gunicorn is running — send SIGHUP for graceful reload.
+    # Workers finish current requests, then restart with new code.
+    # No dropped connections, no downtime.
+    echo "  Graceful reload (SIGHUP → gunicorn pid $MASTER_PID)..."
+    kill -HUP "$MASTER_PID"
+    sleep 3
+    if curl -sk -o /dev/null -w "%{http_code}" "${PROTO}://127.0.0.1:${PORT}/login" | grep -q 200; then
+      echo "  ✓ Reloaded — zero downtime"
+    else
+      echo "  ⚠ Reload may have failed — check logs/server.log"
+    fi
   else
-    echo "  ⚠ Server may not have started — check logs/server.log"
+    # No gunicorn running — cold start
+    echo "  Starting server (cold start)..."
+    nohup bash scripts/start.sh --service > logs/server.log 2>&1 &
+    disown
+    sleep 4
+    if curl -sk -o /dev/null -w "%{http_code}" "${PROTO}://127.0.0.1:${PORT}/login" | grep -q 200; then
+      echo "  ✓ Server started"
+    else
+      echo "  ⚠ Server may not have started — check logs/server.log"
+    fi
   fi
 fi
 

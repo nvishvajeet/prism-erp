@@ -247,25 +247,7 @@
       </li>
       {% endif %}
     </ol>
-    <details class="tile-inline-editor" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Edit sequence</summary>
-      <form method="post" class="approval-edit-form top-gap" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="save_approval_config">
-        {% for idx in range(1, 7) %}
-        {% set cfg = approval_config[idx - 1] if approval_config|length >= idx else none %}
-        <div class="approval-edit-row" data-vis="{{ V }}">
-          <span class="approval-edit-num" data-vis="{{ V }}">{{ idx }}</span>
-          <select name="step_role_{{ idx }}" data-vis="{{ V }}">
-            <option value="">— none —</option>
-            <option value="finance" {% if cfg and cfg["approver_role"] == "finance" %}selected{% endif %}>Finance</option>
-            <option value="professor" {% if cfg and cfg["approver_role"] == "professor" %}selected{% endif %}>Faculty</option>
-            <option value="operator" {% if cfg and cfg["approver_role"] == "operator" %}selected{% endif %}>Operator</option>
-          </select>
-        </div>
-        {% endfor %}
-        <button type="submit" class="small-button" data-vis="{{ V }}">Save Sequence</button>
-      </form>
-    </details>
+    <a class="text-link" href="{{ url_for('instrument_form_control', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Configure Approval &amp; Fields &rarr;</a>
   </section>
   {% endif %}
 

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block breadcrumb_instrument %}{{ instrument["name"] }} / Form Control{% endblock %}
+{% block hover_back %}{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ instrument["name"] }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">Form Control</span>
+  </div>
+</header>
+
+<div class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Tile 1: Approval Sequence (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Approval Sequence") }}
+    <p class="tile-lead" data-vis="{{ V }}">Configure approval steps and per-step submitter notifications.</p>
+    <form method="post" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_approval_notify">
+      <div class="form-control-approval-grid" data-vis="{{ V }}">
+        {% for idx in range(1, 7) %}
+        {% set cfg = approval_config[idx - 1] if approval_config|length >= idx else none %}
+        <div class="form-control-field-row" data-vis="{{ V }}">
+          <span class="approval-edit-num" data-vis="{{ V }}">{{ idx }}</span>
+          {% if cfg %}
+          <span data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ cfg["approver_role"].replace("_"," ").title() }}</strong>
+            {% if cfg["approver_name"] %}<small class="hint" data-vis="{{ V }}">{{ cfg["approver_name"] }}</small>{% endif %}
+          </span>
+          <label class="form-control-notify-label" data-vis="{{ V }}">
+            <input type="checkbox" name="notify_submitter_{{ idx }}" value="1"
+              {% if cfg["notify_submitter"] %}checked{% endif %} data-vis="{{ V }}">
+            Notify submitter
+          </label>
+          {% else %}
+          <span class="hint" data-vis="{{ V }}">— empty —</span>
+          <span data-vis="{{ V }}"></span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Notification Settings</button>
+    </form>
+    <p class="tile-footnote" data-vis="{{ V }}">To change approval roles and assignees, use the inline editor on the <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">instrument page</a>.</p>
+  </section>
+
+  {# ── Tile 2: Custom Fields (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Custom Fields") }}
+    <p class="tile-lead" data-vis="{{ V }}">Fields requesters fill in when submitting to this instrument. Up to 20 fields.</p>
+    <form method="post" id="customFieldsForm" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_custom_fields">
+      <div id="customFieldsList" data-vis="{{ V }}">
+        {% for f in custom_fields %}
+        <div class="form-control-field-row" data-vis="{{ V }}">
+          <input type="text" name="field_label_{{ loop.index }}" value="{{ f['field_label'] }}" placeholder="Label" required data-vis="{{ V }}">
+          <select name="field_type_{{ loop.index }}" class="fc-type-select" data-vis="{{ V }}">
+            <option value="text" {% if f["field_type"] == "text" %}selected{% endif %}>Text</option>
+            <option value="number" {% if f["field_type"] == "number" %}selected{% endif %}>Number</option>
+            <option value="select" {% if f["field_type"] == "select" %}selected{% endif %}>Select</option>
+            <option value="file" {% if f["field_type"] == "file" %}selected{% endif %}>File</option>
+          </select>
+          <label data-vis="{{ V }}"><input type="checkbox" name="field_required_{{ loop.index }}" value="1" {% if f["is_required"] %}checked{% endif %} data-vis="{{ V }}"> Required</label>
+          <input type="text" name="field_options_{{ loop.index }}" value="{{ f['field_options'] }}" placeholder="Options (comma-sep)" class="fc-options-input" data-vis="{{ V }}">
+          <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="form-control-add-btn small-button" id="addFieldBtn" data-vis="{{ V }}">+ Add Field</button>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Fields</button>
+    </form>
+  </section>
+
+  {# ── Tile 3: Overview (span 3) ── #}
+  <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+    {{ card_heading("", "Overview") }}
+    <ul class="tile-summary-list" data-vis="{{ V }}">
+      <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ approval_config|length }}</strong> approval step{{ "s" if approval_config|length != 1 }} configured</li>
+      <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ custom_fields|length }}</strong> custom field{{ "s" if custom_fields|length != 1 }} active</li>
+    </ul>
+    <a class="text-link top-gap" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">&larr; Back to {{ instrument["name"] }}</a>
+  </section>
+
+</div>
+
+<template id="fieldRowTemplate">
+  <div class="form-control-field-row" data-vis="{{ V }}">
+    <input type="text" name="field_label_IDX" placeholder="Label" required data-vis="{{ V }}">
+    <select name="field_type_IDX" class="fc-type-select" data-vis="{{ V }}">
+      <option value="text">Text</option>
+      <option value="number">Number</option>
+      <option value="select">Select</option>
+      <option value="file">File</option>
+    </select>
+    <label data-vis="{{ V }}"><input type="checkbox" name="field_required_IDX" value="1" data-vis="{{ V }}"> Required</label>
+    <input type="text" name="field_options_IDX" placeholder="Options (comma-sep)" class="fc-options-input" data-vis="{{ V }}">
+    <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
+  </div>
+</template>
+
+<script>
+(function() {
+  var list = document.getElementById('customFieldsList');
+  var tmpl = document.getElementById('fieldRowTemplate');
+  var btn = document.getElementById('addFieldBtn');
+  btn.addEventListener('click', function() {
+    var rows = list.querySelectorAll('.form-control-field-row');
+    if (rows.length >= 20) return;
+    var idx = rows.length + 1;
+    var clone = tmpl.content.cloneNode(true);
+    clone.querySelectorAll('[name]').forEach(function(el) {
+      el.name = el.name.replace('IDX', idx);
+    });
+    list.appendChild(clone);
+  });
+  // Re-index names before submit so server gets contiguous 1..N
+  document.getElementById('customFieldsForm').addEventListener('submit', function() {
+    var rows = list.querySelectorAll('.form-control-field-row');
+    rows.forEach(function(row, i) {
+      var n = i + 1;
+      row.querySelectorAll('[name]').forEach(function(el) {
+        el.name = el.name.replace(/\d+$/, n);
+      });
+    });
+  });
+})();
+</script>
+
+{% endblock %}

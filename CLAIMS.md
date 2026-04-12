@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude-form-control | feature/instrument-form-control | 2026-04-12T00:00 | app.py, templates/instrument_form_control.html (new), templates/instrument_detail.html, static/styles.css | Phase 2 commits 1-3 |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

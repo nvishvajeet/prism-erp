@@ -4024,6 +4024,38 @@ def init_db() -> None:
             )
         """)
 
+        # Phase 2: Instrument form control panel
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS instrument_custom_fields (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                field_label TEXT NOT NULL,
+                field_type TEXT NOT NULL DEFAULT 'text',
+                field_options TEXT NOT NULL DEFAULT '',
+                is_required INTEGER NOT NULL DEFAULT 0,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS request_custom_field_values (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                custom_field_id INTEGER NOT NULL,
+                field_value TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (custom_field_id) REFERENCES instrument_custom_fields(id)
+            )
+        """)
+        for col_sql in [
+            "ALTER TABLE instrument_approval_config ADD COLUMN notify_submitter INTEGER NOT NULL DEFAULT 0",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except Exception:
+                pass
+
         # W1.3.7 backfill — every existing user gets a user_roles row
         # mirroring their primary users.role. Idempotent: only inserts
         # the pair (user_id, role) if it's not already present.
@@ -7447,6 +7479,98 @@ def instrument_detail(instrument_id: int):
         ),
         upcoming_downtime=upcoming_downtime,
     )
+
+
+@app.route("/instruments/<int:instrument_id>/form-control", methods=["GET", "POST"])
+@login_required
+def instrument_form_control(instrument_id: int):
+    user = current_user()
+    instrument = query_all("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
+    if not instrument:
+        abort(404)
+    instrument = instrument[0]
+    if not (is_owner(user) or user["role"] == "super_admin"):
+        abort(403)
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+        db = get_db()
+
+        if action == "save_custom_fields":
+            db.execute("DELETE FROM instrument_custom_fields WHERE instrument_id = ?", (instrument_id,))
+            order = 0
+            for idx in range(1, 21):
+                label = request.form.get(f"field_label_{idx}", "").strip()
+                if not label:
+                    continue
+                ftype = request.form.get(f"field_type_{idx}", "text").strip()
+                if ftype not in ("text", "number", "select", "file"):
+                    ftype = "text"
+                freq = 1 if request.form.get(f"field_required_{idx}") else 0
+                opts = request.form.get(f"field_options_{idx}", "").strip()
+                order += 1
+                db.execute(
+                    "INSERT INTO instrument_custom_fields (instrument_id, field_label, field_type, field_options, is_required, display_order, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)",
+                    (instrument_id, label, ftype, opts, freq, order),
+                )
+            db.commit()
+            log_action(user["id"], "instrument", instrument_id, "custom_fields_updated", {"field_count": order})
+            flash("Custom fields saved.", "success")
+            return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
+
+        if action == "save_approval_notify":
+            for idx in range(1, 7):
+                notify = 1 if request.form.get(f"notify_submitter_{idx}") else 0
+                db.execute(
+                    "UPDATE instrument_approval_config SET notify_submitter = ? WHERE instrument_id = ? AND step_order = ?",
+                    (notify, instrument_id, idx),
+                )
+            db.commit()
+            log_action(user["id"], "instrument", instrument_id, "approval_notify_updated", {})
+            flash("Notification settings saved.", "success")
+            return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
+
+        abort(400)
+
+    approval_config = query_all(
+        """
+        SELECT iac.*, u.name AS approver_name
+        FROM instrument_approval_config iac
+        LEFT JOIN users u ON u.id = iac.approver_user_id
+        WHERE iac.instrument_id = ?
+        ORDER BY iac.step_order
+        """,
+        (instrument_id,),
+    )
+    custom_fields = query_all(
+        "SELECT * FROM instrument_custom_fields WHERE instrument_id = ? ORDER BY display_order",
+        (instrument_id,),
+    )
+    approval_role_candidates = query_all(
+        "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
+    )
+    return render_template(
+        "instrument_form_control.html",
+        instrument=instrument,
+        approval_config=approval_config,
+        custom_fields=custom_fields,
+        approval_role_candidates=approval_role_candidates,
+        intake_mode=instrument_intake_mode(instrument),
+        intake_mode_label=intake_mode_label,
+    )
+
+
+@app.route("/instruments/<int:instrument_id>/custom-fields")
+@login_required
+def instrument_custom_fields_json(instrument_id: int):
+    rows = query_all(
+        "SELECT id, field_label, field_type, is_required, field_options FROM instrument_custom_fields WHERE instrument_id = ? AND is_active = 1 ORDER BY display_order",
+        (instrument_id,),
+    )
+    return jsonify([
+        {"id": r["id"], "label": r["field_label"], "type": r["field_type"], "required": bool(r["is_required"]), "options": r["field_options"]}
+        for r in rows
+    ])
 
 
 @app.route("/requests/new", methods=["GET", "POST"])

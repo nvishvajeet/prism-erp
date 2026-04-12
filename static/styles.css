@@ -3500,6 +3500,35 @@ code {
   min-height: 0;
 }
 
+/* Finance tiles — KPI row is short, table/list tiles are bounded */
+.finance-tiles > .tile { max-height: 520px; }
+.finance-tiles > .tile-finance-kpi { max-height: 200px; }
+.finance-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Stats tiles — counters are short, activity feed is bounded */
+.stats-tiles > .tile { max-height: 520px; }
+.stats-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Admin notices — list tiles bounded */
+.admin-notices-tiles > .tile { max-height: 520px; }
+.admin-notices-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Inbox — message list bounded */
+.inbox-tiles > .tile { max-height: 600px; }
+.inbox-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .tile-lead {
   margin: 0 0 0.25rem 0;
   color: var(--muted);

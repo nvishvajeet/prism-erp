@@ -8342,3 +8342,125 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .inst-tiles > article[data-columns="6"].notice-unread {
   background: color-mix(in srgb, var(--accent) 6%, var(--panel-strong));
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   v1.6.2 — Final polish pass (10 improvements, CSS-only)
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* 1. Dashboard: Quick Actions cards — tighter padding, smaller gap */
+.qa-card { padding: 0.4rem 0.65rem; }
+.qa-grid { gap: 0.55rem; }
+.qa-label { font-size: 0.98rem; }
+
+/* 2. Instruments: sticky thead when scrolling long lists */
+.instruments-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--panel-strong, #fff);
+  z-index: 2;
+}
+:root[data-theme="dark"] .instruments-table thead {
+  background: var(--panel-strong);
+}
+
+/* 3. Instrument detail: shorter tile eyebrows (font tightening) */
+.inst-tiles .section-head { font-size: 0.68rem; letter-spacing: 0.08em; }
+
+/* 4. Schedule: filter pills — more Apple-like (tighter, subtler) */
+.filter-pill {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.filter-pill-count {
+  padding: 0.08rem 0.38rem;
+  font-size: 0.66rem;
+}
+
+/* 5. Requests: approval steps — tighter vertical rhythm */
+.lifecycle-steps { gap: 0.4rem; }
+.lifecycle-step { padding: 0.45rem 0.7rem; }
+
+/* 6. Inbox: folder tab active state — stronger highlight */
+.inbox-folder-tab--active {
+  background: var(--ink, #1e2935);
+  color: #fff;
+  border-color: var(--ink, #1e2935);
+  font-weight: 600;
+}
+.inbox-folder-tab--active:hover {
+  background: var(--ink, #1e2935);
+  color: #fff;
+}
+:root[data-theme="dark"] .inbox-folder-tab--active {
+  background: var(--accent, #7fd1d4);
+  color: var(--bg, #0f1419);
+  border-color: var(--accent, #7fd1d4);
+}
+:root[data-theme="dark"] .inbox-folder-tab--active:hover {
+  background: var(--accent-hover, #93dee0);
+  color: var(--bg, #0f1419);
+}
+
+/* 7. Finance: Internal/External blocks — subtle background tints */
+.finance-tiles > .card.tile:nth-child(1) {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #3b6fc7 5%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid color-mix(in srgb, #3b6fc7 50%, transparent);
+}
+.finance-tiles > .card.tile:nth-child(2) {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #2f9e44 5%, var(--panel)),
+    var(--panel));
+  border-left: 3px solid color-mix(in srgb, #2f9e44 50%, transparent);
+}
+:root[data-theme="dark"] .finance-tiles > .card.tile:nth-child(1) {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #3b6fc7 8%, var(--panel)),
+    var(--panel));
+}
+:root[data-theme="dark"] .finance-tiles > .card.tile:nth-child(2) {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, #2f9e44 8%, var(--panel)),
+    var(--panel));
+}
+
+/* 8. Stats: chart tiles — consistent min-height */
+.stats-tiles > .tile {
+  min-height: 20rem;
+}
+.stats-tiles > .tile-stats-header,
+.stats-tiles > .tile-stats-counters,
+.stats-tiles > .tile-stats-export {
+  min-height: auto;
+}
+
+/* 9. Attendance: Mark Present button — Ferrari red accent */
+form[action*="attendance"] .primary-action,
+form[action*="quick-present"] .primary-action {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+form[action*="attendance"] .primary-action:hover,
+form[action*="quick-present"] .primary-action:hover {
+  background: #a93226;
+  border-color: #a93226;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(192, 57, 43, 0.25);
+}
+
+/* 10. Notifications: card padding consistency */
+.inst-tiles > article[data-columns="6"] {
+  padding: 0.75rem 1rem;
+}
+.inst-tiles > article[data-columns="6"] .notice-head {
+  margin-bottom: 0.3rem;
+}
+.inst-tiles > article[data-columns="6"] .notice-body {
+  margin-top: 0.2rem;
+}

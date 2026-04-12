@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('receipts_list') }}" data-vis="{{ V }}">← Receipts</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ receipt.title }}</h2>
+    <span class="badge status-{{ receipt.status }}" data-vis="{{ V }}">{{ receipt.status|capitalize }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# Receipt image #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("", "Receipt") }}
+    {% if receipt.receipt_image_path %}
+      {% set ext = receipt.receipt_image_path.rsplit('.', 1)[-1]|lower %}
+      {% if ext in ('jpg','jpeg','png','gif','webp') %}
+      <img src="/{{ receipt.receipt_image_path }}" alt="Receipt" style="max-width:100%;border-radius:8px;" data-vis="{{ V }}">
+      {% elif ext == 'pdf' %}
+      <a class="btn" href="/{{ receipt.receipt_image_path }}" target="_blank" data-vis="{{ V }}">View PDF →</a>
+      {% else %}
+      <a class="btn" href="/{{ receipt.receipt_image_path }}" data-vis="{{ V }}">Download attachment</a>
+      {% endif %}
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No receipt image attached.</p>
+    {% endif %}
+  </article>
+
+  {# Metadata #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("", "Details") }}
+    {% set meta = [
+      ('Amount', '₹' ~ "{:,.2f}".format(receipt.amount)),
+      ('Category', receipt.category|capitalize),
+      ('Date', receipt.receipt_date[:10] if receipt.receipt_date else '—'),
+      ('Submitted by', receipt.submitter_name),
+      ('Submitted', receipt.created_at[:16]|replace('T',' ') if receipt.created_at else '—'),
+      ('Status', receipt.status|capitalize),
+    ] %}
+    {{ metadata_grid(meta, compact=True) }}
+    {% if receipt.description %}
+    <p class="top-gap" data-vis="{{ V }}">{{ receipt.description }}</p>
+    {% endif %}
+    {% if receipt.reviewer_name %}
+    <div class="top-gap" data-vis="{{ V }}">
+      <strong data-vis="{{ V }}">Reviewed by:</strong> {{ receipt.reviewer_name }}
+      <br data-vis="{{ V }}"><small class="hint" data-vis="{{ V }}">{{ receipt.reviewed_at[:16]|replace('T',' ') if receipt.reviewed_at else '' }}</small>
+      {% if receipt.reviewer_note %}<p data-vis="{{ V }}">{{ receipt.reviewer_note }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </article>
+
+  {# Review form (finance admin only, pending receipts) #}
+  {% if can_review and receipt.status == 'pending' %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Review") }}
+    <form method="post" action="{{ url_for('receipt_review', receipt_id=receipt.id) }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Note<textarea name="reviewer_note" rows="2" placeholder="Optional reviewer note..." data-vis="{{ V }}"></textarea></label>
+      <div class="form-controls" data-vis="{{ V }}">
+        <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
+        <button type="submit" name="action" value="reject" class="btn" data-vis="{{ V }}">Reject</button>
+      </div>
+    </form>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

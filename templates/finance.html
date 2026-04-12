@@ -121,7 +121,7 @@
       <tbody data-vis="{{ V }}">
         {% for row in by_instrument %}
         {% set out = row.owed - row.paid %}
-        <tr class="finance-clickable-row" data-href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">
+        <tr class="clickable-row" data-href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ row.code }}</code> · {{ row.name }}</td>
           <td class="finance-num" data-vis="{{ V }}">{{ row.total_requests }}</td>
           <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.owed) }}</td>
@@ -195,8 +195,11 @@
 </section>
 <script>
 (function(){
-  document.querySelectorAll('.finance-clickable-row[data-href]').forEach(function(r){
-    r.addEventListener('click',function(){window.location=r.dataset.href;});
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
   });
 })();
 </script>

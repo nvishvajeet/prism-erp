@@ -9127,8 +9127,8 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 .finance-table-scroll { overflow-x: auto; }
 .finance-invoice-table td { font-size: 0.8rem; }
 .finance-desc-cell { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.finance-clickable-row { cursor: pointer; transition: background 100ms; }
-.finance-clickable-row:hover { background: var(--hover-soft, rgba(0,0,0,0.03)); }
+.clickable-row { cursor: pointer; transition: background 100ms; }
+.clickable-row:hover { background: var(--hover-soft, rgba(0,0,0,0.03)); }
 
 /* ── Status pills ── */
 .finance-status-pill {
@@ -9241,7 +9241,7 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 :root[data-theme="dark"] .finance-type-expense { background: #0a1e3d; color: #60a5fa; }
 :root[data-theme="dark"] .finance-spend-expense { background: color-mix(in srgb, #0a1e3d 15%, var(--panel)); }
 :root[data-theme="dark"] .finance-method-badge { background: var(--surface); color: var(--hint); }
-:root[data-theme="dark"] .finance-clickable-row:hover { background: var(--hover-soft); }
+:root[data-theme="dark"] .clickable-row:hover { background: var(--hover-soft); }
 :root[data-theme="dark"] .finance-filter-group select,
 :root[data-theme="dark"] .finance-filter-group input[type="date"] { background: var(--surface); color: var(--ink); border-color: var(--line); }
 :root[data-theme="dark"] .finance-form-field input,
@@ -9423,5 +9423,5 @@ a.finance-kpi-link:hover {
 a.finance-kpi-link:active { transform: translateY(0); }
 
 /* Clickable table rows */
-tr.finance-clickable-row { cursor: pointer; transition: background 0.12s; }
-tr.finance-clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
+tr.clickable-row { cursor: pointer; transition: background 0.12s; }
+tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }

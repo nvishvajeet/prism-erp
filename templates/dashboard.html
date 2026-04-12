@@ -213,7 +213,7 @@
           <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>
           <tbody data-vis="{{ V }}">
           {% for row in queue.rows[:5] %}
-            <tr data-vis="{{ V }}">
+            <tr class="clickable-row" data-href="{{ url_for('request_detail', request_id=row['id']) }}" data-vis="{{ V }}">
               <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
               <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
               <td data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["sample_received_at"] or row["created_at"]) }}</td>
@@ -341,5 +341,15 @@
       });
     });
   })();
+</script>
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+})();
 </script>
 {% endblock %}

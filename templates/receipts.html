@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, status_pills_row with context %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Receipts</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ receipts|length }} total</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('receipt_new') }}" data-vis="{{ V }}">+ Submit Receipt</a>
+  </div>
+</header>
+
+{{ status_pills_row(
+  pills=[('', 'All', counts.all), ('pending', 'Pending', counts.pending), ('approved', 'Approved', counts.approved), ('rejected', 'Rejected', counts.rejected)],
+  active=status_filter,
+  row_id='receiptPills'
+) }}
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "All Receipts") }}
+    {% if receipts %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Title</th>
+          <th data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Status</th>
+          {% if can_review %}<th data-vis="{{ V }}">Submitted by</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in receipts %}
+        <tr class="clickable-row" data-href="{{ url_for('receipt_detail', receipt_id=r.id) }}" data-bucket="{{ r.status }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ r.receipt_date[:10] if r.receipt_date else r.created_at[:10] }}</td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.title }}</strong></td>
+          <td data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ r.category }}</span></td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ r.status }}" data-vis="{{ V }}">{{ r.status|capitalize }}</span></td>
+          {% if can_review %}<td data-vis="{{ V }}">{{ r.submitter_name }}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No receipts yet.", "Submit your first receipt to get started.", "Submit Receipt", url_for('receipt_new')) }}
+    {% endif %}
+  </article>
+</section>
+
+<script>
+(function(){
+  // Clickable rows
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+  // Status filter pills
+  var pills=document.querySelectorAll('#receiptPills .filter-pill');
+  var rows=document.querySelectorAll('tbody tr[data-bucket]');
+  pills.forEach(function(p){
+    p.addEventListener('click',function(){
+      var active=p.dataset.bucket||'';
+      pills.forEach(function(pp){pp.classList.toggle('is-active',pp===p);});
+      rows.forEach(function(r){r.hidden=active&&r.dataset.bucket!==active;});
+    });
+  });
+})();
+</script>
+{% endblock %}

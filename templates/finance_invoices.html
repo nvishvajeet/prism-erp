@@ -82,7 +82,7 @@
         </thead>
         <tbody data-vis="{{ V }}">
           {% for inv in invoices %}
-          <tr class="finance-clickable-row" data-href="{{ url_for('finance_invoice_detail', invoice_id=inv.id) }}" data-vis="{{ V }}">
+          <tr class="clickable-row" data-href="{{ url_for('finance_invoice_detail', invoice_id=inv.id) }}" data-vis="{{ V }}">
             <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.invoice_number or '&mdash;' }}</code></td>
             <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.request_no or '&mdash;' }}</code></td>
             <td class="finance-desc-cell" data-vis="{{ V }}">{{ inv.description[:60] if inv.description else inv.request_title[:60] if inv.request_title else '&mdash;' }}</td>
@@ -106,11 +106,13 @@
 </section>
 
 <script>
-document.querySelectorAll('.finance-clickable-row').forEach(function(row) {
-  row.style.cursor = 'pointer';
-  row.addEventListener('click', function() {
-    window.location.href = this.dataset.href;
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
   });
-});
+})();
 </script>
 {% endblock %}

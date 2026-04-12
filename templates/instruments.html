@@ -8,7 +8,7 @@
   <td colspan="7" data-vis="{{ V }}">{{ instrument["category"] or "Uncategorised" }}</td>
 </tr>
 {% endif %}
-<tr data-pane-item data-vis="{{ V }}">
+<tr data-pane-item {% if visible_links[instrument['id']] %}class="clickable-row" data-href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}"{% endif %} data-vis="{{ V }}">
   <td data-vis="{{ V }}">
     {% if visible_links[instrument['id']] %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ instrument["name"] }}</a>{% else %}{{ instrument["name"] }}{% endif %}
   </td>
@@ -174,16 +174,12 @@
 </script>
 {% endif %}
 
-{# Whole-row click: clicking anywhere on an instrument row navigates to detail #}
 <script>
-(function () {
-  document.querySelectorAll('.instruments-table tbody tr[data-pane-item]').forEach(function (row) {
-    var link = row.querySelector('a[href*="/instruments/"]');
-    if (!link) return;
-    row.style.cursor = 'pointer';
-    row.addEventListener('click', function (e) {
-      if (e.target.closest('a, button, input, select')) return;
-      window.location.href = link.href;
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
     });
   });
 })();

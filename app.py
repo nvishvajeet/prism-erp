@@ -130,6 +130,7 @@ DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "tru
 ALL_MODULES = {
     "instruments", "finance", "inbox", "notifications",
     "attendance", "queue", "calendar", "stats", "admin",
+    "receipts",
 }
 _modules_env = os.environ.get("PRISM_MODULES", "").strip()
 ENABLED_MODULES: set[str] = (
@@ -2944,6 +2945,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": False,
         "can_view_finance_stage": False,
         "can_view_professor_stage": False,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "mark_submitted"},
     },
@@ -2959,6 +2962,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": False,
         "can_view_finance_stage": True,
         "can_view_professor_stage": False,
+        "can_access_receipts": True,
+        "can_review_receipts": True,
         "card_visible_fields": {"remarks", "submitted_documents", "conversation", "events", "requester_identity", "finance_data"},
         "card_action_fields": {"reply", "upload_attachment"},
     },
@@ -2974,6 +2979,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": False,
         "can_view_professor_stage": True,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment"},
     },
@@ -2989,6 +2996,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": False,
         "can_view_professor_stage": False,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment"},
     },
@@ -3004,6 +3013,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": False,
         "can_view_professor_stage": False,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
@@ -3019,6 +3030,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": False,
         "can_view_professor_stage": False,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received"},
     },
@@ -3034,6 +3047,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": True,
         "can_view_professor_stage": True,
+        "can_access_receipts": True,
+        "can_review_receipts": True,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
@@ -3049,6 +3064,8 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "can_view_user_profiles": True,
         "can_view_finance_stage": True,
         "can_view_professor_stage": True,
+        "can_access_receipts": True,
+        "can_review_receipts": True,
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
@@ -3073,6 +3090,8 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
             "can_view_user_profiles": False,
             "can_view_finance_stage": False,
             "can_view_professor_stage": False,
+            "can_access_receipts": False,
+            "can_review_receipts": False,
             "card_visible_fields": set(),
             "card_action_fields": set(),
         }
@@ -3099,6 +3118,8 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         "can_view_user_profiles": bool(preset["can_view_user_profiles"] or is_owner_user),
         "can_view_finance_stage": bool(preset["can_view_finance_stage"] or is_owner_user),
         "can_view_professor_stage": bool(preset["can_view_professor_stage"] or is_owner_user),
+        "can_access_receipts": bool(preset.get("can_access_receipts", False) or is_owner_user),
+        "can_review_receipts": bool(preset.get("can_review_receipts", False) or is_owner_user),
         "card_visible_fields": card_fields,
         "card_action_fields": card_actions,
     }
@@ -3114,6 +3135,8 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         profile["can_view_user_profiles"] = True
         profile["can_view_finance_stage"] = True
         profile["can_view_professor_stage"] = True
+        profile["can_access_receipts"] = True
+        profile["can_review_receipts"] = True
     return profile
 
 
@@ -4332,6 +4355,29 @@ def init_db() -> None:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_user_todos_user ON user_todos(user_id, status)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS expense_receipts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submitted_by_user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'INR',
+                category TEXT NOT NULL DEFAULT 'general',
+                receipt_date TEXT NOT NULL DEFAULT '',
+                receipt_image_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                reviewed_by_user_id INTEGER,
+                reviewer_note TEXT NOT NULL DEFAULT '',
+                reviewed_at TEXT,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (submitted_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_user ON expense_receipts(submitted_by_user_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_status ON expense_receipts(status)")
 
         # Additive column migrations for v1.1.0
         for col_sql in [
@@ -13968,6 +14014,102 @@ def prism_clear():
     if PRISM_LOG.exists():
         PRISM_LOG.write_text("{}")
     return jsonify(ok=True)
+
+
+# ── Receipts ERP module ─────────────────────────────────────────
+
+def _user_can_review_receipts(user):
+    roles = user_role_set(user)
+    return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+
+@app.route("/receipts")
+@login_required
+def receipts_list():
+    user = current_user()
+    if not module_enabled("receipts"):
+        abort(404)
+    can_review = _user_can_review_receipts(user)
+    status_filter = request.args.get("status", "")
+    if can_review:
+        rows = query_all("SELECT er.*, u.name AS submitter_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id ORDER BY er.created_at DESC")
+    else:
+        rows = query_all("SELECT er.*, u.name AS submitter_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id WHERE er.submitted_by_user_id = ? ORDER BY er.created_at DESC", (user["id"],))
+    if status_filter:
+        rows = [r for r in rows if r["status"] == status_filter]
+    counts = {"all": len(rows), "pending": sum(1 for r in rows if r["status"]=="pending"), "approved": sum(1 for r in rows if r["status"]=="approved"), "rejected": sum(1 for r in rows if r["status"]=="rejected")}
+    return render_template("receipts.html", receipts=rows, status_filter=status_filter, can_review=can_review, counts=counts)
+
+
+@app.route("/receipts/new", methods=["GET", "POST"])
+@login_required
+def receipt_new():
+    user = current_user()
+    if not module_enabled("receipts"):
+        abort(404)
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        amount = float(request.form.get("amount", "0") or "0")
+        category = request.form.get("category", "general").strip()
+        receipt_date = request.form.get("receipt_date", "").strip()
+        description = request.form.get("description", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(url_for("receipt_new"))
+        receipt_image_path = ""
+        uploaded = request.files.get("receipt_file")
+        if uploaded and uploaded.filename:
+            filename = secure_filename(uploaded.filename)
+            # Save after getting ID
+        cur_id = execute(
+            "INSERT INTO expense_receipts (submitted_by_user_id, title, description, amount, category, receipt_date, receipt_image_path, created_at) VALUES (?,?,?,?,?,?,?,?)",
+            (user["id"], title, description, amount, category, receipt_date, "", now_iso()),
+        )
+        if uploaded and uploaded.filename:
+            filename = secure_filename(uploaded.filename)
+            save_dir = UPLOAD_DIR / "receipts" / str(cur_id)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            uploaded.save(save_dir / filename)
+            receipt_image_path = f"uploads/receipts/{cur_id}/{filename}"
+            execute("UPDATE expense_receipts SET receipt_image_path = ? WHERE id = ?", (receipt_image_path, cur_id))
+        flash("Receipt submitted.", "success")
+        return redirect(url_for("receipt_detail", receipt_id=cur_id))
+    return render_template("receipt_form.html")
+
+
+@app.route("/receipts/<int:receipt_id>")
+@login_required
+def receipt_detail(receipt_id):
+    user = current_user()
+    if not module_enabled("receipts"):
+        abort(404)
+    receipt = query_one("SELECT er.*, u.name AS submitter_name, u.email AS submitter_email, r.name AS reviewer_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id LEFT JOIN users r ON r.id = er.reviewed_by_user_id WHERE er.id = ?", (receipt_id,))
+    if not receipt:
+        abort(404)
+    can_review = _user_can_review_receipts(user)
+    if not can_review and receipt["submitted_by_user_id"] != user["id"]:
+        abort(403)
+    return render_template("receipt_detail.html", receipt=receipt, can_review=can_review)
+
+
+@app.route("/receipts/<int:receipt_id>/review", methods=["POST"])
+@login_required
+def receipt_review(receipt_id):
+    user = current_user()
+    if not _user_can_review_receipts(user):
+        abort(403)
+    receipt = query_one("SELECT * FROM expense_receipts WHERE id = ?", (receipt_id,))
+    if not receipt:
+        abort(404)
+    action = request.form.get("action", "").strip()
+    note = request.form.get("reviewer_note", "").strip()
+    if action == "approve":
+        execute("UPDATE expense_receipts SET status='approved', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+        flash("Receipt approved.", "success")
+    elif action == "reject":
+        execute("UPDATE expense_receipts SET status='rejected', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+        flash("Receipt rejected.", "error")
+    return redirect(url_for("receipt_detail", receipt_id=receipt_id))
 
 
 # ── Debug feedback endpoint ─────────────────────────────────────

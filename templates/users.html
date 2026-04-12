@@ -3,7 +3,7 @@
 {% block content %}
 
 {% macro user_row(user, show_actions=False) -%}
-<tr data-pane-item data-vis="{{ V }}">
+<tr data-pane-item class="clickable-row" data-href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">
   <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["name"] }}</a></td>
   <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["email"] }}</a></td>
   <td data-vis="{{ V }}">{{ user["member_code"] or "-" }}</td>
@@ -132,4 +132,14 @@
 
 </section>
 
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+})();
+</script>
 {% endblock %}

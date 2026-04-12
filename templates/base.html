@@ -176,6 +176,11 @@
     <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
     {% endif %}
 
+    {# Receipts — everyone with module access #}
+    {% if module_enabled('receipts') %}
+    <a class="{% if endpoint in ['receipts_list','receipt_new','receipt_detail','receipt_review'] %}nav-active{% endif %}" href="{{ url_for('receipts_list') }}" data-vis="{{ V }}">Receipts</a>
+    {% endif %}
+
     {# Settings — always #}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
 

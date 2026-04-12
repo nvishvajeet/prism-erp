@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('receipts_list') }}" data-vis="{{ V }}">← Receipts</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Submit Receipt</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Receipt Details") }}
+    <form method="post" enctype="multipart/form-data" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Title <input type="text" name="title" required placeholder="e.g. Lab reagent purchase" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Amount (₹) <input type="number" name="amount" step="0.01" min="0" required placeholder="0.00" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Date <input type="date" name="receipt_date" required data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          <option value="general">General</option>
+          <option value="travel">Travel</option>
+          <option value="equipment">Equipment</option>
+          <option value="consumables">Consumables</option>
+          <option value="services">Services</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Description <textarea name="description" rows="3" placeholder="Brief description of the expense..." data-vis="{{ V }}"></textarea></label>
+      <label data-vis="{{ V }}">Receipt Photo/PDF <input type="file" name="receipt_file" accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf" data-vis="{{ V }}"></label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Receipt</button>
+    </form>
+  </article>
+</section>
+{% endblock %}

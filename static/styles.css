@@ -3397,15 +3397,7 @@ code {
   transition: all 0.15s;
 }
 
-.btn-primary {
-  background-color: var(--accent);
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #2e55c1;
-  box-shadow: 0 2px 4px rgba(52, 101, 197, 0.3);
-}
+/* .btn-primary defined at line ~1687. Do not duplicate. */
 
 .btn-secondary {
   background-color: var(--bg-secondary);

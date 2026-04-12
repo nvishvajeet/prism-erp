@@ -7948,7 +7948,7 @@ def request_detail(request_id: int):
                 flash("Request must be approved and physically received before scheduling.", "error")
                 return redirect(url_for("request_detail", request_id=request_id))
             scheduled_for = request.form["scheduled_for"]
-            operator_id = int(request.form["assigned_operator_id"]) if request.form["assigned_operator_id"] else user["id"]
+            operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
             remarks = request.form.get("remarks", "").strip()
             assert_status_transition(sample_request["status"], "scheduled")
             execute(
@@ -7958,7 +7958,7 @@ def request_detail(request_id: int):
             log_action(user["id"], "sample_request", request_id, "scheduled", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
         elif action == "admin_schedule_override" and can_manage:
             scheduled_for = request.form["scheduled_for"]
-            operator_id = int(request.form["assigned_operator_id"]) if request.form["assigned_operator_id"] else user["id"]
+            operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
             remarks = request.form.get("remarks", "").strip()
             assert_status_transition(sample_request["status"], "scheduled", force=True)
             execute(

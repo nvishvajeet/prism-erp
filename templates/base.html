@@ -140,6 +140,37 @@
   </nav>
   {% endif %}
 
+  {# ── Breadcrumb — "you are here" location bar ── #}
+  {% if current_user and endpoint != 'index' %}
+  <nav class="breadcrumb" aria-label="Breadcrumb" data-vis="{{ V }}">
+    <a href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+    <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+    {% if endpoint in ['instrument_detail', 'instrument_history', 'instrument_calendar'] %}
+      <a href="{{ url_for('instruments') }}" data-vis="{{ V }}">Instruments</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Detail' }}</span>
+    {% elif endpoint == 'request_detail' %}
+      <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Request' }}</span>
+    {% elif endpoint in ['schedule', 'schedule_actions'] %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Queue</span>
+    {% elif endpoint in ['user_profile', 'admin_users'] %}
+      <a href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Users' }}</span>
+    {% elif endpoint in ['finance_portal', 'finance_grants_list', 'finance_grant_detail'] %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Finance</span>
+    {% elif endpoint == 'dev_panel' %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Dev Console</span>
+    {% elif endpoint == 'portfolio_panel' %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Portfolio</span>
+    {% else %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or endpoint|replace('_',' ')|title }}</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+
   <main class="page" id="main-content" data-vis="{{ V }}">
     {% block hover_back %}{% endblock %}
     {% if not current_user %}
@@ -327,11 +358,13 @@
       });
     })();
   </script>
-  {# grid-overlay.js is the PRISM grid/feedback overlay — disabled on the
-     main site as of 2026-04-11. The file at static/grid-overlay.js and the
-     /prism/save|/prism/log|/prism/clear Flask routes are intentionally
-     preserved; they will be revived behind a dedicated debug mode in a
-     future wave. See docs/NEXT_WAVES.md → "Deferred — dev mode overlay". #}
+  {# Grid overlay — append ?debug=1 to any URL to load grid-overlay.js.
+     Shows a 6-column grid, tile boundaries, and click-point markers
+     across the page for visual layout debugging. Not loaded in normal
+     browsing so it adds zero overhead. #}
+  {% if request.args.get('debug') == '1' %}
+  <script defer src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
+  {% endif %}
   <script defer src="{{ url_for('static', filename='keybinds.js') }}"></script>
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>
   <script defer src="{{ url_for('static', filename='approval-toggle.js') }}"></script>

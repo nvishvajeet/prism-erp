@@ -4827,14 +4827,9 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 
 .request-tiles > .tile {
-  grid-column: span 3;
+  grid-column: span 6;
   display: flex;
   flex-direction: column;
-}
-
-.request-tiles > .tile-request-header,
-.request-tiles > .tile-request-events {
-  grid-column: span 6;
 }
 
 .request-tiles .tile > .section-head {
@@ -7206,3 +7201,54 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 
 /* ── Bulk actions toggle ─────────────────────────────────── */
 :root[data-theme="dark"] .bulk-toggle-label { color: var(--ink); }
+
+/* ── Activity feed entries — white blobs in dark mode ────── */
+:root[data-theme="dark"] .activity-entry {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .activity-entry-icon {
+  background: var(--hover-soft);
+}
+:root[data-theme="dark"] .activity-entry-meta strong { color: var(--ink); }
+:root[data-theme="dark"] .activity-entry-text { color: var(--ink); }
+
+/* ── Toggleable forms (approval step boxes, etc.) ────────── */
+:root[data-theme="dark"] .toggleable-form {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .toggleable-form-trigger { color: var(--ink); }
+
+/* ── Explainer details (sample approval pipeline) ────────── */
+:root[data-theme="dark"] .explainer-details { color: var(--ink); }
+:root[data-theme="dark"] .explainer-details summary { color: var(--ink); }
+
+/* ── Print — preserve current theme as-is ────────────────── */
+@media print {
+  /* Force the browser to print background colors + images
+     so dark mode prints dark instead of blank-white */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  /* Hide non-printable UI elements */
+  .topbar, .nav, .hover-back-btn, .skip-nav,
+  .theme-toggle, .bulk-actions, .filter-pill-row,
+  .input-dialog, .toggleable-form, .queue-action-btn,
+  .inline-action-btn, .btn, button[type="submit"] {
+    display: none !important;
+  }
+  /* Remove shadows + transitions that waste ink */
+  .card, .tile, .activity-entry, .queue-card {
+    box-shadow: none !important;
+    transition: none !important;
+  }
+  /* Let content flow naturally — no max-width constraint */
+  .page, .request-tiles, .inst-tiles, .finance-tiles,
+  .dashboard-tiles, .stats-tiles {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

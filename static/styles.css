@@ -3729,13 +3729,16 @@ code {
 .tile-info     { grid-column: span 3; }
 .tile-stats    { grid-column: span 3; }
 .tile-queue    { grid-column: 1 / -1; }
+/* Control Panel + Team share a row (3+3=6) */
 .tile-control  { grid-column: span 3; }
-.tile-team     { grid-column: span 2; }
+.tile-team     { grid-column: span 3; }
 .tile-inventory { grid-column: span 2; }
 .tile-approval { grid-column: span 2; }
 .tile-downtime { grid-column: span 2; }
 .tile-activity { grid-column: span 2; }
-.tile-edit     { grid-column: span 4; }
+/* Metadata + Maintenance share a row (3+3=6) */
+.tile-edit     { grid-column: span 3; }
+.tile-maintenance { grid-column: span 3; }
 .tile-danger   { grid-column: span 2; }
 
 @media (max-width: 1200px) {

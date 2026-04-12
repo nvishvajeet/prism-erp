@@ -56,6 +56,8 @@
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Type</dt><dd data-vis="{{ V }}">{{ (grant.grant_type or 'internal')|upper }}</dd></div>
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Department</dt><dd data-vis="{{ V }}">{{ grant.department or '—' }}</dd></div>
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">PI</dt><dd data-vis="{{ V }}">{{ grant.pi_name or '—' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Portfolio Manager</dt><dd data-vis="{{ V }}">{{ grant.pm_name or '—' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Granted To</dt><dd data-vis="{{ V }}">{{ grant.granted_to or '—' }}</dd></div>
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Period</dt><dd data-vis="{{ V }}">{{ grant.start_date or '?' }} → {{ grant.end_date or '?' }}</dd></div>
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Status</dt><dd data-vis="{{ V }}">{{ grant.status|upper }}</dd></div>
     </dl>

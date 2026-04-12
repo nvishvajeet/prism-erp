@@ -4010,6 +4010,16 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE grants ADD COLUMN department TEXT NOT NULL DEFAULT ''")
             except Exception:
                 pass
+        if "portfolio_manager_id" not in grant_cols:
+            try:
+                cur.execute("ALTER TABLE grants ADD COLUMN portfolio_manager_id INTEGER REFERENCES users(id)")
+            except Exception:
+                pass
+        if "granted_to" not in grant_cols:
+            try:
+                cur.execute("ALTER TABLE grants ADD COLUMN granted_to TEXT NOT NULL DEFAULT ''")
+            except Exception:
+                pass
 
         # Pricing & payment instructions per instrument (Form Control panel)
         inst_cols = {col[1] for col in cur.execute("PRAGMA table_info(instruments)").fetchall()}
@@ -6906,9 +6916,11 @@ def finance_grant_detail(grant_id: int):
             return redirect(url_for("finance_grant_detail", grant_id=grant_id))
     grant = query_one(
         """
-        SELECT g.*, pi.name AS pi_name, pi.email AS pi_email
+        SELECT g.*, pi.name AS pi_name, pi.email AS pi_email,
+               pm.name AS pm_name
           FROM grants g
           LEFT JOIN users pi ON pi.id = g.pi_user_id
+          LEFT JOIN users pm ON pm.id = g.portfolio_manager_id
          WHERE g.id = ?
         """,
         (grant_id,),

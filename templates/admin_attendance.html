@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Attendance Overview</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ target_date }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <form method="get" class="inline-form" data-vis="{{ V }}">
+      <input type="date" name="date" value="{{ target_date }}" data-vis="{{ V }}">
+      <button type="submit" class="btn" data-vis="{{ V }}">Go</button>
+    </form>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+    {{ card_heading("SUMMARY", target_date) }}
+    <div class="dev-now-grid" data-vis="{{ V }}">
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--lifecycle-ok)" data-vis="{{ V }}">{{ present }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Present</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--danger)" data-vis="{{ V }}">{{ absent }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Absent</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--warm)" data-vis="{{ V }}">{{ on_leave }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">On Leave</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" data-vis="{{ V }}">{{ unmarked }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Unmarked</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" data-vis="{{ V }}">{{ total_users }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Total Staff</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+    {{ card_heading("RECORDS", records|length|string ~ " marked") }}
+    {% if records %}
+    <table class="sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Role</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Check-in</th>
+          <th data-vis="{{ V }}">Check-out</th>
+          <th data-vis="{{ V }}">Notes</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in records %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.user_name }}</strong></td>
+          <td data-vis="{{ V }}">{{ r.user_role.replace('_',' ').title() }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ r.status }}" data-vis="{{ V }}">{{ r.status|title }}</span></td>
+          <td data-vis="{{ V }}">{{ r.check_in or '—' }}</td>
+          <td data-vis="{{ V }}">{{ r.check_out or '—' }}</td>
+          <td data-vis="{{ V }}">{{ r.notes or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No attendance records for this date.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

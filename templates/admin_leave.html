@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Leave Requests</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ pending|length }} pending</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+    {{ card_heading("PENDING APPROVAL", pending|length|string ~ " request" ~ ("s" if pending|length != 1 else "")) }}
+    {% if pending %}
+    <table class="sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">From</th>
+          <th data-vis="{{ V }}">To</th>
+          <th data-vis="{{ V }}">Reason</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for lr in pending %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ lr.requester_name }}</strong><br><span class="hint" data-vis="{{ V }}">{{ lr.requester_email }}</span></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ lr.leave_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ lr.start_date }}</td>
+          <td data-vis="{{ V }}">{{ lr.end_date }}</td>
+          <td data-vis="{{ V }}">{{ lr.reason or '—' }}</td>
+          <td data-vis="{{ V }}">
+            <form method="post" action="{{ url_for('admin_leave_approve', leave_id=lr.id) }}" class="inline-form" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_leave_reject', leave_id=lr.id) }}" class="inline-form" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="text" name="reason" placeholder="Reason" data-vis="{{ V }}">
+              <button type="submit" class="btn" data-vis="{{ V }}">Reject</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No pending leave requests.") }}
+    {% endif %}
+  </article>
+
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+    {{ card_heading("RECENT DECISIONS", recent|length|string ~ " processed") }}
+    {% if recent %}
+    <div class="tile-scroll" data-vis="{{ V }}">
+      {% for lr in recent %}
+      <div class="dp-metadata-row" data-vis="{{ V }}">
+        <div data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ lr.requester_name }}</strong>
+          <span class="hint" data-vis="{{ V }}">{{ lr.leave_type|title }} · {{ lr.start_date }} → {{ lr.end_date }}</span>
+        </div>
+        <span class="badge status-{{ lr.status }}" data-vis="{{ V }}">{{ lr.status|title }}</span>
+        {% if lr.approved_by_name %}<span class="hint" data-vis="{{ V }}">by {{ lr.approved_by_name }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No processed leave requests yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

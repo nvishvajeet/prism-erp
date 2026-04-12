@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Attendance & Leave</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('leave_request_new') }}" data-vis="{{ V }}">Apply for Leave</a>
+    {% if is_admin %}
+    <a class="btn" href="{{ url_for('admin_leave_queue') }}" data-vis="{{ V }}">Leave Queue</a>
+    <a class="btn" href="{{ url_for('admin_attendance_calendar') }}" data-vis="{{ V }}">All Attendance</a>
+    {% endif %}
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+
+  {# KPI row #}
+  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+    {{ card_heading("THIS MONTH", "Attendance summary") }}
+    <div class="dev-now-grid" data-vis="{{ V }}">
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--lifecycle-ok)" data-vis="{{ V }}">{{ present }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Present</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--danger)" data-vis="{{ V }}">{{ absent }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Absent</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" style="color:var(--warm)" data-vis="{{ V }}">{{ leave_count }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">On Leave</span>
+      </div>
+      <div class="dev-now-cell" data-vis="{{ V }}">
+        <strong class="dev-now-value" data-vis="{{ V }}">{{ half_day }}</strong>
+        <span class="dev-now-label" data-vis="{{ V }}">Half Day</span>
+      </div>
+    </div>
+  </article>
+
+  {# Mark attendance #}
+  <article class="card tile" data-columns="3" data-vis="{{ V }}">
+    {{ card_heading("MARK TODAY", "Record your attendance") }}
+    <form method="post" action="{{ url_for('attendance_mark') }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="date" value="{{ today }}">
+      <label data-vis="{{ V }}">Status
+        <select name="status" data-vis="{{ V }}">
+          <option value="present">Present</option>
+          <option value="half">Half Day</option>
+          <option value="absent">Absent</option>
+          <option value="leave">On Leave</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Check-in
+        <input type="time" name="check_in" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Check-out
+        <input type="time" name="check_out" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Notes
+        <input type="text" name="notes" placeholder="Optional" data-vis="{{ V }}">
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Mark Attendance</button>
+      </div>
+    </form>
+  </article>
+
+  {# Leave balances #}
+  <article class="card tile" data-columns="3" data-vis="{{ V }}">
+    {{ card_heading("LEAVE BALANCE", "Current year") }}
+    {% if balances %}
+    <div class="tile-scroll-sm" data-vis="{{ V }}">
+      {% for b in balances %}
+      <div class="dp-metadata-row" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ b.leave_type|title }}</strong>
+        <span data-vis="{{ V }}">{{ b.balance }} days</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No leave balances set. Admin can configure in user management.") }}
+    {% endif %}
+  </article>
+
+  {# History #}
+  <article class="card tile" data-columns="3" data-vis="{{ V }}">
+    {{ card_heading("HISTORY", attendance|length|string ~ " days this month") }}
+    {% if attendance %}
+    <div class="tile-scroll" data-vis="{{ V }}">
+      {% for a in attendance %}
+      <div class="dp-metadata-row" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ a.date }}</strong>
+        <span class="badge status-{{ a.status }}" data-vis="{{ V }}">{{ a.status|title }}</span>
+        {% if a.check_in %}<span class="hint" data-vis="{{ V }}">{{ a.check_in }}{% if a.check_out %} → {{ a.check_out }}{% endif %}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No attendance recorded this month.") }}
+    {% endif %}
+  </article>
+
+  {# Leave requests #}
+  <article class="card tile" data-columns="3" data-vis="{{ V }}">
+    {{ card_heading("MY LEAVE REQUESTS", pending_leaves|length|string ~ " total") }}
+    {% if pending_leaves %}
+    <div class="tile-scroll" data-vis="{{ V }}">
+      {% for lr in pending_leaves %}
+      <div class="dp-metadata-row" data-vis="{{ V }}">
+        <div data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ lr.leave_type|title }}</strong>
+          <span class="hint" data-vis="{{ V }}">{{ lr.start_date }} → {{ lr.end_date }}</span>
+        </div>
+        <span class="badge status-{{ lr.status }}" data-vis="{{ V }}">{{ lr.status|title }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No leave requests yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

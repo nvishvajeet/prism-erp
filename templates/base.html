@@ -128,6 +128,7 @@
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
     <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
     {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>{% endif %}
     <span class="nav-spacer"></span>

@@ -3444,6 +3444,53 @@ def init_db() -> None:
                 FOREIGN KEY (notice_id) REFERENCES notices(id) ON DELETE CASCADE
             );
 
+            -- v2.3.0 — Attendance + Leave tracking
+            CREATE TABLE IF NOT EXISTS attendance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'present',
+                check_in TEXT,
+                check_out TEXT,
+                notes TEXT NOT NULL DEFAULT '',
+                marked_by_user_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (marked_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                UNIQUE (user_id, date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id, date);
+            CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
+
+            CREATE TABLE IF NOT EXISTS leave_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                leave_type TEXT NOT NULL DEFAULT 'casual',
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                approved_by_user_id INTEGER,
+                approved_at TEXT,
+                rejection_reason TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_leave_user ON leave_requests(user_id);
+            CREATE INDEX IF NOT EXISTS idx_leave_status ON leave_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_leave_dates ON leave_requests(start_date, end_date);
+
+            CREATE TABLE IF NOT EXISTS leave_balances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                leave_type TEXT NOT NULL,
+                balance REAL NOT NULL DEFAULT 0,
+                year INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE (user_id, leave_type, year)
+            );
+
             CREATE TABLE IF NOT EXISTS instrument_requesters (
                 user_id INTEGER NOT NULL,
                 instrument_id INTEGER NOT NULL,
@@ -6409,6 +6456,7 @@ def sitemap():
         {"label": "New Request", "hint": "Submit a new sample request", "type": "link", "href": url_for("new_request")},
         {"label": "Notifications", "hint": "All active notices", "type": "link", "href": url_for("notifications_page")},
         {"label": "Inbox", "hint": "Direct messages", "type": "link", "href": url_for("inbox")},
+        {"label": "Attendance & Leave", "hint": "Mark attendance, apply for leave", "type": "link", "href": url_for("attendance_page")},
         {"label": "My Profile", "hint": "View and manage your account", "type": "link", "href": url_for("user_profile", user_id=user["id"])},
     ]
     core_info = [
@@ -6470,6 +6518,8 @@ def sitemap():
             {"label": "User Management", "hint": f"{user_count} active, {invited_count} pending invites", "type": "link", "href": url_for("admin_users")},
             {"label": "Notices", "hint": "Post site-wide announcements", "type": "link", "href": url_for("admin_notices")},
             {"label": "Calibrations Due", "hint": "NABL compliance — upcoming calibrations", "type": "link", "href": url_for("admin_calibrations_upcoming")},
+            {"label": "Leave Queue", "hint": "Approve/reject leave requests", "type": "link", "href": url_for("admin_leave_queue")},
+            {"label": "Attendance Overview", "hint": "Daily attendance for all staff", "type": "link", "href": url_for("admin_attendance_calendar")},
         ]
         system_items = [
             {"label": "Server Port", "type": "text", "value": "5055"},
@@ -10762,6 +10812,235 @@ def calendar_ics():
         ics_content,
         mimetype="text/calendar",
         headers={"Content-Disposition": "inline; filename=prism-calendar.ics"},
+    )
+
+
+# ─── v2.3.0 — Attendance & Leave ──────────────────────────────────────
+
+LEAVE_TYPES = ["casual", "sick", "earned", "academic", "sabbatical"]
+
+
+@app.route("/attendance", methods=["GET"])
+@login_required
+def attendance_page():
+    """Personal attendance view — shows the current user's attendance
+    for the current month. Admins see a broader view."""
+    user = current_user()
+    from datetime import date as _date
+    today = _date.today()
+    month_start = today.replace(day=1).isoformat()
+    month_end = today.isoformat()
+    my_attendance = query_all(
+        """
+        SELECT a.date, a.status, a.check_in, a.check_out, a.notes
+          FROM attendance a
+         WHERE a.user_id = ? AND a.date >= ? AND a.date <= ?
+         ORDER BY a.date DESC
+        """,
+        (user["id"], month_start, month_end),
+    )
+    # Summary counts
+    present = sum(1 for a in my_attendance if a["status"] == "present")
+    absent = sum(1 for a in my_attendance if a["status"] == "absent")
+    leave = sum(1 for a in my_attendance if a["status"] == "leave")
+    half_day = sum(1 for a in my_attendance if a["status"] == "half")
+    # Leave balances
+    balances = query_all(
+        "SELECT leave_type, balance FROM leave_balances WHERE user_id = ? AND year = ?",
+        (user["id"], today.year),
+    )
+    # Pending leave requests
+    pending_leaves = query_all(
+        """
+        SELECT lr.*, u.name AS approved_by_name
+          FROM leave_requests lr
+          LEFT JOIN users u ON u.id = lr.approved_by_user_id
+         WHERE lr.user_id = ?
+         ORDER BY lr.created_at DESC
+         LIMIT 20
+        """,
+        (user["id"],),
+    )
+    is_admin = bool(user_role_set(user) & {"super_admin", "site_admin"}) or is_owner(user)
+    return render_template(
+        "attendance.html",
+        attendance=my_attendance,
+        present=present, absent=absent, leave_count=leave, half_day=half_day,
+        balances=balances,
+        pending_leaves=pending_leaves,
+        is_admin=is_admin,
+        today=today.isoformat(),
+        leave_types=LEAVE_TYPES,
+    )
+
+
+@app.route("/attendance/mark", methods=["POST"])
+@login_required
+def attendance_mark():
+    """Mark attendance for today. Users mark their own; admins can mark for others."""
+    user = current_user()
+    target_user_id = int(request.form.get("user_id") or user["id"])
+    roles = user_role_set(user)
+    is_admin = bool(roles & {"super_admin", "site_admin"}) or is_owner(user)
+    if target_user_id != user["id"] and not is_admin:
+        abort(403)
+    from datetime import date as _date
+    att_date = request.form.get("date", _date.today().isoformat()).strip()
+    status = request.form.get("status", "present").strip()
+    if status not in {"present", "absent", "leave", "half"}:
+        status = "present"
+    check_in = request.form.get("check_in", "").strip() or None
+    check_out = request.form.get("check_out", "").strip() or None
+    notes = request.form.get("notes", "").strip()
+    execute(
+        """
+        INSERT INTO attendance (user_id, date, status, check_in, check_out, notes, marked_by_user_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, date) DO UPDATE SET
+            status = excluded.status,
+            check_in = excluded.check_in,
+            check_out = excluded.check_out,
+            notes = excluded.notes,
+            marked_by_user_id = excluded.marked_by_user_id
+        """,
+        (target_user_id, att_date, status, check_in, check_out, notes, user["id"], now_iso()),
+    )
+    log_action(user["id"], "attendance", target_user_id, "attendance_marked",
+               {"date": att_date, "status": status})
+    flash(f"Attendance marked: {status} on {att_date}", "success")
+    return redirect(url_for("attendance_page"))
+
+
+@app.route("/leave/new", methods=["GET", "POST"])
+@login_required
+def leave_request_new():
+    """Submit a leave request."""
+    user = current_user()
+    if request.method == "POST":
+        leave_type = request.form.get("leave_type", "casual").strip()
+        if leave_type not in LEAVE_TYPES:
+            leave_type = "casual"
+        start_date = request.form.get("start_date", "").strip()
+        end_date = request.form.get("end_date", "").strip()
+        reason = request.form.get("reason", "").strip()
+        if not start_date or not end_date:
+            flash("Start and end date are required.", "error")
+            return redirect(url_for("leave_request_new"))
+        if end_date < start_date:
+            flash("End date must be after start date.", "error")
+            return redirect(url_for("leave_request_new"))
+        leave_id = execute(
+            """
+            INSERT INTO leave_requests
+                (user_id, leave_type, start_date, end_date, reason, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            """,
+            (user["id"], leave_type, start_date, end_date, reason, now_iso()),
+        )
+        log_action(user["id"], "leave", leave_id, "leave_requested",
+                   {"type": leave_type, "start": start_date, "end": end_date})
+        flash(f"Leave request submitted ({leave_type}: {start_date} → {end_date}).", "success")
+        return redirect(url_for("attendance_page"))
+    return render_template("leave_new.html", leave_types=LEAVE_TYPES)
+
+
+@app.route("/admin/leave", methods=["GET"])
+@login_required
+def admin_leave_queue():
+    """Admin view: all pending leave requests across the facility."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    pending = query_all(
+        """
+        SELECT lr.*, u.name AS requester_name, u.email AS requester_email
+          FROM leave_requests lr
+          JOIN users u ON u.id = lr.user_id
+         WHERE lr.status = 'pending'
+         ORDER BY lr.start_date ASC
+        """
+    )
+    recent = query_all(
+        """
+        SELECT lr.*, u.name AS requester_name, u.email AS requester_email,
+               a.name AS approved_by_name
+          FROM leave_requests lr
+          JOIN users u ON u.id = lr.user_id
+          LEFT JOIN users a ON a.id = lr.approved_by_user_id
+         WHERE lr.status != 'pending'
+         ORDER BY lr.created_at DESC
+         LIMIT 30
+        """
+    )
+    return render_template("admin_leave.html", pending=pending, recent=recent)
+
+
+@app.route("/admin/leave/<int:leave_id>/approve", methods=["POST"])
+@login_required
+def admin_leave_approve(leave_id: int):
+    """Approve a leave request."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    execute(
+        "UPDATE leave_requests SET status = 'approved', approved_by_user_id = ?, approved_at = ? WHERE id = ? AND status = 'pending'",
+        (user["id"], now_iso(), leave_id),
+    )
+    log_action(user["id"], "leave", leave_id, "leave_approved", {})
+    flash("Leave approved.", "success")
+    return redirect(url_for("admin_leave_queue"))
+
+
+@app.route("/admin/leave/<int:leave_id>/reject", methods=["POST"])
+@login_required
+def admin_leave_reject(leave_id: int):
+    """Reject a leave request."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    reason = request.form.get("reason", "").strip()
+    execute(
+        "UPDATE leave_requests SET status = 'rejected', approved_by_user_id = ?, approved_at = ?, rejection_reason = ? WHERE id = ? AND status = 'pending'",
+        (user["id"], now_iso(), reason, leave_id),
+    )
+    log_action(user["id"], "leave", leave_id, "leave_rejected", {"reason": reason})
+    flash("Leave rejected.", "success")
+    return redirect(url_for("admin_leave_queue"))
+
+
+@app.route("/admin/attendance", methods=["GET"])
+@login_required
+def admin_attendance_calendar():
+    """Admin view: attendance overview for all users on a given date."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    from datetime import date as _date
+    target_date = request.args.get("date", _date.today().isoformat()).strip()
+    records = query_all(
+        """
+        SELECT a.*, u.name AS user_name, u.email AS user_email, u.role AS user_role
+          FROM attendance a
+          JOIN users u ON u.id = a.user_id
+         WHERE a.date = ?
+         ORDER BY u.name
+        """,
+        (target_date,),
+    )
+    total_users = query_one("SELECT COUNT(*) AS c FROM users WHERE active = 1")["c"]
+    present = sum(1 for r in records if r["status"] == "present")
+    absent = sum(1 for r in records if r["status"] == "absent")
+    on_leave = sum(1 for r in records if r["status"] == "leave")
+    unmarked = total_users - len(records)
+    return render_template(
+        "admin_attendance.html",
+        records=records, target_date=target_date,
+        total_users=total_users, present=present, absent=absent,
+        on_leave=on_leave, unmarked=unmarked,
     )
 
 

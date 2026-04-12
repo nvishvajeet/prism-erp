@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Apply for Leave</h2>
+  </div>
+</header>
+
+<section class="new-request-tiles" data-vis="{{ V }}">
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("LEAVE APPLICATION", "Submit your leave request for approval") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Leave Type
+        <select name="leave_type" data-vis="{{ V }}">
+          {% for lt in leave_types %}
+          <option value="{{ lt }}">{{ lt|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Start Date
+        <input type="date" name="start_date" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">End Date
+        <input type="date" name="end_date" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Reason
+        <textarea name="reason" rows="3" placeholder="Why you need leave" data-vis="{{ V }}"></textarea>
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Submit Leave Request</button>
+      </div>
+    </form>
+  </article>
+</section>
+{% endblock %}

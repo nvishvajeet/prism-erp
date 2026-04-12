@@ -3515,6 +3515,15 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_leave_status ON leave_requests(status);
             CREATE INDEX IF NOT EXISTS idx_leave_dates ON leave_requests(start_date, end_date);
 
+            CREATE TABLE IF NOT EXISTS reporting_structure (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                manager_id INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id)
+            );
+
             CREATE TABLE IF NOT EXISTS leave_balances (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -3910,6 +3919,21 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_grant_allocs_grant   ON grant_allocations(grant_id);
             CREATE INDEX IF NOT EXISTS idx_grant_allocs_project ON grant_allocations(project_id);
 
+            CREATE TABLE IF NOT EXISTS grant_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grant_id INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL DEFAULT 0,
+                expense_type TEXT NOT NULL DEFAULT 'equipment',
+                receipt_number TEXT NOT NULL DEFAULT '',
+                recorded_by_user_id INTEGER,
+                recorded_at TEXT NOT NULL,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (grant_id) REFERENCES grants(id) ON DELETE CASCADE,
+                FOREIGN KEY (recorded_by_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_grant_expenses_grant ON grant_expenses(grant_id);
+
             -- sample_requests gains a project_id FK for forward-lookup.
             -- Nullable in alpha.1 because the backfill stitches it after
             -- the fact; NOT NULL would block the tables-exist-before-
@@ -4108,6 +4132,54 @@ def init_db() -> None:
                 field_value TEXT NOT NULL DEFAULT '',
                 FOREIGN KEY (request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
                 FOREIGN KEY (custom_field_id) REFERENCES instrument_custom_fields(id)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS instrument_inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                item_name TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT 'consumable',
+                quantity INTEGER NOT NULL DEFAULT 0,
+                minimum_quantity INTEGER NOT NULL DEFAULT 0,
+                unit TEXT NOT NULL DEFAULT 'units',
+                unit_cost REAL NOT NULL DEFAULT 0,
+                last_restocked_at TEXT,
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            )
+        """)
+        # ── Communications upgrade: mailing lists + email templates ──
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS mailing_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                scope TEXT NOT NULL DEFAULT 'site',
+                created_by_user_id INTEGER,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS mailing_list_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                list_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                FOREIGN KEY (list_id) REFERENCES mailing_lists(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE(list_id, user_id)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS instrument_email_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                subject_template TEXT NOT NULL DEFAULT '',
+                body_template TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
+                UNIQUE(instrument_id, event_type)
             )
         """)
         for col_sql in [
@@ -5942,7 +6014,7 @@ def inbox_preview_for_user(user: sqlite3.Row | None, limit: int = 3) -> list[dic
 # Owner / site_admin / super_admin only.
 
 
-NOTICE_SCOPES = ("site", "role", "instrument")
+NOTICE_SCOPES = ("site", "role", "instrument", "mailing_list")
 NOTICE_SEVERITIES = ("info", "warning", "critical")
 NOTICE_ROLE_TARGETS = (
     "super_admin", "site_admin", "instrument_admin",
@@ -5989,6 +6061,7 @@ def admin_notices():
         "SELECT code, name FROM instruments WHERE status = 'active' ORDER BY code"
     )
     can_post = _user_can_post_notice(user)
+    mailing_lists = query_all("SELECT id, name FROM mailing_lists ORDER BY name")
     return render_template(
         "admin_notices.html",
         notices=rows,
@@ -5997,6 +6070,7 @@ def admin_notices():
         severities=NOTICE_SEVERITIES,
         role_targets=NOTICE_ROLE_TARGETS,
         can_post=can_post,
+        mailing_lists=mailing_lists,
     )
 
 
@@ -6822,6 +6896,139 @@ def finance_grant_detail(grant_id: int):
     )
 
 
+@app.route("/finance/grants/<int:grant_id>/expenses", methods=["GET", "POST"])
+@login_required
+def finance_grant_expenses(grant_id: int):
+    """Grant expenses — non-sample charges (equipment, reagents, vendors)."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+    grant = query_one(
+        "SELECT g.*, pi.name AS pi_name FROM grants g LEFT JOIN users pi ON pi.id = g.pi_user_id WHERE g.id = ?",
+        (grant_id,),
+    )
+    if not grant:
+        abort(404)
+
+    if request.method == "POST":
+        if not _user_can_edit_finance(user):
+            abort(403)
+        db = get_db()
+        db.execute(
+            """INSERT INTO grant_expenses
+               (grant_id, description, amount, expense_type, receipt_number,
+                recorded_by_user_id, recorded_at, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                grant_id,
+                request.form.get("description", "").strip(),
+                float(request.form.get("amount", "0") or 0),
+                request.form.get("expense_type", "equipment").strip(),
+                request.form.get("receipt_number", "").strip(),
+                user["id"],
+                _now(),
+                request.form.get("notes", "").strip(),
+            ),
+        )
+        db.commit()
+        log_action(user["id"], "grant", grant_id, "expense_recorded", {
+            "description": request.form.get("description", "").strip(),
+            "amount": request.form.get("amount", "0"),
+        })
+        flash("Expense recorded.", "success")
+        return redirect(url_for("finance_grant_expenses", grant_id=grant_id))
+
+    expenses = query_all(
+        """SELECT ge.*, u.name AS recorder_name
+           FROM grant_expenses ge
+           LEFT JOIN users u ON u.id = ge.recorded_by_user_id
+           WHERE ge.grant_id = ?
+           ORDER BY ge.recorded_at DESC""",
+        (grant_id,),
+    )
+    total_expenses = sum(e["amount"] or 0 for e in expenses)
+    return render_template(
+        "finance_grant_expenses.html",
+        grant=grant,
+        expenses=expenses,
+        total_expenses=total_expenses,
+        can_edit_finance=_user_can_edit_finance(user),
+    )
+
+
+@app.route("/finance/grants/<int:grant_id>/form-control", methods=["GET", "POST"])
+@login_required
+def finance_grant_form_control(grant_id: int):
+    """Grant form-control — approval config, budget rules, overview."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"finance_admin", "super_admin"} or is_owner(user)):
+        abort(403)
+    grant = query_one(
+        "SELECT g.*, pi.name AS pi_name FROM grants g LEFT JOIN users pi ON pi.id = g.pi_user_id WHERE g.id = ?",
+        (grant_id,),
+    )
+    if not grant:
+        abort(404)
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+        db = get_db()
+
+        if action == "save_budget_rules":
+            # Store budget rules as grant metadata columns (future: separate table)
+            warn_pct = float(request.form.get("warn_threshold_pct", "80") or 80)
+            freeze_pct = float(request.form.get("freeze_threshold_pct", "100") or 100)
+            require_receipt = 1 if request.form.get("require_receipt") else 0
+            db.execute(
+                """UPDATE grants SET notes = ? WHERE id = ?""",
+                (
+                    f"budget_warn_pct={warn_pct};freeze_pct={freeze_pct};require_receipt={require_receipt}",
+                    grant_id,
+                ),
+            )
+            db.commit()
+            log_action(user["id"], "grant", grant_id, "budget_rules_updated", {
+                "warn_pct": warn_pct, "freeze_pct": freeze_pct,
+            })
+            flash("Budget rules saved.", "success")
+            return redirect(url_for("finance_grant_form_control", grant_id=grant_id))
+
+        abort(400)
+
+    # Parse budget rules from notes (simple key=value pairs)
+    budget_rules = {"warn_threshold_pct": 80, "freeze_threshold_pct": 100, "require_receipt": 0}
+    if grant["notes"] and "budget_warn_pct=" in (grant["notes"] or ""):
+        for part in grant["notes"].split(";"):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                k = k.strip()
+                if k == "budget_warn_pct":
+                    budget_rules["warn_threshold_pct"] = float(v)
+                elif k == "freeze_pct":
+                    budget_rules["freeze_threshold_pct"] = float(v)
+                elif k == "require_receipt":
+                    budget_rules["require_receipt"] = int(v)
+
+    expense_count = query_one(
+        "SELECT COUNT(*) AS cnt FROM grant_expenses WHERE grant_id = ?", (grant_id,),
+    )
+    sample_count = query_one(
+        """SELECT COUNT(DISTINCT sr.id) AS cnt
+           FROM sample_requests sr
+           JOIN grant_allocations ga ON ga.project_id = sr.project_id
+           WHERE ga.grant_id = ?""",
+        (grant_id,),
+    )
+    return render_template(
+        "finance_grant_form_control.html",
+        grant=grant,
+        budget_rules=budget_rules,
+        expense_count=(expense_count["cnt"] if expense_count else 0),
+        sample_count=(sample_count["cnt"] if sample_count else 0),
+    )
+
+
 @app.route("/api/health-check")
 def api_health_check():
     """Lightweight healthcheck endpoint — no auth required."""
@@ -7453,6 +7660,30 @@ def instrument_detail(instrument_id: int):
             log_action(user["id"], "instrument", instrument_id, "approval_config_updated", {"step_count": step_order - 1})
             flash("Approval sequence saved.", "success")
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        if action == "add_inventory_item":
+            if not can_edit:
+                abort(403)
+            item_name = request.form.get("item_name", "").strip()
+            inv_category = request.form.get("inv_category", "consumable").strip()
+            quantity = int(request.form.get("quantity", 0) or 0)
+            minimum_quantity = int(request.form.get("minimum_quantity", 0) or 0)
+            unit = request.form.get("unit", "units").strip() or "units"
+            unit_cost = float(request.form.get("unit_cost", 0) or 0)
+            inv_notes = request.form.get("inv_notes", "").strip()
+            if not item_name:
+                flash("Item name is required.", "error")
+                return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+            execute(
+                """
+                INSERT INTO instrument_inventory
+                    (instrument_id, item_name, category, quantity, minimum_quantity, unit, unit_cost, last_restocked_at, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (instrument_id, item_name, inv_category, quantity, minimum_quantity, unit, unit_cost, now_iso(), inv_notes),
+            )
+            log_action(user["id"], "instrument", instrument_id, "inventory_item_added", {"item_name": item_name, "quantity": quantity})
+            flash(f"Inventory item '{item_name}' added.", "success")
+            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         abort(400)
 
     queue_sql, queue_params = request_history_query(["sr.instrument_id = ?"], [instrument_id], {})
@@ -7654,6 +7885,10 @@ def instrument_detail(instrument_id: int):
             "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
         ),
         upcoming_downtime=upcoming_downtime,
+        inventory_items=query_all(
+            "SELECT * FROM instrument_inventory WHERE instrument_id = ? ORDER BY item_name",
+            (instrument_id,),
+        ),
     )
 
 

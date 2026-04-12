@@ -3724,6 +3724,7 @@ code {
 .tile-queue    { grid-column: 1 / -1; }
 .tile-control  { grid-column: span 3; }
 .tile-team     { grid-column: span 2; }
+.tile-inventory { grid-column: span 2; }
 .tile-approval { grid-column: span 2; }
 .tile-downtime { grid-column: span 2; }
 .tile-activity { grid-column: span 2; }

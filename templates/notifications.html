@@ -26,10 +26,12 @@
   </div>
 </header>
 
-<section class="inst-tiles" data-vis="{{ V }}">
+<section class="inbox-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-inbox-list" data-vis="{{ V }}">
   {% if notices %}
+  <ul class="inbox-list" data-vis="{{ V }}">
   {% for n in notices %}
-  <article class="card tile{% if not n.is_read %} notice-unread{% endif %}" data-columns="6" data-vis="{{ V }}">
+  <li class="inbox-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
     <div class="notice-row-header" data-vis="{{ V }}">
       <div class="notice-row-meta" data-vis="{{ V }}">
         {% if not n.is_read %}<span class="notice-unread-dot" data-vis="{{ V }}"></span>{% endif %}
@@ -48,12 +50,12 @@
     <h3 data-vis="{{ V }}">{{ n.subject }}</h3>
     {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
     {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
-  </article>
+  </li>
   {% endfor %}
+  </ul>
   {% else %}
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
     {{ empty_state("No active notifications. You're all caught up.") }}
-  </article>
   {% endif %}
+  </article>
 </section>
 {% endblock %}

@@ -4819,17 +4819,6 @@ def record_payment(
     return cur.lastrowid
 
 
-def attach_request_to_project(
-    db: sqlite3.Connection,
-    request_id: int,
-    project_id: int,
-) -> None:
-    """Set sample_requests.project_id. Idempotent."""
-    db.execute(
-        "UPDATE sample_requests SET project_id = ? WHERE id = ?",
-        (project_id, request_id),
-    )
-
 
 def _seed_demo_grants() -> None:
     """Seed 3 demo grants and attach a few existing external requests
@@ -6264,30 +6253,6 @@ def send_completion_inbox_message(operator_id: int, sample_request: sqlite3.Row 
     except Exception:
         pass  # best-effort; don't break the completion flow
 
-
-def inbox_preview_for_user(user: sqlite3.Row | None, limit: int = 3) -> list[dict]:
-    """Return the most-recent N messages for `user`'s home-page preview
-    tile. Newest-first, unread always on top. Includes sender name."""
-    if not user:
-        return []
-    try:
-        rows = query_all(
-            """
-            SELECT m.id, m.subject, m.body, m.sent_at, m.read_at,
-                   u.name AS sender_name, u.email AS sender_email
-              FROM messages m
-              LEFT JOIN users u ON u.id = m.sender_id
-             WHERE m.recipient_id = ?
-             ORDER BY
-                CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
-                m.sent_at DESC
-             LIMIT ?
-            """,
-            (user["id"], limit),
-        )
-        return [dict(r) for r in rows]
-    except sqlite3.OperationalError:
-        return []
 
 
 # ─── v1.6.1 Admin Notices — sitewide messaging write surface ──────────

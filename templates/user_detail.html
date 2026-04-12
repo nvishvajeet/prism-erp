@@ -226,7 +226,7 @@
 {% endif %}
 
 {% if reset_pw_info %}
-<section class="card compact tile-user-reset-pin" data-vis="{{ V }}" style="border:2px solid var(--accent, #007aff); background:var(--bg-accent-subtle, #eef6ff);">
+<section class="card compact tile-user-reset-pin" data-vis="{{ V }}" style="border:2px solid var(--accent); background:var(--accent-soft);">
   <div class="section-head" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
       <h2 data-vis="{{ V }}">Temporary Password Issued</h2>
@@ -238,7 +238,7 @@
     <strong>This PIN is shown only once.</strong>
   </p>
   <div style="display:flex; align-items:center; gap:0.75rem; margin:0.75rem 0;" data-vis="{{ V }}">
-    <code id="resetPin" style="font-size:1.5rem; letter-spacing:0.15em; padding:0.4rem 0.8rem; background:var(--bg, #fff); border:1px solid var(--border, #ccc); border-radius:6px; user-select:all;">{{ reset_pw_info.temp_password }}</code>
+    <code id="resetPin" style="font-size:1.5rem; letter-spacing:0.15em; padding:0.4rem 0.8rem; background:var(--panel-strong); border:1px solid var(--line); border-radius:6px; user-select:all;">{{ reset_pw_info.temp_password }}</code>
     <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('resetPin').textContent.trim()).then(function(){this.textContent='Copied!'}.bind(this))" data-vis="{{ V }}" style="white-space:nowrap;">Copy PIN</button>
     <a href="{{ url_for('download_reset_password_eml', user_id=reset_pw_info.user_id, tp=reset_pw_info.temp_password) }}" class="button" data-vis="{{ V }}" style="white-space:nowrap;">Download .eml</a>
   </div>

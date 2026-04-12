@@ -6,7 +6,7 @@
   --ink: #1e2935;
   --muted: #738190;
   --line: #e3eaf1;
-  --accent: #5f8fb7;
+  --accent: #4a7a9e;
   --accent-hover: #527ea3;
   --accent-soft: #eef5fb;
   --warm: #b8742c;
@@ -141,7 +141,7 @@
   --tone-rejected-ink: #ffd8dd;
   --surface: #1a2230;
   --surface-alt: #202a35;
-  --lifecycle-ok: #6bc5a0;
+  --lifecycle-ok: #3d8b6a;
   --lifecycle-warn: #e8b84d;
   --lifecycle-danger: #e87474;
 }
@@ -2956,7 +2956,7 @@ code {
 /* ── Delta tone indicators ── */
 .tone-up { color: #2d8659; }
 .tone-down { color: var(--danger, #b84a4a); }
-:root[data-theme="dark"] .tone-up { color: #6bc5a0; }
+:root[data-theme="dark"] .tone-up { color: #3d8b6a; }
 :root[data-theme="dark"] .tone-down { color: #e07070; }
 
 /* ══════════════════════════════════════════
@@ -3108,7 +3108,7 @@ code {
   color: var(--muted);
   white-space: nowrap;
 }
-:root[data-theme="dark"] .wr-inst-active .wr-inst-status-dot { background: #6bc5a0; }
+:root[data-theme="dark"] .wr-inst-active .wr-inst-status-dot { background: #3d8b6a; }
 :root[data-theme="dark"] .wr-inst-queued .wr-inst-status-dot { background: #e0b860; }
 :root[data-theme="dark"] .warroom-panel-alert { border-left-color: #e0b860; }
 

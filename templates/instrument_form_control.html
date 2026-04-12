@@ -106,7 +106,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="save_email_templates" data-vis="{{ V }}">
       {% for evt, evt_label in [("request_submitted", "Request Submitted"), ("step_approved", "Step Approved"), ("request_completed", "Request Completed")] %}
-      <fieldset class="form-control-field-row" style="border:1px solid var(--border-color,#e0e0e0);border-radius:8px;padding:12px;margin-bottom:8px;" data-vis="{{ V }}">
+      <fieldset class="form-control-field-row" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;" data-vis="{{ V }}">
         <legend data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ evt_label }}</strong></legend>
         <label data-vis="{{ V }}">Subject
           <input type="text" name="tmpl_subject_{{ evt }}" value="{{ email_templates.get(evt, {}).get('subject_template', '') if email_templates else '' }}" placeholder="e.g. Your request has been {{'{{'}}status{{'}}'}}" data-vis="{{ V }}">

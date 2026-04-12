@@ -7333,6 +7333,25 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .hover-back-btn { color: var(--muted); background: var(--panel-strong); border-color: var(--line); }
 :root[data-theme="dark"] .hover-back-btn:hover { color: var(--ink); background: var(--hover-soft-strong); }
 
+/* ── Quick Intake cards — the wait-tone bg is dark brown in
+   dark mode but text doesn't inherit properly ──────────── */
+:root[data-theme="dark"] .quick-intake-block {
+  background: var(--panel-strong);
+  border-color: var(--line);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .quick-intake-content strong { color: var(--ink); }
+:root[data-theme="dark"] .quick-intake-content { color: var(--muted); }
+:root[data-theme="dark"] .quick-intake-actions select {
+  background: var(--panel);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* ── Instrument queue tiles on dashboard — QUEUED dates invisible ── */
+:root[data-theme="dark"] .dash-instrument-queue-table td { color: var(--ink); }
+:root[data-theme="dark"] .dash-instrument-queue-table a { color: var(--accent); }
+
 /* ── Quick Action cards — the primary variant uses var(--ink)
    as background which becomes light in dark mode. Invert. ── */
 :root[data-theme="dark"] .qa-card-primary {

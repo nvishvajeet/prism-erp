@@ -1537,8 +1537,11 @@ table td {
   background: color-mix(in srgb, var(--accent-soft) 72%, var(--panel-strong) 28%);
 }
 
+/* max-height removed — user feedback: with ~25 instruments the
+   table should flow naturally, not scroll inside a constrained
+   box. Pagination (page_size=25) handles overflow instead. */
 .instruments-table-shell {
-  max-height: 34rem;
+  max-height: none;
 }
 
 .instruments-table {
@@ -2311,15 +2314,19 @@ code {
   gap: 0.35rem;
 }
 
+/* User feedback: amber card was confusing (color implied a status
+   that wasn't explained). Replaced with a plain row — the status
+   is already shown via the action buttons (Accept Sample / Assign). */
 .quick-intake-block {
-  border: 1px solid var(--tone-wait-border);
-  background: var(--tone-wait-bg);
-  color: var(--tone-wait-ink);
-  border-radius: 12px;
-  padding: 0.65rem 0.8rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
+  padding: 0.25rem 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .quick-intake-content {
@@ -5314,7 +5321,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 
 .tile-dash-quick-intake .quick-intake-table tbody td {
-  padding: 0.6rem 0;
+  padding: 0.3rem 0;
   border-bottom: 1px solid var(--line-soft, #ececf0);
 }
 

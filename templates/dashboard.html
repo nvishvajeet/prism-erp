@@ -141,7 +141,7 @@
     <label class="quick-intake-search" data-vis="{{ V }}">
       <input type="text" id="quickIntakeSearch" placeholder="Type job number, sample name, or requester" data-vis="{{ V }}">
     </label>
-    {% call paginated_pane('quickIntake', page_size=4, max_height='none') %}
+    {% call paginated_pane('quickIntake', page_size=6, max_height='none') %}
     <table class="quick-intake-table" data-vis="{{ V }}">
       <tbody id="quickIntakeBody" data-vis="{{ V }}">
       {% for row in pending_receipt_lookup_rows %}

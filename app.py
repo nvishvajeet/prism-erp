@@ -39,6 +39,8 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
+ORG_NAME = os.environ.get("PRISM_ORG_NAME", "PRISM")
+ORG_TAGLINE = os.environ.get("PRISM_ORG_TAGLINE", "Lab & Research Management")
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -5533,6 +5535,8 @@ def inject_globals():
         "V": V,
         "current_user": user,
         "demo_mode": DEMO_MODE,
+        "org_name": ORG_NAME,
+        "org_tagline": ORG_TAGLINE,
         "module_enabled": module_enabled,
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,

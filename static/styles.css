@@ -8698,3 +8698,34 @@ details[open] > summary,
 :root[data-theme="dark"] .finance-tiles .tile-external {
   border-left-color: var(--danger, #c06565);
 }
+
+/* ── v1.3.0 polish blitz ──────────────────────────────────────────────── */
+
+/* 1. Dashboard: role-hint tile tighter spacing */
+.tile-dash-role-hint { padding: 0.6rem 1rem; }
+
+/* 3. Instrument detail: reduce gap between top tiles */
+.inst-tiles .dashboard-tiles { gap: 0.75rem; }
+
+/* 4. Schedule: filter pills — subtle shadow on active for depth */
+.filter-pill.is-active { box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+.filter-pill { box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
+/* 5. Inbox: compose/new-message button — bolder presence */
+.inst-header-actions a.btn:last-child { font-weight: 600; letter-spacing: 0.02em; }
+
+/* 6. Finance: hero blocks — subtle inset shadow on KPI cells */
+.finance-tiles .dev-now-cell { box-shadow: inset 0 1px 3px rgba(0,0,0,0.04); }
+
+/* 7. Notifications: control panel summary — better affordance */
+.admin-notices-tiles details > summary { padding: 0.55rem 0.85rem; border-radius: var(--radius-md, 8px); border: 1px solid var(--line, #e4e4e9); background: var(--surface, #fff); cursor: pointer; transition: background 120ms ease; }
+.admin-notices-tiles details > summary:hover { background: var(--tint, #f5f7fa); }
+
+/* 8. Attendance: Mark Present button — bolder shadow on hover */
+form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 57, 43, 0.18); }
+
+/* 9. Stats: live-counter grid tighter */
+.dev-now-grid { gap: 0.5rem; }
+
+/* 10. Sitemap/Settings: tighter tile padding */
+.sitemap-tiles .card.tile { padding-top: 0.75rem; padding-bottom: 0.75rem; }

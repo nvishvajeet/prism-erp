@@ -174,6 +174,37 @@
       </button>
     </div>
     <p class="control-mode-status hint" id="intakeToggleStatus" aria-live="polite" data-vis="{{ V }}"></p>
+
+    {# Downtime — merged into Control Panel #}
+    <h3 class="section-kicker" style="margin-top: 0.75rem;" data-vis="{{ V }}">Downtime <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a></h3>
+    {% if upcoming_downtime %}
+    <ul class="downtime-list" data-vis="{{ V }}">
+      {% for dt in upcoming_downtime %}
+      <li class="downtime-item" data-vis="{{ V }}">
+        <div class="downtime-dates" data-vis="{{ V }}">
+          <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
+          <span class="hint" data-vis="{{ V }}">→</span>
+          <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
+        </div>
+        {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
+    {% endif %}
+    {% if can_add_downtime_here %}
+    <details class="tile-inline-editor" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Add downtime</summary>
+      <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="action" value="add_downtime">
+        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
+        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
+        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
+        <button type="submit" class="small-button" data-vis="{{ V }}">Add Block</button>
+      </form>
+    </details>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -247,40 +278,7 @@
   </section>
   {% endif %}
 
-  {# ── Tile: Downtime ── #}
-  <section class="card tile tile-downtime" data-vis="{{ V }}">
-    {% call card_heading("", "Downtime") %}
-      <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
-    {% endcall %}
-    {% if upcoming_downtime %}
-    <ul class="downtime-list" data-vis="{{ V }}">
-      {% for dt in upcoming_downtime %}
-      <li class="downtime-item" data-vis="{{ V }}">
-        <div class="downtime-dates" data-vis="{{ V }}">
-          <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
-          <span class="hint" data-vis="{{ V }}">→</span>
-          <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
-        </div>
-        {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
-    {% endif %}
-    {% if can_add_downtime_here %}
-    <details class="tile-inline-editor" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Add downtime</summary>
-      <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
-        <input type="hidden" name="action" value="add_downtime">
-        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
-        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
-        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
-        <button type="submit" class="small-button" data-vis="{{ V }}">Add Block</button>
-      </form>
-    </details>
-    {% endif %}
-  </section>
+  {# Downtime tile removed — merged into Control Panel above #}
 
   {# ── Tile: Maintenance & Calibration (v2.2.0) ── #}
   <section class="card tile tile-maintenance" data-vis="{{ V }}">

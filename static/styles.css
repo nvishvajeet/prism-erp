@@ -5462,7 +5462,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   gap: 0.1rem;
 }
 .tile-dash-quick-intake .quick-intake-content .hint {
-  display: none; /* hide timestamp to save space */
+  display: none !important;
 }
 .tile-dash-quick-intake .quick-intake-actions {
   flex-shrink: 0;

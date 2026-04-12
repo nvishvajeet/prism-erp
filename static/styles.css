@@ -4715,13 +4715,12 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 /* User feedback: activity feed grows unbounded with entries, pushing
    everything else off-screen. Cap at 24rem (~384px) so the feed
    scrolls inside its tile and the rest of the page stays visible. */
+/* Activity feed: NO scroll pane. Content flows naturally.
+   User: "why is this scrolling, just fix this" */
 .activity-feed {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 24rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .activity-entry {
@@ -5102,9 +5101,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 /* Activity/events tile: span 3 (half) to sit beside detail, capped height */
 .request-tiles > .tile-request-events {
   grid-column: span 3;
-  max-height: 28rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .request-tiles .tile > .section-head {

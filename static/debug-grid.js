@@ -109,27 +109,73 @@
     clickEvents = [];
   }
 
+  // ── Session persistence across page navigation ─────────────────
+  // When recording and the user clicks a link, we save state to
+  // sessionStorage so recording auto-resumes on the next page.
+
+  function saveSessionState() {
+    if (!isRecording) return;
+    sessionStorage.setItem('debugRecording', JSON.stringify({
+      transcript: transcript,
+      clicks: clickEvents,
+      startedAt: sessionStorage.getItem('debugRecordingStart') || new Date().toISOString(),
+    }));
+  }
+
+  function restoreSessionState() {
+    var saved = sessionStorage.getItem('debugRecording');
+    if (!saved) return false;
+    try {
+      var state = JSON.parse(saved);
+      transcript = state.transcript || '';
+      clickEvents = state.clicks || [];
+      sessionStorage.setItem('debugRecordingStart', state.startedAt);
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function clearSessionState() {
+    sessionStorage.removeItem('debugRecording');
+    sessionStorage.removeItem('debugRecordingStart');
+  }
+
   // ── Click capture during recording ────────────────────────────
 
   function onDebugClick(e) {
     if (!isRecording) return;
-    // Don't intercept clicks on the debug panel itself
     if (e.target.closest('#debugPanel')) return;
 
     var g = gridCoords(e.clientX, e.clientY);
     var label = 'R' + g.row + ',C' + g.col;
     var nearest = e.target.closest('[class]');
-    var context = nearest ? '.' + nearest.className.split(/\s+/)[0] : e.target.tagName.toLowerCase();
-    var entry = '[Click: ' + label + ' on ' + context + ']';
+    var context = nearest ? '.' + nearest.className.split(/\s+/')[0] : e.target.tagName.toLowerCase();
 
-    // Append to transcript
+    // If the click target is a link, save state and let navigation
+    // happen — recording resumes on the new page automatically.
+    var link = e.target.closest('a[href]');
+    if (link && link.href && !link.href.startsWith('javascript:')) {
+      var entry = '[Navigate: ' + label + ' → ' + link.pathname + ']';
+      transcript += entry + ' ';
+      clickEvents.push({
+        grid: label, element: context,
+        x: e.clientX, y: e.clientY,
+        page: window.location.pathname,
+        navigateTo: link.pathname,
+      });
+      saveSessionState();
+      // Ensure ?debug=1 follows the navigation
+      var url = new URL(link.href, window.location.origin);
+      url.searchParams.set('debug', '1');
+      link.href = url.toString();
+      return; // let the browser navigate
+    }
+
+    var entry = '[Click: ' + label + ' on ' + context + ']';
     transcript += entry + ' ';
     clickEvents.push({
-      grid: label,
-      element: context,
-      x: e.clientX,
-      y: e.clientY,
-      page: window.location.pathname
+      grid: label, element: context,
+      x: e.clientX, y: e.clientY,
+      page: window.location.pathname,
     });
 
     placeClickMarker(e.clientX, e.clientY, label);
@@ -185,21 +231,27 @@
     return r;
   }
 
-  function startRecording() {
+  function startRecording(resumed) {
     if (!recognition) recognition = initSpeech();
     if (!recognition) {
       alert('Speech recognition not supported. Use Chrome.');
       return;
     }
-    transcript = '';
-    clickEvents = [];
-    clearClickMarkers();
+    if (!resumed) {
+      transcript = '';
+      clickEvents = [];
+      clearClickMarkers();
+      clearSessionState();
+    }
     isRecording = true;
     recognition.start();
     recordBtn.textContent = 'Stop';
     recordBtn.style.background = '#d32f2f';
     transcriptPanel.style.display = 'block';
-    if (transcriptEl) transcriptEl.textContent = 'Listening... (click anywhere to mark a point)';
+    if (transcriptEl) transcriptEl.textContent = resumed
+      ? 'Resumed recording (navigated from previous page)...'
+      : 'Listening... (click anywhere to mark a point)';
+    updateTranscriptDisplay();
   }
 
   function stopRecording() {
@@ -207,6 +259,7 @@
     if (recognition) recognition.stop();
     recordBtn.textContent = 'Record';
     recordBtn.style.background = '#1976d2';
+    clearSessionState();
 
     var fullText = transcript.trim();
     if (fullText || clickEvents.length) {
@@ -299,4 +352,9 @@
 
   // Auto-show grid on load
   toggleGrid();
+
+  // Auto-resume recording if we navigated here while recording
+  if (restoreSessionState()) {
+    startRecording(true);
+  }
 })();

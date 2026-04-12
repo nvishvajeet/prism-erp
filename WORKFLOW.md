@@ -162,7 +162,27 @@ git push origin v1.3.0-stable-release
 
 Commit rhythm is Level 1. Do not restate it here.
 
-### 3.7  Parallel agent work — claim before you edit
+### 3.7  Fast mode — ALWAYS ON
+
+**All agents work in fast mode by default.** This is not optional.
+
+- **No ceremony commits.** Skip claim-only commits for small,
+  single-file changes. Use claims only when touching 3+ files
+  that other agents might also need.
+- **Pre-receive hook is fast** (~1s smoke on branch pushes).
+  Full sanity only runs on tag pushes or `PRISM_FULL_GATE=1`.
+- **Batch related changes** into one commit. Don't split a
+  feature into "schema commit" + "route commit" + "template
+  commit" unless each is independently shippable.
+- **Crawlers track useful signals, not solved problems.**
+  If a crawler checks something that's been stable for weeks,
+  it's noise. Remove the check or move it to a less frequent
+  wave. The sanity wave must stay under 20s.
+- **Think ERP.** PRISM is a modular ERP (see
+  `docs/ERP_PRIMITIVES.md`). Every feature maps to a primitive.
+  New portals clone existing ones, not build from scratch.
+
+### 3.8  Parallel agent work — claim before you edit
 
 Multiple Claude agents can now run concurrently against this
 repo (different chat sessions, same working copy). The

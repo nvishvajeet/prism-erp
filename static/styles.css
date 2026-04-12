@@ -537,6 +537,14 @@ a:hover {
   display: inline-block;
 }
 
+/* ── Operation-status mode colours (dot + optional border tint) ── */
+.operation-accepting .operation-dot  { background: var(--lifecycle-ok); }
+.operation-active    .operation-dot  { background: var(--lifecycle-ok); }
+.operation-on_hold   .operation-dot  { background: var(--lifecycle-warn); }
+.operation-hold      .operation-dot  { background: var(--lifecycle-warn); }
+.operation-wait      .operation-dot  { background: var(--lifecycle-warn); }
+.operation-maintenance .operation-dot { background: var(--lifecycle-danger); }
+
 .small-button.is-active {
   border-color: var(--accent);
   color: var(--accent);

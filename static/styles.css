@@ -3495,9 +3495,20 @@ code {
   padding-bottom: 0.35rem;
 }
 
-/* Scrollable tile body — the area below the heading. Any tile
-   whose content can grow (lists, tables, feeds, forms) gets an
-   internal scroll. The tile itself never grows past its grid slot. */
+/* Every child of a tile that isn't a heading gets internal scroll.
+   This is the core Apple rule: tile heading pins, content scrolls
+   inside, tile never grows. Works for event logs, tables, lists,
+   forms — anything that could grow unbounded. */
+.tile > *:not(.section-head):not(h2):not(h3):not(script) {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Explicit opt-in class for tiles that already manage their own
+   scroll. Same effect but named for readability. */
 .tile-scroll-body {
   flex: 1 1 0;
   overflow-y: auto;
@@ -3517,10 +3528,13 @@ code {
 .tile-request-events { max-height: none; }
 /* Explainer tile: fixed height, details content scrolls inside.
    Opening "Show the full pipeline" never pushes other tiles. */
-.tile-request-explainer { max-height: 280px; }
+.tile-request-explainer {
+  max-height: 280px !important;
+  overflow: hidden !important;
+}
 .tile-request-explainer .explainer-details {
   overflow-y: auto;
-  max-height: 220px;
+  max-height: 200px;
 }
 
 /* Override for dashboard tiles — smaller, snappier */

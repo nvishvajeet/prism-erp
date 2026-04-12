@@ -3495,15 +3495,13 @@ code {
   padding-bottom: 0.35rem;
 }
 
-/* Every child of a tile that isn't a heading gets internal scroll.
-   This is the core Apple rule: tile heading pins, content scrolls
-   inside, tile never grows. Works for event logs, tables, lists,
-   forms — anything that could grow unbounded. */
+/* Tile children get overflow-y: auto so content scrolls inside
+   when it exceeds the tile's max-height. flex-shrink: 1 allows
+   shrinking but flex-basis: auto preserves the content's natural
+   height instead of collapsing to zero. */
 .tile > *:not(.section-head):not(h2):not(h3):not(script) {
-  flex: 1 1 0;
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: 0;
   -webkit-overflow-scrolling: touch;
 }
 

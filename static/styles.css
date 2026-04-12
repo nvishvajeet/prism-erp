@@ -8511,3 +8511,9 @@ form[action*="quick-present"] .primary-action:hover {
   gap: 0.25rem;
   align-items: center;
 }
+
+/* Settings: compact, clean, fewer visual elements */
+.sitemap-tiles { gap: 0.5rem !important; }
+.sitemap-tiles .settings-item { padding: 0.4rem 0.6rem; }
+.sitemap-tiles .settings-group { margin-bottom: 0.25rem; }
+.sitemap-tiles .group-title { font-size: 0.75rem; margin-bottom: 0.25rem; }

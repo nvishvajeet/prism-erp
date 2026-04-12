@@ -26,6 +26,7 @@
             <option value="site">Site-wide — everyone</option>
             <option value="role">Role-scoped — one role only</option>
             <option value="instrument">Instrument-scoped — users with access</option>
+            <option value="mailing_list">Mailing list</option>
           </select>
         </label>
         <label data-vis="{{ V }}">Severity
@@ -49,6 +50,14 @@
         <select name="scope_target_instrument" data-vis="{{ V }}">
           {% for i in instruments %}
           <option value="{{ i.code }}">{{ i.code }} — {{ i.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="admin-notice-target admin-notice-target-mailing-list" data-vis="{{ V }}">Mailing list
+        <select name="scope_target_mailing_list" data-vis="{{ V }}">
+          {% for ml in mailing_lists %}
+          <option value="{{ ml.id }}">{{ ml.name }}</option>
           {% endfor %}
         </select>
       </label>
@@ -80,10 +89,12 @@
         const scopeSel = form.querySelector('#adminNoticeScope');
         const roleCell = form.querySelector('.admin-notice-target-role');
         const instCell = form.querySelector('.admin-notice-target-instrument');
+        const mlCell = form.querySelector('.admin-notice-target-mailing-list');
         function sync() {
           const s = scopeSel.value;
           roleCell.style.display = (s === 'role') ? '' : 'none';
           instCell.style.display = (s === 'instrument') ? '' : 'none';
+          if (mlCell) mlCell.style.display = (s === 'mailing_list') ? '' : 'none';
         }
         scopeSel.addEventListener('change', sync);
         sync();
@@ -122,7 +133,7 @@
       <li class="admin-notice-row-item notice-{{ n.severity }}" data-vis="{{ V }}">
         <div class="admin-notice-row-head" data-vis="{{ V }}">
           <span class="notice-eyebrow" data-vis="{{ V }}">
-            {% if n.scope == 'site' %}SITE-WIDE{% elif n.scope == 'role' %}ROLE · {{ n.scope_target|upper }}{% elif n.scope == 'instrument' %}INSTRUMENT · {{ n.scope_target|upper }}{% else %}{{ n.scope|upper }}{% endif %}
+            {% if n.scope == 'site' %}SITE-WIDE{% elif n.scope == 'role' %}ROLE · {{ n.scope_target|upper }}{% elif n.scope == 'instrument' %}INSTRUMENT · {{ n.scope_target|upper }}{% elif n.scope == 'mailing_list' %}LIST · {{ n.scope_target }}{% else %}{{ n.scope|upper }}{% endif %}
           </span>
           <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
           <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace("T", " ") }}</span>

@@ -91,7 +91,28 @@
     </form>
   </section>
 
-  {# ── Tile 4: Overview (span 3) ── #}
+  {# ── Tile 4: Message Templates (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Message Templates") }}
+    <p class="tile-lead" data-vis="{{ V }}">Customise email notifications sent when workflow events occur on this instrument.</p>
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_email_templates" data-vis="{{ V }}">
+      {% for evt, evt_label in [("request_submitted", "Request Submitted"), ("step_approved", "Step Approved"), ("request_completed", "Request Completed")] %}
+      <fieldset class="form-control-field-row" style="border:1px solid var(--border-color,#e0e0e0);border-radius:8px;padding:12px;margin-bottom:8px;" data-vis="{{ V }}">
+        <legend data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ evt_label }}</strong></legend>
+        <label data-vis="{{ V }}">Subject
+          <input type="text" name="tmpl_subject_{{ evt }}" value="{{ email_templates.get(evt, {}).get('subject_template', '') if email_templates else '' }}" placeholder="e.g. Your request has been {{'{{'}}status{{'}}'}}" data-vis="{{ V }}">
+        </label>
+        <label data-vis="{{ V }}">Body
+          <textarea name="tmpl_body_{{ evt }}" rows="3" placeholder="Plain text template. Use {{'{{'}}requester_name{{'}}'}}, {{'{{'}}instrument_name{{'}}'}}, {{'{{'}}request_id{{'}}'}} as placeholders." data-vis="{{ V }}">{{ email_templates.get(evt, {}).get('body_template', '') if email_templates else '' }}</textarea>
+        </label>
+      </fieldset>
+      {% endfor %}
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Templates</button>
+    </form>
+  </section>
+
+  {# ── Tile 5: Overview (span 3) ── #}
   <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
     {{ card_heading("", "Overview") }}
     <ul class="tile-summary-list" data-vis="{{ V }}">

@@ -6,8 +6,11 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">Inbox</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{% if viewing_as %}{{ viewing_as }}'s Inbox{% else %}Inbox{% endif %}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ unread }} unread · {{ messages|length }} total</span>
+    {% if viewing_as %}
+    <span class="badge badge-role" data-vis="{{ V }}">Owner view</span>
+    {% endif %}
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn btn-primary" href="{{ url_for('message_compose') }}" data-vis="{{ V }}">New message</a>

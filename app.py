@@ -4006,6 +4006,8 @@ def init_db() -> None:
             "ALTER TABLE messages ADD COLUMN parent_message_id INTEGER REFERENCES messages(id)",
             "ALTER TABLE messages ADD COLUMN deleted_by_sender INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE messages ADD COLUMN deleted_by_recipient INTEGER NOT NULL DEFAULT 0",
+            # Phase 1b: permanent-hide (audit-safe delete from Deleted folder)
+            "ALTER TABLE messages ADD COLUMN permanently_hidden INTEGER NOT NULL DEFAULT 0",
         ]:
             try:
                 cur.execute(col_sql)
@@ -6078,12 +6080,31 @@ def _save_message_attachments(message_id: int, files, now_iso: str):
 @login_required
 def inbox():
     """List messages for the current user. Supports folder query param:
-    inbox (default), sent, deleted."""
+    inbox (default), sent, deleted.
+
+    Owner (is_owner) can view any user's inbox via ?user_id=<id> — useful
+    for admin oversight. The target user's name is passed to the template
+    so the UI can show "Viewing <name>'s inbox".
+    """
     user = current_user()
     folder = request.args.get("folder", "inbox")
     if folder not in ("inbox", "sent", "deleted"):
         folder = "inbox"
 
+    # Owner can view another user's mailbox
+    target_user_id = user["id"]
+    viewing_as = None
+    raw_uid = request.args.get("user_id", "")
+    if raw_uid and is_owner(user):
+        try:
+            target_user_id = int(raw_uid)
+            if target_user_id != user["id"]:
+                target = query_one("SELECT name FROM users WHERE id = ?", (target_user_id,))
+                viewing_as = target["name"] if target else f"User #{target_user_id}"
+        except (ValueError, TypeError):
+            pass
+
+    # permanently_hidden messages never appear in any folder
     if folder == "inbox":
         rows = query_all(
             """
@@ -6092,11 +6113,12 @@ def inbox():
               FROM messages m
               LEFT JOIN users u ON u.id = m.sender_id
              WHERE m.recipient_id = ? AND m.deleted_by_recipient = 0
+                   AND m.permanently_hidden = 0
              ORDER BY
                 CASE WHEN m.read_at IS NULL THEN 0 ELSE 1 END,
                 m.sent_at DESC
             """,
-            (user["id"],),
+            (target_user_id,),
         )
     elif folder == "sent":
         rows = query_all(
@@ -6106,9 +6128,10 @@ def inbox():
               FROM messages m
               LEFT JOIN users u ON u.id = m.recipient_id
              WHERE m.sender_id = ? AND m.deleted_by_sender = 0
+                   AND m.permanently_hidden = 0
              ORDER BY m.sent_at DESC
             """,
-            (user["id"],),
+            (target_user_id,),
         )
     else:  # deleted
         rows = query_all(
@@ -6117,11 +6140,12 @@ def inbox():
                    u.id AS sender_id, u.name AS sender_name, u.email AS sender_email
               FROM messages m
               LEFT JOIN users u ON u.id = m.sender_id
-             WHERE (m.recipient_id = ? AND m.deleted_by_recipient = 1)
-                OR (m.sender_id = ? AND m.deleted_by_sender = 1)
+             WHERE ((m.recipient_id = ? AND m.deleted_by_recipient = 1)
+                OR (m.sender_id = ? AND m.deleted_by_sender = 1))
+                AND m.permanently_hidden = 0
              ORDER BY m.sent_at DESC
             """,
-            (user["id"], user["id"]),
+            (target_user_id, target_user_id),
         )
 
     unread = sum(1 for r in rows if not r["read_at"])
@@ -6130,6 +6154,8 @@ def inbox():
         messages=rows,
         unread=unread,
         folder=folder,
+        viewing_as=viewing_as,
+        target_user_id=target_user_id if viewing_as else None,
     )
 
 
@@ -6330,22 +6356,41 @@ def message_reply(message_id: int):
 @app.route("/messages/<int:message_id>/delete", methods=["POST"])
 @login_required
 def message_delete(message_id: int):
-    """Soft-delete a message for the current user."""
+    """Soft-delete a message for the current user.
+
+    First delete from Inbox/Sent → moves to Deleted folder.
+    Second delete from Deleted folder → sets permanently_hidden=1
+    (hidden from all UI views but the DB record is preserved for
+    audit — the user asked for this explicitly).
+    """
     user = current_user()
     msg = query_one(
-        "SELECT sender_id, recipient_id FROM messages WHERE id = ?",
+        "SELECT sender_id, recipient_id, deleted_by_sender, deleted_by_recipient FROM messages WHERE id = ?",
         (message_id,),
     )
     if not msg:
         abort(404)
-    if user["id"] == msg["recipient_id"]:
-        execute("UPDATE messages SET deleted_by_recipient = 1 WHERE id = ?", (message_id,))
-    elif user["id"] == msg["sender_id"]:
-        execute("UPDATE messages SET deleted_by_sender = 1 WHERE id = ?", (message_id,))
-    else:
+    is_recipient = user["id"] == msg["recipient_id"]
+    is_sender = user["id"] == msg["sender_id"]
+    if not (is_recipient or is_sender):
         abort(403)
-    flash("Message deleted.", "success")
-    return redirect(url_for("inbox"))
+
+    # If already in the Deleted folder (soft-deleted), this is a
+    # permanent hide. The record stays in the DB for audit.
+    already_deleted = (
+        (is_recipient and msg["deleted_by_recipient"])
+        or (is_sender and msg["deleted_by_sender"])
+    )
+    if already_deleted:
+        execute("UPDATE messages SET permanently_hidden = 1 WHERE id = ?", (message_id,))
+        flash("Message permanently removed.", "success")
+    else:
+        if is_recipient:
+            execute("UPDATE messages SET deleted_by_recipient = 1 WHERE id = ?", (message_id,))
+        elif is_sender:
+            execute("UPDATE messages SET deleted_by_sender = 1 WHERE id = ?", (message_id,))
+        flash("Message moved to Deleted.", "success")
+    return redirect(url_for("inbox", folder="deleted" if already_deleted else "inbox"))
 
 
 @app.route("/messages/<int:message_id>/attachment/<int:att_id>", methods=["GET"])

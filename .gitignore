@@ -73,3 +73,7 @@ static/instrument_images/instrument_*.png
 
 # Paper submission bundles
 FOCS-submission/
+
+# Local HTTPS certs (mkcert-generated, never commit)
+cert.pem
+key.pem

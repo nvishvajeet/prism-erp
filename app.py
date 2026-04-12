@@ -3433,6 +3433,17 @@ def init_db() -> None:
             -- instrument's noticeboard and appears in the instrument's
             -- team view. Requesters WITHOUT rows can still submit to
             -- any instrument — this is opt-in subscription, not a gate.
+            -- v2.2.3 — per-user read state for notices. A row here means
+            -- the user has seen the notice. Absence = unread.
+            CREATE TABLE IF NOT EXISTS notice_reads (
+                user_id INTEGER NOT NULL,
+                notice_id INTEGER NOT NULL,
+                read_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (user_id, notice_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (notice_id) REFERENCES notices(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS instrument_requesters (
                 user_id INTEGER NOT NULL,
                 instrument_id INTEGER NOT NULL,
@@ -5290,7 +5301,7 @@ def inject_globals():
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,
         "nav_pending_counts": nav_pending_counts(user),
-        "nav_notice_count": len(active_notices_for_user(user)) if user else 0,
+        "nav_notice_count": unread_notice_count(user) if user else 0,
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
@@ -5544,13 +5555,22 @@ def active_notices_for_user(user: sqlite3.Row | None) -> list[dict]:
             LEFT JOIN instrument_admins    ia ON ia.instrument_id = i.id
             LEFT JOIN instrument_operators io ON io.instrument_id = i.id
             LEFT JOIN instrument_faculty_admins fa ON fa.instrument_id = i.id
-            WHERE ia.user_id = ? OR io.user_id = ? OR fa.user_id = ?
+            LEFT JOIN instrument_requesters ir ON ir.instrument_id = i.id
+            WHERE ia.user_id = ? OR io.user_id = ? OR fa.user_id = ? OR ir.user_id = ?
             """,
-            (user["id"], user["id"], user["id"]),
+            (user["id"], user["id"], user["id"], user["id"]),
         )
         user_instrument_codes = {r["code"] for r in acc_rows}
     except sqlite3.OperationalError:
         user_instrument_codes = set()
+    # Read state — which notices has this user already seen?
+    try:
+        read_ids = {r["notice_id"] for r in query_all(
+            "SELECT notice_id FROM notice_reads WHERE user_id = ?",
+            (user["id"],),
+        )}
+    except sqlite3.OperationalError:
+        read_ids = set()
     visible: list[dict] = []
     for row in rows:
         scope = row["scope"]
@@ -5574,8 +5594,15 @@ def active_notices_for_user(user: sqlite3.Row | None) -> list[dict]:
                 d["scope_label"] = f"instrument · {target}"
             else:
                 d["scope_label"] = scope
+            d["is_read"] = row["id"] in read_ids
             visible.append(d)
     return visible
+
+
+def unread_notice_count(user: sqlite3.Row | None) -> int:
+    """Count of active notices the user hasn't read yet."""
+    notices = active_notices_for_user(user)
+    return sum(1 for n in notices if not n.get("is_read"))
 
 
 def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
@@ -5861,6 +5888,28 @@ def admin_notices_delete(notice_id: int):
 # ─── v1.6.2 User-to-user messaging routes ─────────────────────────────
 # Directed messages, one sender + one recipient per row. Separate from
 # notices (broadcast). Single source of truth: the `messages` table.
+
+
+@app.route("/notifications/mark-read", methods=["POST"])
+@login_required
+def notification_mark_read():
+    """Mark a notice as read for the current user. Or mark all read."""
+    user = current_user()
+    notice_id = request.form.get("notice_id", "").strip()
+    if notice_id == "all":
+        notices = active_notices_for_user(user)
+        for n in notices:
+            if not n.get("is_read"):
+                execute(
+                    "INSERT OR IGNORE INTO notice_reads (user_id, notice_id, read_at) VALUES (?, ?, ?)",
+                    (user["id"], n["id"], now_iso()),
+                )
+    elif notice_id:
+        execute(
+            "INSERT OR IGNORE INTO notice_reads (user_id, notice_id, read_at) VALUES (?, ?, ?)",
+            (user["id"], int(notice_id), now_iso()),
+        )
+    return redirect(url_for("notifications_page"))
 
 
 @app.route("/notifications", methods=["GET"])

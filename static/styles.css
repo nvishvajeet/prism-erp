@@ -1039,7 +1039,7 @@ a:hover {
 /* ── New Request — tile grid (mirrors .inst-tiles for Jony-Ive
    uniformity with instrument_detail.html — no wasted whitespace,
    form spans the full page width) ── */
-.new-request-tiles {
+.new-request-tiles { 
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1rem;
@@ -1086,7 +1086,7 @@ a:hover {
 }
 
 @media (max-width: 760px) {
-  .new-request-tiles { grid-template-columns: 1fr; }
+  .new-request-tiles {  grid-template-columns: 1fr; }
   .new-request-tiles > .tile { grid-column: 1 / -1; }
 }
 
@@ -1247,7 +1247,7 @@ a:hover {
 
 input[type="file"] {
   padding: 0.55rem 0.65rem;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px dashed var(--line);
   background: var(--panel-strong);
 }
@@ -1518,7 +1518,7 @@ table td {
 .paginated-pane-scroll {
   overflow: auto;
   max-height: var(--pane-max-height, 28rem);
-  border-radius: 10px 10px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 .paginated-pane-controls {
@@ -2226,7 +2226,7 @@ code {
 }
 
 .calendar-shell .fc-event {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 0.15rem 0.18rem;
   cursor: pointer;
 }
@@ -2643,7 +2643,7 @@ code {
 }
 
 .calendar-card {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 0.65rem 0.75rem;
   margin-bottom: 0.65rem;
   background: #edf6f4;
@@ -2994,7 +2994,7 @@ code {
   gap: 0.6rem;
 }
 .warroom-inst-tile {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 0.7rem;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -3187,7 +3187,7 @@ code {
 /* Base button class for consistency */
 .btn {
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 0.64rem 0.88rem;
   background: var(--accent);
   color: white;
@@ -3665,7 +3665,7 @@ code {
 }
 
 /* Finance tiles — KPI row is short, table/list tiles are bounded */
-.finance-tiles > .tile { max-height: 520px; }
+.finance-tiles > .tile { max-height: none; }
 .finance-tiles > .tile-finance-kpi { max-height: 200px; }
 .finance-tiles > .tile > :not(.section-head):not(h2):not(h3) {
   overflow-y: auto;
@@ -3682,7 +3682,7 @@ code {
 }
 
 /* Admin notices — list tiles bounded */
-.admin-notices-tiles > .tile { max-height: 520px; }
+.admin-notices-tiles > .tile { max-height: none; }
 .admin-notices-tiles > .tile > :not(.section-head):not(h2):not(h3) {
   overflow-y: auto;
   min-height: 0;

@@ -67,3 +67,41 @@ Needs:
 - `/finance/grants/<id>/expenses` — non-sample expenses (NEW)
 - `/finance/grants/<id>/form-control` — grant approval config (clone of instrument form-control)
 - `/finance/receipts` — receipt management (NEW)
+
+## Finance portal redesign — user feedback 2026-04-12T17:09
+
+### Landing page split: Internal vs External
+
+**Internal:**
+- Grants — budget tracking, who's spending what
+- Instruments — machine expenses, maintenance costs, reagents
+- Equipment purchases — expensing system (like sample requests)
+- Personnel expenses — reimbursements charged to grants
+
+**External:**
+- Incoming samples from outside — logged via email/form
+- Payment collection, receipt issuance
+- Revenue tracking per instrument
+
+### Statistics engine for Finance
+
+Bring the stats crawler/tiles to the finance portal:
+- Per-grant spending over time (monthly bar charts)
+- Per-instrument revenue vs cost
+- Per-person pending expenses
+- Monthly income vs expenditure (internal + external)
+- Full "state of the economy" dashboard
+
+### Expensing system
+
+Clone the sample request workflow:
+- Submit expense → charged to a grant
+- Approval flow (Grant PI → Finance officer)
+- Receipt attachment required
+- Status tracking (pending → approved → paid → completed)
+
+This maps directly to the instrument ERP primitives:
+- Expense = Sample Request
+- Grant = Instrument
+- Finance officer = Operator
+- Grant PI = Instrument Admin

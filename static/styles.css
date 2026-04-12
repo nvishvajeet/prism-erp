@@ -5388,22 +5388,33 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   border-color: var(--ink, #1a1a1f);
 }
 
+/* Quick Intake: 3-column card grid, 2 rows max visible.
+   User feedback: "two rows, 6 samples, each with quick action" */
 .tile-dash-quick-intake .quick-intake-table {
   width: 100%;
   border-collapse: collapse;
 }
-
+.tile-dash-quick-intake .quick-intake-table tbody {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.tile-dash-quick-intake .quick-intake-table tbody tr {
+  display: block;
+}
 .tile-dash-quick-intake .quick-intake-table tbody td {
-  padding: 0.3rem 0;
-  border-bottom: 1px solid var(--line-soft, #ececf0);
+  display: block;
+  padding: 0;
+  border: 1px solid var(--line-soft, #ececf0);
+  border-radius: 8px;
 }
 
 .tile-dash-quick-intake .quick-intake-block {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
 }
 
 .tile-dash-quick-intake .quick-intake-content {
@@ -5437,6 +5448,8 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   gap: 1rem;
 }
 
+/* Instrument queue cards: capped height with internal scroll.
+   User feedback: "these smaller panels should have overflow panes" */
 .tile-dash-instrument-queues .dash-instrument-card {
   border: 1px solid var(--line, #e4e4e9);
   border-radius: 0.75rem;
@@ -5446,6 +5459,9 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   flex-direction: column;
   gap: 0.55rem;
   min-width: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tile-dash-instrument-queues .dash-instrument-card-head strong {

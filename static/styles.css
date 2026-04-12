@@ -5086,7 +5086,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   width: 100%;
   padding: 0 0.5rem;
   align-items: stretch;
-  align-items: start;
 }
 
 .request-tiles > .tile {

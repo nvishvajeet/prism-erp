@@ -55,11 +55,6 @@
       {{ stat_blob(queue_metrics.pending, "Pending", url_for('schedule', instrument_id=instrument['id'], bucket='pending'), tone='wait') }}
       {{ stat_blob(instrument_queue_counts['active'], "Active", url_for('schedule', instrument_id=instrument['id'], bucket='active'), tone='active') }}
       {{ stat_blob(instrument_queue_counts['done'], "Completed", url_for('schedule', instrument_id=instrument['id'], bucket='completed'), tone='completed') }}
-      {{ stat_blob(queue_metrics.processed_last_week, "This Week", url_for('schedule', instrument_id=instrument['id']), tone='week-jobs') }}
-      {% if queue_metrics.average_return_hours is not none %}
-      {{ stat_blob(format_duration_days(queue_metrics.average_return_hours), "Avg Turnaround", url_for('instrument_visualization', instrument_id=instrument['id']), tone='samples') }}
-      {% endif %}
-    </div>
   </section>
 
   {# ── Tile: Queue (full width) ── #}
@@ -69,8 +64,6 @@
         <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
         {% if can_view_history %}
         <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='completed') }}" data-vis="{{ V }}">History</a>
-        {% endif %}
-      </div>
     {% endcall %}
 
     {{ status_pills_row(
@@ -179,8 +172,6 @@
     </div>
     <p class="control-mode-status hint" id="intakeToggleStatus" aria-live="polite" data-vis="{{ V }}"></p>
   </section>
-  {% endif %}
-
   {# ── Tile: Team (operators + faculty) ── #}
   <section class="card tile tile-team" data-vis="{{ V }}">
     {{ card_heading("", "Team") }}
@@ -195,8 +186,6 @@
         </div>
         {% else %}
         <p class="hint" data-vis="{{ V }}">None assigned</p>
-        {% endif %}
-      </div>
       <div class="team-col" data-vis="{{ V }}">
         <h3 class="section-kicker" data-vis="{{ V }}">Faculty In Charge</h3>
         {% if selected_faculty_rows %}
@@ -207,8 +196,6 @@
         </div>
         {% else %}
         <p class="hint" data-vis="{{ V }}">None assigned</p>
-        {% endif %}
-      </div>
       {% if selected_requester_rows %}
       <div class="team-col" data-vis="{{ V }}">
         <h3 class="section-kicker" data-vis="{{ V }}">Subscribers</h3>
@@ -218,12 +205,8 @@
           {% endfor %}
         </div>
       </div>
-      {% endif %}
-    </div>
     {% if can_edit %}
     <p class="tile-footnote" data-vis="{{ V }}">Edit assignments from the <a class="text-link" href="#metaEditTile" data-vis="{{ V }}">Metadata</a> tile.</p>
-    {% endif %}
-  </section>
 
   {# ── Tile: Approval Sequence ── #}
   {% if can_edit_approval_config %}
@@ -245,12 +228,8 @@
       <li class="approval-flow-empty" data-vis="{{ V }}">
         <small class="hint" data-vis="{{ V }}">Using default: Finance → Faculty → Operator</small>
       </li>
-      {% endif %}
-    </ol>
     <a class="text-link" href="{{ url_for('instrument_form_control', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Configure Approval &amp; Fields &rarr;</a>
   </section>
-  {% endif %}
-
   {# ── Tile: Downtime ── #}
   <section class="card tile tile-downtime" data-vis="{{ V }}">
     {% call card_heading("", "Downtime") %}
@@ -271,8 +250,6 @@
     </ul>
     {% else %}
     <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
-    {% endif %}
-    {% if can_add_downtime_here %}
     <details class="tile-inline-editor" data-vis="{{ V }}">
       <summary data-vis="{{ V }}">Add downtime</summary>
       <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
@@ -283,8 +260,6 @@
         <button type="submit" class="small-button" data-vis="{{ V }}">Add Block</button>
       </form>
     </details>
-    {% endif %}
-  </section>
 
   {# ── Tile: Maintenance & Calibration (v2.2.0) ── #}
   <section class="card tile" data-vis="{{ V }}">
@@ -319,8 +294,6 @@
       </div>
     </form>
   </section>
-  {% endif %}
-
   {# ── Tile: Activity ── #}
   <section class="card tile tile-activity" data-vis="{{ V }}">
     {{ card_heading("", "Recent Activity") }}
@@ -344,8 +317,6 @@
     {% endcall %}
     {% else %}
     <p class="hint" data-vis="{{ V }}">No recent activity</p>
-    {% endif %}
-  </section>
 
   {# ── Tile: Metadata Edit (toggleable) ── #}
   {% if can_edit %}
@@ -384,14 +355,10 @@
           </div>
         </fieldset>
       </div>
-      {% endif %}
-      <div class="meta-edit-actions" data-vis="{{ V }}">
         <button type="submit" data-vis="{{ V }}">Save Changes</button>
       </div>
     </form>
   </section>
-  {% endif %}
-
   {# ── Tile: Danger Zone ── #}
   {% if can_archive_instrument or can_restore_instrument %}
   <section class="card tile tile-danger" data-vis="{{ V }}">
@@ -408,17 +375,11 @@
         </label>
         <button type="submit" class="danger small-button" data-vis="{{ V }}">Archive Instrument</button>
       </form>
-      {% endif %}
-      {% if can_restore_instrument and instrument["status"] == "archived" %}
       <form method="post" data-vis="{{ V }}">
         <input type="hidden" name="action" value="restore_instrument">
         <button type="submit" class="small-button" data-vis="{{ V }}">Restore Instrument</button>
       </form>
-      {% endif %}
-    </div>
   </section>
-  {% endif %}
-
 </div>
 
 <script>

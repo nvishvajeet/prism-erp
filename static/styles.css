@@ -5628,7 +5628,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .stats-tiles {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 1.25rem;
+  gap: 0.75rem;
   margin: 0 auto;
   max-width: 1400px;
   width: 100%;
@@ -8237,4 +8237,17 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
     max-width: 100% !important;
     padding: 0 !important;
   }
+}
+
+/* Quick Intake: ultra-minimal — hide operator assign dropdown, show only Accept */
+.tile-dash-quick-intake .queue-action-operator,
+.tile-dash-quick-intake .queue-action-stack select {
+  display: none;
+}
+.tile-dash-quick-intake .quick-intake-content strong {
+  font-size: 0.82rem;
+}
+.tile-dash-quick-intake .quick-intake-content span:not(.hint) {
+  font-size: 0.75rem;
+  color: var(--muted);
 }

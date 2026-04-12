@@ -1,0 +1,73 @@
+# === __MODULE_UPPER__ MODULE ROUTES ===
+# Paste these into app.py inside the route section.
+# Search for "# === MODULE ROUTES ===" to find the right spot.
+
+@app.route("/__MODULE__")
+@login_required
+def __MODULE___list():
+    """List all __ENTITY_PLURAL__."""
+    db = get_db()
+    items = db.execute("SELECT * FROM __MODULE__ ORDER BY created_at DESC").fetchall()
+    return render_template("__MODULE___list.html", items=items, V=V)
+
+
+@app.route("/__MODULE__/<int:__ENTITY___id>", methods=["GET", "POST"])
+@login_required
+def __MODULE___detail(__ENTITY___id):
+    """Show detail page for a single __ENTITY__."""
+    db = get_db()
+    item = db.execute("SELECT * FROM __MODULE__ WHERE id = ?", (__ENTITY___id,)).fetchone()
+    if not item:
+        abort(404)
+    events = db.execute(
+        "SELECT * FROM __MODULE___events WHERE __ENTITY___id = ? ORDER BY created_at DESC",
+        (__ENTITY___id,)
+    ).fetchall()
+    stats = {
+        "total": db.execute("SELECT COUNT(*) FROM __MODULE__").fetchone()[0],
+        "active": db.execute("SELECT COUNT(*) FROM __MODULE__ WHERE status = 'active'").fetchone()[0],
+        "completed": db.execute("SELECT COUNT(*) FROM __MODULE__ WHERE status = 'completed'").fetchone()[0],
+    }
+    return render_template("__MODULE___detail.html", item=item, events=events, stats=stats, V=V)
+
+
+@app.route("/__MODULE__/<int:__ENTITY___id>/form-control", methods=["GET", "POST"])
+@login_required
+def __MODULE___form_control(__ENTITY___id):
+    """Approval config + custom fields for a __ENTITY__."""
+    db = get_db()
+    item = db.execute("SELECT * FROM __MODULE__ WHERE id = ?", (__ENTITY___id,)).fetchone()
+    if not item:
+        abort(404)
+    approval_config = db.execute(
+        "SELECT * FROM __MODULE___approval_config WHERE __ENTITY___id = ? ORDER BY step_order",
+        (__ENTITY___id,)
+    ).fetchall()
+    custom_fields = db.execute(
+        "SELECT * FROM __MODULE___custom_fields WHERE __ENTITY___id = ? ORDER BY sort_order",
+        (__ENTITY___id,)
+    ).fetchall()
+    if request.method == "POST":
+        # Handle form submissions here
+        pass
+    return render_template(
+        "__MODULE___form_control.html",
+        item=item, approval_config=approval_config,
+        custom_fields=custom_fields, V=V,
+    )
+
+
+@app.route("/__MODULE__/new", methods=["GET", "POST"])
+@login_required
+def __MODULE___new():
+    """Create a new __ENTITY__."""
+    if request.method == "POST":
+        db = get_db()
+        db.execute(
+            "INSERT INTO __MODULE__ (name, status, created_at) VALUES (?, 'draft', datetime('now'))",
+            (request.form["name"],)
+        )
+        db.commit()
+        flash("__ENTITY_TITLE__ created.", "success")
+        return redirect(url_for("__MODULE___list"))
+    return render_template("__MODULE___new.html", V=V)

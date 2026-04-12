@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, paginated_pane, empty_state with context %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">__ENTITY_PLURAL_TITLE__</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ items|length }} total</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('__MODULE___new') }}" data-vis="{{ V }}">New __ENTITY_TITLE__</a>
+  </div>
+</header>
+
+<section class="__MODULE__-tiles" data-vis="{{ V }}">
+  <article class="card tile" style="grid-column: span 6" data-vis="{{ V }}">
+    {{ card_heading("", "__ENTITY_PLURAL_TITLE__") }}
+    {% if items %}
+    {% call paginated_pane('main__ENTITY_PLURAL_CAMEL__', page_size=25, max_height='none') %}
+    <table class="__MODULE__-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Created</th>
+          <!-- ADD MORE COLUMNS HERE -->
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for item in items %}
+        <tr data-pane-item data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('__MODULE___detail', __ENTITY___id=item['id']) }}" data-vis="{{ V }}">{{ item["name"] }}</a>
+          </td>
+          <td data-vis="{{ V }}">
+            <span class="badge status-{{ item['status'] }}" data-vis="{{ V }}">{{ item["status"].replace("_", " ").title() }}</span>
+          </td>
+          <td data-vis="{{ V }}">{{ item["created_at"] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+    {% else %}
+    {{ empty_state("No __ENTITY_PLURAL__ yet.") }}
+    {% endif %}
+  </article>
+</section>
+
+{% endblock %}

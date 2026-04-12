@@ -1,0 +1,46 @@
+-- === __MODULE_UPPER__ MODULE SCHEMA ===
+-- Add these tables to your migration file or run directly.
+
+CREATE TABLE IF NOT EXISTS __MODULE__ (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL,
+    code            TEXT,
+    status          TEXT    NOT NULL DEFAULT 'draft',
+    notes           TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx___MODULE___status ON __MODULE__(status);
+
+-- Event stream (append-only audit trail)
+CREATE TABLE IF NOT EXISTS __MODULE___events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    __ENTITY___id   INTEGER NOT NULL REFERENCES __MODULE__(id),
+    user_id         INTEGER,
+    action          TEXT    NOT NULL,
+    description     TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx___MODULE___events___ENTITY__ ON __MODULE___events(__ENTITY___id);
+
+-- Approval configuration
+CREATE TABLE IF NOT EXISTS __MODULE___approval_config (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    __ENTITY___id   INTEGER NOT NULL REFERENCES __MODULE__(id),
+    step_order      INTEGER NOT NULL,
+    approver_role   TEXT    NOT NULL,
+    approver_name   TEXT,
+    notify_submitter INTEGER NOT NULL DEFAULT 0
+);
+
+-- Custom fields
+CREATE TABLE IF NOT EXISTS __MODULE___custom_fields (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    __ENTITY___id   INTEGER NOT NULL REFERENCES __MODULE__(id),
+    label           TEXT    NOT NULL,
+    field_type      TEXT    NOT NULL DEFAULT 'text',
+    required        INTEGER NOT NULL DEFAULT 0,
+    sort_order      INTEGER NOT NULL DEFAULT 0
+);

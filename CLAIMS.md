@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude-opus-4-6 | css-dark-mode-audit | 2026-04-12T00:00:00 | static/styles.css (dark-mode-audit) | — |
 | claude-opus-erp | docs-erp-primitives | 2026-04-12T00:00:00 | docs/ERP_PRIMITIVES.md, CLAIMS.md | next |
 | _(empty)_ | — | — | — | — |
 

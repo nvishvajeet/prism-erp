@@ -17,23 +17,33 @@ from ..harness import Harness, ROLE_PERSONAS
 
 # True  = role should see 200 (or a 302 that lands on a 200)
 # False = role should see 403
+# Roles that require instrument-area access for gated pages
+_INST_GATED = {"requester": False}
+_ALL_TRUE = {r: True for _, _, r in ROLE_PERSONAS}
+
+def _gated(overrides: dict[str, bool] | None = None) -> dict[str, bool]:
+    m = {r: True for _, _, r in ROLE_PERSONAS}
+    m.update(_INST_GATED)
+    if overrides:
+        m.update(overrides)
+    return m
+
 ACCESS_MATRIX: dict[str, dict[str, bool]] = {
-    "/": {r: True for _, _, r in ROLE_PERSONAS},
-    "/schedule": {r: True for _, _, r in ROLE_PERSONAS},
-    "/calendar": {r: True for _, _, r in ROLE_PERSONAS},
-    "/instruments": {r: True for _, _, r in ROLE_PERSONAS},
-    "/stats": {r: True for _, _, r in ROLE_PERSONAS},
-    "/visualizations": {r: True for _, _, r in ROLE_PERSONAS},
-    "/requests/new": {r: True for _, _, r in ROLE_PERSONAS},
-    "/me": {r: True for _, _, r in ROLE_PERSONAS},
-    "/docs": {r: True for _, _, r in ROLE_PERSONAS},
-    "/sitemap": {r: True for _, _, r in ROLE_PERSONAS},
-    "/profile/change-password": {r: True for _, _, r in ROLE_PERSONAS},
+    "/": _ALL_TRUE,
+    "/schedule": _gated(),
+    "/calendar": _gated(),
+    "/instruments": _gated(),
+    "/stats": _gated(),
+    "/visualizations": _gated(),
+    "/requests/new": _ALL_TRUE,
+    "/me": _ALL_TRUE,
+    "/docs": _ALL_TRUE,
+    "/sitemap": _ALL_TRUE,
+    "/profile/change-password": _ALL_TRUE,
     "/admin/users": {
         "super_admin": True,
         "site_admin": True,
         "instrument_admin": False,
-        "faculty_in_charge": False,
         "operator": False,
         "professor_approver": False,
         "finance_admin": False,

@@ -30,7 +30,6 @@ from ..harness import Harness
 
 # (persona_email, path, label)
 CASES: list[tuple[str, str, str]] = [
-    ("user1@prism.local",  "/schedule",  "requester — queue empty"),
     ("anika@prism.local", "/schedule",  "operator — queue empty"),
     ("vishvajeet@prism.local", "/",          "owner dashboard — per-instrument queues empty"),
 ]

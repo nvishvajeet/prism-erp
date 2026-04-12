@@ -3516,15 +3516,25 @@ code {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Explicit opt-in class for tiles that already manage their own
-   scroll. Same effect but named for readability. */
+/* Explicit opt-in class for scrollable tile bodies.
+   Usage: wrap content below the heading in <div class="tile-scroll">
+   The heading stays pinned, content scrolls inside. The tile never
+   grows past its grid slot.
+
+   --scroll-height custom property controls the max-height.
+   Default 28rem (~448px). Override per-tile with style or class. */
+.tile-scroll,
 .tile-scroll-body {
-  flex: 1 1 0;
+  max-height: var(--scroll-height, 28rem);
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: 0;
   -webkit-overflow-scrolling: touch;
 }
+.tile-scroll-sm { --scroll-height: 16rem; }
+.tile-scroll-md { --scroll-height: 24rem; }
+.tile-scroll-lg { --scroll-height: 36rem; }
+.tile-scroll-xl { --scroll-height: 48rem; }
+.tile-scroll-none { --scroll-height: none; max-height: none; }
 
 /* For tiles that DON'T use .tile-scroll-body explicitly, cap
    the tile height so content doesn't push neighbors. The tile

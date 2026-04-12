@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, paginated_pane with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Notifications</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ notices|length }} active</span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("ALL NOTIFICATIONS", "Site-wide + role + instrument notices") }}
+    {% if notices %}
+    {% call paginated_pane('allNotices', page_size=15, max_height='none') %}
+    <div class="notice-list" data-vis="{{ V }}">
+      {% for n in notices %}
+      <div class="notice-row notice-severity-{{ n.severity }}" data-pane-item data-vis="{{ V }}">
+        <div class="notice-row-meta" data-vis="{{ V }}">
+          <code class="inline-code" data-vis="{{ V }}">{{ n.scope|upper }}{% if n.scope_target %} · {{ n.scope_target }}{% endif %}</code>
+          <span class="badge notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
+          <span class="hint" data-vis="{{ V }}">{{ n.created_at[:16] if n.created_at else '' }}</span>
+        </div>
+        <strong data-vis="{{ V }}">{{ n.subject }}</strong>
+        {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
+        {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endcall %}
+    {% else %}
+    {{ empty_state("No active notifications. You're all caught up.") }}
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

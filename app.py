@@ -5851,6 +5851,21 @@ def admin_notices_delete(notice_id: int):
 # notices (broadcast). Single source of truth: the `messages` table.
 
 
+@app.route("/notifications", methods=["GET"])
+@login_required
+def notifications_page():
+    """v2.2.0 — Full notification feed. Shows every notice relevant to
+    the current user (site-wide + role-scoped + instrument-scoped),
+    newest first. The dashboard noticeboard shows the latest 2-3;
+    this page shows the full history."""
+    user = current_user()
+    all_notices = active_notices_for_user(user)
+    return render_template(
+        "notifications.html",
+        notices=all_notices,
+    )
+
+
 @app.route("/inbox", methods=["GET"])
 @login_required
 def inbox():

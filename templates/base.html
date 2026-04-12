@@ -127,6 +127,7 @@
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
+    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications</a>
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
     {% if is_owner_user %}
     {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Owner-only development control panel">Dev</a>{% endif %}

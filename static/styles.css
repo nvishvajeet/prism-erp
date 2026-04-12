@@ -3722,7 +3722,7 @@ code {
 .tile-info     { grid-column: span 3; }
 .tile-stats    { grid-column: span 3; }
 .tile-queue    { grid-column: 1 / -1; }
-.tile-control  { grid-column: span 2; }
+.tile-control  { grid-column: span 3; }
 .tile-team     { grid-column: span 2; }
 .tile-approval { grid-column: span 2; }
 .tile-downtime { grid-column: span 2; }

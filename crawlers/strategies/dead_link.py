@@ -28,10 +28,10 @@ SEED_PATHS = [
 ]
 
 ROLES_TO_CRAWL = [
-    "admin@lab.local",
-    "fesem.admin@lab.local",
-    "anika@lab.local",
-    "shah@lab.local",
+    "vishvajeet@prism.local",
+    "kondhalkar@prism.local",
+    "anika@prism.local",
+    "user1@prism.local",
 ]
 
 

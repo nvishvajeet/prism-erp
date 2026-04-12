@@ -27,10 +27,15 @@ CRITICAL_PATHS = [
 ]
 
 SMOKE_ROLES = [
-    ("admin@lab.local", "super_admin"),
-    ("anika@lab.local", "operator"),
-    ("shah@lab.local", "requester"),
+    ("vishvajeet@prism.local", "super_admin"),
+    ("anika@prism.local", "operator"),
+    ("user1@prism.local", "requester"),
 ]
+
+# Paths that are expected to return 403 for specific roles (by design).
+EXPECTED_403 = {
+    "requester": {"/schedule", "/calendar", "/instruments", "/stats", "/visualizations"},
+}
 
 
 class SmokeStrategy(CrawlerStrategy):
@@ -50,9 +55,11 @@ class SmokeStrategy(CrawlerStrategy):
                     if resp.status_code < 400:
                         result.passed += 1
                     elif resp.status_code == 403:
-                        # Acceptable for health-check etc. on some roles
-                        result.warnings += 1
-                        result.details.append(f"{role} {path} → 403")
+                        if path in EXPECTED_403.get(role, set()):
+                            result.passed += 1  # expected gate
+                        else:
+                            result.warnings += 1
+                            result.details.append(f"{role} {path} → 403")
                     else:
                         result.failed += 1
                         result.details.append(

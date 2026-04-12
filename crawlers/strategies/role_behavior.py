@@ -35,13 +35,13 @@ class RoleBehaviorStrategy(CrawlerStrategy):
         result = CrawlResult(name=self.name, aspect=self.aspect)
 
         # ---- super_admin: create user ------------------------------
-        with harness.logged_in("admin@lab.local"):
+        with harness.logged_in("vishvajeet@prism.local"):
             resp = harness.post(
                 "/admin/users",
                 data={
                     "action": "create_user",
                     "name": "Test Bot",
-                    "email": "testbot@lab.local",
+                    "email": "testbot@prism.local",
                     "role": "requester",
                     "password": "BotPass123",
                 },
@@ -50,38 +50,38 @@ class RoleBehaviorStrategy(CrawlerStrategy):
             self._score(result, resp.status_code, "super_admin: create user")
 
         # ---- site_admin: load admin users --------------------------
-        with harness.logged_in("siteadmin@lab.local"):
+        with harness.logged_in("siteadmin@prism.local"):
             resp = harness.get("/admin/users", follow_redirects=True)
             self._score(result, resp.status_code, "site_admin: /admin/users")
 
         # ---- instrument_admin: open instrument detail (config lives there) ----
-        with harness.logged_in("fesem.admin@lab.local"):
+        with harness.logged_in("kondhalkar@prism.local"):
             resp = harness.get("/instruments/1", follow_redirects=True)
             self._score(result, resp.status_code, "instrument_admin: /instruments/1")
 
         # ---- faculty_in_charge: instrument detail ------------------
-        with harness.logged_in("sen@lab.local"):
+        with harness.logged_in("approver@prism.local"):
             resp = harness.get("/instruments/1", follow_redirects=True)
             self._score(result, resp.status_code, "faculty_in_charge: /instruments/1")
 
         # ---- operator: open queue + load instrument ----------------
-        with harness.logged_in("anika@lab.local"):
+        with harness.logged_in("anika@prism.local"):
             for path in ["/schedule", "/instruments/1"]:
                 resp = harness.get(path, follow_redirects=True)
                 self._score(result, resp.status_code, f"operator: {path}")
 
         # ---- professor_approver: approvals surface -----------------
-        with harness.logged_in("prof.approver@lab.local"):
+        with harness.logged_in("approver@prism.local"):
             resp = harness.get("/schedule", follow_redirects=True)
             self._score(result, resp.status_code, "professor_approver: /schedule")
 
         # ---- finance_admin: stats dashboard ------------------------
-        with harness.logged_in("finance@lab.local"):
+        with harness.logged_in("meera@prism.local"):
             resp = harness.get("/stats", follow_redirects=True)
             self._score(result, resp.status_code, "finance_admin: /stats")
 
         # ---- requester: submit a new request -----------------------
-        with harness.logged_in("shah@lab.local"):
+        with harness.logged_in("user1@prism.local"):
             resp = harness.get("/requests/new")
             self._score(result, resp.status_code, "requester: open /requests/new")
             resp = harness.post(

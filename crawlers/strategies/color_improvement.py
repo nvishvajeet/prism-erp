@@ -39,7 +39,7 @@ class ColorImprovementStrategy(CrawlerStrategy):
         result = CrawlResult(name=self.name, aspect=self.aspect)
         colors: Counter[str] = Counter()
 
-        with harness.logged_in("admin@lab.local"):
+        with harness.logged_in("vishvajeet@prism.local"):
             for path in SCAN_PATHS:
                 resp = harness.get(path, follow_redirects=True)
                 if resp.status_code >= 400:

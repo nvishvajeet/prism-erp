@@ -10,16 +10,16 @@ Improves: enforces the W1.4.1 contract that the topbar renders
 
 Covers four cases on the shipped demo seed:
 
-  * `finance@lab.local` — has one live pending approval step
+  * `meera@prism.local` — has one live pending approval step
     assigned to her, must render the badge with a positive count.
     This is the "approver path" through `nav_pending_counts`.
-  * `iyer@lab.local` — has a `sample_requests` row sitting in
+  * `user2@prism.local` — has a `sample_requests` row sitting in
     `awaiting_sample_submission`, must render the badge with a
     positive count. This is the "requester path" — proves both
     counting rules contribute independently.
-  * `anika@lab.local` — operator with no pending step assigned,
+  * `anika@prism.local` — operator with no pending step assigned,
     must NOT render the class at all.
-  * `shah@lab.local` — requester with no `awaiting_sample_submission`
+  * `user1@prism.local` — requester with no `awaiting_sample_submission`
     rows, must NOT render the class.
 
 Together: both positive-path branches and both idle branches are
@@ -59,8 +59,8 @@ class TopbarBadgesStrategy(CrawlerStrategy):
     # users WITH pending work have a badge — don't assert idle users
     # have NO badge, because notification count is always valid.
     CASES: list[tuple[str, bool, str]] = [
-        ("finance@lab.local", True,  "finance admin — approver path, has pending"),
-        ("iyer@lab.local",    True,  "requester — awaiting sample submission"),
+        ("meera@prism.local", True,  "finance admin — approver path, has pending"),
+        ("user2@prism.local",    True,  "requester — awaiting sample submission"),
     ]
 
     def run(self, harness: Harness) -> CrawlResult:

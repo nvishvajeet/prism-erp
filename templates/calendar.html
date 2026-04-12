@@ -72,6 +72,7 @@
     <div class="cal-card-body" data-vis="{{ V }}">
       <h3 data-vis="{{ V }}">Add Maintenance Window</h3>
       <form method="post" action="{{ url_for('calendar') }}" class="downtime-form" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group" data-vis="{{ V }}">
           <label for="dt_instrument" data-vis="{{ V }}">Instrument</label>
           <select id="dt_instrument" name="instrument_id" required data-vis="{{ V }}">

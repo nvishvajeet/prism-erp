@@ -197,6 +197,7 @@
     <details class="tile-inline-editor" data-vis="{{ V }}">
       <summary data-vis="{{ V }}">Add downtime</summary>
       <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add_downtime">
         <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
         <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
@@ -291,7 +292,7 @@
     <details class="form-toggle" data-vis="{{ V }}">
       <summary class="btn btn-sm">Add Item</summary>
       <form method="post" class="stack-sm" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add_inventory_item">
         <div class="form-row" data-vis="{{ V }}">
           <label>Item Name <input type="text" name="item_name" required></label>
@@ -362,6 +363,7 @@
     {% endcall %}
     <p class="tile-lead" data-vis="{{ V }}">Edit instrument details, photo, and team assignments.</p>
     <form method="post" enctype="multipart/form-data" class="meta-edit-form" id="metaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="update_metadata">
       <div class="meta-edit-grid" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Code<input type="text" name="code" value="{{ instrument['code'] }}" required></label>
@@ -403,6 +405,7 @@
       <summary class="danger-toggle-btn" style="padding-top: 0.75rem; color: var(--danger);" data-vis="{{ V }}">Danger Zone</summary>
       {% if can_archive_instrument and instrument["status"] != "archived" %}
       <form method="post" class="danger-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="archive_instrument">
         <p class="hint" data-vis="{{ V }}">Type the instrument code to archive permanently.</p>
         <label data-vis="{{ V }}">
@@ -413,6 +416,7 @@
       {% endif %}
       {% if can_restore_instrument and instrument["status"] == "archived" %}
       <form method="post" class="top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="restore_instrument">
         <button type="submit" class="small-button" data-vis="{{ V }}">Restore Instrument</button>
       </form>

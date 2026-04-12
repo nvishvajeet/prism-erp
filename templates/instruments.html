@@ -80,6 +80,7 @@
     {% if can_add_instrument %}
     <div class="edit-panel is-hidden" id="instrumentCreatePanel" data-vis="{{ V }}">
       <form method="post" class="form-grid compact-admin-form" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="create_instrument">
         <label data-vis="{{ V }}">Name
           <input type="text" name="new_name" required data-vis="{{ V }}">

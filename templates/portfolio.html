@@ -18,6 +18,7 @@
     {% endif %}
   </div>
   <form method="post" action="{{ url_for('portfolio_refresh') }}" class="section-actions" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="link-button" data-vis="{{ V }}">↻ Recompute now</button>
   </form>
 </header>
@@ -189,6 +190,7 @@
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("DAILY", "Today's recommended buys (rounded to ₹1,000) — click a row to log it as bought") }}
   <form method="post" action="{{ url_for('portfolio_log_orders_bulk') }}" id="todayBuyForm" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <table data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}">
@@ -404,6 +406,7 @@ setTimeout(function () { window.location.reload(); }, 600000);
 <section class="card" data-vis="{{ V }}">
   {{ card_heading("ORDERS", "Log an executed buy") }}
   <form method="post" action="{{ url_for('portfolio_log_order') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label data-vis="{{ V }}">Fund
       <select name="fund_tag" required data-vis="{{ V }}">
         {% for row in pf.mtd_progress %}

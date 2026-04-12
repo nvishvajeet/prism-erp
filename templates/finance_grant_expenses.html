@@ -55,6 +55,7 @@
   <article class="card tile" data-vis="{{ V }}">
     {{ card_heading("ADD EXPENSE", "Record a new charge") }}
     <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Description <input type="text" name="description" required placeholder="e.g. Reagent purchase — NaCl 5kg" data-vis="{{ V }}"></label>
       <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
       <label data-vis="{{ V }}">Type

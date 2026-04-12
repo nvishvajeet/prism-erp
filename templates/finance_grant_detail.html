@@ -70,6 +70,7 @@
     <details class="toggleable-form" data-vis="{{ V }}" style="margin-top: 0.75rem;">
       <summary class="text-link" data-vis="{{ V }}">Edit Metadata</summary>
       <form method="post" class="form-grid" style="margin-top: 0.5rem;" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="update_grant_metadata" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Name <input type="text" name="name" value="{{ grant.name }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Sponsor <input type="text" name="sponsor" value="{{ grant.sponsor }}" data-vis="{{ V }}"></label>

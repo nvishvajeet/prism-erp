@@ -136,9 +136,39 @@
     <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
     {% endif %}
 
-    {# Notifications — universal #}
+    {# Notifications — universal, with dropdown panel #}
     {% if module_enabled('notifications') %}
-    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    <div class="nav-dropdown notif-dropdown" data-vis="{{ V }}">
+      <a class="nav-trigger {% if endpoint == 'notifications_page' %}nav-active{% endif %}"
+         href="{{ url_for('notifications_page') }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}"
+         data-notif-trigger>Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+      <div class="notif-panel" role="menu" aria-label="Recent notifications" data-vis="{{ V }}">
+        <div class="notif-panel-header" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Notifications</strong>
+          {% if nav_notice_count %}<span class="notif-panel-count" data-vis="{{ V }}">{{ nav_notice_count }} unread</span>{% endif %}
+        </div>
+        {% if recent_notices %}
+        <div class="notif-panel-list" data-vis="{{ V }}">
+          {% for n in recent_notices %}
+          <a href="{{ n.href or url_for('notifications_page') }}" class="notif-panel-item{% if not n.is_read %} notif-unread{% endif %}" data-vis="{{ V }}">
+            {% if n.kind == 'system' %}
+            <span class="notif-cat-icon notif-cat-{{ n.scope_label }}" data-vis="{{ V }}"></span>
+            {% else %}
+            <span class="notif-severity-dot notif-sev-{{ n.severity }}" data-vis="{{ V }}"></span>
+            {% endif %}
+            <span class="notif-item-body" data-vis="{{ V }}">
+              <span class="notif-item-subject" data-vis="{{ V }}">{{ n.subject }}</span>
+              <span class="notif-item-meta" data-vis="{{ V }}">{{ time_ago(n.created_at) }} · {{ n.scope_label }}</span>
+            </span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="notif-panel-empty" data-vis="{{ V }}">No recent notifications</div>
+        {% endif %}
+        <a href="{{ url_for('notifications_page') }}" class="notif-panel-footer" data-vis="{{ V }}">View all notifications</a>
+      </div>
+    </div>
     {% endif %}
 
     {# Attendance — operators + admins only (not requesters/faculty) #}
@@ -401,7 +431,7 @@
      - Grid overlay: press 'g' to toggle numbered grid lines
      - Voice recorder: click Record, speak + click, click Stop
      - Feedback saved to logs/debug_feedback.md for Claude to fix #}
-  {% if request.args.get('debug') == '1' or (is_owner_user|default(false)) or (current_user and current_user.role == 'super_admin') %}
+  {% if request.args.get('debug') == '1' or (is_owner_user|default(false)) %}
   <script defer src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
   <script defer src="{{ url_for('static', filename='debug-grid.js') }}"></script>
   {% endif %}
@@ -464,6 +494,36 @@
             d.classList.remove('nav-dropdown-open');
             setExpanded(d, false);
           });
+        }
+      });
+    })();
+
+    /* ── Notification dropdown — click-to-toggle ── */
+    (function () {
+      var trigger = document.querySelector('[data-notif-trigger]');
+      if (!trigger) return;
+      var dropdown = trigger.closest('.notif-dropdown');
+      if (!dropdown) return;
+
+      trigger.addEventListener('click', function (e) {
+        e.preventDefault();
+        var nowOpen = !dropdown.classList.contains('notif-dropdown-open');
+        dropdown.classList.toggle('notif-dropdown-open', nowOpen);
+        trigger.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('.notif-dropdown')) {
+          dropdown.classList.remove('notif-dropdown-open');
+          trigger.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      dropdown.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          dropdown.classList.remove('notif-dropdown-open');
+          trigger.setAttribute('aria-expanded', 'false');
+          trigger.focus();
         }
       });
     })();

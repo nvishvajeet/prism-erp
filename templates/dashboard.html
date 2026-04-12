@@ -5,17 +5,7 @@
 
 <section class="dashboard-tiles" data-vis="{{ V }}">
 
-  {# ── TILE 0: Role orientation — "you are here" hint ── #}
-  {% if current_user and current_role_display %}
-  <article class="card tile tile-dash-role-hint" data-vis="{{ V }}">
-    <div class="role-hint-body" data-vis="{{ V }}">
-      <span class="role-hint-badge" data-vis="{{ V }}">{{ current_role_display }}</span>
-      {% if current_role_hint %}
-      <span class="role-hint-text" data-vis="{{ V }}">{{ current_role_hint }}</span>
-      {% endif %}
-    </div>
-  </article>
-  {% endif %}
+  {# ── TILE 0: Role hint removed — role visible in Settings / User Mgmt only ── #}
 
   {# ── TILE: NOTICEBOARD — v1.6.0 site/role/instrument-scoped
        announcements. Ferrari-dashboard aesthetic: earthy-red
@@ -36,6 +26,36 @@
         <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
         {% if n.body %}
         <p class="notice-body" data-vis="{{ V }}">{{ n.body }}</p>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── TILE: AT A GLANCE — role-scoped summary stats ── #}
+  {% if dash_at_a_glance %}
+  <article class="card tile tile-dash-at-a-glance" data-vis="{{ V }}">
+    {{ card_heading("", "At a Glance") }}
+    {{ kpi_grid(dash_at_a_glance, variant='dense') }}
+  </article>
+  {% endif %}
+
+  {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
+  {% if dash_action_items %}
+  <article class="card tile tile-dash-action-items" data-vis="{{ V }}">
+    {% call card_heading("", "Your Action Items") %}
+      <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">View all &rarr;</a>
+    {% endcall %}
+    <ul class="action-items-list" data-vis="{{ V }}">
+      {% for item in dash_action_items %}
+      <li class="action-item" data-vis="{{ V }}">
+        <a href="{{ item.href }}" class="action-item-link" data-vis="{{ V }}">
+          <span class="action-item-label" data-vis="{{ V }}">{{ item.label }}</span>
+          <span class="action-item-detail hint" data-vis="{{ V }}">{{ item.detail }}</span>
+        </a>
+        {% if item.age %}
+        <span class="action-item-age hint" data-vis="{{ V }}">{{ time_ago(item.age) }}</span>
         {% endif %}
       </li>
       {% endfor %}
@@ -248,11 +268,13 @@
   {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
   <article class="card tile tile-dash-attendance" data-vis="{{ V }}">
     {{ card_heading("", "Attendance") }}
-    <form method="post" action="{{ url_for('attendance_quick_present') }}" data-vis="{{ V }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
-      <button type="submit" class="btn btn-primary attendance-mark-btn" data-vis="{{ V }}">Mark Present Today</button>
-    </form>
-    <a class="text-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Full attendance →</a>
+    <div class="attendance-quick-row" data-vis="{{ V }}">
+      <form method="post" action="{{ url_for('attendance_quick_present') }}" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-pill-sm attendance-mark-btn" data-vis="{{ V }}">Mark Present Today</button>
+      </form>
+      <a class="text-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Full attendance →</a>
+    </div>
   </article>
   {% endif %}
 

@@ -61,6 +61,7 @@
   <article class="card tile tile-viz-export" data-vis="{{ V }}">
     {{ card_heading("", "Export") }}
     <form method="post" action="{{ url_for(export_endpoint) }}" class="action-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="horizon" value="{{ report_filters.horizon }}">
       <input type="hidden" name="date_from" value="{{ report_filters.date_from }}">
       <input type="hidden" name="date_to" value="{{ report_filters.date_to }}">

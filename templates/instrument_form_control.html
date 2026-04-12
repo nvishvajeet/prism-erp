@@ -16,33 +16,38 @@
   {# ── Tile 1: Approval Sequence (full width) ── #}
   <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
     {{ card_heading("", "Approval Sequence") }}
-    <p class="tile-lead" data-vis="{{ V }}">Configure approval steps and per-step submitter notifications.</p>
+    <p class="tile-lead" data-vis="{{ V }}">Configure up to 6 approval steps. Requests advance through each role in order.</p>
     <form method="post" data-vis="{{ V }}">
-      <input type="hidden" name="action" value="save_approval_notify">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="save_approval_sequence">
       <div class="form-control-approval-grid" data-vis="{{ V }}">
         {% for idx in range(1, 7) %}
         {% set cfg = approval_config[idx - 1] if approval_config|length >= idx else none %}
         <div class="form-control-field-row" data-vis="{{ V }}">
           <span class="approval-edit-num" data-vis="{{ V }}">{{ idx }}</span>
-          {% if cfg %}
-          <span data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ cfg["approver_role"].replace("_"," ").title() }}</strong>
-            {% if cfg["approver_name"] %}<small class="hint" data-vis="{{ V }}">{{ cfg["approver_name"] }}</small>{% endif %}
-          </span>
+          <select name="step_role_{{ idx }}" class="fc-type-select" data-vis="{{ V }}">
+            <option value="">— none —</option>
+            <option value="finance" {% if cfg and cfg["approver_role"] == "finance" %}selected{% endif %}>Finance</option>
+            <option value="professor" {% if cfg and cfg["approver_role"] == "professor" %}selected{% endif %}>Professor</option>
+            <option value="operator" {% if cfg and cfg["approver_role"] == "operator" %}selected{% endif %}>Operator</option>
+          </select>
+          <select name="step_user_{{ idx }}" class="fc-type-select" data-vis="{{ V }}">
+            <option value="">Auto-assign</option>
+            {% for u in approval_role_candidates %}
+            <option value="{{ u['id'] }}" {% if cfg and cfg["approver_user_id"] == u["id"] %}selected{% endif %}>{{ u["name"] }} ({{ u["role"].replace("_"," ").title() }})</option>
+            {% endfor %}
+          </select>
           <label class="form-control-notify-label" data-vis="{{ V }}">
             <input type="checkbox" name="notify_submitter_{{ idx }}" value="1"
-              {% if cfg["notify_submitter"] %}checked{% endif %} data-vis="{{ V }}">
+              {% if cfg and cfg["notify_submitter"] %}checked{% endif %} data-vis="{{ V }}">
             Notify submitter
           </label>
-          {% else %}
-          <span class="hint" data-vis="{{ V }}">— empty —</span>
-          <span data-vis="{{ V }}"></span>
-          {% endif %}
         </div>
         {% endfor %}
       </div>
-      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Notification Settings</button>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Approval Sequence</button>
     </form>
-    <p class="tile-footnote" data-vis="{{ V }}">To change approval roles and assignees, use the inline editor on the <a class="text-link" href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}">instrument page</a>.</p>
+    <p class="tile-footnote" data-vis="{{ V }}">Leave a step as "none" to skip it. Steps are renumbered automatically.</p>
   </section>
 
   {# ── Tile 2: Custom Fields (full width) ── #}
@@ -50,6 +55,7 @@
     {{ card_heading("", "Custom Fields") }}
     <p class="tile-lead" data-vis="{{ V }}">Fields requesters fill in when submitting to this instrument. Up to 20 fields.</p>
     <form method="post" id="customFieldsForm" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="save_custom_fields">
       <div id="customFieldsList" data-vis="{{ V }}">
         {% for f in custom_fields %}
@@ -77,6 +83,7 @@
     {{ card_heading("", "Pricing & Payment Instructions") }}
     <p class="tile-lead" data-vis="{{ V }}">Shown to requesters before they fill in the submission form. Editable by operator and area admins.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="save_pricing" data-vis="{{ V }}">
       <label data-vis="{{ V }}">Price per sample
         <input type="text" name="price_per_sample" value="{{ instrument.price_per_sample or '' }}" placeholder="e.g. Rs 500 per sample (internal), Rs 2000 (external)" data-vis="{{ V }}">
@@ -96,6 +103,7 @@
     {{ card_heading("", "Message Templates") }}
     <p class="tile-lead" data-vis="{{ V }}">Customise email notifications sent when workflow events occur on this instrument.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="save_email_templates" data-vis="{{ V }}">
       {% for evt, evt_label in [("request_submitted", "Request Submitted"), ("step_approved", "Step Approved"), ("request_completed", "Request Completed")] %}
       <fieldset class="form-control-field-row" style="border:1px solid var(--border-color,#e0e0e0);border-radius:8px;padding:12px;margin-bottom:8px;" data-vis="{{ V }}">

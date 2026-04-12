@@ -46,6 +46,7 @@
   <article class="card tile tile-new-request-form" data-vis="{{ V }}">
     {{ card_heading("", "Request details") }}
     <form method="post" enctype="multipart/form-data" class="form-grid new-request-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Instrument</h3>
         <label data-vis="{{ V }}">

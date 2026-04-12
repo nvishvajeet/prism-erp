@@ -84,6 +84,7 @@
       <span class="tile-bulk-count" id="bulkCount" data-vis="{{ V }}">0 selected</span>
     {% endcall %}
     <form method="post" action="{{ url_for('schedule_bulk_actions') }}" class="tile-bulk-body" id="bulkForm" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="bulk_assign">
       <input type="hidden" name="request_ids" id="bulkRequestIds" value="">
       <input type="hidden" name="back" value="{{ queue_back_url }}">

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('finance_invoices_list') }}" class="hover-back-btn" title="Back to Invoices">&larr;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">&larr; Invoices</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New Invoice</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">Create a billing document</span>
+  </div>
+</header>
+
+{# ── Tab navigation ── #}
+<nav class="finance-tab-nav" data-vis="{{ V }}">
+  <a class="finance-tab" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Overview</a>
+  <a class="finance-tab finance-tab-active" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">Invoices</a>
+  <a class="finance-tab" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">Spend</a>
+  <a class="finance-tab" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
+</nav>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+    {{ card_heading("CREATE INVOICE", "Fill in the details below") }}
+    <form method="post" action="{{ url_for('finance_invoice_new') }}" class="finance-invoice-create-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="finance-form-grid" data-vis="{{ V }}">
+
+        <div class="finance-form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Sample Request</label>
+          <select name="request_id" required data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">Select a request...</option>
+            {% for r in requests_list %}
+            <option value="{{ r.id }}" data-vis="{{ V }}">{{ r.request_no }} &mdash; {{ r.title[:50] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="finance-form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Description</label>
+          <input type="text" name="description" placeholder="Brief description (optional)" maxlength="200" data-vis="{{ V }}">
+        </div>
+
+        <div class="finance-form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Amount Due (&#8377;)</label>
+          <input type="number" name="amount_due" step="0.01" min="0.01" required placeholder="0.00" data-vis="{{ V }}">
+        </div>
+
+        <div class="finance-form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Grant (optional)</label>
+          <select name="grant_id" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">No grant</option>
+            {% for g in grants_list %}
+            <option value="{{ g.id }}" data-vis="{{ V }}">{{ g.code }} &mdash; {{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="finance-form-field" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Notes</label>
+          <textarea name="notes" rows="3" placeholder="Internal notes (optional)" data-vis="{{ V }}"></textarea>
+        </div>
+
+      </div>
+      <div class="finance-form-actions" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create Invoice</button>
+        <a href="{{ url_for('finance_invoices_list') }}" class="btn btn-muted" data-vis="{{ V }}">Cancel</a>
+      </div>
+    </form>
+  </article>
+
+</section>
+{% endblock %}

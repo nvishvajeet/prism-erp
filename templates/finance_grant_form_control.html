@@ -30,6 +30,7 @@
     {{ card_heading("", "Budget Rules") }}
     <p class="tile-lead" data-vis="{{ V }}">Set warning and freeze thresholds for grant spending. When spend reaches the warning threshold, the PI is alerted. At the freeze threshold, new charges are blocked.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="save_budget_rules" data-vis="{{ V }}">
       <label data-vis="{{ V }}">Warning threshold (%)
         <input type="number" step="1" min="0" max="100" name="warn_threshold_pct" value="{{ budget_rules.warn_threshold_pct }}" data-vis="{{ V }}">

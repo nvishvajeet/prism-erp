@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_portal') }}" class="hover-back-btn" title="Back to Finance Portal">&larr;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">&larr; Finance Portal</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Spend</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ entries|length }} entr{{ "ies" if entries|length != 1 else "y" }}</span>
+  </div>
+</header>
+
+{# ── Tab navigation ── #}
+<nav class="finance-tab-nav" data-vis="{{ V }}">
+  <a class="finance-tab" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Overview</a>
+  <a class="finance-tab" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">Invoices</a>
+  <a class="finance-tab finance-tab-active" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">Spend</a>
+  <a class="finance-tab" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
+</nav>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  {# ── Grant filter ── #}
+  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+    {{ card_heading("FILTER", "Filter spend by grant") }}
+    <form method="get" action="{{ url_for('finance_spend') }}" class="finance-filter-bar" data-vis="{{ V }}">
+      <div class="finance-filter-group" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Grant</label>
+        <select name="grant_id" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All grants</option>
+          {% for g in grants_list %}
+          <option value="{{ g.id }}" {{ 'selected' if grant_filter == g.id|string }} data-vis="{{ V }}">{{ g.code }} &mdash; {{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn" data-vis="{{ V }}">Apply</button>
+      <a href="{{ url_for('finance_spend') }}" class="btn btn-muted" data-vis="{{ V }}">Reset</a>
+    </form>
+  </article>
+
+  {# ── Unified spend table ── #}
+  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+    {{ card_heading("SPEND LOG", "Payments + grant expenses combined") }}
+    {% if entries %}
+    <div class="finance-table-scroll" data-vis="{{ V }}">
+      <table class="finance-table sortable-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Date</th>
+            <th data-vis="{{ V }}">Type</th>
+            <th class="finance-num" data-vis="{{ V }}">Amount</th>
+            <th data-vis="{{ V }}">Method</th>
+            <th data-vis="{{ V }}">Reference</th>
+            <th data-vis="{{ V }}">Grant</th>
+            <th data-vis="{{ V }}">Recorded by</th>
+            <th data-vis="{{ V }}">Notes</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for e in entries %}
+          <tr class="{% if e.entry_type == 'expense' %}finance-spend-expense{% endif %}" data-vis="{{ V }}">
+            <td data-vis="{{ V }}">{{ e.event_date[:10] if e.event_date else '&mdash;' }}</td>
+            <td data-vis="{{ V }}">
+              <span class="finance-type-badge finance-type-{{ e.entry_type }}" data-vis="{{ V }}">{{ e.entry_type|title }}</span>
+            </td>
+            <td class="finance-num" data-vis="{{ V }}">&#8377;{{ "{:,.2f}".format(e.amount) }}</td>
+            <td data-vis="{{ V }}">{{ e.method|replace('_', ' ')|title }}</td>
+            <td data-vis="{{ V }}">
+              {% if e.entry_type == 'payment' and e.invoice_number %}
+              <code class="inline-code" data-vis="{{ V }}">{{ e.invoice_number }}</code>
+              {% if e.request_no %} &middot; {{ e.request_no }}{% endif %}
+              {% elif e.entry_type == 'expense' %}
+              {{ e.request_no[:40] if e.request_no else '&mdash;' }}
+              {% else %}
+              &mdash;
+              {% endif %}
+            </td>
+            <td data-vis="{{ V }}">{{ e.grant_code or '&mdash;' }}</td>
+            <td data-vis="{{ V }}">{{ e.recorded_by_name or '&mdash;' }}</td>
+            <td class="finance-desc-cell" data-vis="{{ V }}">{{ e.notes[:40] if e.notes else '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    {{ empty_state("No spend entries found.", hint="Payments and grant expenses will appear here.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

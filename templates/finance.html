@@ -10,9 +10,38 @@
     <span class="inst-header-code" data-vis="{{ V }}">Economy Dashboard</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if can_edit_finance %}
+    <a class="btn btn-primary" href="{{ url_for('finance_invoice_new') }}" data-vis="{{ V }}">+ New Invoice</a>
+    {% endif %}
     <a class="btn" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
   </div>
 </header>
+
+{# ── Tab navigation ── #}
+<nav class="finance-tab-nav" data-vis="{{ V }}">
+  <a class="finance-tab finance-tab-active" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Overview</a>
+  <a class="finance-tab" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">Invoices</a>
+  <a class="finance-tab" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">Spend</a>
+  <a class="finance-tab" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
+</nav>
+
+{# ── Quick action cards (finance_admin only) ── #}
+{% if can_edit_finance %}
+<div class="finance-quick-actions" data-vis="{{ V }}">
+  <a class="finance-action-card" href="{{ url_for('finance_invoice_new') }}" data-vis="{{ V }}">
+    <span class="finance-action-icon" data-vis="{{ V }}">+</span>
+    <span class="finance-action-label" data-vis="{{ V }}">Create Invoice</span>
+  </a>
+  <a class="finance-action-card" href="{{ url_for('finance_invoices_list', status='pending') }}" data-vis="{{ V }}">
+    <span class="finance-action-icon" data-vis="{{ V }}">&#8377;</span>
+    <span class="finance-action-label" data-vis="{{ V }}">Record Payment</span>
+  </a>
+  <a class="finance-action-card" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">
+    <span class="finance-action-icon" data-vis="{{ V }}">&#9776;</span>
+    <span class="finance-action-label" data-vis="{{ V }}">View Spend</span>
+  </a>
+</div>
+{% endif %}
 
 <section class="finance-tiles" data-vis="{{ V }}">
 

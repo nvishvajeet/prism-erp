@@ -37,6 +37,7 @@
     </div>
     {% if can_edit_user %}
     <form method="post" class="meta-edit-form" id="userMetaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="update_user_metadata">
       <div class="meta-edit-grid" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Name<input type="text" name="name" value="{{ target_user['name'] }}" required></label>
@@ -123,6 +124,7 @@
     {% endif %}
   </p>
   <form method="post" class="meta-edit-form top-gap" id="userExtraRolesForm" hidden data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_user_role_set">
     <p class="hint" data-vis="{{ V }}">Tick a box to layer another role on top of the primary role. The primary role is controlled by the "Change Role" tile above.</p>
     <div class="extra-role-grid" data-vis="{{ V }}">
@@ -153,6 +155,7 @@
     <strong>{{ assigned_operator_ids|length }}</strong> as operator, and
     <strong>{{ assigned_faculty_ids|length }}</strong> as faculty in charge. Edit to grant or revoke access by instrument or by category.</p>
   <form method="post" class="meta-edit-form top-gap" id="userInstrumentsForm" hidden data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_user_instruments">
     <p class="hint" data-vis="{{ V }}">Select the lane(s) for each instrument. Use the category quick-grant buttons to assign a whole group at once.</p>
     {% if instrument_groups %}
@@ -215,9 +218,30 @@
     </div>
   </div>
   <form method="post" class="inline-form" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="remove_access">
     <button type="submit" class="danger" data-vis="{{ V }}">Remove Access</button>
   </form>
+</section>
+{% endif %}
+
+{% if reset_pw_info %}
+<section class="card compact tile-user-reset-pin" data-vis="{{ V }}" style="border:2px solid var(--accent, #007aff); background:var(--bg-accent-subtle, #eef6ff);">
+  <div class="section-head" data-vis="{{ V }}">
+    <div data-vis="{{ V }}">
+      <h2 data-vis="{{ V }}">Temporary Password Issued</h2>
+    </div>
+  </div>
+  <p class="hint" data-vis="{{ V }}">
+    Share this PIN securely with {{ reset_pw_info.name }}.
+    They will be required to choose their own password on next login.
+    <strong>This PIN is shown only once.</strong>
+  </p>
+  <div style="display:flex; align-items:center; gap:0.75rem; margin:0.75rem 0;" data-vis="{{ V }}">
+    <code id="resetPin" style="font-size:1.5rem; letter-spacing:0.15em; padding:0.4rem 0.8rem; background:var(--bg, #fff); border:1px solid var(--border, #ccc); border-radius:6px; user-select:all;">{{ reset_pw_info.temp_password }}</code>
+    <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('resetPin').textContent.trim()).then(function(){this.textContent='Copied!'}.bind(this))" data-vis="{{ V }}" style="white-space:nowrap;">Copy PIN</button>
+    <a href="{{ url_for('download_reset_password_eml', user_id=reset_pw_info.user_id, tp=reset_pw_info.temp_password) }}" class="button" data-vis="{{ V }}" style="white-space:nowrap;">Download .eml</a>
+  </div>
 </section>
 {% endif %}
 
@@ -237,6 +261,7 @@
   </p>
   <form method="post" class="inline-form" data-vis="{{ V }}"
         onsubmit="return confirm('Issue a new temporary password for {{ target_user.email }}? Their current password will be invalidated.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="reset_password">
     <button type="submit" data-vis="{{ V }}">Reset Password</button>
   </form>

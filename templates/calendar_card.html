@@ -17,6 +17,7 @@
 
 {% if sample_request["status"] == "sample_submitted" %}
 <form method="post" action="{{ url_for('schedule_actions') }}" class="cal-action-form" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="request_id" value="{{ sample_request['id'] }}">
   <input type="hidden" name="action" value="mark_received">
   <button type="submit" class="small-button" data-vis="{{ V }}">Mark Received</button>
@@ -25,6 +26,7 @@
 
 {% if sample_request["status"] == "sample_received" %}
 <form method="post" action="{{ url_for('schedule_actions') }}" class="cal-action-form" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="request_id" value="{{ sample_request['id'] }}">
   <input type="hidden" name="action" value="take_up">
   <label class="cal-inline-label" data-vis="{{ V }}">Schedule
@@ -41,6 +43,7 @@
 
 {% if sample_request["status"] == "scheduled" %}
 <form method="post" action="{{ url_for('schedule_actions') }}" class="cal-action-form" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="request_id" value="{{ sample_request['id'] }}">
   <input type="hidden" name="action" value="start_now">
   <button type="submit" class="small-button" data-vis="{{ V }}">Start Now</button>
@@ -49,6 +52,7 @@
 
 {% if sample_request["status"] == "in_progress" %}
 <form method="post" action="{{ url_for('schedule_actions') }}" class="cal-action-form" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="request_id" value="{{ sample_request['id'] }}">
   <input type="hidden" name="action" value="finish_now">
   <label class="cal-inline-label" data-vis="{{ V }}">Result Summary

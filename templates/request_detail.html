@@ -88,6 +88,7 @@
     {{ metadata_grid(_meta_items) }}
     {% if can_manage and not sample_request["completion_locked"] %}
     <form method="post" class="meta-edit-form top-gap" id="requestMetaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="update_request_metadata">
       <div class="meta-edit-grid" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Title<input type="text" name="title" value="{{ sample_request['title'] }}" required></label>
@@ -139,6 +140,7 @@
     <div class="tile-request-actions-body" data-vis="{{ V }}">
       {% if card_policy.actions.mark_submitted %}
       <form method="post" class="action-form" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="mark_sample_submitted">
         <label class="checkbox-line" data-vis="{{ V }}">
           <input type="checkbox" required data-vis="{{ V }}">
@@ -151,6 +153,7 @@
       </form>
       {% elif card_policy.actions.finish_fast %}
       <form method="post" enctype="multipart/form-data" class="action-form fast-finish-form" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="resolve_sample">
         <input type="hidden" name="mark_complete" value="1">
         <label data-vis="{{ V }}">Comment
@@ -173,6 +176,7 @@
         <div class="top-gap" data-vis="{{ V }}">
           {% if card_policy.actions.reassign %}
           <form method="post" class="action-form secondary-action-form" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="reassign_operator">
             <label data-vis="{{ V }}">Assign To
               <select name="assigned_operator_id" required data-vis="{{ V }}">
@@ -190,6 +194,7 @@
           {% endif %}
           {% if card_policy.actions.mark_received %}
           <form method="post" class="action-form secondary-action-form" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="mark_sample_received">
             <input type="hidden" name="remarks" value="">
             <button type="submit" data-vis="{{ V }}">Confirm Receipt</button>
@@ -197,6 +202,7 @@
           {% endif %}
           {% if card_policy.actions.update_status %}
           <form method="post" class="action-form secondary-action-form" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="admin_set_status">
             <label data-vis="{{ V }}">Status
               <select name="new_status" required data-vis="{{ V }}">
@@ -249,6 +255,7 @@
           {% endif %}
           {% if can_manage and step["status"] == "pending" %}
           <form method="post" class="action-form secondary-action-form top-gap" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="assign_approver">
             <input type="hidden" name="step_id" value="{{ step['id'] }}">
             <select name="approver_user_id" required data-vis="{{ V }}">

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_portal') }}" class="hover-back-btn" title="Back to Finance Portal">&larr;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">&larr; Finance Portal</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Invoices</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ invoices|length }} result{{ "s" if invoices|length != 1 else "" }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if can_edit_finance %}
+    <a class="btn btn-primary" href="{{ url_for('finance_invoice_new') }}" data-vis="{{ V }}">+ New Invoice</a>
+    {% endif %}
+  </div>
+</header>
+
+{# ── Tab navigation ── #}
+<nav class="finance-tab-nav" data-vis="{{ V }}">
+  <a class="finance-tab" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Overview</a>
+  <a class="finance-tab finance-tab-active" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">Invoices</a>
+  <a class="finance-tab" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">Spend</a>
+  <a class="finance-tab" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
+</nav>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  {# ── Filter bar ── #}
+  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+    {{ card_heading("FILTERS", "Narrow down the invoice list") }}
+    <form method="get" action="{{ url_for('finance_invoices_list') }}" class="finance-filter-bar" data-vis="{{ V }}">
+      <div class="finance-filter-group" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Status</label>
+        <select name="status" data-vis="{{ V }}">
+          <option value="all" {{ 'selected' if status_filter == 'all' }} data-vis="{{ V }}">All</option>
+          <option value="pending" {{ 'selected' if status_filter == 'pending' }} data-vis="{{ V }}">Pending</option>
+          <option value="partial" {{ 'selected' if status_filter == 'partial' }} data-vis="{{ V }}">Partial</option>
+          <option value="paid" {{ 'selected' if status_filter == 'paid' }} data-vis="{{ V }}">Paid</option>
+          <option value="void" {{ 'selected' if status_filter == 'void' }} data-vis="{{ V }}">Void</option>
+        </select>
+      </div>
+      <div class="finance-filter-group" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Grant</label>
+        <select name="grant_id" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All grants</option>
+          {% for g in grants_list %}
+          <option value="{{ g.id }}" {{ 'selected' if grant_filter == g.id|string }} data-vis="{{ V }}">{{ g.code }} &mdash; {{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="finance-filter-group" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">From</label>
+        <input type="date" name="date_from" value="{{ date_from }}" data-vis="{{ V }}">
+      </div>
+      <div class="finance-filter-group" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">To</label>
+        <input type="date" name="date_to" value="{{ date_to }}" data-vis="{{ V }}">
+      </div>
+      <button type="submit" class="btn" data-vis="{{ V }}">Apply</button>
+      <a href="{{ url_for('finance_invoices_list') }}" class="btn btn-muted" data-vis="{{ V }}">Reset</a>
+    </form>
+  </article>
+
+  {# ── Invoice table ── #}
+  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+    {{ card_heading("INVOICES", invoices|length|string ~ " invoice" ~ ("s" if invoices|length != 1 else "")) }}
+    {% if invoices %}
+    <div class="finance-table-scroll" data-vis="{{ V }}">
+      <table class="finance-table sortable-table finance-invoice-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Invoice #</th>
+            <th data-vis="{{ V }}">Request</th>
+            <th data-vis="{{ V }}">Description</th>
+            <th class="finance-num" data-vis="{{ V }}">Amount</th>
+            <th class="finance-num" data-vis="{{ V }}">Paid</th>
+            <th data-vis="{{ V }}">Status</th>
+            <th data-vis="{{ V }}">Grant</th>
+            <th data-vis="{{ V }}">Date</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for inv in invoices %}
+          <tr class="finance-clickable-row" data-href="{{ url_for('finance_invoice_detail', invoice_id=inv.id) }}" data-vis="{{ V }}">
+            <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.invoice_number or '&mdash;' }}</code></td>
+            <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.request_no or '&mdash;' }}</code></td>
+            <td class="finance-desc-cell" data-vis="{{ V }}">{{ inv.description[:60] if inv.description else inv.request_title[:60] if inv.request_title else '&mdash;' }}</td>
+            <td class="finance-num" data-vis="{{ V }}">&pound;{{ "{:,.2f}".format(inv.amount_due) }}</td>
+            <td class="finance-num" data-vis="{{ V }}">&pound;{{ "{:,.2f}".format(inv.amount_paid) }}</td>
+            <td data-vis="{{ V }}">
+              <span class="finance-status-pill finance-status-{{ inv.derived_status }}" data-vis="{{ V }}">{{ inv.derived_status|upper }}</span>
+            </td>
+            <td data-vis="{{ V }}">{{ inv.grant_code or '&mdash;' }}</td>
+            <td data-vis="{{ V }}">{{ inv.issued_at[:10] if inv.issued_at else '&mdash;' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    {{ empty_state("No invoices match the current filters.", hint="Try broadening your search or create a new invoice.") }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+document.querySelectorAll('.finance-clickable-row').forEach(function(row) {
+  row.style.cursor = 'pointer';
+  row.addEventListener('click', function() {
+    window.location.href = this.dataset.href;
+  });
+});
+</script>
+{% endblock %}

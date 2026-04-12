@@ -25,6 +25,13 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import RequestEntityTooLarge
 
+# Google OAuth (optional — only active when GOOGLE_CLIENT_ID is set)
+try:
+    from authlib.integrations.flask_client import OAuth as AuthlibOAuth
+    _AUTHLIB_AVAILABLE = True
+except ImportError:
+    _AUTHLIB_AVAILABLE = False
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -65,19 +72,19 @@ OWNER_EMAILS = {
     # and crawlers continue to work without an env var on dev machines.
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "vishvajeet.nagargoje@prism.local,admin@lab.local",
+        "vishvajeet@prism.local",
     ).split(",")
     if email.strip()
 }
 DEMO_ROLE_SWITCHES = {
-    "owner": {"label": "Owner", "email": "admin@lab.local"},
-    "super_admin": {"label": "Super Admin", "email": "dean@lab.local"},
-    "instrument_admin": {"label": "Instrument Admin", "email": "fesem.admin@lab.local"},
-    "faculty_in_charge": {"label": "Faculty In-Charge", "email": "sen@lab.local"},
-    "operator": {"label": "Operator", "email": "anika@lab.local"},
-    "member": {"label": "Member", "email": "shah@lab.local"},
-    "finance": {"label": "Finance", "email": "finance@lab.local"},
-    "professor": {"label": "Professor", "email": "prof.approver@lab.local"},
+    "owner": {"label": "Owner", "email": "vishvajeet@prism.local"},
+    "super_admin": {"label": "Super Admin", "email": "dean@prism.local"},
+    "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@prism.local"},
+    "site_admin": {"label": "Site Admin", "email": "siteadmin@prism.local"},
+    "operator": {"label": "Operator", "email": "anika@prism.local"},
+    "member": {"label": "Member", "email": "user1@prism.local"},
+    "finance": {"label": "Finance", "email": "meera@prism.local"},
+    "professor": {"label": "Approver", "email": "approver@prism.local"},
 }
 
 app = Flask(__name__)
@@ -140,6 +147,27 @@ def module_enabled(name: str) -> bool:
 
 
 csrf = CSRFProtect(app)
+
+# ── Google OAuth ────────────────────────────────────────────────
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_ALLOWED_DOMAIN = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "mitwpu.edu.in")
+
+_oauth = None
+if _AUTHLIB_AVAILABLE and GOOGLE_CLIENT_ID:
+    _oauth = AuthlibOAuth(app)
+    _oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+# ── SendGrid / External Email ──────────────────────────────────
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
+SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "noreply@prism.local")
+SENDGRID_DAILY_LIMIT = int(os.environ.get("SENDGRID_DAILY_LIMIT", "100"))
 
 
 def now_iso() -> str:
@@ -4246,6 +4274,81 @@ def init_db() -> None:
                         (gid, cat),
                     )
 
+        # ── v1.1.0 — System notifications, budget rules, email queue, OAuth, todos ──
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS system_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                category TEXT NOT NULL DEFAULT 'general',
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                href TEXT NOT NULL DEFAULT '',
+                source_type TEXT NOT NULL DEFAULT '',
+                source_id INTEGER,
+                is_read INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_sysnotif_user ON system_notifications(user_id, is_read)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_sysnotif_created ON system_notifications(created_at)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS budget_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grant_id INTEGER,
+                warn_utilization_pct REAL DEFAULT 80.0,
+                block_utilization_pct REAL DEFAULT 100.0,
+                require_receipt INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (grant_id) REFERENCES grants(id) ON DELETE CASCADE
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS email_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                to_address TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body_html TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'queued',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                sent_at TEXT
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_todos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                assigned_by_user_id INTEGER,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'open',
+                due_date TEXT,
+                created_at TEXT NOT NULL DEFAULT '',
+                completed_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (assigned_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_todos_user ON user_todos(user_id, status)")
+
+        # Additive column migrations for v1.1.0
+        for col_sql in [
+            "ALTER TABLE invoices ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE invoices ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE invoices ADD COLUMN created_by_user_id INTEGER REFERENCES users(id)",
+            "ALTER TABLE invoices ADD COLUMN grant_id INTEGER REFERENCES grants(id)",
+            "ALTER TABLE users ADD COLUMN google_id TEXT",
+            "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except Exception:
+                pass
+
         db.commit()
     db.close()
     seed_data()
@@ -4938,12 +5041,14 @@ def seed_data() -> None:
     demo_pw_hash = generate_password_hash(DEMO_PASSWORD, method="pbkdf2:sha256")
 
     # Rebind every seeded persona's password on every boot so existing
-    # demo DBs catch up without a re-seed. Keyed by role-named emails
-    # so any persona whose email we know gets refreshed in place.
+    # demo DBs catch up without a re-seed.
     _persona_emails = (
-        "admin@lab.local", "operator@lab.local", "requester@lab.local",
-        "member@lab.local", "finance@lab.local", "approver@lab.local",
-        "instrument_admin@lab.local", "site_admin@lab.local",
+        "vishvajeet@prism.local", "dean@prism.local", "kondhalkar@prism.local",
+        "siteadmin@prism.local", "anika@prism.local", "ravi@prism.local",
+        "chetan@prism.local", "meera@prism.local", "suresh@prism.local",
+        "approver@prism.local",
+        "user1@prism.local", "user2@prism.local", "user3@prism.local",
+        "user4@prism.local", "user5@prism.local",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -4956,36 +5061,35 @@ def seed_data() -> None:
         db.close()
         return
 
-    # Legacy named personas — seeded FIRST to keep their autoincrement
-    # IDs stable. scripts/smoke_test.py hardcodes `requester_id=9` for
-    # sen@lab.local and several crawlers hardcode other positional IDs
-    # like this. Same order as the pre-simplification seed (11 entries).
-    legacy_users = [
-        ("Dean Rao",        "dean@lab.local",          "super_admin"),
-        ("Facility Admin",  "admin@lab.local",         "super_admin"),
-        ("Finance Office",  "finance@lab.local",       "finance_admin"),
-        ("Prof. Approver",  "prof.approver@lab.local", "professor_approver"),
-        ("FESEM Admin",     "fesem.admin@lab.local",   "instrument_admin"),
-        ("ICPMS Admin",     "icpms.admin@lab.local",   "instrument_admin"),
-        ("Anika",           "anika@lab.local",         "operator"),
-        ("Ravi",            "ravi@lab.local",          "operator"),
-        ("Prof. Sen",       "sen@lab.local",           "requester"),
-        ("Prof. Iyer",      "iyer@lab.local",          "requester"),
-        ("Dr. Shah",        "shah@lab.local",          "requester"),
+    # ── Core user roster ─────────────────────────────────────────
+    # Owner + super_admin + admins + operators + finance + generic users.
+    # Password for ALL demo accounts: "12345"
+    core_users = [
+        # Owner (god-view via OWNER_EMAILS env var)
+        ("Vishvajeet Nagargoje", "vishvajeet@prism.local",  "super_admin"),
+        # Dean — super admin
+        ("Dean Rao",             "dean@prism.local",        "super_admin"),
+        # Kondhalkar — admin across many instruments
+        ("Prof. Kondhalkar",     "kondhalkar@prism.local",  "instrument_admin"),
+        # Site admin
+        ("Site Admin",           "siteadmin@prism.local",   "site_admin"),
+        # Operators
+        ("Operator Anika",       "anika@prism.local",       "operator"),
+        ("Operator Ravi",        "ravi@prism.local",        "operator"),
+        ("Operator Chetan",      "chetan@prism.local",      "operator"),
+        # Finance operators
+        ("Finance Meera",        "meera@prism.local",       "finance_admin"),
+        ("Finance Suresh",       "suresh@prism.local",      "finance_admin"),
+        # Approver
+        ("Prof. Approver",       "approver@prism.local",    "professor_approver"),
+        # Generic user accounts (User 1–5)
+        ("User One",             "user1@prism.local",       "requester"),
+        ("User Two",             "user2@prism.local",       "requester"),
+        ("User Three",           "user3@prism.local",       "requester"),
+        ("User Four",            "user4@prism.local",       "requester"),
+        ("User Five",            "user5@prism.local",       "requester"),
     ]
-    # Role-aware seeded users for the public demo card on
-    # nvishvajeet.github.io. The email IS the role label — a visitor
-    # logging in as operator@lab.local instantly knows which UI
-    # they're testing. Seeded AFTER the legacy set so IDs start at 12.
-    role_aware_users = [
-        ("Site Admin",       "site_admin@lab.local",       "site_admin"),
-        ("Instrument Admin", "instrument_admin@lab.local", "instrument_admin"),
-        ("Approver",         "approver@lab.local",         "professor_approver"),
-        ("Operator",         "operator@lab.local",         "operator"),
-        ("Requester",        "requester@lab.local",        "requester"),
-        ("Member",           "member@lab.local",           "requester"),
-    ]
-    for name, email, role in legacy_users + role_aware_users:
+    for name, email, role in core_users:
         db.execute(
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
             (name, email, demo_pw_hash, role),
@@ -5121,184 +5225,48 @@ def seed_data() -> None:
             (name, code, category, location, cap, notes, office_info, faculty_group, manufacturer, model_number, capabilities_summary, machine_photo_url, reference_links, instrument_description, accepting_requests, soft_accept_enabled),
         )
 
-    # ── v2.0.3 — Real CRF personnel ──────────────────────────────
-    # 1 dean + 14 faculty (each handles 2-9 instruments) + 16 operators
-    # (each handles 2-5 instruments). Multi-instrument handling enforced.
-    # Every instrument gets exactly 2 faculty in charge + 2 operators.
-    # New accounts use @prism.local to keep them visually distinct
-    # from the @lab.local legacy demo personas (which smoke_test +
-    # crawlers depend on for stable IDs).
-    crf_personnel = [
-        # Owner — singular per the v2.0.3 directive. OWNER_EMAILS env
-        # var (top of file) gates god-view; this row gives the owner
-        # an actual login. super_admin role mirrors the dean's level.
-        ("Vishvajeet Nagargoje", "vishvajeet.nagargoje@prism.local", "super_admin"),
-        # Dean (R&D)
-        ("Dr. Anand Bhalerao",  "dean.bhalerao@prism.local",   "super_admin"),
-        # Faculty in charge
-        ("Dr. Sneha Kulkarni",  "kulkarni@prism.local",        "professor_approver"),
-        ("Dr. Aditya Joshi",    "ajoshi@prism.local",          "professor_approver"),
-        ("Dr. Meera Deshpande", "deshpande@prism.local",       "professor_approver"),
-        ("Dr. Rahul Patil",     "rpatil@prism.local",          "professor_approver"),
-        ("Dr. Kavita Iyer",     "kiyer@prism.local",           "professor_approver"),
-        ("Dr. Vinod Karnik",    "karnik@prism.local",          "professor_approver"),
-        ("Dr. Ananya Bose",     "bose@prism.local",            "professor_approver"),
-        ("Dr. Suresh Kapoor",   "kapoor@prism.local",          "professor_approver"),
-        ("Dr. Priya Menon",     "menon@prism.local",           "professor_approver"),
-        ("Dr. Rohit Naik",      "rnaik@prism.local",           "professor_approver"),
-        ("Dr. Sandeep Rao",     "srao@prism.local",            "professor_approver"),
-        ("Dr. Latika Gokhale",  "gokhale@prism.local",         "professor_approver"),
-        ("Dr. Manish Sharma",   "msharma@prism.local",         "professor_approver"),
-        ("Dr. Vivek Gupta",     "vgupta@prism.local",          "professor_approver"),
-        # Operators (research assistants / lab technicians)
-        ("Asha Pawar",          "asha.pawar@prism.local",      "operator"),
-        ("Bhargav Naik",        "bhargav.naik@prism.local",    "operator"),
-        ("Chetan Joshi",        "chetan.joshi@prism.local",    "operator"),
-        ("Divya Rane",          "divya.rane@prism.local",      "operator"),
-        ("Esha Mhaskar",        "esha.mhaskar@prism.local",    "operator"),
-        ("Farhan Sayyed",       "farhan.sayyed@prism.local",   "operator"),
-        ("Gauri Kale",          "gauri.kale@prism.local",      "operator"),
-        ("Hemant Patil",        "hemant.patil@prism.local",    "operator"),
-        ("Indu Bhonsle",        "indu.bhonsle@prism.local",    "operator"),
-        ("Jignesh Mehta",       "jignesh.mehta@prism.local",   "operator"),
-        ("Kshitij Pandit",      "kshitij.pandit@prism.local",  "operator"),
-        ("Lavanya Hegde",       "lavanya.hegde@prism.local",   "operator"),
-        ("Mahesh Yadav",        "mahesh.yadav@prism.local",    "operator"),
-        ("Nilesh Wagh",         "nilesh.wagh@prism.local",     "operator"),
-        ("Omkar Bhide",         "omkar.bhide@prism.local",     "operator"),
-        ("Pratik Salunke",      "pratik.salunke@prism.local",  "operator"),
-    ]
-    for name, email, role in crf_personnel:
-        db.execute(
-            "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
-            (name, email, demo_pw_hash, role),
-        )
+    # (No additional personnel block — all users defined in core_users above)
 
     assignments = [
-        # ── Legacy fixture assignments (smoke_test + crawler dependencies) ─
-        ("fesem.admin@lab.local", "INST-001", "admin"),
-        ("icpms.admin@lab.local", "INST-002", "admin"),
-        ("anika@lab.local", "INST-001", "operator"),
-        ("ravi@lab.local", "INST-002", "operator"),
-        ("sen@lab.local", "INST-001", "faculty"),
-        ("iyer@lab.local", "INST-002", "faculty"),
-        ("shah@lab.local", "INST-003", "faculty"),
-        ("sen@lab.local", "INST-004", "faculty"),
+        # ── Kondhalkar is admin on most instruments ───────────────
+        ("kondhalkar@prism.local", "INST-001", "admin"),
+        ("kondhalkar@prism.local", "INST-002", "admin"),
+        ("kondhalkar@prism.local", "INST-003", "admin"),
+        ("kondhalkar@prism.local", "INST-004", "admin"),
+        ("kondhalkar@prism.local", "INST-005", "admin"),
+        ("kondhalkar@prism.local", "INST-006", "admin"),
+        ("kondhalkar@prism.local", "INST-007", "admin"),
+        ("kondhalkar@prism.local", "INST-008", "admin"),
+        ("kondhalkar@prism.local", "INST-009", "admin"),
+        ("kondhalkar@prism.local", "INST-010", "admin"),
+        ("kondhalkar@prism.local", "INST-011", "admin"),
+        ("kondhalkar@prism.local", "INST-012", "admin"),
+        ("kondhalkar@prism.local", "INST-013", "admin"),
 
-        # ── CRF faculty assignments (2 per instrument) ────────────
-        # FESEM
-        ("deshpande@prism.local", "INST-001", "faculty"),
-        ("rpatil@prism.local",    "INST-001", "faculty"),
-        # ICP-MS
-        ("kulkarni@prism.local",  "INST-002", "faculty"),
-        ("ajoshi@prism.local",    "INST-002", "faculty"),
-        # XRD
-        ("rpatil@prism.local",    "INST-003", "faculty"),
-        ("kiyer@prism.local",     "INST-003", "faculty"),
-        # Raman
-        ("kulkarni@prism.local",  "INST-004", "faculty"),
-        ("karnik@prism.local",    "INST-004", "faculty"),
-        # Particle/Zeta
-        ("deshpande@prism.local", "INST-005", "faculty"),
-        ("bose@prism.local",      "INST-005", "faculty"),
-        # Nanoindenter
-        ("kapoor@prism.local",    "INST-006", "faculty"),
-        ("menon@prism.local",     "INST-006", "faculty"),
-        # Surface Profiler
-        ("menon@prism.local",     "INST-007", "faculty"),
-        ("rnaik@prism.local",     "INST-007", "faculty"),
-        # Tribometer
-        ("kapoor@prism.local",    "INST-008", "faculty"),
-        ("rnaik@prism.local",     "INST-008", "faculty"),
-        # Polarizing OM
-        ("kiyer@prism.local",     "INST-009", "faculty"),
-        ("srao@prism.local",      "INST-009", "faculty"),
-        # Battery Fab
-        ("bose@prism.local",      "INST-010", "faculty"),
-        ("srao@prism.local",      "INST-010", "faculty"),
-        # UV-Vis-DRS
-        ("ajoshi@prism.local",    "INST-011", "faculty"),
-        ("gokhale@prism.local",   "INST-011", "faculty"),
-        # UV-VIS-NIR
-        ("karnik@prism.local",    "INST-012", "faculty"),
-        ("gokhale@prism.local",   "INST-012", "faculty"),
-        # NABL mechanical line — both senior faculty cover all 9
-        ("msharma@prism.local",   "INST-013", "faculty"),
-        ("vgupta@prism.local",    "INST-013", "faculty"),
-        ("msharma@prism.local",   "INST-014", "faculty"),
-        ("vgupta@prism.local",    "INST-014", "faculty"),
-        ("msharma@prism.local",   "INST-015", "faculty"),
-        ("vgupta@prism.local",    "INST-015", "faculty"),
-        ("msharma@prism.local",   "INST-016", "faculty"),
-        ("vgupta@prism.local",    "INST-016", "faculty"),
-        ("msharma@prism.local",   "INST-017", "faculty"),
-        ("vgupta@prism.local",    "INST-017", "faculty"),
-        ("msharma@prism.local",   "INST-018", "faculty"),
-        ("vgupta@prism.local",    "INST-018", "faculty"),
-        ("msharma@prism.local",   "INST-019", "faculty"),
-        ("vgupta@prism.local",    "INST-019", "faculty"),
-        ("msharma@prism.local",   "INST-020", "faculty"),
-        ("vgupta@prism.local",    "INST-020", "faculty"),
-        ("msharma@prism.local",   "INST-021", "faculty"),
-        ("vgupta@prism.local",    "INST-021", "faculty"),
+        # ── Approver as faculty on imaging + spectroscopy ─────────
+        ("approver@prism.local",  "INST-001", "faculty"),
+        ("approver@prism.local",  "INST-002", "faculty"),
+        ("approver@prism.local",  "INST-003", "faculty"),
+        ("approver@prism.local",  "INST-004", "faculty"),
+        ("approver@prism.local",  "INST-005", "faculty"),
 
-        # ── CRF operator assignments (2 per instrument) ───────────
-        # FESEM
-        ("chetan.joshi@prism.local",  "INST-001", "operator"),
-        ("divya.rane@prism.local",    "INST-001", "operator"),
-        # ICP-MS
-        ("asha.pawar@prism.local",    "INST-002", "operator"),
-        ("bhargav.naik@prism.local",  "INST-002", "operator"),
-        # XRD
-        ("chetan.joshi@prism.local",  "INST-003", "operator"),
-        ("esha.mhaskar@prism.local",  "INST-003", "operator"),
-        # Raman
-        ("bhargav.naik@prism.local",  "INST-004", "operator"),
-        ("farhan.sayyed@prism.local", "INST-004", "operator"),
-        # Particle/Zeta
-        ("divya.rane@prism.local",    "INST-005", "operator"),
-        ("gauri.kale@prism.local",    "INST-005", "operator"),
-        # Nanoindenter
-        ("hemant.patil@prism.local",  "INST-006", "operator"),
-        ("jignesh.mehta@prism.local", "INST-006", "operator"),
-        # Surface Profiler
-        ("hemant.patil@prism.local",  "INST-007", "operator"),
-        ("indu.bhonsle@prism.local",  "INST-007", "operator"),
-        # Tribometer
-        ("indu.bhonsle@prism.local",  "INST-008", "operator"),
-        ("jignesh.mehta@prism.local", "INST-008", "operator"),
-        # Polarizing OM
-        ("esha.mhaskar@prism.local",  "INST-009", "operator"),
-        ("kshitij.pandit@prism.local","INST-009", "operator"),
-        # Battery Fab
-        ("gauri.kale@prism.local",    "INST-010", "operator"),
-        ("kshitij.pandit@prism.local","INST-010", "operator"),
-        # UV-Vis-DRS
-        ("asha.pawar@prism.local",    "INST-011", "operator"),
-        ("lavanya.hegde@prism.local", "INST-011", "operator"),
-        # UV-VIS-NIR
-        ("farhan.sayyed@prism.local", "INST-012", "operator"),
-        ("lavanya.hegde@prism.local", "INST-012", "operator"),
-        # NABL UTM/Compression/Microscope group — Mahesh + Omkar
-        ("mahesh.yadav@prism.local",  "INST-013", "operator"),
-        ("omkar.bhide@prism.local",   "INST-013", "operator"),
-        ("mahesh.yadav@prism.local",  "INST-017", "operator"),
-        ("omkar.bhide@prism.local",   "INST-017", "operator"),
-        ("mahesh.yadav@prism.local",  "INST-021", "operator"),
-        ("omkar.bhide@prism.local",   "INST-021", "operator"),
-        ("mahesh.yadav@prism.local",  "INST-020", "operator"),
-        ("omkar.bhide@prism.local",   "INST-020", "operator"),
-        ("mahesh.yadav@prism.local",  "INST-018", "operator"),
-        ("omkar.bhide@prism.local",   "INST-018", "operator"),
-        # NABL Hardness/Fatigue group — Nilesh + Pratik
-        ("nilesh.wagh@prism.local",   "INST-014", "operator"),
-        ("pratik.salunke@prism.local","INST-014", "operator"),
-        ("nilesh.wagh@prism.local",   "INST-015", "operator"),
-        ("pratik.salunke@prism.local","INST-015", "operator"),
-        ("nilesh.wagh@prism.local",   "INST-016", "operator"),
-        ("pratik.salunke@prism.local","INST-016", "operator"),
-        ("nilesh.wagh@prism.local",   "INST-019", "operator"),
-        ("pratik.salunke@prism.local","INST-019", "operator"),
+        # ── Operators spread across instruments ───────────────────
+        # Anika: imaging cluster
+        ("anika@prism.local",     "INST-001", "operator"),
+        ("anika@prism.local",     "INST-009", "operator"),
+        # Ravi: spectroscopy cluster
+        ("ravi@prism.local",      "INST-002", "operator"),
+        ("ravi@prism.local",      "INST-003", "operator"),
+        ("ravi@prism.local",      "INST-004", "operator"),
+        ("ravi@prism.local",      "INST-011", "operator"),
+        # Chetan: surface + mechanical + battery
+        ("chetan@prism.local",    "INST-005", "operator"),
+        ("chetan@prism.local",    "INST-006", "operator"),
+        ("chetan@prism.local",    "INST-007", "operator"),
+        ("chetan@prism.local",    "INST-008", "operator"),
+        ("chetan@prism.local",    "INST-010", "operator"),
+        ("chetan@prism.local",    "INST-012", "operator"),
+        ("chetan@prism.local",    "INST-013", "operator"),
     ]
     for email, code, kind in assignments:
         user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]
@@ -5311,11 +5279,8 @@ def seed_data() -> None:
             table = "instrument_faculty_admins"
         db.execute(f"INSERT OR IGNORE INTO {table} (user_id, instrument_id) VALUES (?, ?)", (user_id, inst_id))
 
-    demo_requests = [
-        ("REQ-1001", "sen@lab.local", "INST-001", "Nanoparticle morphology", "Au NP Batch A", 3, "internal", "", 0, 0, "n/a", "under_review", None, None, None, None),
-        ("REQ-1002", "iyer@lab.local", "INST-002", "Water trace metals", "River sample set", 3, "external", "RCPT-7782", 1500, 500, "partial", "awaiting_sample_submission", "ravi@lab.local", None, None, None),
-        ("REQ-1003", "shah@lab.local", "INST-001", "Fiber surface imaging", "Polymer fiber lot 7", 2, "external", "RCPT-7783", 2000, 2000, "paid", "completed", "anika@lab.local", "2026-04-09 14:00", "2026-04-08T09:00:00Z", "2026-04-08T10:00:00Z"),
-    ]
+    # No demo requests — clean slate for production demo
+    demo_requests = []
     for req_no, requester_email, inst_code, title, sample_name, sample_count, sample_origin, receipt_number, amount_due, amount_paid, finance_status, status, operator_email, scheduled, sample_submitted_at, sample_received_at in demo_requests:
         requester_id = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()[0]
         instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (inst_code,)).fetchone()[0]
@@ -5516,6 +5481,43 @@ def instrument_group_member_ids(group_id: int) -> list[int]:
         return []
 
 
+def _recent_combined_notifications(user) -> list[dict]:
+    """Return latest 5 combined admin notices + system notifications for the nav dropdown."""
+    if not user:
+        return []
+    items: list[dict] = []
+    for n in active_notices_for_user(user)[:5]:
+        items.append({
+            "id": n["id"],
+            "kind": "notice",
+            "subject": n["subject"],
+            "severity": n.get("severity", "info"),
+            "scope_label": n.get("scope_label", ""),
+            "href": "",
+            "is_read": n.get("is_read", False),
+            "created_at": n.get("created_at", ""),
+        })
+    try:
+        for s in query_all(
+            "SELECT id, title, href, category, is_read, created_at FROM system_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
+            (user["id"],),
+        ):
+            items.append({
+                "id": s["id"],
+                "kind": "system",
+                "subject": s["title"],
+                "severity": "info",
+                "scope_label": s.get("category", "system"),
+                "href": s.get("href", ""),
+                "is_read": bool(s.get("is_read", 0)),
+                "created_at": s.get("created_at", ""),
+            })
+    except sqlite3.OperationalError:
+        pass
+    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return items[:5]
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
@@ -5552,8 +5554,10 @@ def inject_globals():
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,
         "nav_pending_counts": nav_pending_counts(user),
-        "nav_notice_count": unread_notice_count(user) if user else 0,
+        "nav_notice_count": (unread_notice_count(user) + unread_system_notification_count(user)) if user else 0,
+        "recent_notices": _recent_combined_notifications(user),
         "nav_inbox_unread": unread_message_count(user) if user else 0,
+        "google_oauth_enabled": bool(_oauth),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
@@ -5579,6 +5583,258 @@ def inject_globals():
         "request_card_policy_user": lambda request_row: request_card_policy(user, request_row),
         "request_card_can_view_field_user": lambda request_row, field_name: request_card_field_allowed(user, request_row, field_name),
     }
+
+
+# ─── v1.6.1 Role-specific dashboard panels ────────────────────────────
+# Two compact tiles above existing content: "Your Action Items" (things
+# needing THIS user's attention right now) and "At a Glance" (summary
+# stats scoped to role). Max 5 items each.
+
+
+def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
+    """Return up to 5 actionable items for the logged-in user's role.
+
+    Each item: {label, detail, href, age}
+    """
+    roles = user_role_set(user)
+    db = get_db()
+    items: list[dict] = []
+
+    # ── Approvers: pending approval steps assigned to their role ──
+    if "professor_approver" in roles:
+        rows = query_all(
+            """
+            SELECT sr.id, sr.request_no, sr.sample_name, sr.created_at,
+                   i.name AS instrument_name
+            FROM approval_steps aps
+            JOIN sample_requests sr ON sr.id = aps.sample_request_id
+            JOIN instruments i ON i.id = sr.instrument_id
+            WHERE aps.approver_role = 'professor' AND aps.status = 'pending'
+              AND sr.status = 'under_review'
+            ORDER BY sr.created_at ASC
+            LIMIT 5
+            """,
+        )
+        for r in rows:
+            items.append({
+                "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "detail": r["instrument_name"],
+                "href": url_for("request_detail", request_id=r["id"]),
+                "age": r["created_at"],
+            })
+
+    # ── Finance admin: pending finance clearances ──
+    if "finance_admin" in roles:
+        rows = query_all(
+            """
+            SELECT sr.id, sr.request_no, sr.sample_name, sr.created_at,
+                   i.name AS instrument_name
+            FROM approval_steps aps
+            JOIN sample_requests sr ON sr.id = aps.sample_request_id
+            JOIN instruments i ON i.id = sr.instrument_id
+            WHERE aps.approver_role = 'finance' AND aps.status = 'pending'
+              AND sr.status = 'under_review'
+            ORDER BY sr.created_at ASC
+            LIMIT 5
+            """,
+        )
+        for r in rows:
+            items.append({
+                "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "detail": f"Finance clearance · {r['instrument_name']}",
+                "href": url_for("request_detail", request_id=r["id"]),
+                "age": r["created_at"],
+            })
+
+    # ── Operator: samples awaiting processing (received/scheduled/in_progress assigned to them) ──
+    if "operator" in roles:
+        rows = query_all(
+            """
+            SELECT sr.id, sr.request_no, sr.sample_name, sr.status, sr.created_at,
+                   i.name AS instrument_name
+            FROM sample_requests sr
+            JOIN instruments i ON i.id = sr.instrument_id
+            WHERE sr.assigned_operator_id = ?
+              AND sr.status IN ('sample_received', 'scheduled', 'in_progress')
+            ORDER BY
+              CASE sr.status
+                WHEN 'in_progress' THEN 1
+                WHEN 'scheduled' THEN 2
+                WHEN 'sample_received' THEN 3
+              END,
+              sr.created_at ASC
+            LIMIT 5
+            """,
+            (user["id"],),
+        )
+        for r in rows:
+            items.append({
+                "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "detail": f"{r['status'].replace('_', ' ').title()} · {r['instrument_name']}",
+                "href": url_for("request_detail", request_id=r["id"]),
+                "age": r["created_at"],
+            })
+
+    # ── Instrument admin: pending sample_submitted for their instruments ──
+    if "instrument_admin" in roles:
+        inst_ids = assigned_instrument_ids(user)
+        if inst_ids:
+            ph = ",".join("?" for _ in inst_ids)
+            rows = query_all(
+                f"""
+                SELECT sr.id, sr.request_no, sr.sample_name, sr.created_at,
+                       i.name AS instrument_name
+                FROM sample_requests sr
+                JOIN instruments i ON i.id = sr.instrument_id
+                WHERE sr.instrument_id IN ({ph})
+                  AND sr.status = 'sample_submitted'
+                ORDER BY sr.created_at ASC
+                LIMIT 5
+                """,
+                tuple(inst_ids),
+            )
+            for r in rows:
+                items.append({
+                    "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                    "detail": f"Needs intake · {r['instrument_name']}",
+                    "href": url_for("request_detail", request_id=r["id"]),
+                    "age": r["created_at"],
+                })
+
+    # ── Super admin / owner: pending approvals site-wide ──
+    if roles & {"super_admin", "site_admin"} or is_owner(user):
+        if not items:  # avoid duplicates if also an approver
+            rows = query_all(
+                """
+                SELECT sr.id, sr.request_no, sr.sample_name, sr.created_at,
+                       aps.approver_role, i.name AS instrument_name
+                FROM approval_steps aps
+                JOIN sample_requests sr ON sr.id = aps.sample_request_id
+                JOIN instruments i ON i.id = sr.instrument_id
+                WHERE aps.status = 'pending' AND sr.status = 'under_review'
+                ORDER BY sr.created_at ASC
+                LIMIT 5
+                """,
+            )
+            for r in rows:
+                items.append({
+                    "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                    "detail": f"Awaiting {r['approver_role']} · {r['instrument_name']}",
+                    "href": url_for("request_detail", request_id=r["id"]),
+                    "age": r["created_at"],
+                })
+
+    # ── Requester: their requests needing action from them ──
+    if "requester" in roles:
+        rows = query_all(
+            """
+            SELECT sr.id, sr.request_no, sr.sample_name, sr.status, sr.created_at,
+                   i.name AS instrument_name
+            FROM sample_requests sr
+            JOIN instruments i ON i.id = sr.instrument_id
+            WHERE sr.requester_id = ?
+              AND sr.status IN ('draft', 'revision_requested')
+            ORDER BY sr.created_at DESC
+            LIMIT 5
+            """,
+            (user["id"],),
+        )
+        for r in rows:
+            items.append({
+                "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "detail": f"{r['status'].replace('_', ' ').title()} · {r['instrument_name']}",
+                "href": url_for("request_detail", request_id=r["id"]),
+                "age": r["created_at"],
+            })
+
+    return items[:5]
+
+
+def _dashboard_at_a_glance(user: sqlite3.Row) -> list[dict]:
+    """Role-scoped summary stats. Each item: {value, label, href, tone}."""
+    roles = user_role_set(user)
+    db = get_db()
+    stats: list[dict] = []
+
+    # ── Super admin / owner: site-wide overview ──
+    if roles & {"super_admin", "site_admin"} or is_owner(user):
+        pending_approvals = db.execute(
+            "SELECT COUNT(*) FROM approval_steps WHERE status = 'pending'"
+        ).fetchone()[0]
+        active_requests = db.execute(
+            "SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected', 'draft')"
+        ).fetchone()[0]
+        stats.append({"value": active_requests, "label": "Active requests", "href": url_for("schedule"), "tone": "active"})
+        stats.append({"value": pending_approvals, "label": "Pending approvals", "href": url_for("schedule") + "?pending_me=1", "tone": "wait"})
+
+    # ── Instrument admin: queue depth for their instruments ──
+    if "instrument_admin" in roles:
+        inst_ids = assigned_instrument_ids(user)
+        if inst_ids:
+            ph = ",".join("?" for _ in inst_ids)
+            queued = db.execute(
+                f"SELECT COUNT(*) FROM sample_requests WHERE instrument_id IN ({ph}) AND status IN ('sample_submitted','sample_received','scheduled','in_progress')",
+                tuple(inst_ids),
+            ).fetchone()[0]
+            submitted = db.execute(
+                f"SELECT COUNT(*) FROM sample_requests WHERE instrument_id IN ({ph}) AND status = 'sample_submitted'",
+                tuple(inst_ids),
+            ).fetchone()[0]
+            stats.append({"value": queued, "label": "In queue", "href": url_for("schedule"), "tone": "active"})
+            stats.append({"value": submitted, "label": "Awaiting intake", "href": url_for("schedule") + "?bucket=sample_submitted", "tone": "wait"})
+
+    # ── Operator: today's work ──
+    if "operator" in roles:
+        my_active = db.execute(
+            "SELECT COUNT(*) FROM sample_requests WHERE assigned_operator_id = ? AND status IN ('sample_received','scheduled','in_progress')",
+            (user["id"],),
+        ).fetchone()[0]
+        my_today = db.execute(
+            "SELECT COUNT(*) FROM sample_requests WHERE assigned_operator_id = ? AND status IN ('sample_received','scheduled','in_progress') AND date(scheduled_for) = date('now')",
+            (user["id"],),
+        ).fetchone()[0]
+        stats.append({"value": my_active, "label": "My active samples", "href": url_for("schedule") + "?today=1", "tone": "active"})
+        stats.append({"value": my_today, "label": "Scheduled today", "href": url_for("schedule") + "?today=1", "tone": "wait"})
+
+    # ── Professor approver: pending / recent decisions ──
+    if "professor_approver" in roles:
+        pending = db.execute(
+            """SELECT COUNT(*) FROM approval_steps aps
+               JOIN sample_requests sr ON sr.id = aps.sample_request_id
+               WHERE aps.approver_role = 'professor' AND aps.status = 'pending'
+                 AND sr.status = 'under_review'"""
+        ).fetchone()[0]
+        recent_decided = db.execute(
+            """SELECT COUNT(*) FROM approval_steps aps
+               WHERE aps.approver_role = 'professor' AND aps.status IN ('approved','rejected')
+                 AND aps.acted_at >= date('now', '-7 days')"""
+        ).fetchone()[0]
+        stats.append({"value": pending, "label": "Awaiting your approval", "href": url_for("schedule") + "?pending_me=1", "tone": "wait"})
+        stats.append({"value": recent_decided, "label": "Decided (7d)", "href": url_for("schedule") + "?pending_me=1", "tone": "active"})
+
+    # ── Finance admin ──
+    if "finance_admin" in roles:
+        pending_fin = db.execute(
+            """SELECT COUNT(*) FROM approval_steps aps
+               JOIN sample_requests sr ON sr.id = aps.sample_request_id
+               WHERE aps.approver_role = 'finance' AND aps.status = 'pending'
+                 AND sr.status = 'under_review'"""
+        ).fetchone()[0]
+        stats.append({"value": pending_fin, "label": "Pending clearances", "href": url_for("finance_portal"), "tone": "wait"})
+
+    # ── Requester: their request breakdown ──
+    if "requester" in roles:
+        row = db.execute(
+            """SELECT
+                 SUM(CASE WHEN status NOT IN ('completed','rejected') THEN 1 ELSE 0 END) AS active,
+                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS done
+               FROM sample_requests WHERE requester_id = ?""",
+            (user["id"],),
+        ).fetchone()
+        stats.append({"value": (row[0] or 0), "label": "Active requests", "href": url_for("schedule") + "?mine=1", "tone": "active"})
+        stats.append({"value": (row[1] or 0), "label": "Completed", "href": url_for("schedule") + "?mine=1", "tone": "completed"})
+
+    return stats
 
 
 @app.route("/")
@@ -5759,6 +6015,8 @@ def index():
         upcoming_downtime=upcoming_downtime_all,
         active_notices=active_notices_for_user(user),
         quick_actions=quick_actions_for_user(user),
+        dash_action_items=_dashboard_action_items(user),
+        dash_at_a_glance=_dashboard_at_a_glance(user),
     )
 
 
@@ -5833,6 +6091,14 @@ def active_notices_for_user(user: sqlite3.Row | None) -> list[dict]:
             keep = target in role_set
         elif scope == "instrument":
             keep = target in user_instrument_codes
+        elif scope == "mailing_list":
+            try:
+                member_ids = {r["user_id"] for r in query_all(
+                    "SELECT user_id FROM mailing_list_members WHERE list_id = ?", (int(target),)
+                )}
+                keep = user["id"] in member_ids
+            except (sqlite3.OperationalError, ValueError):
+                keep = False
         else:
             keep = False
         if keep:
@@ -5844,6 +6110,8 @@ def active_notices_for_user(user: sqlite3.Row | None) -> list[dict]:
                 d["scope_label"] = f"role · {target}"
             elif scope == "instrument":
                 d["scope_label"] = f"instrument · {target}"
+            elif scope == "mailing_list":
+                d["scope_label"] = f"mailing list · {target}"
             else:
                 d["scope_label"] = scope
             d["is_read"] = row["id"] in read_ids
@@ -6233,10 +6501,11 @@ def admin_mailing_list_delete(list_id: int):
 @app.route("/notifications/mark-read", methods=["POST"])
 @login_required
 def notification_mark_read():
-    """Mark a notice as read for the current user. Or mark all read."""
+    """Mark a notice or system notification as read. Or mark all read."""
     user = current_user()
     notice_id = request.form.get("notice_id", "").strip()
     if notice_id == "all":
+        # Mark all admin notices read
         notices = active_notices_for_user(user)
         for n in notices:
             if not n.get("is_read"):
@@ -6244,6 +6513,24 @@ def notification_mark_read():
                     "INSERT OR IGNORE INTO notice_reads (user_id, notice_id, read_at) VALUES (?, ?, ?)",
                     (user["id"], n["id"], now_iso()),
                 )
+        # Mark all system notifications read
+        try:
+            execute(
+                "UPDATE system_notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0",
+                (user["id"],),
+            )
+        except sqlite3.OperationalError:
+            pass
+    elif notice_id.startswith("sys_"):
+        # System notification
+        sys_id = int(notice_id[4:])
+        try:
+            execute(
+                "UPDATE system_notifications SET is_read = 1 WHERE id = ? AND user_id = ?",
+                (sys_id, user["id"]),
+            )
+        except sqlite3.OperationalError:
+            pass
     elif notice_id:
         execute(
             "INSERT OR IGNORE INTO notice_reads (user_id, notice_id, read_at) VALUES (?, ?, ?)",
@@ -6255,15 +6542,67 @@ def notification_mark_read():
 @app.route("/notifications", methods=["GET"])
 @login_required
 def notifications_page():
-    """v2.2.0 — Full notification feed. Shows every notice relevant to
-    the current user (site-wide + role-scoped + instrument-scoped),
-    newest first. The dashboard noticeboard shows the latest 2-3;
-    this page shows the full history."""
+    """Unified notification feed: admin notices + system notifications,
+    newest first. Supports ?cat= filter (all, request, finance, instrument, admin)."""
     user = current_user()
-    all_notices = active_notices_for_user(user)
+    cat = request.args.get("cat", "all").strip().lower()
+    # Admin notices — normalise into unified shape
+    admin_notices = active_notices_for_user(user)
+    unified: list[dict] = []
+    for n in admin_notices:
+        unified.append({
+            "id": n["id"],
+            "kind": "notice",
+            "category": "admin",
+            "title": n["subject"],
+            "body": n.get("body", ""),
+            "href": "",
+            "severity": n.get("severity", "info"),
+            "scope_label": n.get("scope_label", ""),
+            "is_read": n.get("is_read", False),
+            "created_at": n.get("created_at", ""),
+            "author_name": n.get("author_name", ""),
+        })
+    # System notifications
+    try:
+        sys_rows = query_all(
+            "SELECT * FROM system_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+            (user["id"],),
+        )
+    except sqlite3.OperationalError:
+        sys_rows = []
+    for s in sys_rows:
+        unified.append({
+            "id": s["id"],
+            "kind": "system",
+            "category": s.get("category", "request"),
+            "title": s["title"],
+            "body": s.get("body", ""),
+            "href": s.get("href", ""),
+            "severity": "info",
+            "scope_label": s.get("category", "system"),
+            "is_read": bool(s.get("is_read", 0)),
+            "created_at": s.get("created_at", ""),
+            "author_name": "",
+        })
+    # Sort unified by created_at DESC
+    unified.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    # Filter by category if not "all"
+    if cat and cat != "all":
+        unified = [n for n in unified if n["category"] == cat]
+    # Category counts for tab badges
+    all_count = len(admin_notices) + len(sys_rows)
+    cat_counts = {"all": all_count}
+    for n in admin_notices:
+        cat_counts["admin"] = cat_counts.get("admin", 0) + 1
+    for s in sys_rows:
+        c = s.get("category", "request")
+        cat_counts[c] = cat_counts.get(c, 0) + 1
     return render_template(
         "notifications.html",
-        notices=all_notices,
+        notices=unified,
+        active_cat=cat,
+        cat_counts=cat_counts,
     )
 
 
@@ -6661,9 +7000,10 @@ def finance_portal():
     Gated to finance_admin / super_admin / site_admin / owner.
     """
     user = current_user()
-    roles = user_role_set(user)
-    if not (roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user)):
+    if not _user_can_view_finance(user):
         abort(403)
+    roles = user_role_set(user)
+    can_edit = _user_can_edit_finance(user)
     # KPIs — headline row. Computed over invoices joined to external
     # sample_requests, with paid-sum derived from payments.
     kpi_row = query_one(
@@ -6779,6 +7119,7 @@ def finance_portal():
         by_instrument=by_instrument,
         outstanding=outstanding,
         recently_paid=recently_paid,
+        can_edit_finance=_user_can_edit_finance(user),
     )
 
 
@@ -6798,6 +7139,534 @@ def _user_can_edit_finance(user: sqlite3.Row | None) -> bool:
         return False
     roles = user_role_set(user)
     return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+
+def check_budget(grant_id, amount):
+    """Returns (allowed: bool, warning: str|None).
+
+    Queries budget_rules + current utilization for the given grant.
+    Blocks if over block_utilization_pct, warns if over warn_utilization_pct.
+    """
+    grant = query_one("SELECT id, total_budget FROM grants WHERE id = ?", (grant_id,))
+    if not grant or not grant["total_budget"] or grant["total_budget"] <= 0:
+        return True, None  # no budget cap — always allowed
+
+    total_budget = grant["total_budget"]
+
+    # Current spend: sum of payments on invoices linked to this grant
+    # + sum of grant_expenses
+    inv_spend = query_one(
+        """SELECT COALESCE(SUM(p.amount), 0) AS s
+           FROM payments p
+           JOIN invoices inv ON inv.id = p.invoice_id
+           WHERE inv.grant_id = ?""",
+        (grant_id,),
+    )
+    exp_spend = query_one(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM grant_expenses WHERE grant_id = ?",
+        (grant_id,),
+    )
+    current_spend = (inv_spend["s"] if inv_spend else 0) + (exp_spend["s"] if exp_spend else 0)
+    projected = current_spend + amount
+    utilization_pct = (projected / total_budget) * 100
+
+    # Load budget rules (fall back to defaults)
+    rules = query_one("SELECT * FROM budget_rules WHERE grant_id = ?", (grant_id,))
+    warn_pct = rules["warn_utilization_pct"] if rules else 80.0
+    block_pct = rules["block_utilization_pct"] if rules else 100.0
+
+    if utilization_pct >= block_pct:
+        return False, (
+            f"Budget BLOCKED: this would bring grant utilization to "
+            f"{utilization_pct:.1f}% (limit {block_pct:.0f}%). "
+            f"Current spend: {current_spend:,.0f}, new amount: {amount:,.0f}, "
+            f"budget: {total_budget:,.0f}."
+        )
+    if utilization_pct >= warn_pct:
+        return True, (
+            f"Budget WARNING: grant utilization will reach {utilization_pct:.1f}% "
+            f"(warn threshold {warn_pct:.0f}%). "
+            f"Current spend: {current_spend:,.0f}, new amount: {amount:,.0f}, "
+            f"budget: {total_budget:,.0f}."
+        )
+    return True, None
+
+
+def _next_invoice_number():
+    """Generate next invoice number in INV-YYYY-NNNN format."""
+    import datetime
+    year = datetime.datetime.now().year
+    prefix = f"INV-{year}-"
+    row = query_one(
+        "SELECT invoice_number FROM invoices WHERE invoice_number LIKE ? ORDER BY invoice_number DESC LIMIT 1",
+        (f"{prefix}%",),
+    )
+    if row and row["invoice_number"]:
+        try:
+            seq = int(row["invoice_number"].split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f"{prefix}{seq:04d}"
+
+
+@app.route("/finance/invoices")
+@login_required
+def finance_invoices_list():
+    """Invoice list page with filters."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+
+    # Filter params
+    status_filter = request.args.get("status", "all")
+    grant_filter = request.args.get("grant_id", "")
+    date_from = request.args.get("date_from", "")
+    date_to = request.args.get("date_to", "")
+
+    where_clauses = []
+    params = []
+
+    if status_filter and status_filter != "all":
+        if status_filter in ("pending", "partial", "paid", "void"):
+            where_clauses.append("derived_status = ?")
+            params.append(status_filter)
+
+    if grant_filter:
+        try:
+            where_clauses.append("inv.grant_id = ?")
+            params.append(int(grant_filter))
+        except (ValueError, TypeError):
+            pass
+
+    if date_from:
+        where_clauses.append("inv.issued_at >= ?")
+        params.append(date_from)
+    if date_to:
+        where_clauses.append("inv.issued_at <= ?")
+        params.append(date_to + "T23:59:59")
+
+    where_sql = ""
+    # Build the query with derived status
+    base_sql = """
+        SELECT
+          inv.id, inv.invoice_number, inv.amount_due, inv.status AS raw_status,
+          inv.issued_at, inv.notes, inv.description, inv.grant_id,
+          sr.request_no, sr.title AS request_title,
+          g.name AS grant_name, g.code AS grant_code,
+          COALESCE(p.paid, 0) AS amount_paid,
+          CASE
+            WHEN inv.status = 'void' THEN 'void'
+            WHEN COALESCE(p.paid, 0) = 0 THEN 'pending'
+            WHEN COALESCE(p.paid, 0) < inv.amount_due THEN 'partial'
+            ELSE 'paid'
+          END AS derived_status
+        FROM invoices inv
+        LEFT JOIN sample_requests sr ON sr.id = inv.request_id
+        LEFT JOIN grants g ON g.id = inv.grant_id
+        LEFT JOIN (
+          SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id
+        ) p ON p.invoice_id = inv.id
+    """
+
+    if where_clauses:
+        # Wrap to filter on derived_status
+        full_sql = f"SELECT * FROM ({base_sql}) AS sub WHERE {' AND '.join(where_clauses)} ORDER BY issued_at DESC LIMIT 200"
+    else:
+        full_sql = f"SELECT * FROM ({base_sql}) AS sub ORDER BY issued_at DESC LIMIT 200"
+
+    # SQLite doesn't support AS sub syntax; use a CTE instead
+    cte_sql = f"""
+        WITH sub AS ({base_sql})
+        SELECT * FROM sub
+        {"WHERE " + " AND ".join(where_clauses) if where_clauses else ""}
+        ORDER BY issued_at DESC
+        LIMIT 200
+    """
+
+    invoices = query_all(cte_sql, tuple(params))
+
+    # Grants for filter dropdown
+    grants_list = query_all("SELECT id, code, name FROM grants ORDER BY name")
+
+    return render_template(
+        "finance_invoices.html",
+        invoices=invoices,
+        grants_list=grants_list,
+        status_filter=status_filter,
+        grant_filter=grant_filter,
+        date_from=date_from,
+        date_to=date_to,
+        can_edit_finance=_user_can_edit_finance(user),
+    )
+
+
+@app.route("/finance/invoices/new", methods=["GET", "POST"])
+@login_required
+def finance_invoice_new():
+    """Create a new invoice."""
+    user = current_user()
+    if not _user_can_edit_finance(user):
+        abort(403)
+
+    grants_list = query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name")
+    requests_list = query_all(
+        "SELECT id, request_no, title FROM sample_requests WHERE sample_origin = 'external' ORDER BY created_at DESC LIMIT 100"
+    )
+
+    if request.method == "POST":
+        request_id = request.form.get("request_id", "").strip()
+        description = request.form.get("description", "").strip()
+        amount_str = request.form.get("amount_due", "0").strip()
+        grant_id_str = request.form.get("grant_id", "").strip()
+        notes = request.form.get("notes", "").strip()
+
+        try:
+            amount_due = float(amount_str)
+        except (ValueError, TypeError):
+            flash("Invalid amount.", "error")
+            return render_template(
+                "finance_invoice_form.html",
+                grants_list=grants_list,
+                requests_list=requests_list,
+                mode="new",
+            )
+
+        if amount_due <= 0:
+            flash("Amount must be positive.", "error")
+            return render_template(
+                "finance_invoice_form.html",
+                grants_list=grants_list,
+                requests_list=requests_list,
+                mode="new",
+            )
+
+        grant_id = int(grant_id_str) if grant_id_str else None
+        req_id = int(request_id) if request_id else None
+
+        # If no request selected, we still need a request_id for FK.
+        # Create a placeholder or require one.
+        if not req_id:
+            flash("Please select a sample request.", "error")
+            return render_template(
+                "finance_invoice_form.html",
+                grants_list=grants_list,
+                requests_list=requests_list,
+                mode="new",
+            )
+
+        # Budget check
+        if grant_id:
+            allowed, warning = check_budget(grant_id, amount_due)
+            if not allowed:
+                flash(warning, "error")
+                return render_template(
+                    "finance_invoice_form.html",
+                    grants_list=grants_list,
+                    requests_list=requests_list,
+                    mode="new",
+                )
+            if warning:
+                flash(warning, "warning")
+
+        invoice_number = _next_invoice_number()
+        inv_id = execute(
+            """INSERT INTO invoices
+               (request_id, project_id, amount_due, status, issued_at, due_at, notes,
+                invoice_number, description, created_by_user_id, grant_id)
+               VALUES (?, NULL, ?, 'pending', ?, NULL, ?, ?, ?, ?, ?)""",
+            (req_id, amount_due, now_iso(), notes, invoice_number, description, user["id"], grant_id),
+        )
+
+        log_action(user["id"], "invoice", inv_id, "invoice_created", {
+            "invoice_number": invoice_number, "amount_due": amount_due,
+            "request_id": req_id, "grant_id": grant_id,
+        })
+
+        # Notify requester
+        sr = query_one("SELECT requester_id, request_no FROM sample_requests WHERE id = ?", (req_id,))
+        if sr:
+            notify(
+                sr["requester_id"], "finance",
+                f"Invoice {invoice_number} created",
+                f"Amount: {amount_due:,.2f} for request {sr['request_no']}.",
+                href=url_for("finance_invoice_detail", invoice_id=inv_id),
+                source_type="invoice", source_id=inv_id,
+            )
+
+        flash(f"Invoice {invoice_number} created successfully.", "success")
+        return redirect(url_for("finance_invoice_detail", invoice_id=inv_id))
+
+    return render_template(
+        "finance_invoice_form.html",
+        grants_list=grants_list,
+        requests_list=requests_list,
+        mode="new",
+    )
+
+
+@app.route("/finance/invoices/<int:invoice_id>")
+@login_required
+def finance_invoice_detail(invoice_id):
+    """Invoice detail with payment timeline."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+
+    inv = query_one(
+        """SELECT inv.*, sr.request_no, sr.title AS request_title, sr.requester_id,
+                  g.name AS grant_name, g.code AS grant_code, g.total_budget AS grant_budget,
+                  u.name AS created_by_name
+           FROM invoices inv
+           LEFT JOIN sample_requests sr ON sr.id = inv.request_id
+           LEFT JOIN grants g ON g.id = inv.grant_id
+           LEFT JOIN users u ON u.id = inv.created_by_user_id
+           WHERE inv.id = ?""",
+        (invoice_id,),
+    )
+    if not inv:
+        abort(404)
+
+    payments_list = query_all(
+        """SELECT p.*, u.name AS recorded_by_name
+           FROM payments p
+           LEFT JOIN users u ON u.id = p.recorded_by_user_id
+           WHERE p.invoice_id = ?
+           ORDER BY p.paid_at DESC""",
+        (invoice_id,),
+    )
+
+    total_paid = sum(p["amount"] for p in payments_list)
+    remaining = max(0, inv["amount_due"] - total_paid)
+    derived_status = "void" if inv["status"] == "void" else (
+        "paid" if total_paid >= inv["amount_due"] and inv["amount_due"] > 0
+        else "partial" if total_paid > 0
+        else "pending"
+    )
+
+    # Budget utilization for the grant (if linked)
+    budget_util = None
+    if inv["grant_id"]:
+        grant_spend = query_one(
+            """SELECT COALESCE(SUM(p.amount), 0) AS s
+               FROM payments p JOIN invoices i ON i.id = p.invoice_id
+               WHERE i.grant_id = ?""",
+            (inv["grant_id"],),
+        )
+        exp_spend = query_one(
+            "SELECT COALESCE(SUM(amount), 0) AS s FROM grant_expenses WHERE grant_id = ?",
+            (inv["grant_id"],),
+        )
+        total_spend = (grant_spend["s"] if grant_spend else 0) + (exp_spend["s"] if exp_spend else 0)
+        if inv["grant_budget"] and inv["grant_budget"] > 0:
+            budget_util = {
+                "spent": total_spend,
+                "budget": inv["grant_budget"],
+                "pct": (total_spend / inv["grant_budget"]) * 100,
+            }
+
+    return render_template(
+        "finance_invoice_detail.html",
+        inv=inv,
+        payments=payments_list,
+        total_paid=total_paid,
+        remaining=remaining,
+        derived_status=derived_status,
+        budget_util=budget_util,
+        can_edit_finance=_user_can_edit_finance(user),
+    )
+
+
+@app.route("/finance/invoices/<int:invoice_id>/pay", methods=["POST"])
+@login_required
+def finance_invoice_pay(invoice_id):
+    """Record a payment against an invoice."""
+    user = current_user()
+    if not _user_can_edit_finance(user):
+        abort(403)
+
+    inv = query_one("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+    if not inv:
+        abort(404)
+    if inv["status"] == "void":
+        flash("Cannot record payment on a voided invoice.", "error")
+        return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+
+    amount_str = request.form.get("amount", "0").strip()
+    method = request.form.get("method", "bank_transfer").strip()
+    receipt_number = request.form.get("receipt_number", "").strip()
+    notes = request.form.get("notes", "").strip()
+
+    try:
+        amount = float(amount_str)
+    except (ValueError, TypeError):
+        flash("Invalid payment amount.", "error")
+        return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+
+    if amount <= 0:
+        flash("Payment amount must be positive.", "error")
+        return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+
+    # Budget check if grant linked
+    if inv["grant_id"]:
+        allowed, warning = check_budget(inv["grant_id"], amount)
+        if not allowed:
+            flash(warning, "error")
+            return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+        if warning:
+            flash(warning, "warning")
+
+    pay_id = execute(
+        """INSERT INTO payments (invoice_id, amount, method, receipt_number, paid_at, recorded_by_user_id, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (invoice_id, amount, method, receipt_number, now_iso(), user["id"], notes),
+    )
+
+    # Check if fully paid — update invoice status
+    total_paid_row = query_one(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id = ?",
+        (invoice_id,),
+    )
+    total_paid = total_paid_row["s"] if total_paid_row else 0
+    new_status = "paid" if total_paid >= inv["amount_due"] else "partial" if total_paid > 0 else "pending"
+    execute("UPDATE invoices SET status = ? WHERE id = ?", (new_status, invoice_id))
+
+    log_action(user["id"], "payment", pay_id, "payment_recorded", {
+        "invoice_id": invoice_id, "amount": amount, "method": method,
+        "receipt_number": receipt_number, "new_invoice_status": new_status,
+    })
+
+    # Notify requester
+    sr = query_one(
+        "SELECT sr.requester_id, sr.request_no FROM sample_requests sr JOIN invoices inv ON inv.request_id = sr.id WHERE inv.id = ?",
+        (invoice_id,),
+    )
+    if sr:
+        notify(
+            sr["requester_id"], "finance",
+            f"Payment of {amount:,.2f} recorded",
+            f"Against invoice {inv['invoice_number'] or invoice_id} for request {sr['request_no']}. Status: {new_status}.",
+            href=url_for("finance_invoice_detail", invoice_id=invoice_id),
+            source_type="payment", source_id=pay_id,
+        )
+
+    flash(f"Payment of {amount:,.2f} recorded. Invoice is now {new_status}.", "success")
+    return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+
+
+@app.route("/finance/invoices/<int:invoice_id>/void", methods=["POST"])
+@login_required
+def finance_invoice_void(invoice_id):
+    """Void an invoice. Only finance_admin/owner."""
+    user = current_user()
+    if not _user_can_edit_finance(user):
+        abort(403)
+
+    inv = query_one("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+    if not inv:
+        abort(404)
+
+    execute("UPDATE invoices SET status = 'void' WHERE id = ?", (invoice_id,))
+    log_action(user["id"], "invoice", invoice_id, "invoice_voided", {
+        "invoice_number": inv["invoice_number"],
+    })
+
+    # Notify requester
+    sr = query_one(
+        "SELECT sr.requester_id, sr.request_no FROM sample_requests sr JOIN invoices inv ON inv.request_id = sr.id WHERE inv.id = ?",
+        (invoice_id,),
+    )
+    if sr:
+        notify(
+            sr["requester_id"], "finance",
+            f"Invoice {inv['invoice_number'] or invoice_id} voided",
+            f"For request {sr['request_no']}.",
+            href=url_for("finance_invoice_detail", invoice_id=invoice_id),
+            source_type="invoice", source_id=invoice_id,
+        )
+
+    flash("Invoice voided.", "success")
+    return redirect(url_for("finance_invoice_detail", invoice_id=invoice_id))
+
+
+@app.route("/finance/spend")
+@login_required
+def finance_spend():
+    """Unified spend view: combine invoice payments + grant_expenses."""
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+
+    grant_filter = request.args.get("grant_id", "")
+
+    grant_where = ""
+    params_payments = []
+    params_expenses = []
+
+    if grant_filter:
+        try:
+            gid = int(grant_filter)
+            grant_where_payments = "WHERE inv.grant_id = ?"
+            grant_where_expenses = "WHERE ge.grant_id = ?"
+            params_payments = [gid]
+            params_expenses = [gid]
+        except (ValueError, TypeError):
+            grant_where_payments = ""
+            grant_where_expenses = ""
+    else:
+        grant_where_payments = ""
+        grant_where_expenses = ""
+
+    # Invoice payments
+    payment_rows = query_all(
+        f"""SELECT
+              p.id, p.amount, p.method, p.receipt_number, p.paid_at AS event_date,
+              p.notes, 'payment' AS entry_type,
+              inv.invoice_number, inv.grant_id,
+              g.name AS grant_name, g.code AS grant_code,
+              sr.request_no, u.name AS recorded_by_name
+            FROM payments p
+            JOIN invoices inv ON inv.id = p.invoice_id
+            LEFT JOIN grants g ON g.id = inv.grant_id
+            LEFT JOIN sample_requests sr ON sr.id = inv.request_id
+            LEFT JOIN users u ON u.id = p.recorded_by_user_id
+            {grant_where_payments}
+            ORDER BY p.paid_at DESC
+            LIMIT 300""",
+        tuple(params_payments),
+    )
+
+    # Grant expenses
+    expense_rows = query_all(
+        f"""SELECT
+              ge.id, ge.amount, ge.expense_type AS method, ge.receipt_number,
+              ge.recorded_at AS event_date, ge.notes, 'expense' AS entry_type,
+              '' AS invoice_number, ge.grant_id,
+              g.name AS grant_name, g.code AS grant_code,
+              ge.description AS request_no, u.name AS recorded_by_name
+            FROM grant_expenses ge
+            LEFT JOIN grants g ON g.id = ge.grant_id
+            LEFT JOIN users u ON u.id = ge.recorded_by_user_id
+            {grant_where_expenses}
+            ORDER BY ge.recorded_at DESC
+            LIMIT 300""",
+        tuple(params_expenses),
+    )
+
+    # Merge and sort by date descending
+    all_entries = list(payment_rows) + list(expense_rows)
+    all_entries.sort(key=lambda r: r["event_date"] or "", reverse=True)
+
+    grants_list = query_all("SELECT id, code, name FROM grants ORDER BY name")
+
+    return render_template(
+        "finance_spend.html",
+        entries=all_entries[:300],
+        grants_list=grants_list,
+        grant_filter=grant_filter,
+        can_edit_finance=_user_can_edit_finance(user),
+    )
 
 
 @app.route("/finance/grants")
@@ -7425,6 +8294,267 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ── Google OAuth routes ─────────────────────────────────────────
+@app.route("/auth/google")
+def auth_google():
+    """Redirect to Google OAuth consent screen."""
+    if not _oauth:
+        flash("Google sign-in is not configured on this server.", "error")
+        return redirect(url_for("login"))
+    redirect_uri = url_for("auth_google_callback", _external=True)
+    return _oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/google/callback")
+def auth_google_callback():
+    """Handle Google OAuth callback — match by email to existing user."""
+    if not _oauth:
+        abort(404)
+    try:
+        token = _oauth.google.authorize_access_token()
+        userinfo = token.get("userinfo") or _oauth.google.userinfo()
+    except Exception:
+        flash("Google sign-in failed. Please try again.", "error")
+        return redirect(url_for("login"))
+
+    email = (userinfo.get("email") or "").strip().lower()
+    if not email:
+        flash("Could not retrieve email from Google.", "error")
+        return redirect(url_for("login"))
+
+    # Domain restriction
+    if GOOGLE_ALLOWED_DOMAIN:
+        domain = email.split("@")[-1] if "@" in email else ""
+        if domain != GOOGLE_ALLOWED_DOMAIN:
+            flash(f"Only @{GOOGLE_ALLOWED_DOMAIN} accounts are allowed.", "error")
+            return redirect(url_for("login"))
+
+    user = query_one("SELECT * FROM users WHERE email = ? AND active = 1", (email,))
+    if not user:
+        flash("No PRISM account found for this email. Contact your departmental secretary to get access.", "error")
+        return redirect(url_for("login"))
+
+    # Link google_id if not yet linked
+    google_id = userinfo.get("sub", "")
+    avatar_url = userinfo.get("picture", "")
+    if google_id and not row_value(user, "google_id", ""):
+        execute("UPDATE users SET google_id = ?, avatar_url = ? WHERE id = ?",
+                (google_id, avatar_url, user["id"]))
+    elif avatar_url:
+        execute("UPDATE users SET avatar_url = ? WHERE id = ?", (avatar_url, user["id"]))
+
+    session.clear()
+    session["user_id"] = user["id"]
+    session.permanent = True
+    flash(f"Signed in as {user['name']} via Google.", "success")
+    return redirect(url_for("index"))
+
+
+# ── System notification helper ──────────────────────────────────
+def notify(user_id: int, category: str, title: str, body: str = "",
+           href: str = "", source_type: str = "", source_id: int | None = None):
+    """Create a system notification for a user."""
+    execute(
+        "INSERT INTO system_notifications (user_id, category, title, body, href, source_type, source_id, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, category, title, body, href, source_type, source_id, now_iso()),
+    )
+
+
+def unread_system_notification_count(user) -> int:
+    """Count of unread system notifications for a user."""
+    row = query_one(
+        "SELECT COUNT(*) AS c FROM system_notifications WHERE user_id = ? AND is_read = 0",
+        (user["id"],),
+    )
+    return row["c"] if row else 0
+
+
+# ── Todo list routes ──────────────────────────────────────────────
+
+def _can_assign_todo_to(assigner, target_user_id: int) -> bool:
+    """Check if assigner can assign a todo to target_user_id."""
+    if not assigner:
+        return False
+    role = assigner["role"]
+    # Dean / owner can assign to anyone
+    if is_owner(assigner) or role in ("super_admin", "site_admin"):
+        return True
+    # instrument_admin can assign to users on their instruments
+    if role == "instrument_admin":
+        managed = {r["user_id"] for r in query_all(
+            "SELECT user_id FROM instrument_operators WHERE instrument_id IN (SELECT instrument_id FROM instrument_admins WHERE user_id = ?)",
+            (assigner["id"],),
+        )}
+        managed |= {r["user_id"] for r in query_all(
+            "SELECT user_id FROM instrument_requesters WHERE instrument_id IN (SELECT instrument_id FROM instrument_admins WHERE user_id = ?)",
+            (assigner["id"],),
+        )}
+        return target_user_id in managed
+    return False
+
+
+@app.route("/todos", methods=["GET"])
+@login_required
+def todos_page():
+    """User's todo list: assigned to them + created by them."""
+    user = current_user()
+    my_todos = query_all(
+        """SELECT t.*, u.name AS assigned_by_name
+           FROM user_todos t
+           LEFT JOIN users u ON u.id = t.assigned_by_user_id
+           WHERE t.user_id = ? ORDER BY
+             CASE t.status WHEN 'open' THEN 0 ELSE 1 END,
+             CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+             t.due_date ASC NULLS LAST, t.created_at DESC""",
+        (user["id"],),
+    )
+    assigned_by_me = query_all(
+        """SELECT t.*, u.name AS assignee_name
+           FROM user_todos t
+           LEFT JOIN users u ON u.id = t.user_id
+           WHERE t.assigned_by_user_id = ? AND t.user_id != ? ORDER BY
+             CASE t.status WHEN 'open' THEN 0 ELSE 1 END,
+             t.created_at DESC""",
+        (user["id"], user["id"]),
+    )
+    # Users this person can assign to
+    can_assign = is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")
+    assignable_users = []
+    if can_assign:
+        assignable_users = query_all(
+            "SELECT id, name, email FROM users WHERE active = 1 AND invite_status = 'active' ORDER BY name"
+        )
+    return render_template(
+        "todos.html",
+        my_todos=my_todos,
+        assigned_by_me=assigned_by_me,
+        can_assign=can_assign,
+        assignable_users=assignable_users,
+    )
+
+
+@app.route("/todos/new", methods=["POST"])
+@login_required
+def todo_new():
+    """Create a new todo item."""
+    user = current_user()
+    title = request.form.get("title", "").strip()
+    if not title:
+        flash("Title is required.", "error")
+        return redirect(url_for("todos_page"))
+    body = request.form.get("body", "").strip()
+    priority = request.form.get("priority", "normal").strip()
+    if priority not in ("low", "normal", "high", "urgent"):
+        priority = "normal"
+    due_date = request.form.get("due_date", "").strip() or None
+    assign_to = request.form.get("user_id", "").strip()
+    if assign_to:
+        target_id = int(assign_to)
+        if target_id != user["id"] and not _can_assign_todo_to(user, target_id):
+            flash("You cannot assign tasks to that user.", "error")
+            return redirect(url_for("todos_page"))
+    else:
+        target_id = user["id"]
+    execute(
+        "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (target_id, user["id"], title, body, priority, due_date, now_iso()),
+    )
+    # Notify assignee if it's someone else
+    if target_id != user["id"]:
+        try:
+            notify(target_id, "request", f"New task: {title}",
+                   f"Assigned by {user['name']}", url_for("todos_page"),
+                   "user_todo", None)
+        except Exception:
+            pass
+    flash("Task created.", "success")
+    return redirect(url_for("todos_page"))
+
+
+@app.route("/todos/<int:todo_id>/complete", methods=["POST"])
+@login_required
+def todo_complete(todo_id: int):
+    """Mark a todo as completed."""
+    user = current_user()
+    todo = query_one("SELECT * FROM user_todos WHERE id = ?", (todo_id,))
+    if not todo or (todo["user_id"] != user["id"] and todo["assigned_by_user_id"] != user["id"]):
+        abort(403)
+    execute(
+        "UPDATE user_todos SET status = 'completed', completed_at = ? WHERE id = ?",
+        (now_iso(), todo_id),
+    )
+    flash("Task completed.", "success")
+    return redirect(url_for("todos_page"))
+
+
+@app.route("/todos/<int:todo_id>/delete", methods=["POST"])
+@login_required
+def todo_delete(todo_id: int):
+    """Delete a todo item."""
+    user = current_user()
+    todo = query_one("SELECT * FROM user_todos WHERE id = ?", (todo_id,))
+    if not todo or (todo["user_id"] != user["id"] and todo["assigned_by_user_id"] != user["id"]):
+        abort(403)
+    execute("DELETE FROM user_todos WHERE id = ?", (todo_id,))
+    flash("Task deleted.", "success")
+    return redirect(url_for("todos_page"))
+
+
+# ── External email queue helper ─────────────────────────────────
+def queue_external_email(to: str, subject: str, body_html: str):
+    """Queue an email for SendGrid delivery. Secretary use only."""
+    execute(
+        "INSERT INTO email_queue (to_address, subject, body_html, created_at) VALUES (?, ?, ?, ?)",
+        (to, subject, body_html, now_iso()),
+    )
+
+
+def flush_email_queue() -> int:
+    """Send queued emails via SendGrid. Returns count sent. Call from cron or on-demand."""
+    if not SENDGRID_API_KEY:
+        return 0
+    today = date.today().isoformat()
+    sent_today = query_one(
+        "SELECT COUNT(*) AS c FROM email_queue WHERE status = 'sent' AND sent_at LIKE ?",
+        (f"{today}%",),
+    )
+    remaining = SENDGRID_DAILY_LIMIT - (sent_today["c"] if sent_today else 0)
+    if remaining <= 0:
+        return 0
+    queued = query_all(
+        "SELECT * FROM email_queue WHERE status = 'queued' ORDER BY created_at LIMIT ?",
+        (remaining,),
+    )
+    sent = 0
+    for msg in queued:
+        try:
+            import urllib.request
+            payload = json.dumps({
+                "personalizations": [{"to": [{"email": msg["to_address"]}]}],
+                "from": {"email": SENDGRID_FROM},
+                "subject": msg["subject"],
+                "content": [{"type": "text/html", "value": msg["body_html"]}],
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.sendgrid.com/v3/mail/send",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {SENDGRID_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+            execute("UPDATE email_queue SET status = 'sent', sent_at = ? WHERE id = ?",
+                    (now_iso(), msg["id"]))
+            sent += 1
+        except Exception as exc:
+            execute("UPDATE email_queue SET attempts = attempts + 1 WHERE id = ?", (msg["id"],))
+            app.logger.warning(f"SendGrid send failed for queue#{msg['id']}: {exc}")
+    return sent
+
+
 @app.route("/instruments", methods=["GET", "POST"])
 @login_required
 def instruments():
@@ -7723,6 +8853,13 @@ def instrument_detail(instrument_id: int):
             if not (is_owner(user) or user["role"] == "super_admin"):
                 abort(403)
             db = get_db()
+            # Preserve notify_submitter settings before deleting rows
+            old_notify = {}
+            for row in db.execute(
+                "SELECT step_order, approver_role, notify_submitter FROM instrument_approval_config WHERE instrument_id = ?",
+                (instrument_id,),
+            ).fetchall():
+                old_notify[(row["step_order"], row["approver_role"])] = row["notify_submitter"]
             db.execute("DELETE FROM instrument_approval_config WHERE instrument_id = ?", (instrument_id,))
             step_order = 1
             valid_roles = {"finance", "professor", "operator"}
@@ -7732,9 +8869,10 @@ def instrument_detail(instrument_id: int):
                     continue
                 user_id_raw = request.form.get(f"step_user_{idx}", "").strip()
                 approver_user_id = int(user_id_raw) if user_id_raw else None
+                notify = old_notify.get((step_order, role), 0)
                 db.execute(
-                    "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id) VALUES (?, ?, ?, ?)",
-                    (instrument_id, step_order, role, approver_user_id),
+                    "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id, notify_submitter) VALUES (?, ?, ?, ?, ?)",
+                    (instrument_id, step_order, role, approver_user_id, notify),
                 )
                 step_order += 1
             db.commit()
@@ -8010,16 +9148,25 @@ def instrument_form_control(instrument_id: int):
             flash("Custom fields saved.", "success")
             return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
 
-        if action == "save_approval_notify":
+        if action == "save_approval_sequence":
+            db.execute("DELETE FROM instrument_approval_config WHERE instrument_id = ?", (instrument_id,))
+            valid_roles = {"finance", "professor", "operator"}
+            step_order = 1
             for idx in range(1, 7):
+                role = request.form.get(f"step_role_{idx}", "").strip()
+                if not role or role not in valid_roles:
+                    continue
+                user_id_raw = request.form.get(f"step_user_{idx}", "").strip()
+                approver_user_id = int(user_id_raw) if user_id_raw else None
                 notify = 1 if request.form.get(f"notify_submitter_{idx}") else 0
                 db.execute(
-                    "UPDATE instrument_approval_config SET notify_submitter = ? WHERE instrument_id = ? AND step_order = ?",
-                    (notify, instrument_id, idx),
+                    "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id, notify_submitter) VALUES (?, ?, ?, ?, ?)",
+                    (instrument_id, step_order, role, approver_user_id, notify),
                 )
+                step_order += 1
             db.commit()
-            log_action(user["id"], "instrument", instrument_id, "approval_notify_updated", {})
-            flash("Notification settings saved.", "success")
+            log_action(user["id"], "instrument", instrument_id, "approval_sequence_updated", {"step_count": step_order - 1})
+            flash("Approval sequence saved.", "success")
             return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
 
         if action == "save_pricing":
@@ -8307,6 +9454,20 @@ def new_request():
                 "accepting_requests": bool(instrument["accepting_requests"]),
             },
         )
+        # ── Workflow notification: new request submitted ──
+        try:
+            ops = query_all(
+                "SELECT user_id FROM instrument_operators WHERE instrument_id = ?",
+                (instrument_id,),
+            )
+            _req_url = url_for("request_detail", request_id=request_id)
+            for op in ops:
+                notify(op["user_id"], "request",
+                       f"New request: {title}",
+                       f"Request {request_no} submitted for {instrument['name']}",
+                       _req_url, "sample_request", request_id)
+        except Exception:
+            pass  # notification failure must not block request creation
         if instrument["accepting_requests"]:
             flash(f"Request {request_no} submitted for {requester_row['name']}. Sample number {sample_ref} and printable slip generated.", "success")
         else:
@@ -8633,6 +9794,15 @@ def request_detail(request_id: int):
                     {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
                 )
             write_request_metadata_snapshot(request_id)
+            # ── Workflow notification: status changed ──
+            try:
+                notify(sample_request["requester_id"], "request",
+                       f"Request {sample_request['request_no']} updated",
+                       f"Status changed to {new_status}",
+                       url_for("request_detail", request_id=request_id),
+                       "sample_request", request_id)
+            except Exception:
+                pass
             flash("Status updated.", "success")
             return redirect(url_for("request_detail", request_id=request_id))
 
@@ -8672,6 +9842,15 @@ def request_detail(request_id: int):
                 except ValueError as exc:
                     flash(f"Approved, but file upload failed: {exc}", "error")
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_approved", {"step_id": step_id})
+            # ── Workflow notification: approval step approved ──
+            try:
+                notify(sample_request["requester_id"], "request",
+                       f"Approval update on {sample_request['request_no']}",
+                       f"Step {step['approver_role'].replace('_', ' ').title()} approved",
+                       url_for("request_detail", request_id=request_id),
+                       "sample_request", request_id)
+            except Exception:
+                pass
             # Phase 2 commit 5 — notify submitter via inbox if configured
             notify_cfg = query_one(
                 "SELECT notify_submitter FROM instrument_approval_config WHERE instrument_id = ? AND step_order = ?",
@@ -8725,6 +9904,15 @@ def request_detail(request_id: int):
             assert_status_transition(sample_request["status"], "rejected")
             execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
             log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_rejected", {"step_id": step_id})
+            # ── Workflow notification: approval step rejected ──
+            try:
+                notify(sample_request["requester_id"], "request",
+                       f"Approval update on {sample_request['request_no']}",
+                       f"Step {step['approver_role'].replace('_', ' ').title()} rejected",
+                       url_for("request_detail", request_id=request_id),
+                       "sample_request", request_id)
+            except Exception:
+                pass
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return jsonify({
                     "ok": True,
@@ -10956,9 +12144,18 @@ def user_profile(user_id: int):
                 viewer["id"], "user", user_id, "password_reset_by_admin",
                 {"email": target_user["email"]},
             )
+            # Store in session so the template can render the PIN card
+            # and the .eml download route can build the file. Cleared
+            # on next page load or when the .eml is downloaded.
+            session["_reset_pw"] = {
+                "user_id": user_id,
+                "email": target_user["email"],
+                "name": target_user["name"],
+                "temp_password": temp_password,
+            }
             flash(
-                f"Temporary password for {target_user['email']}: {temp_password} — "
-                f"share securely; they will be required to change it on next login.",
+                f"Temporary password issued for {target_user['email']}. "
+                f"See the PIN card below to copy or email it.",
                 "success",
             )
             return redirect(url_for("user_profile", user_id=user_id))
@@ -11261,9 +12458,17 @@ def user_profile(user_id: int):
         if viewer["role"] == "super_admin":
             base_roles += ["site_admin", "super_admin"]
         role_choices = [(r, role_display_name(r)) for r in base_roles]
+    # Pop the one-time reset PIN info from the session so it renders
+    # exactly once on this page load.  Keep it in session until GET
+    # so the redirect after POST still has it.
+    reset_pw_info = session.pop("_reset_pw", None) if request.method == "GET" else None
+    # Only show if it matches this user — avoids leaking across tabs.
+    if reset_pw_info and reset_pw_info.get("user_id") != user_id:
+        reset_pw_info = None
     return render_template(
         "user_detail.html",
         target_user=target_user,
+        reset_pw_info=reset_pw_info,
         rows=rows,
         handled_rows=handled_rows,
         submitted_summary=submitted_summary,
@@ -11308,6 +12513,47 @@ def user_profile(user_id: int):
             int(g["id"]): instrument_group_member_ids(int(g["id"]))
             for g in instrument_groups_all()
         },
+    )
+
+
+@app.route("/users/<int:user_id>/reset-password.eml")
+@login_required
+def download_reset_password_eml(user_id: int):
+    """Serve a one-time RFC 2822 .eml file the admin can forward to the
+    user whose password was just reset.  The temp password is passed via
+    query string (the link is generated server-side and shown only in
+    the PIN card on the user_detail page, so it is not bookmarkable in
+    practice)."""
+    viewer = g.user
+    if not can_manage_members(viewer):
+        abort(403)
+    target_user = query_one("SELECT id, name, email FROM users WHERE id = ?", (user_id,))
+    if target_user is None:
+        abort(404)
+    temp_pw = request.args.get("tp", "")
+    if not temp_pw:
+        abort(400)
+    import io
+    from email.message import EmailMessage
+    msg = EmailMessage()
+    msg["To"] = target_user["email"]
+    msg["Subject"] = "Your PRISM Account — Temporary Password"
+    msg["From"] = "PRISM Admin <noreply@prism.local>"
+    msg.set_content(
+        f"Hello {target_user['name']},\n\n"
+        f"Your PRISM account password has been reset by an administrator.\n\n"
+        f"Your temporary password is:  {temp_pw}\n\n"
+        f"Please log in and change your password immediately.\n\n"
+        f"— PRISM System"
+    )
+    buf = io.BytesIO(msg.as_bytes())
+    buf.seek(0)
+    safe_name = target_user["email"].split("@")[0]
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=f"password-reset-{safe_name}.eml",
+        mimetype="message/rfc822",
     )
 
 

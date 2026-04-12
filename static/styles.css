@@ -3448,14 +3448,57 @@ code {
   grid-auto-flow: row dense;
 }
 
+/* ── v2.1.0 Apple-style tile discipline ──────────────────────
+   Every tile is a fixed-size card that snaps into a grid. Content
+   that outgrows the tile scrolls INSIDE it — nothing pushes other
+   tiles around, nothing reflows the grid, nothing breaks alignment.
+   Headings stay pinned at the top; the scrollable body fills the
+   remaining space. This is the iOS widget contract: tiles are
+   containers, content lives inside them, the grid is sacred. ──── */
 .tile {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 0.75rem;
+  gap: 0;
+  overflow: hidden;
 }
 
-.tile > .section-head { flex: 0 0 auto; margin-bottom: 0.25rem; }
+.tile > .section-head,
+.tile > h2,
+.tile > h3 {
+  flex: 0 0 auto;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
+}
+
+/* Scrollable tile body — the area below the heading. Any tile
+   whose content can grow (lists, tables, feeds, forms) gets an
+   internal scroll. The tile itself never grows past its grid slot. */
+.tile-scroll-body {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* For tiles that DON'T use .tile-scroll-body explicitly, cap
+   the tile height so content doesn't push neighbors. The tile
+   defaults to auto-height but maxes out at a reasonable bound
+   so large data doesn't blow out the grid. Specific tile classes
+   can override this for tiles that genuinely need to be taller
+   (e.g. the request event feed). */
+.tile { max-height: 600px; }
+.tile-request-header,
+.tile-request-events,
+.tile-request-explainer { max-height: none; }
+
+/* Override for dashboard tiles — smaller, snappier */
+.dashboard-tiles > .tile { max-height: 440px; }
+.dashboard-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
 
 .tile-lead {
   margin: 0 0 0.25rem 0;

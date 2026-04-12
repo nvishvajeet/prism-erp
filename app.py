@@ -8134,6 +8134,26 @@ def docs():
 
     # Simple markdown-to-HTML (headings, bold, code blocks, lists, tables, links)
     def md_to_html(md):
+        import html as html_mod
+
+        def esc(text):
+            """Escape HTML entities to prevent XSS."""
+            return html_mod.escape(str(text))
+
+        def inline_fmt(text):
+            """Apply inline markdown formatting to already-escaped text."""
+            text = esc(text)
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+            text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+            # Links: only allow http/https/mailto, not javascript:
+            def safe_link(m):
+                label, href = m.group(1), m.group(2)
+                if href.lower().startswith(("http://", "https://", "mailto:", "/", "#")):
+                    return f'<a href="{href}">{label}</a>'
+                return f"{label} ({href})"
+            text = re.sub(r"\[(.+?)\]\((.+?)\)", safe_link, text)
+            return text
+
         lines = md.split("\n")
         html_parts = []
         in_code = False
@@ -8146,13 +8166,12 @@ def docs():
                     html_parts.append("</code></pre>")
                     in_code = False
                 else:
-                    lang = line.strip()[3:].strip()
+                    lang = esc(line.strip()[3:].strip())
                     html_parts.append(f'<pre><code class="lang-{lang}">')
                     in_code = True
                 continue
             if in_code:
-                import html as html_mod
-                html_parts.append(html_mod.escape(line))
+                html_parts.append(esc(line))
                 continue
             # Close table/list if needed
             if in_table and not line.strip().startswith("|"):
@@ -8168,7 +8187,7 @@ def docs():
             hm = re.match(r"^(#{1,6})\s+(.*)", line)
             if hm:
                 level = len(hm.group(1))
-                text = hm.group(2).strip()
+                text = inline_fmt(hm.group(2).strip())
                 html_parts.append(f"<h{level}>{text}</h{level}>")
                 continue
             # Tables
@@ -8179,13 +8198,13 @@ def docs():
                 if not in_table:
                     html_parts.append('<table class="doc-table"><thead><tr>')
                     for c in cells:
-                        html_parts.append(f"<th>{c}</th>")
+                        html_parts.append(f"<th>{esc(c)}</th>")
                     html_parts.append("</tr></thead><tbody>")
                     in_table = True
                 else:
                     html_parts.append("<tr>")
                     for c in cells:
-                        html_parts.append(f"<td>{c}</td>")
+                        html_parts.append(f"<td>{esc(c)}</td>")
                     html_parts.append("</tr>")
                 continue
             # Lists
@@ -8194,17 +8213,13 @@ def docs():
                 if not in_list:
                     html_parts.append("<ul>")
                     in_list = True
-                item_text = lm.group(1)
+                item_text = esc(lm.group(1))
                 # Checkboxes
                 item_text = item_text.replace("[x]", "&#9745;").replace("[ ]", "&#9744;")
                 html_parts.append(f"<li>{item_text}</li>")
                 continue
-            # Paragraph — apply inline formatting
-            text = line
-            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-            text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-            text = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
-            html_parts.append(f"<p>{text}</p>")
+            # Paragraph — escape then apply inline formatting
+            html_parts.append(f"<p>{inline_fmt(line)}</p>")
         if in_table:
             html_parts.append("</tbody></table>")
         if in_list:

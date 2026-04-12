@@ -1887,6 +1887,8 @@ def can_view_user_profile(viewer: sqlite3.Row, target_user: sqlite3.Row) -> bool
           SELECT user_id, instrument_id FROM instrument_operators
           UNION ALL
           SELECT user_id, instrument_id FROM instrument_faculty_admins
+          UNION ALL
+          SELECT user_id, instrument_id FROM instrument_requesters
         ) assignments
         WHERE assignments.user_id = ?
           AND assignments.instrument_id IN ({placeholders})
@@ -3225,9 +3227,11 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
             SELECT instrument_id FROM instrument_operators WHERE user_id = ?
             UNION
             SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?
+            UNION
+            SELECT instrument_id FROM instrument_requesters WHERE user_id = ?
             ORDER BY instrument_id
             """,
-            (user_id, user_id, user_id),
+            (user_id, user_id, user_id, user_id),
         )
         result = [row["instrument_id"] for row in rows]
 
@@ -7082,6 +7086,17 @@ def instrument_detail(instrument_id: int):
         f"SELECT id, name FROM users WHERE id IN ({','.join('?' for _ in selected_faculty_ids)}) ORDER BY name",
         tuple(sorted(selected_faculty_ids)),
     ) if selected_faculty_ids else []
+    # v2.2.0 — subscribed requesters
+    selected_requester_ids = {
+        row["user_id"] for row in query_all(
+            "SELECT user_id FROM instrument_requesters WHERE instrument_id = ?",
+            (instrument_id,),
+        )
+    }
+    selected_requester_rows = query_all(
+        f"SELECT id, name FROM users WHERE id IN ({','.join('?' for _ in selected_requester_ids)}) ORDER BY name",
+        tuple(sorted(selected_requester_ids)),
+    ) if selected_requester_ids else []
     instrument_logs = query_all(
         "SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id WHERE entity_type = 'instrument' AND entity_id = ? ORDER BY al.id",
         (instrument_id,),
@@ -7134,6 +7149,7 @@ def instrument_detail(instrument_id: int):
         selected_faculty_ids=selected_faculty_ids,
         selected_operator_rows=selected_operator_rows,
         selected_faculty_rows=selected_faculty_rows,
+        selected_requester_rows=selected_requester_rows,
         instrument_timeline_entries=instrument_timeline_entries(instrument, instrument_logs),
         intake_mode=instrument_intake_mode(instrument),
         intake_mode_label=intake_mode_label,

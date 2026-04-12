@@ -209,6 +209,16 @@
         <p class="hint" data-vis="{{ V }}">None assigned</p>
         {% endif %}
       </div>
+      {% if selected_requester_rows %}
+      <div class="team-col" data-vis="{{ V }}">
+        <h3 class="section-kicker" data-vis="{{ V }}">Subscribers</h3>
+        <div class="person-chip-stack" data-vis="{{ V }}">
+          {% for p in selected_requester_rows %}
+          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id'])) }}
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
     </div>
     {% if can_edit %}
     <p class="tile-footnote" data-vis="{{ V }}">Edit assignments from the <a class="text-link" href="#metaEditTile" data-vis="{{ V }}">Metadata</a> tile.</p>

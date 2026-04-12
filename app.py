@@ -103,6 +103,40 @@ app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
 # LAB_SCHEDULER_DEMO_MODE=0 in production to lock both down.
 DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "true", "yes"}
 
+# ── ERP Module System ────────────────────────────────────────────
+# Deployment-level toggle: which ERP modules are available.
+# Set PRISM_MODULES in .env as a comma-separated list.
+# Default: all modules enabled (backward compatible).
+# Example: PRISM_MODULES=instruments,finance,inbox
+#
+# Module registry:
+#   instruments  — Instrument Portal (list, detail, form control)
+#   finance      — Finance Portal (grants, budgets, invoices)
+#   inbox        — Email/Inbox System
+#   notifications — Notification System (notices, noticeboard)
+#   attendance   — Attendance Portal
+#   queue        — Queue/Schedule (request workflow)
+#   calendar     — Calendar views
+#   stats        — Statistics/Analytics
+#   admin        — Admin panels (users, dev panel)
+
+ALL_MODULES = {
+    "instruments", "finance", "inbox", "notifications",
+    "attendance", "queue", "calendar", "stats", "admin",
+}
+_modules_env = os.environ.get("PRISM_MODULES", "").strip()
+ENABLED_MODULES: set[str] = (
+    {m.strip().lower() for m in _modules_env.split(",") if m.strip()}
+    if _modules_env
+    else ALL_MODULES.copy()  # default: everything on
+)
+
+
+def module_enabled(name: str) -> bool:
+    """Check if an ERP module is enabled for this deployment."""
+    return name in ENABLED_MODULES
+
+
 csrf = CSRFProtect(app)
 
 
@@ -5417,6 +5451,7 @@ def inject_globals():
         "V": V,
         "current_user": user,
         "demo_mode": DEMO_MODE,
+        "module_enabled": module_enabled,
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,

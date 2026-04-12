@@ -95,7 +95,7 @@
     {% else %}
 
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
-    {% if access_profile_user.can_access_instruments %}
+    {% if module_enabled('instruments') and access_profile_user.can_access_instruments %}
     <div class="nav-dropdown" data-vis="{{ V }}">
       <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar'] %}nav-active{% endif %}"
          href="{{ url_for('instruments') }}"
@@ -118,22 +118,28 @@
       {% endif %}
     </div>
     {% endif %}
-    {% if can_access_schedule_user %}
+    {% if module_enabled('queue') and can_access_schedule_user %}
     <a class="{% if endpoint in ['schedule', 'schedule_actions', 'request_detail'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
     {% endif %}
-    {% if can_access_calendar_user %}
+    {% if module_enabled('calendar') and can_access_calendar_user %}
     <a class="{% if endpoint in ['calendar', 'calendar_events'] %}nav-active{% endif %}" href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
     {% endif %}
-    {% if can_access_stats_user %}
+    {% if module_enabled('stats') and can_access_stats_user %}
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
+    {% if module_enabled('notifications') %}
     <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    {% endif %}
+    {% if module_enabled('attendance') %}
     <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
+    {% endif %}
+    {% if module_enabled('inbox') %}
     <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
+    {% endif %}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>{% endif %}
+    {% if module_enabled('admin') and is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>{% endif %}
     <span class="nav-spacer"></span>
-    {% if access_profile_user.can_view_finance_stage or is_owner_user %}
+    {% if module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user) %}
     <a class="nav-button subtle {% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
     {% endif %}
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>

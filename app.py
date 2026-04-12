@@ -4780,21 +4780,21 @@ def _seed_demo_notices() -> None:
         admin_id = admin_id_row["id"] if admin_id_row else None
         demo_notices = [
             (
-                "site", None, "info",
-                "Welcome to the PRISM live demo",
-                "This is a public-facing demo of the PRISM Manager demo. Credentials are pre-filled by the /login?demo=1 shortcut. Try logging out and signing back in as operator@lab.local or requester@lab.local with the same password (12345) to see the per-role UI.",
-                admin_id,
-            ),
-            (
                 "role", "operator", "warning",
-                "FESEM preventive maintenance window next Monday",
-                "Scheduled downtime 09:00–13:00. Any queue items booked in that window will auto-shift to the next available slot. Operators: please flag any urgent samples that must run before maintenance.",
+                "FESEM preventive maintenance — Monday 09:00–13:00",
+                "Scheduled downtime for annual calibration. Queue items in that window will auto-shift. Operators: flag urgent samples that must run before maintenance by Friday EOD.",
                 admin_id,
             ),
             (
                 "site", None, "info",
-                "v1.6.0 — noticeboard + quick actions shipped",
-                "This tile itself is the new capability. Notices can be site-wide, role-scoped, or instrument-scoped. Admin UI for posting + dismissal persistence are on the v1.6.x patch stream. See CHANGELOG [1.6.0] for the full contract.",
+                "New grant application deadline: April 30",
+                "DST-SERB grant applications for the next funding cycle close April 30. PIs should submit instrument usage projections to the finance office by April 25. Contact finance@prism.local for the budget template.",
+                admin_id,
+            ),
+            (
+                "role", "requester", "info",
+                "Sample submission guidelines updated",
+                "Please ensure all external samples include a signed purchase order or payment receipt. Instruments now show payment instructions before the submission form — check the pricing section when selecting your instrument.",
                 admin_id,
             ),
         ]

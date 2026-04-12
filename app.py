@@ -9474,7 +9474,9 @@ def _dev_panel_progress() -> dict:
         t = t.strip()
         if not t.startswith("v"):
             continue
-        parts = t[1:].split(".")
+        # Strip suffixes like -stable, -stable-release, -alpha.1 for semver parsing
+        clean = t[1:].split("-")[0]
+        parts = clean.split(".")
         if len(parts) == 3 and all(p.isdigit() for p in parts):
             semver_tags.append(((int(parts[0]), int(parts[1]), int(parts[2])), t))
     semver_tags.sort()

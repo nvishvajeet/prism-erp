@@ -27,7 +27,7 @@ cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
 
 case "$REPO_ROOT" in
-  /Users/vishvajeetn/Documents/Scheduler/Main)
+  /path/to/prism)
     PLIST_SRC="ops/launchd/local.prism.laptop.plist"
     ;;
   /Users/vishwajeet/Scheduler/Main)

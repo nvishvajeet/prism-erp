@@ -67,7 +67,7 @@
       <div class="userbox" data-vis="{{ V }}">
         <div class="user-meta" data-vis="{{ V }}">
           <strong data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}" data-vis="{{ V }}">{{ current_user["name"] }}</a></strong>
-          <span class="badge badge-role" data-vis="{{ V }}">{{ current_user["role"].replace("_", " ").title() }}</span>
+          <span class="topbar-role-badge" data-vis="{{ V }}">{{ current_role_display }}</span>
         </div>
         <div class="user-controls" data-vis="{{ V }}">
           <button type="button" id="themeToggle" class="theme-toggle" data-vis="{{ V }}" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle light and dark mode">

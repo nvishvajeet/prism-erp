@@ -2,7 +2,7 @@
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  PRISM ERP — One-line installer (like Homebrew)             ║
 # ║                                                              ║
-# ║  curl -fsSL https://raw.githubusercontent.com/nvishvajeet/  ║
+# ║  curl -fsSL https://raw.githubusercontent.com/YOUR-ORG/     ║
 # ║    prism-erp/main/install.sh | bash                         ║
 # ║                                                              ║
 # ║  Or download and run:                                        ║
@@ -178,7 +178,7 @@ esac
 echo ""
 if [ "$EXISTING" -eq 0 ]; then
   say "Cloning PRISM ERP..."
-  REPO_URL="${PRISM_REPO_URL:-https://github.com/nvishvajeet/prism-erp.git}"
+  REPO_URL="${PRISM_REPO_URL:-https://github.com/YOUR-ORG/prism-erp.git}"
   git clone "$REPO_URL" "$INSTALL_DIR" 2>&1 | tail -3
 else
   say "Updating existing installation..."

@@ -3,7 +3,7 @@
 This file exists because I (the agent) can't push from the sandbox:
 `/opt/homebrew/bin/ssh` rejects `UseKeychain yes` in your
 `~/.ssh/config`, and neither key loaded in the agent
-(`vnagargoje@u-bordeaux.fr`, `vishvajeetn-Bitbucket`) is authorised on
+(`your-email@example.com`, `your-bitbucket-key`) is authorised on
 the Mac mini as `vishwajeet`. Everything you need is grouped by the
 machine you run it on.
 
@@ -24,9 +24,9 @@ Open `~/.ssh/config` and either:
 ```
 Host bitbucket.org
     HostName bitbucket.org
-    User vishvajeetn
+    User your-username
     PreferredAuthentications publickey
-    IdentityFile /Users/vishvajeetn/.ssh/vishvajeetn-Bitbucket
+    IdentityFile ~/.ssh/your-bitbucket-key
 ```
 
 **Option B — wrap them in `Match exec`** so Apple's ssh still uses
@@ -34,9 +34,9 @@ the keychain:
 ```
 Host bitbucket.org
     HostName bitbucket.org
-    User vishvajeetn
+    User your-username
     PreferredAuthentications publickey
-    IdentityFile /Users/vishvajeetn/.ssh/vishvajeetn-Bitbucket
+    IdentityFile ~/.ssh/your-bitbucket-key
 
 Match exec "test $(readlink -f $(which ssh)) = /usr/bin/ssh"
     UseKeychain yes

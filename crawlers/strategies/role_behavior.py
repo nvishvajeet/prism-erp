@@ -35,7 +35,7 @@ class RoleBehaviorStrategy(CrawlerStrategy):
         result = CrawlResult(name=self.name, aspect=self.aspect)
 
         # ---- super_admin: create user ------------------------------
-        with harness.logged_in("vishvajeet@prism.local"):
+        with harness.logged_in("owner@prism.local"):
             resp = harness.post(
                 "/admin/users",
                 data={

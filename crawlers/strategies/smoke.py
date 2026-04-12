@@ -27,7 +27,7 @@ CRITICAL_PATHS = [
 ]
 
 SMOKE_ROLES = [
-    ("vishvajeet@prism.local", "super_admin"),
+    ("owner@prism.local", "super_admin"),
     ("anika@prism.local", "operator"),
     ("user1@prism.local", "requester"),
 ]

@@ -141,7 +141,7 @@
   --tone-rejected-ink: #ffd8dd;
   --surface: #1a2230;
   --surface-alt: #202a35;
-  --lifecycle-ok: #3d8b6a;
+  --lifecycle-ok: #2d7554;
   --lifecycle-warn: #e8b84d;
   --lifecycle-danger: #e87474;
 }
@@ -3325,6 +3325,12 @@ code {
 :root[data-theme="dark"] .badge-role {
   background: rgba(95, 143, 183, 0.15);
   color: var(--accent);
+}
+
+.topbar-role-badge {
+  display: block; font-size: 0.65rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); font-weight: 500;
+  line-height: 1;
 }
 
 /* W1.4.1 — topbar count badge.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # rotate_demo_tunnel.sh — one-command refresh of the Cloudflare quick
 # tunnel that exposes the laptop Flask (:5055) to public HTTPS for the
-# PRISM demo on nvishvajeet.github.io.
+# PRISM public demo site.
 #
 # Why this exists: cloudflared quick tunnels rotate their
 # `*.trycloudflare.com` subdomain on every restart. When the operator
@@ -18,7 +18,7 @@
 set -e
 
 PRISM_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SITE_DIR="${HOME}/Claude/nvishvajeet.github.io"
+SITE_DIR="${PRISM_SITE_DIR:-${HOME}/Claude/prism-site}"  # set PRISM_SITE_DIR for your portfolio repo
 LOG="${PRISM_DIR}/logs/cloudflared.log"
 CONFIG="${SITE_DIR}/_config.yml"
 

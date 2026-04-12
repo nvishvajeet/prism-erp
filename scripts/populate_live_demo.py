@@ -81,7 +81,7 @@ def ensure_instrument(
 ) -> int:
     row = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()
     if row:
-        # v2.0.3 — respect existing instrument metadata. The CRF brochure
+        # v2.0.3 — respect existing instrument metadata. The facility
         # data seeded by app.seed_data() is canonical; populate_live_demo
         # only fills in missing rows, never overwrites a row that already
         # exists. Previously this UPDATE clobbered the brochure
@@ -551,9 +551,9 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             log_action(db, actor_operator, request_id, "rejected", {"remarks": remarks}, now_iso(request_base + timedelta(hours=10)))
 
     seeded_originators = {
-        "REQ-1001": "vishvajeet@prism.local",
+        "REQ-1001": "owner@prism.local",
         "REQ-1002": "kondhalkar@prism.local",
-        "REQ-1003": "vishvajeet@prism.local",
+        "REQ-1003": "owner@prism.local",
     }
     for request_no, originator_email in seeded_originators.items():
         _orig = db.execute("SELECT id FROM users WHERE email = ?", (originator_email,)).fetchone()

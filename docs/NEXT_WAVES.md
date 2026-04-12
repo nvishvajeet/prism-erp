@@ -396,7 +396,7 @@ via the existing `audit_logs ← users.name` join.*
 *Only starts after W1.3.9 has tagged and the HTTPS tailnet URL
 is confirmed green via `deploy_smoke`.*
 
-1. **Portfolio button on `nvishvajeet.github.io`** — single
+1. **Portfolio button on `the project portfolio site`** — single
    `<a>` pointing at the HTTPS tailnet URL with "demo creds
    inside, requires tailnet access" microcopy. One-commit change
    on that repo. (~5 min)
@@ -564,7 +564,7 @@ concrete W-number and a target tag.
 
 **Goal:** PRISM reachable at `https://prism-mini.<tail>.ts.net/`
 (or a custom domain) with a valid Let's Encrypt cert, so the
-portfolio site at `nvishvajeet.github.io` can link to a live
+portfolio site at `the project portfolio site` can link to a live
 demo URL that works in any browser without cert warnings.
 
 **Current state:**
@@ -594,7 +594,7 @@ invited agents to claim it, spin, and abort. Keeping it here
 makes the strategic nature explicit: HTTPS is a goal, not a todo.
 
 **Downstream unblocks** (all one-shot, all trivial once HTTPS is live):
-- **Portfolio button on `nvishvajeet.github.io`** — one `<a>`
+- **Portfolio button on `the project portfolio site`** — one `<a>`
   pointing at the HTTPS tailnet URL with "demo creds inside,
   requires tailnet access" microcopy.
 - **Tag `v1.4.X` on the commit that goes live** — mark the

@@ -178,7 +178,7 @@ class LifecycleStrategy(CrawlerStrategy):
         # needs a planner_date + slot setup that's out of scope for
         # this in-process lifecycle crawler. A future
         # `lifecycle_operator_board` strategy will pick that up.
-        with harness.logged_in("vishvajeet@prism.local"):
+        with harness.logged_in("owner@prism.local"):
             for path in [f"/requests/{request_id}", "/schedule",
                          "/instruments/1/history", "/stats"]:
                 resp = harness.get(path, follow_redirects=True)

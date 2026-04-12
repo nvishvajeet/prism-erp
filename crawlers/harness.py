@@ -33,7 +33,7 @@ from typing import Any, Callable, Iterator
 # ── Canonical roles + seed personas ─────────────────────────────────
 # Every strategy can rely on these accounts existing after seed_users().
 # Single shared password — the public demo card on
-# nvishvajeet.github.io prefills it, so role-aware testing is
+# the public demo card prefills it, so role-aware testing is
 # "change the email, keep the password." Role-named emails make the
 # in-test role instantly obvious.
 PASSWORD = "12345"
@@ -45,8 +45,8 @@ ROLE_PERSONAS: list[tuple[str, str, str]] = [
     # role_behavior, smoke, topbar_badges). Keep the identities
     # stable. The new role-named demo emails (admin@, operator@,
     # requester@, etc.) are seeded separately by app.py init_db
-    # for the public demo card on nvishvajeet.github.io.
-    ("Admin Owner",      "vishvajeet@prism.local",   "super_admin"),
+    # for the public demo card on the portfolio site.
+    ("Admin Owner",      "owner@prism.local",   "super_admin"),
     ("Site Admin",       "siteadmin@prism.local",   "site_admin"),
     ("FESEM Admin",      "kondhalkar@prism.local",  "instrument_admin"),
     ("Dr. Sen",          "approver@prism.local",    "professor_approver"),
@@ -135,7 +135,7 @@ class Harness:
         harness.bootstrap()
         harness.seed_users_and_instruments()
 
-        with harness.logged_in("vishvajeet@prism.local"):
+        with harness.logged_in("owner@prism.local"):
             resp = harness.get("/")
             assert resp.status_code == 200
 
@@ -161,7 +161,7 @@ class Harness:
         can no longer be called" guard after the first request.
         """
         # Owner emails must be set BEFORE app is imported the first time
-        os.environ.setdefault("OWNER_EMAILS", "vishvajeet@prism.local")
+        os.environ.setdefault("OWNER_EMAILS", "owner@prism.local")
         # Demo mode must be on so seed_data()/login routes behave like dev
         os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
         # CSRF enforcement OFF for the test client — W6.6 gates it on

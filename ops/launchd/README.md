@@ -8,7 +8,7 @@ automatically.
 | File | Host | Working copy |
 |---|---|---|
 | `local.prism.plist`         | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
-| `local.prism.laptop.plist`  | Dev laptop (`vishvajeetn`) | `~/Documents/Scheduler/Main` |
+| `local.prism.laptop.plist`  | Dev laptop (`your-user`) | `~/Documents/Scheduler/Main` |
 
 ## macOS TCC gotcha — Documents folder access
 

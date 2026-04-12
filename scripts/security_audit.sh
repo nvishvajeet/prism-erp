@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /Users/vishvajeetn/Documents/Scheduler/Main
+cd /path/to/prism
 
 echo "=== PRISM SECURITY CRAWL ==="
 echo ""

@@ -356,7 +356,7 @@ every agent, every task, every session:
 A fresh agent starting a new chat session on this project
 follows this loop. Every step is mandatory. Skip nothing.
 
-1. **Sync.** `cd /Users/vishvajeetn/Documents/Scheduler/Main &&
+1. **Sync.** `cd /path/to/prism &&
    git pull --rebase origin v1.3.0-stable-release`.
 2. **Clean-tree check.** `git status --short`. Must be empty.
    If not, surface to operator before touching anything else.

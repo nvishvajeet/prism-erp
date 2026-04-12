@@ -10,7 +10,7 @@
 - **Faculty** — professor_approver / faculty_in_charge roles
 
 ### Instrument data:
-- All instruments from the CRF brochure
+- All instruments from the facility brochure
 - Photos from the brochure
 - Pricing, capabilities, location filled in via Form Control
 
@@ -21,7 +21,7 @@
 ### Environment:
 ```bash
 PRISM_ORG_NAME=Central Research Facility
-PRISM_ORG_TAGLINE=MIT-WPU Shared Instrument Facility
+PRISM_ORG_TAGLINE=Your Institution Shared Instrument Facility
 LAB_SCHEDULER_DEMO_MODE=0
 PRISM_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin
 ```

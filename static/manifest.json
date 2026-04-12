@@ -1,7 +1,7 @@
 {
   "name": "PRISM Lab Scheduler",
   "short_name": "PRISM",
-  "description": "Sample request and operator workflow for the MIT-WPU shared instrument facility.",
+  "description": "Sample request and operator workflow for shared instrument facilities.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8fa",
@@ -14,7 +14,7 @@
       "type": "image/x-icon"
     },
     {
-      "src": "/static/mitwpu-logo.webp",
+      "src": "/static/institution-logo.webp",
       "sizes": "any",
       "type": "image/webp",
       "purpose": "any maskable"

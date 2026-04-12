@@ -10,7 +10,7 @@ first-class hard attribute. [CHANGELOG](CHANGELOG.md) ·
 [Philosophy](docs/PHILOSOPHY.md) ·
 [Architecture](docs/PROJECT.md) ·
 [ERP Primitives](docs/ERP_PRIMITIVES.md) ·
-[Live demo](https://nvishvajeet.github.io/demo.html)
+[Live demo](https://nvishvajeet.github.io/demo.html) <!-- update URL for your deployment -->
 
 ### Fast mode
 
@@ -76,15 +76,12 @@ Serve.
 
 ## The live demo
 
-Public HTTPS demo is proxied from the laptop via a Cloudflare
+Public HTTPS demo is proxied from the dev machine via a Cloudflare
 quick tunnel — any browser on the internet, no tailnet required.
-Visit the **Demo** tab on
-[nvishvajeet.github.io](https://nvishvajeet.github.io/demo.html)
-for the one-click landing. The `/login?demo=1` query param
-pre-fills the admin credentials so visitors land signed in with
-one button press. Seven deep-link cards below the CTA jump
-straight into Dashboard, Instruments, Instrument detail, Queue,
-New request form, Dev panel, and Sitemap.
+The `/login?demo=1` query param pre-fills the admin credentials so
+visitors land signed in with one button press. Seven deep-link
+cards below the CTA jump straight into Dashboard, Instruments,
+Instrument detail, Queue, New request form, Dev panel, and Sitemap.
 
 ## Architecture in 30 seconds
 
@@ -189,7 +186,7 @@ single-operator sessions.
 
 ## License + credits
 
-Built by Vishvajeet N. Python 3.14 + Flask 3. No
+Python 3.14 + Flask 3. No
 telemetry. No external services on the happy path (Tailscale /
 Cloudflare tunnels are opt-in for public demo access only).
 Demo data and operational data are physically separated per

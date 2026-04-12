@@ -29,7 +29,7 @@ body:
   6. The page is not a 403/404/500.
 
 Owner-only: every other role 403s on /admin/dev_panel, so the strategy
-logs in as vishvajeet@prism.local (the seeded super_admin / owner).
+logs in as owner@prism.local (the seeded super_admin / owner).
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
 
-OWNER_EMAIL = "vishvajeet@prism.local"
+OWNER_EMAIL = "owner@prism.local"
 DEV_PANEL_PATH = "/admin/dev_panel"
 
 # Sentinels that must appear in the rendered HTML. Each tuple is

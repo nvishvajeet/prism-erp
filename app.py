@@ -66,18 +66,16 @@ COMMUNICATION_NOTE_TYPES = [
 ]
 OWNER_EMAILS = {
     email.strip().lower()
-    # v2.0.3 — single owner (Vishvajeet Nagargoje, CRF lead). Override
-    # at deploy time with `OWNER_EMAILS=youraccount@example.com` env var.
-    # admin@lab.local stays in the default set so legacy demo personas
-    # and crawlers continue to work without an env var on dev machines.
+    # Override at deploy time with `OWNER_EMAILS=you@example.com` env var.
+    # Default: owner@prism.local (the demo seed super_admin).
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "vishvajeet@prism.local",
+        "owner@prism.local",
     ).split(",")
     if email.strip()
 }
 DEMO_ROLE_SWITCHES = {
-    "owner": {"label": "Owner", "email": "vishvajeet@prism.local"},
+    "owner": {"label": "Owner", "email": "owner@prism.local"},
     "super_admin": {"label": "Super Admin", "email": "dean@prism.local"},
     "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@prism.local"},
     "site_admin": {"label": "Site Admin", "email": "siteadmin@prism.local"},
@@ -151,7 +149,7 @@ csrf = CSRFProtect(app)
 # ── Google OAuth ────────────────────────────────────────────────
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_ALLOWED_DOMAIN = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "mitwpu.edu.in")
+GOOGLE_ALLOWED_DOMAIN = os.environ.get("GOOGLE_ALLOWED_DOMAIN", "mitwpu.edu.in")  # change this to your institution's domain
 
 _oauth = None
 if _AUTHLIB_AVAILABLE and GOOGLE_CLIENT_ID:
@@ -4844,7 +4842,7 @@ def _seed_demo_grants() -> None:
             ("CEFIPRA-2026-07", "Ceramic Phase Analysis Collaboration", "Indo-French Centre for Promotion of Advanced Research (CEFIPRA)",
              pi_admin, 1800000.0, "2026-02-15", "2028-02-14", "active",
              "Bilateral grant — XRD + Raman access for cross-institute samples."),
-            ("MITWPU-INT-24", "Internal MITWPU Materials Seed Grant", "MITWPU Internal",
+            ("INST-INT-24", "Internal Materials Seed Grant", "Internal",
              pi_admin, 450000.0, "2026-04-01", "2026-09-30", "active",
              "Small internal seed — supports pilot runs before external funding applications."),
         ]
@@ -5023,7 +5021,7 @@ def seed_data() -> None:
 
     # Unified demo seed: one simple password ("12345") for every seeded
     # account, and role-named emails so a public tester logging in via
-    # nvishvajeet.github.io → /login?demo=1 instantly sees which role
+    # portfolio site → /login?demo=1 instantly sees which role
     # they're exercising. DEMO_MODE-only path; operational never hits
     # this because seed_data() returns early when DEMO_MODE is off.
     DEMO_PASSWORD = "12345"
@@ -5032,7 +5030,7 @@ def seed_data() -> None:
     # Rebind every seeded persona's password on every boot so existing
     # demo DBs catch up without a re-seed.
     _persona_emails = (
-        "vishvajeet@prism.local", "dean@prism.local", "kondhalkar@prism.local",
+        "owner@prism.local", "dean@prism.local", "kondhalkar@prism.local",
         "siteadmin@prism.local", "anika@prism.local", "ravi@prism.local",
         "chetan@prism.local", "meera@prism.local", "suresh@prism.local",
         "approver@prism.local",
@@ -5055,7 +5053,7 @@ def seed_data() -> None:
     # Password for ALL demo accounts: "12345"
     core_users = [
         # Owner (god-view via OWNER_EMAILS env var)
-        ("Vishvajeet Nagargoje", "vishvajeet@prism.local",  "super_admin"),
+        ("Facility Owner", "owner@prism.local",  "super_admin"),
         # Dean — super admin
         ("Dean Rao",             "dean@prism.local",        "super_admin"),
         # Kondhalkar — admin across many instruments
@@ -5084,124 +5082,124 @@ def seed_data() -> None:
             (name, email, demo_pw_hash, role),
         )
 
-    # ── v2.0.3 — Real CRF instrument inventory from the PRISM brochure ──
+    # ── v2.0.3 — Demo instrument inventory ──
     # 21 instruments across the imaging, spectroscopy, mechanical-test,
     # and battery-fab clusters. Numbering preserved for backwards
     # compat: INST-001 = FESEM (smoke_test fixture), INST-002 = ICP-MS,
     # INST-003 = XRD. New instruments INST-004 onward are appended.
     instruments = [
         # ── Imaging cluster ────────────────────────────────────────
-        ("FESEM", "INST-001", "Microscopy", "CRF Bay A — Imaging Hall", 4,
+        ("FESEM", "INST-001", "Microscopy", "Facility Bay A — Imaging Hall", 4,
          "Sub-nanometre imaging, FEG source, 50 eV–30 kV, mag 10x to 1,000,000x, in-chamber plasma cleaner, EDS elemental mapping.",
-         "CRF Bay A · Office A-201", "Imaging & Nanoscale", "TESCAN", "S8152",
+         "Facility Bay A · Office A-201", "Imaging & Nanoscale", "TESCAN", "S8152",
          "Field-emission SEM for nanoscale surface morphology, fracture analysis, particle sizing, and elemental mapping (EDS).",
          "", "", "Field Emission Scanning Electron Microscope — high-resolution imaging at the nanoscale.", 1, 0),
-        ("Polarizing Optical Microscope", "INST-009", "Microscopy", "CRF Bay A — Imaging Hall", 6,
+        ("Polarizing Optical Microscope", "INST-009", "Microscopy", "Facility Bay A — Imaging Hall", 6,
          "3.6 W LED Köhler illumination, 360° rotatable stage (0.1 mm vernier), 4×/10×/20×/40× objectives, polarizer 0–90°, integrated LCD capture.",
-         "CRF Bay A · Office A-204", "Imaging & Nanoscale", "OPTIKA", "B-510POL",
+         "Facility Bay A · Office A-204", "Imaging & Nanoscale", "OPTIKA", "B-510POL",
          "Polarized-light microscopy for liquid crystals, polymers, thin-film texture, birefringence and grain-boundary analysis.",
          "", "", "Polarizing Optical Microscope for anisotropic and transparent materials.", 1, 0),
 
         # ── Spectroscopy / Diffraction cluster ─────────────────────
-        ("ICP-MS", "INST-002", "Spectroscopy", "CRF Bay B — Analytical", 3,
+        ("ICP-MS", "INST-002", "Spectroscopy", "Facility Bay B — Analytical", 3,
          "SHIMADZU ICPMS-2040 LF, low argon (11 L/min), trace ppt detection, isotope ratio capable, semi-quant overview, liquid + solid sample intro.",
-         "CRF Bay B · Office B-104", "Analytical Chemistry", "SHIMADZU", "ICPMS-2040 LF",
+         "Facility Bay B · Office B-104", "Analytical Chemistry", "SHIMADZU", "ICPMS-2040 LF",
          "Inductively Coupled Plasma Mass Spectrometry for trace elemental quantification (ppt limits), full periodic table.",
          "", "", "ICP-MS for trace and ultra-trace multi-element analysis in liquids and digests.", 1, 1),
-        ("XRD", "INST-003", "Diffraction", "CRF Bay B — Analytical", 5,
+        ("XRD", "INST-003", "Diffraction", "Facility Bay B — Analytical", 5,
          "Empyrean DY3280 with 1Der detector, vertical goniometer, GIXRD capable, large reference-pattern library.",
-         "CRF Bay B · Office B-110", "Analytical Chemistry", "MALVERN PANALYTICAL", "Empyrean-DY3280",
+         "Facility Bay B · Office B-110", "Analytical Chemistry", "MALVERN PANALYTICAL", "Empyrean-DY3280",
          "X-Ray Diffractometer for phase ID, crystal structure, thin-film GIXRD on powders and solids.",
          "", "", "X-Ray Diffractometer for crystalline phase analysis.", 1, 0),
-        ("Raman Spectrometer", "INST-004", "Spectroscopy", "CRF Bay B — Analytical", 4,
+        ("Raman Spectrometer", "INST-004", "Spectroscopy", "Facility Bay B — Analytical", 4,
          "JASCO NRS-4500 confocal micro-Raman, 532/785 nm lasers, 50–8000 cm⁻¹, ~1 cm⁻¹ resolution, 2D/3D mapping, dual spatial filter.",
-         "CRF Bay B · Office B-112", "Analytical Chemistry", "JASCO", "NRS-4500",
+         "Facility Bay B · Office B-112", "Analytical Chemistry", "JASCO", "NRS-4500",
          "Confocal micro-Raman for molecular vibrations, chemical mapping, polymorphism, carbon-material characterization.",
          "", "", "Confocal micro-Raman imaging and spectroscopy system.", 1, 0),
-        ("Particle / Zeta Size Analyser", "INST-005", "Light Scattering", "CRF Bay B — Analytical", 6,
+        ("Particle / Zeta Size Analyser", "INST-005", "Light Scattering", "Facility Bay B — Analytical", 6,
          "Zetasizer Advance, DLS + ELS + multi-angle DLS, 0.3 nm – 10 µm particle size, 3.8 nm – 100 µm zeta range, 3–12 µL sample, NIBS optics.",
-         "CRF Bay B · Office B-114", "Colloids & Nanomaterials", "MALVERN PANALYTICAL", "Zetasizer Advance",
+         "Facility Bay B · Office B-114", "Colloids & Nanomaterials", "MALVERN PANALYTICAL", "Zetasizer Advance",
          "Particle/Zeta size analyser for colloids, nanoparticles, proteins, exosomes, liposomes — DLS + ELS workflows.",
          "", "", "Particle size + zeta potential characterization for nanoparticles and colloids.", 1, 0),
-        ("UV-Visible / UV-DRS", "INST-011", "Spectroscopy", "CRF Bay B — Analytical", 6,
+        ("UV-Visible / UV-DRS", "INST-011", "Spectroscopy", "Facility Bay B — Analytical", 6,
          "LABINDIA UV 3200 + UV 3092 DRS module. Double-beam, deuterium + tungsten-halogen, 190–800 nm, transmission + reflectance for solids/powders/liquids.",
-         "CRF Bay B · Office B-116", "Analytical Chemistry", "LABINDIA", "UV 3200 + UV 3092",
+         "Facility Bay B · Office B-116", "Analytical Chemistry", "LABINDIA", "UV 3200 + UV 3092",
          "UV-Visible spectrophotometer with Diffuse Reflectance accessory — band gap, photoinitiator quant, degradation studies.",
          "", "", "UV-Vis with DRS for liquid + solid characterization.", 1, 0),
-        ("UV-VIS-NIR Spectrophotometer", "INST-012", "Spectroscopy", "CRF Bay B — Analytical", 5,
+        ("UV-VIS-NIR Spectrophotometer", "INST-012", "Spectroscopy", "Facility Bay B — Analytical", 5,
          "SHIMADZU UV-3600i Plus, 185–3300 nm, 3-detector (PMT/InGaAs/PbS), stray light <0.00005% at 220 nm, ±0.08 nm UV/Vis accuracy.",
-         "CRF Bay B · Office B-118", "Analytical Chemistry", "SHIMADZU", "UV-3600i Plus",
+         "Facility Bay B · Office B-118", "Analytical Chemistry", "SHIMADZU", "UV-3600i Plus",
          "Research-grade UV-VIS-NIR spectrophotometer — band gap, AR coatings, optical fibers, biological NIR analysis.",
          "", "", "UV-VIS-NIR Spectrophotometer with three-detector full-range system.", 1, 0),
 
         # ── Surface / Mechanical micro-test cluster ────────────────
-        ("Nanoindenter", "INST-006", "Mechanical Micro-test", "CRF Bay C — Surface Lab", 4,
+        ("Nanoindenter", "INST-006", "Mechanical Micro-test", "Facility Bay C — Surface Lab", 4,
          "INDUSTRON NG-80, max load 10 mN, load resolution 5 nN, displacement resolution 1 nm, load + displacement controlled modes.",
-         "CRF Bay C · Office C-201", "Mechanical Surfaces", "INDUSTRON", "NG-80",
+         "Facility Bay C · Office C-201", "Mechanical Surfaces", "INDUSTRON", "NG-80",
          "Nanoindenter for hardness, elastic modulus, fracture toughness on metals, polymers, ceramics, coatings, thin films.",
          "", "", "Nanoindenter — probes nanomechanical properties of bulk and thin-film samples.", 1, 0),
-        ("Surface Profiler", "INST-007", "Surface Metrology", "CRF Bay C — Surface Lab", 5,
+        ("Surface Profiler", "INST-007", "Surface Metrology", "Facility Bay C — Surface Lab", 5,
          "BRUKER Dektak Pro, max load 6 mg, scan length 3000 µm, surface roughness + thin-film thickness + residual stress.",
-         "CRF Bay C · Office C-205", "Surface Science", "BRUKER", "Dektak Pro",
+         "Facility Bay C · Office C-205", "Surface Science", "BRUKER", "Dektak Pro",
          "Stylus surface profiler — average roughness, peak-to-valley, thin-film thickness, residual stress in films.",
          "", "", "Surface Profiler for micron and nano-scale surface integrity measurements.", 1, 0),
-        ("Tribometer", "INST-008", "Tribology", "CRF Bay C — Surface Lab", 3,
+        ("Tribometer", "INST-008", "Tribology", "Facility Bay C — Surface Lab", 3,
          "DUCOM POD-4.0 Pin-on-Disc, room temp – 900 °C, max sample 60 mm dia × 2 mm thick, stainless steel ball counter material.",
-         "CRF Bay C · Office C-208", "Tribology", "DUCOM", "POD-4.0",
+         "Facility Bay C · Office C-208", "Tribology", "DUCOM", "POD-4.0",
          "Tribometer — friction coefficient, wear morphology, reciprocatory + rotary wear, room temp to 900 °C.",
          "", "", "Pin-on-Disc Tribometer for tribological and wear behaviour characterization.", 1, 0),
 
         # ── Battery fabrication cluster ────────────────────────────
-        ("Battery Fabrication System", "INST-010", "Energy Storage", "CRF Bay D — Battery Lab", 3,
+        ("Battery Fabrication System", "INST-010", "Energy Storage", "Facility Bay D — Battery Lab", 3,
          "Coin-cell (CR2032) fabrication line: slurry mixer, doctor-blade coater, vacuum oven, calender, electrode puncher, Ar glove box (<0.01 ppm H₂O/O₂), multi-channel battery tester.",
-         "CRF Bay D · Office D-110", "Energy Materials", "Multi-vendor", "CR2032 coin-cell line",
+         "Facility Bay D · Office D-110", "Energy Materials", "Multi-vendor", "CR2032 coin-cell line",
          "Complete coin-cell battery fabrication facility for Li-ion + Na-ion half/full cells with full electrochemical testing.",
          "", "", "End-to-end coin-cell battery fabrication and electrochemical testing.", 1, 0),
 
         # ── NABL ISO/IEC 17025:2017 mechanical testing line ────────
-        ("Universal Testing Machine — 100 kN", "INST-013", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 3,
+        ("Universal Testing Machine — 100 kN", "INST-013", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 3,
          "0–100 kN load range. NABL accredited per IS 1608 (Part 1), ASTM E8/E8M, ASTM D3039/D3039M.",
-         "CRF Bay E · Office E-101", "Mechanical Testing (NABL)", "—", "UTM-100kN",
+         "Facility Bay E · Office E-101", "Mechanical Testing (NABL)", "—", "UTM-100kN",
          "Universal testing machine — 100 kN range for tensile/compression on metals and composites.",
          "", "", "100 kN UTM — NABL accredited tensile testing.", 1, 0),
-        ("Universal Testing Machine — 5 kN", "INST-017", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 4,
+        ("Universal Testing Machine — 5 kN", "INST-017", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 4,
          "0–5 kN load range for low-load tensile/peel/film tests. NABL accredited per ASTM E345.",
-         "CRF Bay E · Office E-102", "Mechanical Testing (NABL)", "—", "UTM-5kN",
+         "Facility Bay E · Office E-102", "Mechanical Testing (NABL)", "—", "UTM-5kN",
          "Low-load UTM for thin films, foils, and elastomers per ASTM E345.",
          "", "", "5 kN UTM — NABL accredited low-load tensile testing.", 1, 0),
-        ("Universal Testing Machine — 1000 kN", "INST-021", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 2,
+        ("Universal Testing Machine — 1000 kN", "INST-021", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 2,
          "0–1000 kN heavy-load UTM. NABL accredited per IS 1608 (Part 1).",
-         "CRF Bay E · Office E-103", "Mechanical Testing (NABL)", "—", "UTM-1000kN",
+         "Facility Bay E · Office E-103", "Mechanical Testing (NABL)", "—", "UTM-1000kN",
          "Heavy-load UTM for structural members, reinforcement bars, large composites.",
          "", "", "1000 kN UTM — NABL accredited heavy-load tensile testing.", 1, 0),
-        ("Hardness Testing — Rockwell", "INST-014", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 6,
+        ("Hardness Testing — Rockwell", "INST-014", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 6,
          "Rockwell hardness scales A/B/C/D/E/F/G/H/K. NABL accredited per IS 1586 (Part 1).",
-         "CRF Bay E · Office E-110", "Mechanical Testing (NABL)", "—", "Rockwell",
+         "Facility Bay E · Office E-110", "Mechanical Testing (NABL)", "—", "Rockwell",
          "Rockwell hardness on metals and alloys per IS 1586.",
          "", "", "Rockwell hardness tester — NABL accredited.", 1, 0),
-        ("Hardness Testing — Vickers / Brinell", "INST-015", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 5,
+        ("Hardness Testing — Vickers / Brinell", "INST-015", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 5,
          "Vickers and Brinell macrohardness. NABL accredited per IS 1500 (Part 1).",
-         "CRF Bay E · Office E-111", "Mechanical Testing (NABL)", "—", "Vickers/Brinell",
+         "Facility Bay E · Office E-111", "Mechanical Testing (NABL)", "—", "Vickers/Brinell",
          "Vickers + Brinell hardness on metals, alloys, and case-hardened materials.",
          "", "", "Vickers / Brinell hardness tester — NABL accredited.", 1, 0),
-        ("Hardness Testing — Micro-Vickers", "INST-016", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 6,
+        ("Hardness Testing — Micro-Vickers", "INST-016", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 6,
          "Micro-Vickers indentation for thin sections, coatings, weld zones. NABL accredited per IS 1501 (Part 1) and ISO 6507-1.",
-         "CRF Bay E · Office E-112", "Mechanical Testing (NABL)", "—", "Micro-Vickers",
+         "Facility Bay E · Office E-112", "Mechanical Testing (NABL)", "—", "Micro-Vickers",
          "Micro-Vickers hardness for thin sections, coatings, and microstructure-level mapping.",
          "", "", "Micro-Vickers hardness tester — NABL accredited.", 1, 0),
-        ("Microscope RV 3", "INST-018", "Metallography", "CRF Bay E — NABL Mechanical", 5,
+        ("Microscope RV 3", "INST-018", "Metallography", "Facility Bay E — NABL Mechanical", 5,
          "Metallographic microscope per ASTM E112 grain-size standard. NABL accredited.",
-         "CRF Bay E · Office E-114", "Mechanical Testing (NABL)", "—", "RV 3",
+         "Facility Bay E · Office E-114", "Mechanical Testing (NABL)", "—", "RV 3",
          "Metallographic microscope for grain-size determination per ASTM E112.",
          "", "", "Metallographic microscope — NABL accredited grain size analysis.", 1, 0),
-        ("Axial Computerized Fatigue Testing Machine", "INST-019", "Fatigue Testing", "CRF Bay E — NABL Mechanical", 2,
+        ("Axial Computerized Fatigue Testing Machine", "INST-019", "Fatigue Testing", "Facility Bay E — NABL Mechanical", 2,
          "Computerized axial fatigue rig. NABL accredited per ASTM D3479 / D3479M.",
-         "CRF Bay E · Office E-116", "Mechanical Testing (NABL)", "—", "Axial Fatigue Rig",
+         "Facility Bay E · Office E-116", "Mechanical Testing (NABL)", "—", "Axial Fatigue Rig",
          "Axial fatigue testing on composites and metals per ASTM D3479.",
          "", "", "Axial computerized fatigue testing — NABL accredited.", 1, 0),
-        ("Compression Testing Machine", "INST-020", "Mechanical Testing", "CRF Bay E — NABL Mechanical", 4,
+        ("Compression Testing Machine", "INST-020", "Mechanical Testing", "Facility Bay E — NABL Mechanical", 4,
          "Compression testing for cement, concrete, ceramics, and rigid foams. NABL accredited per IS 516 (Part 1/Sec 1).",
-         "CRF Bay E · Office E-118", "Mechanical Testing (NABL)", "—", "CTM",
+         "Facility Bay E · Office E-118", "Mechanical Testing (NABL)", "—", "CTM",
          "Compression testing per IS 516 — concrete, ceramics, rigid materials.",
          "", "", "Compression testing machine — NABL accredited.", 1, 0),
     ]
@@ -13799,7 +13797,7 @@ def admin_users():
     can_open_user_admin = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     if not can_open_user_admin:
         abort(403)
-    can_create_users = is_owner(user)
+    can_create_users = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     can_delete_members = is_owner(user)
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_elevate_members = is_owner(user) or user["role"] == "super_admin"

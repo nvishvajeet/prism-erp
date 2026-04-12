@@ -31,7 +31,7 @@ from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
 
-OWNER_EMAIL = "vishvajeet@prism.local"
+OWNER_EMAIL = "owner@prism.local"
 XHR_HEADERS = {
     "X-Requested-With": "XMLHttpRequest",
     "Accept": "application/json",

@@ -28,7 +28,7 @@ SEED_PATHS = [
 ]
 
 ROLES_TO_CRAWL = [
-    "vishvajeet@prism.local",
+    "owner@prism.local",
     "kondhalkar@prism.local",
     "anika@prism.local",
     "user1@prism.local",

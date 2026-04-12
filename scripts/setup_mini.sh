@@ -141,7 +141,7 @@ say "You can now use: ssh prism-mini"
 echo ""
 echo -e "${BOLD}Step 5: Installing PRISM on mini${NC}"
 
-REPO_URL="${PRISM_REPO_URL:-https://github.com/nvishvajeet/prism-erp.git}"
+REPO_URL="${PRISM_REPO_URL:-https://github.com/YOUR-ORG/prism-erp.git}"
 
 ssh -p "$MINI_PORT" "${MINI_USER}@${MINI_IP}" bash -s -- "$MINI_PATH" "$REPO_URL" << 'REMOTE_INSTALL'
   MINI_PATH="$1"

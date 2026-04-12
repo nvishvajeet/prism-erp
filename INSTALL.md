@@ -9,7 +9,7 @@
 ## Quick start — 4 commands
 
 ```bash
-git clone https://github.com/nvishvajeet/prism-erp.git prism
+git clone https://github.com/YOUR-ORG/prism-erp.git prism
 cd prism
 bash scripts/setup.sh
 ./scripts/start.sh
@@ -56,7 +56,7 @@ Available modules: `instruments`, `finance`, `inbox`,
 ssh user@server
 
 # On the server
-git clone https://github.com/nvishvajeet/prism-erp.git prism
+git clone https://github.com/YOUR-ORG/prism-erp.git prism
 cd prism
 bash scripts/setup.sh
 
@@ -143,7 +143,7 @@ Continue, Aider, Copilot, Windsurf):
 
 ```bash
 # On the remote machine
-git clone https://github.com/nvishvajeet/prism-erp.git prism
+git clone https://github.com/YOUR-ORG/prism-erp.git prism
 cd prism
 bash scripts/setup.sh
 
@@ -181,6 +181,6 @@ prism/
 
 ## Support
 
-- Issues: https://github.com/nvishvajeet/prism-erp/issues
+- Issues: https://github.com/YOUR-ORG/prism-erp/issues
 - Docs: `docs/` folder in this repo
 - AI agents: start with `AGENTS.md`

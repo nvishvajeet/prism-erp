@@ -91,7 +91,7 @@ class SlowQueriesStrategy(CrawlerStrategy):
 
         total_calls = 0
         try:
-            with harness.logged_in("vishvajeet@prism.local"):
+            with harness.logged_in("owner@prism.local"):
                 for path in HOT_ROUTES:
                     harness.get(path, note="slow_queries",
                                 follow_redirects=True)

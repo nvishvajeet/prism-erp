@@ -7154,3 +7154,55 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .inst-header-title { color: var(--ink); }
 :root[data-theme="dark"] .hover-back-btn { color: var(--muted); background: var(--panel-strong); border-color: var(--line); }
 :root[data-theme="dark"] .hover-back-btn:hover { color: var(--ink); background: var(--hover-soft-strong); }
+
+/* ── Quick Action cards — the primary variant uses var(--ink)
+   as background which becomes light in dark mode. Invert. ── */
+:root[data-theme="dark"] .qa-card-primary {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .qa-card-primary:hover {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel-strong));
+}
+:root[data-theme="dark"] .qa-card-primary .qa-eyebrow { color: var(--accent); }
+:root[data-theme="dark"] .qa-card-primary .qa-label { color: var(--ink); }
+
+/* ── Filter pills (queue status toggles) — white bg + white
+   text in dark mode because --surface isn't defined ──────── */
+:root[data-theme="dark"] .filter-pill {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .filter-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+:root[data-theme="dark"] .filter-pill.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+:root[data-theme="dark"] .filter-pill.is-active .filter-pill-count {
+  background: rgba(127, 209, 212, 0.2);
+}
+:root[data-theme="dark"] .filter-pill-count {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Queue table action buttons ──────────────────────────── */
+:root[data-theme="dark"] .queue-action-btn,
+:root[data-theme="dark"] .inline-action-btn {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .queue-action-btn:hover,
+:root[data-theme="dark"] .inline-action-btn:hover {
+  background: var(--hover-soft-strong);
+  border-color: var(--accent);
+}
+
+/* ── Bulk actions toggle ─────────────────────────────────── */
+:root[data-theme="dark"] .bulk-toggle-label { color: var(--ink); }

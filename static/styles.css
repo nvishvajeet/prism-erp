@@ -588,6 +588,9 @@ a:hover {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
+/* Push right-side nav items (Finance, New Request) to the end */
+.nav-spacer { flex: 1 1 auto; }
+
 :root[data-theme="dark"] .nav > a.nav-active,
 :root[data-theme="dark"] .nav > a.nav-active:hover {
   background: var(--tone-active-bg);

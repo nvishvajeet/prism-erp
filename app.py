@@ -10184,6 +10184,7 @@ def user_profile(user_id: int):
     assigned_admin_ids: set[int] = set()
     assigned_operator_ids: set[int] = set()
     assigned_faculty_ids: set[int] = set()
+    assigned_requester_ids: set[int] = set()
     if can_edit_user_value:
         instrument_roster = query_all(
             "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
@@ -10201,6 +10202,11 @@ def user_profile(user_id: int):
         assigned_faculty_ids = {
             row["instrument_id"] for row in query_all(
                 "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_requester_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_requesters WHERE user_id = ?", (user_id,)
             )
         }
         instrument_categories = sorted({(r["category"] or "Uncategorized") for r in instrument_roster})
@@ -10237,6 +10243,7 @@ def user_profile(user_id: int):
         assigned_admin_ids=assigned_admin_ids,
         assigned_operator_ids=assigned_operator_ids,
         assigned_faculty_ids=assigned_faculty_ids,
+        assigned_requester_ids=assigned_requester_ids,
         role_choices=role_choices,
         target_role_set=user_role_set(target_user),
         layered_role_choices=[

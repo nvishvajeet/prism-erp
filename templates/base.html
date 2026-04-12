@@ -132,6 +132,10 @@
     {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Owner-only development control panel">Dev</a>{% endif %}
     <a class="{% if endpoint == 'portfolio_panel' %}nav-active{% endif %}" href="{{ url_for('portfolio_panel') }}" data-vis="{{ V }}" title="Owner-only personal portfolio dashboard">Portfolio</a>
     {% endif %}
+    <span class="nav-spacer"></span>
+    {% if access_profile_user.can_view_finance_stage or is_owner_user %}
+    <a class="nav-button subtle {% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+    {% endif %}
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% endif %}
   </nav>
@@ -333,6 +337,7 @@
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>
   <script defer src="{{ url_for('static', filename='approval-toggle.js') }}"></script>
   <script defer src="{{ url_for('static', filename='role-toggle.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='sortable-table.js') }}"></script>
   {% if current_user %}
   <div id="keybindHelp" class="keybind-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden data-vis="{{ V }}">
     <div class="keybind-help-card" data-vis="{{ V }}">

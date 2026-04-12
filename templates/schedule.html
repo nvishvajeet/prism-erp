@@ -113,7 +113,7 @@
     {% endcall %}
 
     {% call paginated_pane('centralQueue', page_size=25, max_height='none', css_class='queue-table-shell') %}
-    <table id="centralQueueTable" class="tile-queue-table" data-vis="{{ V }}">
+    <table id="centralQueueTable" class="tile-queue-table sortable-table" data-vis="{{ V }}">
       <colgroup>
         {% if can_operate_queue %}<col class="col-select">{% endif %}
         <col class="col-request"><col class="col-instrument"><col class="col-status">

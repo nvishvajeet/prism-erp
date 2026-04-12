@@ -175,12 +175,13 @@
           <th class="lane-col" data-vis="{{ V }}">Admin</th>
           <th class="lane-col" data-vis="{{ V }}">Operator</th>
           <th class="lane-col" data-vis="{{ V }}">Faculty</th>
+          <th class="lane-col" data-vis="{{ V }}">Subscriber</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
         {% for category in instrument_categories %}
         <tr class="assignment-category-row" data-vis="{{ V }}">
-          <td colspan="4" data-vis="{{ V }}">
+          <td colspan="5" data-vis="{{ V }}">
             <strong data-vis="{{ V }}">{{ category }}</strong>
             <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="operator_ids" data-vis="{{ V }}">Grant all as operator</button>
             <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="admin_ids" data-vis="{{ V }}">Grant all as admin</button>
@@ -193,6 +194,7 @@
           <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="admin_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_admin_ids %}checked{% endif %}></td>
           <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="operator_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_operator_ids %}checked{% endif %}></td>
           <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="faculty_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_faculty_ids %}checked{% endif %}></td>
+          <td class="lane-col" data-vis="{{ V }}"><input type="checkbox" name="requester_ids" value="{{ inst['id'] }}" {% if inst['id'] in assigned_requester_ids %}checked{% endif %}></td>
         </tr>
         {% endfor %}
         {% endfor %}

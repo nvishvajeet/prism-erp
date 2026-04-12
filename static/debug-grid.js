@@ -164,6 +164,35 @@
     sessionStorage.removeItem('debugRecordingStart');
   }
 
+  // ── Mouse tracking during recording (hold C or Shift to log position) ──
+  var lastTrackTime = 0;
+  var cKeyDown = false;
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'c' && !e.target.closest('input,textarea,select,[contenteditable]')) cKeyDown = true;
+  });
+  document.addEventListener('keyup', function (e) { if (e.key === 'c') cKeyDown = false; });
+  document.addEventListener('mousemove', function (e) {
+    if (!isRecording) return;
+    // Hold 'c' key while moving mouse to log positions
+    if (!e.shiftKey && !cKeyDown) return;
+    var now = Date.now();
+    if (now - lastTrackTime < 200) return; // ~5 times per second
+    lastTrackTime = now;
+    var g = gridCoords(e.clientX, e.clientY);
+    var label = 'R' + g.row + ',C' + g.col;
+    var nearest = e.target.closest('[class]');
+    var context = nearest ? '.' + nearest.className.split(/\s+/)[0] : e.target.tagName.toLowerCase();
+    var entry = '[Hover: ' + label + ' on ' + context + '] ';
+    transcript += entry;
+    clickEvents.push({
+      grid: label, element: context,
+      x: e.clientX, y: e.clientY + window.scrollY,
+      page: window.location.pathname, type: 'hover'
+    });
+    placeClickMarker(e.clientX, e.clientY, label);
+    updateTranscriptDisplay();
+  });
+
   // ── Click capture during recording ────────────────────────────
 
   function onDebugClick(e) {

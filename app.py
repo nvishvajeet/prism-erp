@@ -5489,15 +5489,16 @@ def _recent_combined_notifications(user) -> list[dict]:
             "SELECT id, title, href, category, is_read, created_at FROM system_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
             (user["id"],),
         ):
+            row = dict(s)
             items.append({
-                "id": s["id"],
+                "id": row["id"],
                 "kind": "system",
-                "subject": s["title"],
+                "subject": row.get("title", ""),
                 "severity": "info",
-                "scope_label": s.get("category", "system"),
-                "href": s.get("href", ""),
-                "is_read": bool(s.get("is_read", 0)),
-                "created_at": s.get("created_at", ""),
+                "scope_label": row.get("category", "system"),
+                "href": row.get("href", ""),
+                "is_read": bool(row.get("is_read", 0)),
+                "created_at": row.get("created_at", ""),
             })
     except sqlite3.OperationalError:
         pass

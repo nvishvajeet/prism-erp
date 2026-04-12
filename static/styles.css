@@ -144,6 +144,11 @@
   --lifecycle-ok: #2d7554;
   --lifecycle-warn: #e8b84d;
   --lifecycle-danger: #e87474;
+  --lifecycle-done: #6bc5a0;
+  --lifecycle-current: #7fb8e8;
+  --op-accepting: #6bc5a0;
+  --op-hold: #e8c06a;
+  --op-maintenance: #e88a8a;
 }
 
 * {

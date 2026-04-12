@@ -12,7 +12,7 @@
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='mitwpu-logo.webp') }}">
-  <title>{{ title or "PRISM — MIT-WPU CRF" }}</title>
+  <title>{{ title or "PRISM" }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
     (function () {
@@ -60,7 +60,7 @@
   <a class="skip-nav" href="#main-content">Skip to main content</a>
   <header class="topbar" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
-      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">PRISM — MIT-WPU CRF</a></h1>
+      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">PRISM</a></h1>
     </div>
     {% if current_user %}
     <div class="topbar-right" data-vis="{{ V }}">

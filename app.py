@@ -6110,6 +6110,12 @@ def admin_notices_new():
         if scope_target not in codes:
             flash("Invalid instrument target.", "error")
             return redirect(url_for("admin_notices"))
+    elif scope == "mailing_list":
+        scope_target = (request.form.get("scope_target_mailing_list") or "").strip()
+        valid_ids = {str(r["id"]) for r in query_all("SELECT id FROM mailing_lists")}
+        if scope_target not in valid_ids:
+            flash("Invalid mailing list.", "error")
+            return redirect(url_for("admin_notices"))
     now_iso = datetime.utcnow().isoformat(timespec="seconds")
     notice_id = execute(
         """
@@ -6144,6 +6150,65 @@ def admin_notices_delete(notice_id: int):
                 "scope": notice_row["scope"] if notice_row else None})
     flash(f"Notice #{notice_id} removed.", "success")
     return redirect(url_for("admin_notices"))
+
+
+# ─── Mailing list management routes ──────────────────────────────────
+@app.route("/admin/mailing-lists", methods=["GET"])
+@login_required
+def admin_mailing_lists():
+    user = current_user()
+    if not _user_can_post_notice(user):
+        abort(403)
+    lists = query_all(
+        """SELECT ml.*, u.name AS creator_name,
+                  (SELECT COUNT(*) FROM mailing_list_members WHERE list_id = ml.id) AS member_count
+             FROM mailing_lists ml
+             LEFT JOIN users u ON u.id = ml.created_by_user_id
+             ORDER BY ml.name"""
+    )
+    all_users = query_all("SELECT id, name, email FROM users WHERE active = 1 ORDER BY name")
+    return render_template("admin_mailing_lists.html", lists=lists, all_users=all_users)
+
+
+@app.route("/admin/mailing-lists/new", methods=["POST"])
+@login_required
+def admin_mailing_list_create():
+    user = current_user()
+    if not _user_can_post_notice(user):
+        abort(403)
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip()
+    if not name:
+        flash("List name is required.", "error")
+        return redirect(url_for("admin_mailing_lists"))
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    list_id = execute(
+        "INSERT INTO mailing_lists (name, description, created_by_user_id, created_at) VALUES (?, ?, ?, ?)",
+        (name, description, user["id"], now_iso),
+    )
+    member_ids = request.form.getlist("member_ids")
+    db = get_db()
+    for uid in member_ids:
+        try:
+            db.execute("INSERT OR IGNORE INTO mailing_list_members (list_id, user_id) VALUES (?, ?)", (list_id, int(uid)))
+        except (ValueError, TypeError):
+            pass
+    db.commit()
+    log_action(user["id"], "mailing_list", list_id, "mailing_list_created", {"name": name})
+    flash(f"Mailing list '{name}' created.", "success")
+    return redirect(url_for("admin_mailing_lists"))
+
+
+@app.route("/admin/mailing-lists/<int:list_id>/delete", methods=["POST"])
+@login_required
+def admin_mailing_list_delete(list_id: int):
+    user = current_user()
+    if not _user_can_post_notice(user):
+        abort(403)
+    execute("DELETE FROM mailing_lists WHERE id = ?", (list_id,))
+    log_action(user["id"], "mailing_list", list_id, "mailing_list_deleted", {})
+    flash("Mailing list deleted.", "success")
+    return redirect(url_for("admin_mailing_lists"))
 
 
 # ─── v1.6.2 User-to-user messaging routes ─────────────────────────────
@@ -6926,7 +6991,7 @@ def finance_grant_expenses(grant_id: int):
                 request.form.get("expense_type", "equipment").strip(),
                 request.form.get("receipt_number", "").strip(),
                 user["id"],
-                _now(),
+                now_iso(),
                 request.form.get("notes", "").strip(),
             ),
         )
@@ -7956,6 +8021,22 @@ def instrument_form_control(instrument_id: int):
             flash("Pricing & payment instructions saved.", "success")
             return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
 
+        if action == "save_email_templates":
+            for evt in ("request_submitted", "step_approved", "request_completed"):
+                subj = request.form.get(f"tmpl_subject_{evt}", "").strip()
+                body_val = request.form.get(f"tmpl_body_{evt}", "").strip()
+                db.execute(
+                    """INSERT INTO instrument_email_templates (instrument_id, event_type, subject_template, body_template)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(instrument_id, event_type) DO UPDATE
+                       SET subject_template = excluded.subject_template, body_template = excluded.body_template""",
+                    (instrument_id, evt, subj, body_val),
+                )
+            db.commit()
+            log_action(user["id"], "instrument", instrument_id, "email_templates_updated", {})
+            flash("Email templates saved.", "success")
+            return redirect(url_for("instrument_form_control", instrument_id=instrument_id))
+
         abort(400)
 
     approval_config = query_all(
@@ -7975,6 +8056,11 @@ def instrument_form_control(instrument_id: int):
     approval_role_candidates = query_all(
         "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
     )
+    email_templates_rows = query_all(
+        "SELECT event_type, subject_template, body_template FROM instrument_email_templates WHERE instrument_id = ?",
+        (instrument_id,),
+    )
+    email_templates = {r["event_type"]: r for r in email_templates_rows}
     return render_template(
         "instrument_form_control.html",
         instrument=instrument,
@@ -7983,6 +8069,7 @@ def instrument_form_control(instrument_id: int):
         approval_role_candidates=approval_role_candidates,
         intake_mode=instrument_intake_mode(instrument),
         intake_mode_label=intake_mode_label,
+        email_templates=email_templates,
     )
 
 
@@ -11654,6 +11741,45 @@ def attendance_page():
         (user["id"],),
     )
     is_admin = bool(user_role_set(user) & {"super_admin", "site_admin"}) or is_owner(user)
+    # Team data: people who report to this user
+    team_members = query_all(
+        """
+        SELECT u.id, u.name, u.email,
+               a.status AS today_status, a.check_in, a.check_out
+          FROM reporting_structure rs
+          JOIN users u ON u.id = rs.user_id
+          LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
+         WHERE rs.manager_id = ?
+         ORDER BY u.name
+        """,
+        (today.isoformat(), user["id"]),
+    )
+    # Pending leave requests from team members (for manager approval)
+    team_leave_requests = []
+    if team_members:
+        team_ids = [m["id"] for m in team_members]
+        placeholders = ",".join("?" * len(team_ids))
+        team_leave_requests = query_all(
+            f"""
+            SELECT lr.*, u.name AS requester_name
+              FROM leave_requests lr
+              JOIN users u ON u.id = lr.user_id
+             WHERE lr.user_id IN ({placeholders}) AND lr.status = 'pending'
+             ORDER BY lr.start_date ASC
+            """,
+            team_ids,
+        )
+    is_manager = len(team_members) > 0
+    # Manager info for current user
+    my_manager = query_one(
+        """
+        SELECT u.name AS manager_name
+          FROM reporting_structure rs
+          JOIN users u ON u.id = rs.manager_id
+         WHERE rs.user_id = ?
+        """,
+        (user["id"],),
+    )
     return render_template(
         "attendance.html",
         attendance=my_attendance,
@@ -11661,6 +11787,10 @@ def attendance_page():
         balances=balances,
         pending_leaves=pending_leaves,
         is_admin=is_admin,
+        is_manager=is_manager,
+        team_members=team_members,
+        team_leave_requests=team_leave_requests,
+        my_manager=my_manager,
         today=today.isoformat(),
         leave_types=LEAVE_TYPES,
     )
@@ -11700,6 +11830,109 @@ def attendance_mark():
     log_action(user["id"], "attendance", target_user_id, "attendance_marked",
                {"date": att_date, "status": status})
     flash(f"Attendance marked: {status} on {att_date}", "success")
+    return redirect(url_for("attendance_page"))
+
+
+@app.route("/attendance/quick-present", methods=["POST"])
+@login_required
+def attendance_quick_present():
+    """One-click mark present for today."""
+    user = current_user()
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    execute(
+        """
+        INSERT INTO attendance (user_id, date, status, marked_by_user_id, created_at)
+        VALUES (?, ?, 'present', ?, ?)
+        ON CONFLICT (user_id, date) DO UPDATE SET
+            status = 'present', marked_by_user_id = excluded.marked_by_user_id
+        """,
+        (user["id"], today, user["id"], now_iso()),
+    )
+    log_action(user["id"], "attendance", user["id"], "attendance_marked",
+               {"date": today, "status": "present"})
+    flash("Marked present for today.", "success")
+    return redirect(url_for("attendance_page"))
+
+
+@app.route("/attendance/apply-leave", methods=["POST"])
+@login_required
+def attendance_apply_leave():
+    """Apply for leave directly from the attendance page."""
+    user = current_user()
+    leave_type = request.form.get("leave_type", "casual").strip()
+    if leave_type not in LEAVE_TYPES:
+        leave_type = "casual"
+    start_date = request.form.get("start_date", "").strip()
+    end_date = request.form.get("end_date", "").strip()
+    reason = request.form.get("reason", "").strip()
+    if not start_date or not end_date:
+        flash("Start and end date are required.", "error")
+        return redirect(url_for("attendance_page"))
+    if end_date < start_date:
+        flash("End date must be after start date.", "error")
+        return redirect(url_for("attendance_page"))
+    leave_id = execute(
+        """
+        INSERT INTO leave_requests
+            (user_id, leave_type, start_date, end_date, reason, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+        """,
+        (user["id"], leave_type, start_date, end_date, reason, now_iso()),
+    )
+    log_action(user["id"], "leave", leave_id, "leave_requested",
+               {"type": leave_type, "start": start_date, "end": end_date})
+    flash(f"Leave request submitted ({leave_type}: {start_date} to {end_date}).", "success")
+    return redirect(url_for("attendance_page"))
+
+
+@app.route("/attendance/team-leave/<int:leave_id>/approve", methods=["POST"])
+@login_required
+def attendance_team_leave_approve(leave_id: int):
+    """Manager approves a leave request from a direct report."""
+    user = current_user()
+    lr = query_one("SELECT * FROM leave_requests WHERE id = ? AND status = 'pending'", (leave_id,))
+    if not lr:
+        abort(404)
+    # Verify requester reports to current user
+    reports = query_one(
+        "SELECT 1 FROM reporting_structure WHERE user_id = ? AND manager_id = ?",
+        (lr["user_id"], user["id"]),
+    )
+    is_admin = bool(user_role_set(user) & {"super_admin", "site_admin"}) or is_owner(user)
+    if not reports and not is_admin:
+        abort(403)
+    execute(
+        "UPDATE leave_requests SET status = 'approved', approved_by_user_id = ?, approved_at = ? WHERE id = ?",
+        (user["id"], now_iso(), leave_id),
+    )
+    log_action(user["id"], "leave", leave_id, "leave_approved", {})
+    flash("Leave approved.", "success")
+    return redirect(url_for("attendance_page"))
+
+
+@app.route("/attendance/team-leave/<int:leave_id>/reject", methods=["POST"])
+@login_required
+def attendance_team_leave_reject(leave_id: int):
+    """Manager rejects a leave request from a direct report."""
+    user = current_user()
+    lr = query_one("SELECT * FROM leave_requests WHERE id = ? AND status = 'pending'", (leave_id,))
+    if not lr:
+        abort(404)
+    reports = query_one(
+        "SELECT 1 FROM reporting_structure WHERE user_id = ? AND manager_id = ?",
+        (lr["user_id"], user["id"]),
+    )
+    is_admin = bool(user_role_set(user) & {"super_admin", "site_admin"}) or is_owner(user)
+    if not reports and not is_admin:
+        abort(403)
+    reason = request.form.get("reason", "").strip()
+    execute(
+        "UPDATE leave_requests SET status = 'rejected', approved_by_user_id = ?, approved_at = ?, rejection_reason = ? WHERE id = ?",
+        (user["id"], now_iso(), reason, leave_id),
+    )
+    log_action(user["id"], "leave", leave_id, "leave_rejected", {"reason": reason})
+    flash("Leave rejected.", "success")
     return redirect(url_for("attendance_page"))
 
 

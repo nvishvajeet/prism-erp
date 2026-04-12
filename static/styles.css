@@ -1620,17 +1620,31 @@ table td {
 .col-files      { width: 10%; }
 .col-action     { width: 10%; }
 
-/* Instrument row: whole-row hover highlight (Apple-style click target) */
+/* Instrument row: whole-row hover highlight (Apple-style click target).
+   Entire row is clickable — JS handles navigation on row click.
+   No underlines on hover — Apple philosophy. */
 .instruments-table tbody tr:not(.category-header-row):hover {
   background: var(--hover-row, rgba(80, 140, 255, 0.06));
   cursor: pointer;
 }
+.instruments-table tbody tr:not(.category-header-row):hover a {
+  text-decoration: none;
+}
+/* People names in the table should be links to their profiles */
+.instruments-table .people-list div {
+  cursor: pointer;
+}
+.instruments-table .people-list div:hover {
+  color: var(--accent);
+}
 
-/* Links column: compact inline row of Detail / History / Queue */
+/* Links column: stacked vertically, one per line.
+   User: "detail history and queue on one line after the other" */
 .inst-links-row {
   display: flex;
-  gap: 0.5rem;
-  font-size: 0.82rem;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.78rem;
 }
 .inst-links-row .text-link { white-space: nowrap; }
 

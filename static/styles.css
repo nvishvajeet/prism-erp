@@ -591,6 +591,14 @@ a:hover {
 /* Push right-side nav items (Finance, New Request) to the end */
 .nav-spacer { flex: 1 1 auto; }
 
+/* Data-attribute grid column spans — replaces inline style="grid-column: span N" */
+[data-columns="1"] { grid-column: span 1; }
+[data-columns="2"] { grid-column: span 2; }
+[data-columns="3"] { grid-column: span 3; }
+[data-columns="4"] { grid-column: span 4; }
+[data-columns="5"] { grid-column: span 5; }
+[data-columns="6"] { grid-column: span 6; }
+
 :root[data-theme="dark"] .nav > a.nav-active,
 :root[data-theme="dark"] .nav > a.nav-active:hover {
   background: var(--tone-active-bg);
@@ -7229,6 +7237,16 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: var(--accent, #7fd1d4);
   flex-shrink: 0;
 }
+/* Clickable table rows — cursor + hover effect on data tables */
+.sortable-table tbody tr { cursor: pointer; transition: background 100ms ease; }
+.sortable-table tbody tr:hover { background: var(--hover-soft, rgba(0,0,0,0.03)); }
+:root[data-theme="dark"] .sortable-table tbody tr:hover { background: var(--hover-soft); }
+
+/* Finance invoice links — clickable on hover */
+.finance-invoice-link:hover { text-decoration: none; }
+.finance-invoice-row:hover { background: var(--hover-soft, rgba(0,0,0,0.03)); }
+:root[data-theme="dark"] .finance-invoice-row:hover { background: var(--hover-soft); }
+
 .notice-row-header { display: flex; flex-direction: column; gap: 0.2rem; }
 .notice-row-meta {
   display: flex;

@@ -5081,10 +5081,14 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   flex-direction: column;
 }
 
+/* Full-width tiles — content that benefits from wide layout */
+.dashboard-tiles > .tile-dash-noticeboard,
 .dashboard-tiles > .tile-dash-quick-intake,
 .dashboard-tiles > .tile-dash-instrument-queues {
   grid-column: span 6;
 }
+/* Quick Actions: keep at span 3 (half-width) so it sits beside
+   This Week — two actionable tiles side by side */
 
 .dashboard-tiles .tile > .section-head {
   margin-bottom: 0.75rem;

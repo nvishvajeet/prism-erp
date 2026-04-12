@@ -7696,6 +7696,236 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .explainer-details { color: var(--ink); }
 :root[data-theme="dark"] .explainer-details summary { color: var(--ink); }
 
+/* ── v2.1.1 DARK-MODE AUDIT — comprehensive readability pass ──
+   Catches remaining elements that lacked dark-mode overrides:
+   links in cards/tiles/tables, standalone small-buttons, breadcrumbs,
+   link-buttons, nav buttons, form elements, status text, person chips,
+   payment callouts, message components, and general anchor visibility.
+   Also improves overall text readability for both themes.            */
+
+/* ── Global link visibility in containers ───────────────── */
+:root[data-theme="dark"] .card a,
+:root[data-theme="dark"] .tile a { color: var(--accent); }
+:root[data-theme="dark"] .card a:hover,
+:root[data-theme="dark"] .tile a:hover { color: var(--accent-hover); }
+
+/* ── Standalone .small-button (outside sortable-table) ──── */
+:root[data-theme="dark"] .small-button {
+  background: var(--button-bg);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .small-button:hover {
+  background: var(--hover-soft-strong);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── .link-button (non-primary) ─────────────────────────── */
+:root[data-theme="dark"] .link-button {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .link-button:hover {
+  background: var(--hover-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .link-button.subtle {
+  background: transparent;
+  color: var(--ink);
+}
+:root[data-theme="dark"] .link-button.subtle:hover {
+  color: var(--accent);
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────── */
+:root[data-theme="dark"] .breadcrumb {
+  color: var(--muted);
+  border-bottom-color: var(--line);
+}
+:root[data-theme="dark"] .breadcrumb a { color: var(--accent); }
+:root[data-theme="dark"] .breadcrumb-sep { color: var(--muted); }
+:root[data-theme="dark"] .breadcrumb-link { color: var(--accent); }
+:root[data-theme="dark"] .breadcrumb-link:hover { color: var(--accent-hover); }
+:root[data-theme="dark"] .breadcrumb-separator { color: var(--muted); }
+
+/* ── Nav buttons ────────────────────────────────────────── */
+:root[data-theme="dark"] .nav-button {
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .nav-button:hover {
+  background: var(--hover-soft);
+  color: var(--accent);
+}
+:root[data-theme="dark"] .nav-button.subtle {
+  color: var(--muted);
+}
+:root[data-theme="dark"] .nav-button.subtle:hover {
+  color: var(--ink);
+}
+
+/* ── Primary action button ──────────────────────────────── */
+:root[data-theme="dark"] .primary-action {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .primary-action:hover {
+  background: var(--accent-hover);
+}
+
+/* ── General buttons (.btn) ─────────────────────────────── */
+:root[data-theme="dark"] .btn {
+  background: var(--button-bg);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .btn:hover {
+  background: var(--hover-soft-strong);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .btn-primary:hover {
+  background: var(--accent-hover);
+  color: var(--bg);
+}
+:root[data-theme="dark"] .btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+:root[data-theme="dark"] .btn-danger:hover {
+  background: var(--danger);
+  color: var(--ink);
+}
+
+/* ── Form elements (catch-all for any missed inputs) ────── */
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: var(--muted);
+}
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] select:focus,
+:root[data-theme="dark"] textarea:focus {
+  border-color: var(--accent);
+  outline-color: var(--accent);
+}
+
+/* ── Person chips ───────────────────────────────────────── */
+:root[data-theme="dark"] a.person-chip,
+:root[data-theme="dark"] .person-chip {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] a.person-chip:hover {
+  background: var(--hover-soft-strong);
+}
+
+/* ── Payment instructions callout text ──────────────────── */
+:root[data-theme="dark"] .payment-instructions-callout {
+  color: var(--tone-wait-ink);
+}
+:root[data-theme="dark"] .payment-instructions-callout strong {
+  color: var(--ink);
+}
+
+/* ── Message components ─────────────────────────────────── */
+:root[data-theme="dark"] .message-subject { color: var(--ink); }
+:root[data-theme="dark"] .message-body { color: var(--ink); }
+:root[data-theme="dark"] .message-meta { color: var(--muted); }
+:root[data-theme="dark"] .message-header { color: var(--ink); }
+:root[data-theme="dark"] .message-attachment-name { color: var(--ink); }
+:root[data-theme="dark"] .message-attachment-download { color: var(--accent); }
+:root[data-theme="dark"] .message-reply-form textarea {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+/* ── Inbox folder tabs (reinforce) ──────────────────────── */
+:root[data-theme="dark"] .inbox-folder-tab {
+  background: var(--panel-strong);
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+/* ── View toggles ───────────────────────────────────────── */
+:root[data-theme="dark"] .view-toggle {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .view-toggle-active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* ── Finance paid amounts ───────────────────────────────── */
+:root[data-theme="dark"] .finance-invoice-paid-row .finance-invoice-amount { color: var(--lifecycle-ok); }
+
+/* ── Table header + body text ───────────────────────────── */
+:root[data-theme="dark"] th { color: var(--muted); }
+:root[data-theme="dark"] td { color: var(--ink); }
+
+/* ── Input dialog ───────────────────────────────────────── */
+:root[data-theme="dark"] .input-dialog-send {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* ── Mailing list & detail page ─────────────────────────── */
+:root[data-theme="dark"] .mc-banner { color: var(--ink); }
+:root[data-theme="dark"] .mailing-detail-body { color: var(--ink); }
+
+/* ── Tile headings ──────────────────────────────────────── */
+:root[data-theme="dark"] .tile h2,
+:root[data-theme="dark"] .tile h3 { color: var(--ink); }
+
+/* ── Lifecycle strip labels ─────────────────────────────── */
+:root[data-theme="dark"] .lifecycle-label { color: var(--muted); }
+:root[data-theme="dark"] .lifecycle-step.is-done .lifecycle-label { color: var(--lifecycle-ok); }
+
+/* ── Form labels and fieldset legends ───────────────────── */
+:root[data-theme="dark"] label { color: var(--ink); }
+:root[data-theme="dark"] legend { color: var(--ink); }
+:root[data-theme="dark"] fieldset { border-color: var(--line); }
+
+/* ── Topbar ─────────────────────────────────────────────── */
+:root[data-theme="dark"] .topbar {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .topbar h1 { color: var(--ink); }
+
+/* ── Warroom / dev-now panels ───────────────────────────── */
+:root[data-theme="dark"] .dev-now-cell {
+  background: var(--panel-strong);
+  border-color: var(--line);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .dev-now-label { color: var(--muted); }
+:root[data-theme="dark"] .dev-now-value { color: var(--ink); }
+
+/* ── Stat cards ─────────────────────────────────────────── */
+:root[data-theme="dark"] .stat {
+  background: var(--panel-strong);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* ── Scrollbar styling for dark mode ────────────────────── */
+:root[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--bg); }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
 /* ── Mobile responsive ───────────────────────────────────── */
 @media (max-width: 768px) {
   /* Nav: compact, wrap, smaller text */

@@ -3557,8 +3557,11 @@ code {
   max-height: 200px;
 }
 
-/* Override for dashboard tiles — smaller, snappier */
+/* Override for dashboard tiles — smaller, snappier.
+   Operational tiles (intake + queues) uncapped for full visibility. */
 .dashboard-tiles > .tile { max-height: 440px; }
+.dashboard-tiles > .tile-dash-quick-intake,
+.dashboard-tiles > .tile-dash-instrument-queues { max-height: none; }
 .dashboard-tiles > .tile > :not(.section-head):not(h2):not(h3) {
   overflow-y: auto;
   min-height: 0;

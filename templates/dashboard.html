@@ -22,7 +22,7 @@
        severity accent on critical, amber on warning, ink on
        info. Each notice is a terminal-style card with a
        monospaced SCOPE eyebrow + severity badge. ── #}
-  {% if active_notices %}
+  {% if module_enabled('notifications') and active_notices %}
   <article class="card tile tile-dash-noticeboard" data-vis="{{ V }}">
     {{ card_heading("NOTICEBOARD", active_notices|length|string ~ " active") }}
     <ul class="notice-list" data-vis="{{ V }}">
@@ -133,7 +133,7 @@
   {% endif %}
 
   {# ── TILE 3: Quick Intake — sample_submitted rows needing assignment / acceptance ── #}
-  {% if has_instrument_area_access_user and pending_receipt_lookup_rows %}
+  {% if module_enabled('queue') and has_instrument_area_access_user and pending_receipt_lookup_rows %}
   <article class="card tile tile-dash-quick-intake" data-vis="{{ V }}">
     {% call card_heading("", "Quick Intake") %}
       <a class="text-link" href="{{ url_for('schedule', bucket='sample_submitted') }}" data-vis="{{ V }}">Open Queue</a>
@@ -167,7 +167,7 @@
   {% endif %}
 
   {# ── TILE 4: Instrument Queues — inline grid of up to 9 instrument mini-queues ── #}
-  {% if has_instrument_area_access_user and not instrument_fifo_queue %}
+  {% if module_enabled('queue') and has_instrument_area_access_user and not instrument_fifo_queue %}
   <article class="card tile tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
     {% call card_heading("", "Instrument Queues") %}
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
@@ -177,7 +177,7 @@
                    "New Request", url_for('new_request')) }}
   </article>
   {% endif %}
-  {% if has_instrument_area_access_user and instrument_fifo_queue %}
+  {% if module_enabled('queue') and has_instrument_area_access_user and instrument_fifo_queue %}
   <article class="card tile tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
     {% call card_heading("", "Instrument Queues") %}
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
@@ -245,7 +245,7 @@
   {% endif %}
 
   {# ── TILE 6: Your Jobs — requester / non-admin landing shortcut ── #}
-  {% if not has_instrument_area_access_user %}
+  {% if module_enabled('queue') and not has_instrument_area_access_user %}
   <article class="card tile tile-dash-your-jobs" data-vis="{{ V }}">
     {{ card_heading("", "Your Jobs") }}
     <div class="link-row" data-vis="{{ V }}">
@@ -257,7 +257,7 @@
 
 </section>
 
-{% if has_instrument_area_access_user and pending_receipt_lookup_rows %}
+{% if module_enabled('queue') and has_instrument_area_access_user and pending_receipt_lookup_rows %}
 <script>
   (function () {
     const input = document.getElementById("quickIntakeSearch");

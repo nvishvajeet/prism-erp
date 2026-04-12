@@ -150,13 +150,21 @@ def create_request(
     created_by_email: str | None = None,
 ) -> int:
     request_no = next_request_number(db)
-    requester_id = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()["id"]
+    _r = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()
+    if not _r:
+        return -1  # skip — user not in seed
+    requester_id = _r["id"]
     created_by_lookup = created_by_email or requester_email
-    created_by_user_id = db.execute("SELECT id FROM users WHERE email = ?", (created_by_lookup,)).fetchone()["id"]
-    instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()["id"]
+    _cb = db.execute("SELECT id FROM users WHERE email = ?", (created_by_lookup,)).fetchone()
+    created_by_user_id = _cb["id"] if _cb else requester_id
+    _inst = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()
+    if not _inst:
+        return -1
+    instrument_id = _inst["id"]
     operator_id = None
     if operator_email:
-        operator_id = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()["id"]
+        _op = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()
+        operator_id = _op["id"] if _op else None
     completion_locked = 1 if status == "completed" else 0
     created_at = now_iso(base_dt)
     updated_at = completed_at or sample_received_at or sample_submitted_at or scheduled_for or created_at
@@ -220,9 +228,14 @@ def create_request(
 
 
 def create_approval_chain(db: sqlite3.Connection, request_id: int, instrument_code: str, base_dt: datetime, approval_state: str) -> None:
-    instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()["id"]
-    finance_id = db.execute("SELECT id FROM users WHERE role = 'finance_admin' ORDER BY id LIMIT 1").fetchone()["id"]
-    professor_id = db.execute("SELECT id FROM users WHERE role = 'professor_approver' ORDER BY id LIMIT 1").fetchone()["id"]
+    _inst = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()
+    if not _inst:
+        return
+    instrument_id = _inst["id"]
+    _fin = db.execute("SELECT id FROM users WHERE role = 'finance_admin' ORDER BY id LIMIT 1").fetchone()
+    finance_id = _fin["id"] if _fin else 1
+    _prof = db.execute("SELECT id FROM users WHERE role = 'professor_approver' ORDER BY id LIMIT 1").fetchone()
+    professor_id = _prof["id"] if _prof else 1
     operator_id = db.execute(
         """
         SELECT u.id
@@ -348,15 +361,24 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
     }
     for code, email in admin_map.items():
         instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()["id"]
+        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not _u:
+            continue
+        user_id = _u["id"]
         assign_admin(db, user_id, instrument_id)
     for code, email in operator_map.items():
         instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()["id"]
+        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not _u:
+            continue
+        user_id = _u["id"]
         assign_operator(db, user_id, instrument_id)
     for code, email in faculty_map.items():
         instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()["id"]
+        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not _u:
+            continue
+        user_id = _u["id"]
         assign_faculty(db, user_id, instrument_id)
 
     if db.execute("SELECT COUNT(*) FROM sample_requests WHERE request_no LIKE 'REQ-2%'").fetchone()[0]:
@@ -490,15 +512,25 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
         )
         create_approval_chain(db, request_id, instrument_code, request_base, approval_state)
 
-        requester_id = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()["id"]
-        actor_operator = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()["id"] if operator_email else None
+        if request_id == -1:
+            continue
+        _rq = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()
+        if not _rq:
+            continue
+        requester_id = _rq["id"]
+        actor_operator = None
+        if operator_email:
+            _aop = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()
+            actor_operator = _aop["id"] if _aop else None
         log_action(db, requester_id, request_id, "submitted", {"status": "submitted"}, now_iso(request_base))
         if approval_state in {"finance_only", "professor_pending", "fully_approved", "operator_rejected"}:
-            finance_id = db.execute("SELECT id FROM users WHERE email = 'finance@lab.local'").fetchone()["id"]
-            log_action(db, finance_id, request_id, "finance_approved", {}, now_iso(request_base + timedelta(hours=3)))
+            _fin = db.execute("SELECT id FROM users WHERE role = 'finance_admin' ORDER BY id LIMIT 1").fetchone()
+            if _fin:
+                log_action(db, _fin["id"], request_id, "finance_approved", {}, now_iso(request_base + timedelta(hours=3)))
         if approval_state in {"fully_approved", "operator_rejected"}:
-            professor_id = db.execute("SELECT id FROM users WHERE email = 'prof.approver@lab.local'").fetchone()["id"]
-            log_action(db, professor_id, request_id, "professor_approved", {}, now_iso(request_base + timedelta(hours=6)))
+            _prof = db.execute("SELECT id FROM users WHERE role = 'professor_approver' ORDER BY id LIMIT 1").fetchone()
+            if _prof:
+                log_action(db, _prof["id"], request_id, "professor_approved", {}, now_iso(request_base + timedelta(hours=6)))
         if approval_state == "fully_approved":
             log_action(db, actor_operator, request_id, "operator_approved", {}, now_iso(request_base + timedelta(hours=9)))
         if approval_state == "operator_rejected":
@@ -519,12 +551,15 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             log_action(db, actor_operator, request_id, "rejected", {"remarks": remarks}, now_iso(request_base + timedelta(hours=10)))
 
     seeded_originators = {
-        "REQ-1001": "admin@lab.local",
-        "REQ-1002": "fesem.admin@lab.local",
-        "REQ-1003": "admin@lab.local",
+        "REQ-1001": "vishvajeet@prism.local",
+        "REQ-1002": "kondhalkar@prism.local",
+        "REQ-1003": "vishvajeet@prism.local",
     }
     for request_no, originator_email in seeded_originators.items():
-        originator_id = db.execute("SELECT id FROM users WHERE email = ?", (originator_email,)).fetchone()["id"]
+        _orig = db.execute("SELECT id FROM users WHERE email = ?", (originator_email,)).fetchone()
+        if not _orig:
+            continue
+        originator_id = _orig["id"]
         request_row = db.execute("SELECT id FROM sample_requests WHERE request_no = ?", (request_no,)).fetchone()
         if request_row:
             db.execute(

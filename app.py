@@ -12766,6 +12766,7 @@ def prism_clear():
 FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
 
 @app.route("/debug/feedback", methods=["POST"])
+@csrf.exempt
 @login_required
 def debug_feedback():
     """Append voice-transcribed debugging feedback to logs/debug_feedback.md.

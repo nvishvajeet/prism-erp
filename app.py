@@ -3284,7 +3284,7 @@ def has_instrument_area_access(user: sqlite3.Row | None) -> bool:
 
 
 def sync_instrument_assignments(table: str, instrument_id: int, user_ids: list[int]) -> None:
-    allowed = {"instrument_admins", "instrument_operators", "instrument_faculty_admins"}
+    allowed = {"instrument_admins", "instrument_operators", "instrument_faculty_admins", "instrument_requesters"}
     if table not in allowed:
         raise ValueError("Unsupported assignment table")
     db = get_db()
@@ -3424,6 +3424,19 @@ def init_db() -> None:
                 FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
             );
 
+            -- v2.2.0 — requesters assigned to specific instruments.
+            -- A requester with a row here gets notifications for that
+            -- instrument's noticeboard and appears in the instrument's
+            -- team view. Requesters WITHOUT rows can still submit to
+            -- any instrument — this is opt-in subscription, not a gate.
+            CREATE TABLE IF NOT EXISTS instrument_requesters (
+                user_id INTEGER NOT NULL,
+                instrument_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, instrument_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS instrument_faculty_admins (
                 user_id INTEGER NOT NULL,
                 instrument_id INTEGER NOT NULL,
@@ -3431,6 +3444,30 @@ def init_db() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
             );
+
+            -- v2.2.0 — instrument maintenance + calibration log.
+            -- Every maintenance event, calibration, service call is a
+            -- row here. The instrument detail page shows these as an
+            -- event-widget timeline. NABL auditors check this table.
+            CREATE TABLE IF NOT EXISTS instrument_maintenance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL DEFAULT 'maintenance',
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                performed_by_user_id INTEGER,
+                performed_at TEXT NOT NULL DEFAULT '',
+                next_due_at TEXT,
+                cost REAL NOT NULL DEFAULT 0,
+                certificate_number TEXT NOT NULL DEFAULT '',
+                attachment_filename TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE,
+                FOREIGN KEY (performed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_inst_maint_instrument ON instrument_maintenance(instrument_id);
+            CREATE INDEX IF NOT EXISTS idx_inst_maint_type ON instrument_maintenance(event_type);
+            CREATE INDEX IF NOT EXISTS idx_inst_maint_next_due ON instrument_maintenance(next_due_at);
 
             CREATE TABLE IF NOT EXISTS sample_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -10030,6 +10067,7 @@ def user_profile(user_id: int):
                 "instrument_admins": _ids("admin_ids"),
                 "instrument_operators": _ids("operator_ids"),
                 "instrument_faculty_admins": _ids("faculty_ids"),
+                "instrument_requesters": _ids("requester_ids"),
             }
             manageable_rows = query_all(
                 "SELECT id FROM instruments WHERE status = 'active'"
@@ -10463,6 +10501,160 @@ def calendar_events():
 @instrument_access_required("view")
 def instrument_calendar(instrument_id: int, instrument):
     return redirect(url_for("calendar", instrument_id=instrument_id))
+
+
+# ─── v2.2.0 — Instrument maintenance log + notifications ─────────────
+
+
+@app.route("/instruments/<int:instrument_id>/maintenance", methods=["GET", "POST"])
+@login_required
+def instrument_maintenance_log(instrument_id: int):
+    """Maintenance + calibration log for an instrument. GET shows the
+    event-widget timeline; POST adds a new entry. Gated to operators,
+    instrument admins, faculty admins, and super/site admins."""
+    user = current_user()
+    instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
+    if not instrument:
+        abort(404)
+    roles = user_role_set(user)
+    can_view = bool(roles & {"super_admin", "site_admin"}) or is_owner(user) or \
+        can_manage_instrument(user["id"], instrument_id, user["role"]) or \
+        can_operate_instrument(user["id"], instrument_id, user["role"])
+    if not can_view:
+        abort(403)
+
+    if request.method == "POST":
+        event_type = request.form.get("event_type", "maintenance").strip()
+        if event_type not in {"maintenance", "calibration", "service", "repair", "inspection"}:
+            event_type = "maintenance"
+        title = request.form.get("title", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(url_for("instrument_maintenance_log", instrument_id=instrument_id))
+        description = request.form.get("description", "").strip()
+        performed_at = request.form.get("performed_at", now_iso()).strip() or now_iso()
+        next_due_at = request.form.get("next_due_at", "").strip() or None
+        cost = float(request.form.get("cost") or 0)
+        certificate_number = request.form.get("certificate_number", "").strip()
+        execute(
+            """
+            INSERT INTO instrument_maintenance
+                (instrument_id, event_type, title, description,
+                 performed_by_user_id, performed_at, next_due_at,
+                 cost, certificate_number, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (instrument_id, event_type, title, description,
+             user["id"], performed_at, next_due_at,
+             cost, certificate_number, now_iso()),
+        )
+        log_action(user["id"], "instrument", instrument_id, "maintenance_logged",
+                   {"event_type": event_type, "title": title})
+        flash(f"Logged: {title}", "success")
+        return redirect(url_for("instrument_maintenance_log", instrument_id=instrument_id))
+
+    entries = query_all(
+        """
+        SELECT m.*, u.name AS performed_by_name
+          FROM instrument_maintenance m
+          LEFT JOIN users u ON u.id = m.performed_by_user_id
+         WHERE m.instrument_id = ?
+         ORDER BY m.performed_at DESC, m.id DESC
+         LIMIT 200
+        """,
+        (instrument_id,),
+    )
+    upcoming_calibrations = query_all(
+        """
+        SELECT m.*, u.name AS performed_by_name
+          FROM instrument_maintenance m
+          LEFT JOIN users u ON u.id = m.performed_by_user_id
+         WHERE m.instrument_id = ?
+           AND m.event_type = 'calibration'
+           AND m.next_due_at IS NOT NULL
+           AND m.next_due_at >= date('now', '-7 days')
+         ORDER BY m.next_due_at ASC
+         LIMIT 10
+        """,
+        (instrument_id,),
+    )
+    return render_template(
+        "instrument_maintenance.html",
+        instrument=instrument,
+        entries=entries,
+        upcoming_calibrations=upcoming_calibrations,
+        can_add=can_view,
+    )
+
+
+@app.route("/instruments/<int:instrument_id>/notify", methods=["POST"])
+@login_required
+def instrument_notify(instrument_id: int):
+    """Post a notice scoped to this instrument. Operators and admins
+    can broadcast to everyone assigned to this instrument (operators,
+    faculty, requesters). Uses the existing notices table with
+    scope='instrument' + scope_target=instrument.code."""
+    user = current_user()
+    instrument = query_one("SELECT * FROM instruments WHERE id = ?", (instrument_id,))
+    if not instrument:
+        abort(404)
+    roles = user_role_set(user)
+    can_post = bool(roles & {"super_admin", "site_admin"}) or is_owner(user) or \
+        can_manage_instrument(user["id"], instrument_id, user["role"]) or \
+        can_operate_instrument(user["id"], instrument_id, user["role"])
+    if not can_post:
+        abort(403)
+    subject = request.form.get("subject", "").strip()
+    body = request.form.get("body", "").strip()
+    severity = request.form.get("severity", "info").strip()
+    if severity not in {"info", "warning", "critical"}:
+        severity = "info"
+    if not subject:
+        flash("Subject is required.", "error")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    now = now_iso()
+    notice_id = execute(
+        """
+        INSERT INTO notices
+            (scope, scope_target, severity, subject, body,
+             author_id, created_at, expires_at)
+        VALUES ('instrument', ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (instrument["code"], severity, subject, body, user["id"], now),
+    )
+    log_action(user["id"], "notice", notice_id, "instrument_notice_posted",
+               {"instrument_id": instrument_id, "subject": subject[:200]})
+    flash(f"Notice posted to {instrument['name']} subscribers.", "success")
+    return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+
+
+@app.route("/admin/maintenance/upcoming")
+@login_required
+def admin_calibrations_upcoming():
+    """NABL-facing dashboard: calibrations due in the next 30 days
+    across all instruments. Admin/owner gated."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+        abort(403)
+    upcoming = query_all(
+        """
+        SELECT m.*, i.name AS instrument_name, i.code AS instrument_code,
+               u.name AS performed_by_name
+          FROM instrument_maintenance m
+          JOIN instruments i ON i.id = m.instrument_id
+          LEFT JOIN users u ON u.id = m.performed_by_user_id
+         WHERE m.event_type = 'calibration'
+           AND m.next_due_at IS NOT NULL
+           AND m.next_due_at >= date('now', '-7 days')
+           AND m.next_due_at <= date('now', '+30 days')
+         ORDER BY m.next_due_at ASC
+        """
+    )
+    return render_template(
+        "admin_calibrations_upcoming.html",
+        upcoming=upcoming,
+    )
 
 
 @app.route("/stats")

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Calibrations Due</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">NABL compliance</span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("UPCOMING", upcoming|length|string ~ " calibration" ~ ("s" if upcoming|length != 1 else "") ~ " due in the next 30 days") }}
+    {% if upcoming %}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for c in upcoming %}
+      <li class="finance-invoice-row" data-vis="{{ V }}">
+        <a href="{{ url_for('instrument_maintenance_log', instrument_id=c.instrument_id) }}" class="finance-invoice-link" data-vis="{{ V }}">
+          <div class="finance-invoice-head" data-vis="{{ V }}">
+            <span class="finance-invoice-status notice-severity-warning" data-vis="{{ V }}">DUE {{ c.next_due_at[:10] }}</span>
+            <strong class="finance-invoice-title" data-vis="{{ V }}">{{ c.title }}</strong>
+            <span class="finance-invoice-amount" data-vis="{{ V }}">{{ c.instrument_name }}</span>
+          </div>
+          <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+            <code class="inline-code" data-vis="{{ V }}">{{ c.instrument_code }}</code>
+            {% if c.certificate_number %} · cert {{ c.certificate_number }}{% endif %}
+            · last done {{ c.performed_at[:10] }}
+            {% if c.performed_by_name %} by {{ c.performed_by_name }}{% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No calibrations due in the next 30 days. All instruments are current.") }}
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

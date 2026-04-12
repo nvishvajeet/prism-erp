@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('instrument_detail', instrument_id=instrument.id) }}" class="hover-back-btn" title="Back to Instrument">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('instrument_detail', instrument_id=instrument.id) }}" data-vis="{{ V }}">← {{ instrument.name }}</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Maintenance & Calibration Log</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ instrument.code }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {% if upcoming_calibrations %}
+  <article class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("UPCOMING CALIBRATIONS", upcoming_calibrations|length|string ~ " due soon") }}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for c in upcoming_calibrations %}
+      <li class="finance-invoice-row" data-vis="{{ V }}">
+        <div class="finance-invoice-head" data-vis="{{ V }}">
+          <span class="finance-invoice-status notice-severity-warning" data-vis="{{ V }}">DUE {{ c.next_due_at[:10] if c.next_due_at else '?' }}</span>
+          <strong class="finance-invoice-title" data-vis="{{ V }}">{{ c.title }}</strong>
+          {% if c.certificate_number %}<code class="inline-code" data-vis="{{ V }}">{{ c.certificate_number }}</code>{% endif %}
+        </div>
+        <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+          Last done {{ c.performed_at[:10] }} by {{ c.performed_by_name or 'unknown' }}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {% if can_add %}
+  <article class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+    {{ card_heading("LOG EVENT", "Add maintenance or calibration record") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Type
+        <select name="event_type" data-vis="{{ V }}">
+          <option value="maintenance">Maintenance</option>
+          <option value="calibration">Calibration</option>
+          <option value="service">Service Call</option>
+          <option value="repair">Repair</option>
+          <option value="inspection">Inspection</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Title
+        <input type="text" name="title" required placeholder="What was done" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Description
+        <textarea name="description" rows="3" placeholder="Details, parts replaced, observations…" data-vis="{{ V }}"></textarea>
+      </label>
+      <label data-vis="{{ V }}">Date performed
+        <input type="date" name="performed_at" value="{{ now_iso()[:10] if now_iso else '' }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Next due date (for calibrations)
+        <input type="date" name="next_due_at" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Certificate number
+        <input type="text" name="certificate_number" placeholder="NABL cert #" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Cost (₹)
+        <input type="number" step="0.01" min="0" name="cost" value="0" data-vis="{{ V }}">
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Log Event</button>
+      </div>
+    </form>
+  </article>
+  {% endif %}
+
+  <article class="card tile" style="grid-column: span {{ 3 if can_add else 6 }};" data-vis="{{ V }}">
+    {{ card_heading("HISTORY", entries|length|string ~ " entries") }}
+    {% if entries %}
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for e in entries %}
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-meta" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ e.title }}</strong>
+            <span class="badge" data-vis="{{ V }}">{{ e.event_type|upper }}</span>
+            <span class="activity-entry-time" data-vis="{{ V }}">{{ e.performed_at[:10] if e.performed_at else '' }}</span>
+          </div>
+          {% if e.performed_by_name %}<p class="hint" data-vis="{{ V }}">{{ e.performed_by_name }}</p>{% endif %}
+          {% if e.description %}<div class="activity-entry-text" data-vis="{{ V }}">{{ e.description }}</div>{% endif %}
+          {% if e.certificate_number %}<p class="hint" data-vis="{{ V }}">Certificate: <code class="inline-code" data-vis="{{ V }}">{{ e.certificate_number }}</code></p>{% endif %}
+          {% if e.next_due_at %}<p class="hint" data-vis="{{ V }}">Next due: {{ e.next_due_at[:10] }}</p>{% endif %}
+          {% if e.cost > 0 %}<p class="hint" data-vis="{{ V }}">Cost: ₹{{ "{:,.0f}".format(e.cost) }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No maintenance records yet. Log the first one.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

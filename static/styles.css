@@ -8272,3 +8272,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 /* Maintenance + Notify: compact, span 2 each so they sit in one row with Activity */
 .tile-maintenance { grid-column: span 2; }
 .tile-notify      { grid-column: span 2; }
+
+/* Form control page: tiles need auto-height for editable forms.
+   The fixed 16rem from inst-tiles doesn't work for full form panels. */
+.inst-tiles > .tile[style*="span 6"] { height: auto; max-height: none; }

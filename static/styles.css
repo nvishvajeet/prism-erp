@@ -1156,14 +1156,21 @@ a:hover {
 }
 
 /* ── Breadcrumb location bar ── */
+/* Three-level sticky header: topbar → nav → breadcrumb.
+   All stay pinned so the user always knows where they are. */
 .breadcrumb {
-  padding: 0.3rem 1rem;
-  font-size: 0.78rem;
+  padding: 0.25rem 1rem;
+  font-size: 0.75rem;
   color: var(--text-muted, #6b7684);
   display: flex;
   align-items: center;
   gap: 0.35rem;
   border-bottom: 1px solid rgba(200, 210, 220, 0.12);
+  position: sticky;
+  top: 0;
+  z-index: 38;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
 }
 .breadcrumb a {
   color: var(--accent);
@@ -7922,6 +7929,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .breadcrumb {
   color: var(--muted);
   border-bottom-color: var(--line);
+  background: rgba(15, 20, 25, 0.95);
 }
 :root[data-theme="dark"] .breadcrumb a { color: var(--accent); }
 :root[data-theme="dark"] .breadcrumb-sep { color: var(--muted); }

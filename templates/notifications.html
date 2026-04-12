@@ -20,6 +20,9 @@
     {% else %}
     <span class="hint" data-vis="{{ V }}">All read</span>
     {% endif %}
+    {% if is_owner_user or can_manage_members_user %}
+    <a class="btn btn-primary" href="{{ url_for('admin_notices') }}" data-vis="{{ V }}">Send Notice</a>
+    {% endif %}
   </div>
 </header>
 

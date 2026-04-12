@@ -23,6 +23,14 @@
   {% endif %}
 
   {% for section in sections %}
+  {# Role-aware template guards (defence-in-depth; server already filters) #}
+  {% set show_section = true %}
+  {% if section.key == 'admin' and not (is_owner_user or can_manage_members_user) %}
+    {% set show_section = false %}
+  {% elif section.key == 'operations' and not (module_enabled('instruments') or module_enabled('queue') or module_enabled('finance')) %}
+    {% set show_section = false %}
+  {% endif %}
+  {% if show_section %}
   <article class="card tile tile-sitemap-section tile-sitemap-{{ section.key }}" data-vis="{{ V }}">
     <header class="sitemap-section-head" data-vis="{{ V }}">
       <span class="sitemap-section-icon" data-vis="{{ V }}">{{ section.icon }}</span>
@@ -36,6 +44,14 @@
       {% endif %}
 
       {% for item in group.entries %}
+      {# Per-item role guards for sensitive links #}
+      {% set show_item = true %}
+      {% if item.label == 'Finance Portal' and not (module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user)) %}
+        {% set show_item = false %}
+      {% elif item.label in ('User Management', 'Notices', 'Leave Queue', 'Attendance Overview', 'Calibrations Due') and not (is_owner_user or can_manage_members_user) %}
+        {% set show_item = false %}
+      {% endif %}
+      {% if show_item %}
       <div class="settings-item" data-vis="{{ V }}">
         <div class="item-label" data-vis="{{ V }}">
           <span class="item-title" data-vis="{{ V }}">{{ item.label }}</span>
@@ -57,10 +73,12 @@
           {% endif %}
         </div>
       </div>
+      {% endif %}
       {% endfor %}
     </div>
     {% endfor %}
   </article>
+  {% endif %}
   {% endfor %}
 
 </section>

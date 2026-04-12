@@ -5272,14 +5272,24 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   flex-direction: column;
 }
 
-/* Full-width tiles — content that benefits from wide layout */
+/* Full-width tiles */
 .dashboard-tiles > .tile-dash-noticeboard,
-.dashboard-tiles > .tile-dash-quick-intake,
 .dashboard-tiles > .tile-dash-instrument-queues {
   grid-column: span 6;
 }
-/* Quick Actions: keep at span 3 (half-width) so it sits beside
-   This Week — two actionable tiles side by side */
+/* Quick Actions: compact, span 2 so it sits beside week+month */
+.dashboard-tiles > .tile-dash-quick-actions {
+  grid-column: span 2;
+}
+/* This Week + This Month: side by side, span 2 each */
+.dashboard-tiles > .tile-dash-week,
+.dashboard-tiles > .tile-dash-month {
+  grid-column: span 2;
+}
+/* Quick Intake: span 6 but items in a 3-column grid */
+.dashboard-tiles > .tile-dash-quick-intake {
+  grid-column: span 6;
+}
 
 .dashboard-tiles .tile > .section-head {
   margin-bottom: 0.75rem;

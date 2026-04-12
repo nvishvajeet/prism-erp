@@ -28,20 +28,27 @@
   var clickEvents = []; // collected during a recording session
 
   function gridCoords(clientX, clientY) {
+    // Use page coordinates (scroll-aware) so row numbers match
+    // the full document, not just the viewport.
+    var pageY = clientY + window.scrollY;
     var col = Math.floor(clientX / (window.innerWidth / COLS)) + 1;
-    var row = Math.floor(clientY / ROW_HEIGHT) + 1;
+    var row = Math.floor(pageY / ROW_HEIGHT) + 1;
     return { row: Math.max(1, row), col: Math.min(col, COLS) };
   }
 
   function createGrid() {
     if (gridContainer) return;
+    // Use position:absolute so the grid covers the FULL page
+    // height and scrolls with the document. Column labels stay
+    // fixed via position:sticky inside the container.
     gridContainer = document.createElement('div');
     gridContainer.id = 'debugGrid';
     gridContainer.style.cssText = [
-      'position: fixed', 'inset: 0', 'z-index: 99990',
-      'pointer-events: none', 'display: none'
+      'position: absolute', 'top: 0', 'left: 0', 'right: 0',
+      'z-index: 99990', 'pointer-events: none', 'display: none'
     ].join(';');
 
+    // Column lines (full document height) + sticky column labels
     for (var c = 0; c <= COLS; c++) {
       var pct = (c / COLS * 100).toFixed(2) + '%';
       var line = document.createElement('div');
@@ -51,33 +58,48 @@
       if (c < COLS) {
         var cl = document.createElement('div');
         cl.textContent = 'C' + (c + 1);
-        cl.style.cssText = 'position:absolute;top:4px;left:calc(' + pct +
+        cl.style.cssText = 'position:fixed;top:4px;left:calc(' + pct +
           ' + 4px);font:bold 11px/1 monospace;color:rgba(255,80,80,0.8);' +
-          'background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px';
+          'background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px;z-index:99991';
         gridContainer.appendChild(cl);
       }
     }
-    var rows = Math.ceil(window.innerHeight / ROW_HEIGHT) + 2;
-    for (var r = 0; r <= rows; r++) {
-      var top = r * ROW_HEIGHT;
-      var rl = document.createElement('div');
-      rl.style.cssText = 'position:absolute;left:0;right:0;top:' + top +
-        'px;height:1px;background:rgba(80,140,255,0.3)';
-      gridContainer.appendChild(rl);
-      var lab = document.createElement('div');
-      lab.textContent = 'R' + (r + 1);
-      lab.style.cssText = 'position:absolute;top:' + (top + 4) +
-        'px;left:4px;font:bold 11px/1 monospace;color:rgba(80,140,255,0.8);' +
-        'background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px';
-      gridContainer.appendChild(lab);
+
+    // Update grid height + row count to cover the full document
+    function updateRows() {
+      // Remove old row lines/labels
+      gridContainer.querySelectorAll('.dg-row').forEach(function(el) { el.remove(); });
+      var docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      gridContainer.style.height = docHeight + 'px';
+      var totalRows = Math.ceil(docHeight / ROW_HEIGHT) + 1;
+      for (var r = 0; r <= totalRows; r++) {
+        var top = r * ROW_HEIGHT;
+        var rl = document.createElement('div');
+        rl.className = 'dg-row';
+        rl.style.cssText = 'position:absolute;left:0;right:0;top:' + top +
+          'px;height:1px;background:rgba(80,140,255,0.3)';
+        gridContainer.appendChild(rl);
+        var lab = document.createElement('div');
+        lab.className = 'dg-row';
+        lab.textContent = 'R' + (r + 1);
+        lab.style.cssText = 'position:absolute;top:' + (top + 4) +
+          'px;left:4px;font:bold 11px/1 monospace;color:rgba(80,140,255,0.8);' +
+          'background:rgba(0,0,0,0.6);padding:2px 5px;border-radius:3px';
+        gridContainer.appendChild(lab);
+      }
     }
+    updateRows();
+    // Re-measure when content changes (e.g. expand/collapse tiles)
+    window.addEventListener('resize', updateRows);
+    new MutationObserver(updateRows).observe(document.body, {childList: true, subtree: true, attributes: true});
+
     document.body.appendChild(gridContainer);
 
-    // Container for click markers (persists independently of grid toggle)
+    // Container for click markers (absolute, scroll-aware)
     clickMarkerContainer = document.createElement('div');
     clickMarkerContainer.id = 'debugClickMarkers';
     clickMarkerContainer.style.cssText =
-      'position:fixed;inset:0;z-index:99991;pointer-events:none';
+      'position:absolute;top:0;left:0;right:0;z-index:99991;pointer-events:none';
     document.body.appendChild(clickMarkerContainer);
   }
 
@@ -90,14 +112,17 @@
 
   function placeClickMarker(x, y, label) {
     createGrid();
+    // Use page coordinates so markers stay at the right scroll position
+    var pageX = x;
+    var pageY = y + window.scrollY;
     var dot = document.createElement('div');
-    dot.style.cssText = 'position:fixed;width:22px;height:22px;border-radius:50%;' +
+    dot.style.cssText = 'position:absolute;width:22px;height:22px;border-radius:50%;' +
       'background:rgba(220,40,40,0.7);border:2px solid #fff;' +
-      'left:' + (x - 11) + 'px;top:' + (y - 11) + 'px;' +
+      'left:' + (pageX - 11) + 'px;top:' + (pageY - 11) + 'px;' +
       'pointer-events:none;z-index:99992';
     var tag = document.createElement('div');
     tag.textContent = label;
-    tag.style.cssText = 'position:fixed;left:' + (x + 14) + 'px;top:' + (y - 8) +
+    tag.style.cssText = 'position:absolute;left:' + (pageX + 14) + 'px;top:' + (pageY - 8) +
       'px;font:bold 11px/1 monospace;color:#fff;background:rgba(220,40,40,0.85);' +
       'padding:2px 6px;border-radius:3px;pointer-events:none;z-index:99992';
     clickMarkerContainer.appendChild(dot);

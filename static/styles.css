@@ -8499,3 +8499,15 @@ form[action*="quick-present"] .primary-action:hover {
   background: var(--accent);
   color: #fff;
 }
+
+/* Quick Intake: show action buttons compact, hide only the operator dropdown */
+.tile-dash-quick-intake .queue-action-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.72rem;
+  border-radius: var(--radius-md);
+}
+.tile-dash-quick-intake .queue-action-stack {
+  flex-direction: row;
+  gap: 0.25rem;
+  align-items: center;
+}

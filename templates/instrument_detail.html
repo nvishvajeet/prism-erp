@@ -354,58 +354,6 @@
     <a class="btn" href="{{ url_for('instrument_maintenance_log', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Open maintenance log</a>
   </section>
 
-  {# ── Tile: Notify instrument subscribers (v2.2.0) ── #}
-  {% if can_edit %}
-  <section class="card tile tile-notify" data-vis="{{ V }}">
-    {{ card_heading("", "Notify Subscribers") }}
-    <form method="post" action="{{ url_for('instrument_notify', instrument_id=instrument['id']) }}" class="form-grid" data-vis="{{ V }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
-      <label data-vis="{{ V }}">Subject
-        <input type="text" name="subject" required placeholder="Short announcement" data-vis="{{ V }}">
-      </label>
-      <label data-vis="{{ V }}">Body (optional)
-        <textarea name="body" rows="2" placeholder="Details…" data-vis="{{ V }}"></textarea>
-      </label>
-      <label data-vis="{{ V }}">Severity
-        <select name="severity" data-vis="{{ V }}">
-          <option value="info">Info</option>
-          <option value="warning">Warning</option>
-          <option value="critical">Critical</option>
-        </select>
-      </label>
-      <div data-vis="{{ V }}">
-        <button type="submit" class="primary-action" data-vis="{{ V }}">Post Notice</button>
-      </div>
-    </form>
-  </section>
-  {% endif %}
-
-  {# ── Tile: Activity ── #}
-  <section class="card tile tile-activity" data-vis="{{ V }}">
-    {{ card_heading("", "Recent Activity") }}
-    {% if instrument_timeline_entries %}
-    {% call paginated_pane('instEvents', page_size=6, max_height='none') %}
-    <table class="activity-table" data-vis="{{ V }}">
-      <tbody id="instEventsBody">
-        {% for entry in instrument_timeline_entries %}
-        <tr data-pane-item data-vis="{{ V }}">
-          <td data-vis="{{ V }}">
-            <div class="activity-row" data-vis="{{ V }}">
-              <strong data-vis="{{ V }}">{{ entry.title }}</strong>
-              {% if entry.detail %}<span class="hint" data-vis="{{ V }}">{{ entry.detail }}</span>{% endif %}
-              <small class="muted" data-vis="{{ V }}">{{ format_dt(entry.at) }} — {{ entry.actor }}</small>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% endcall %}
-    {% else %}
-    <p class="hint" data-vis="{{ V }}">No recent activity</p>
-    {% endif %}
-  </section>
-
   {# ── Tile: Metadata Edit (toggleable) ── #}
   {% if can_edit %}
   <section class="card tile tile-edit" id="metaEditTile" data-vis="{{ V }}">
@@ -503,3 +451,56 @@
      Intake-mode toggle is wired by static/intake-toggle.js (loaded from base.html). */
 </script>
 {% endblock %}
+
+  {# ── Tile: Notify instrument subscribers (v2.2.0) ── #}
+  {% if can_edit %}
+  <section class="card tile tile-notify" data-vis="{{ V }}">
+    {{ card_heading("", "Notify Subscribers") }}
+    <form method="post" action="{{ url_for('instrument_notify', instrument_id=instrument['id']) }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Subject
+        <input type="text" name="subject" required placeholder="Short announcement" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Body (optional)
+        <textarea name="body" rows="2" placeholder="Details…" data-vis="{{ V }}"></textarea>
+      </label>
+      <label data-vis="{{ V }}">Severity
+        <select name="severity" data-vis="{{ V }}">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="primary-action" data-vis="{{ V }}">Post Notice</button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+
+  {# ── Tile: Activity ── #}
+  <section class="card tile tile-activity" data-vis="{{ V }}">
+    {{ card_heading("", "Recent Activity") }}
+    {% if instrument_timeline_entries %}
+    {% call paginated_pane('instEvents', page_size=6, max_height='none') %}
+    <table class="activity-table" data-vis="{{ V }}">
+      <tbody id="instEventsBody">
+        {% for entry in instrument_timeline_entries %}
+        <tr data-pane-item data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <div class="activity-row" data-vis="{{ V }}">
+              <strong data-vis="{{ V }}">{{ entry.title }}</strong>
+              {% if entry.detail %}<span class="hint" data-vis="{{ V }}">{{ entry.detail }}</span>{% endif %}
+              <small class="muted" data-vis="{{ V }}">{{ format_dt(entry.at) }} — {{ entry.actor }}</small>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No recent activity</p>
+    {% endif %}
+  </section>
+

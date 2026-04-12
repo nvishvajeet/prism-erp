@@ -186,14 +186,14 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 1rem 1.5rem 0.9rem;
+  padding: 0.6rem 1.5rem;
   background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
-  /* Topbar scrolls away; nav is the sticky element at top: 0.
-     Single sticky bar = no jitter, more vertical space. */
-  z-index: 40;
+  position: sticky;
+  top: 0;
+  z-index: 50;
   box-shadow: var(--shadow-soft);
   isolation: isolate;
 }
@@ -554,13 +554,13 @@ a:hover {
 .nav {
   display: flex;
   gap: 0.7rem;
-  padding: 0.7rem 1.5rem 0.9rem;
+  padding: 0.5rem 1.5rem;
   background: rgba(255, 255, 255, 0.92);
   flex-wrap: wrap;
   align-items: center;
   border-bottom: 1px solid var(--line);
   position: sticky;
-  top: 0;
+  top: 0; /* Sticks at top — topbar scrolls away above it */
   z-index: 39;
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-soft);

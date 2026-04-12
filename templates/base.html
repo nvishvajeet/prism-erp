@@ -87,9 +87,9 @@
     {% set endpoint = request.endpoint or '' %}
     {% if not access_profile_user.can_access_instruments %}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
-    <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
+    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox</a>
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications</a>
     <span class="nav-spacer"></span>
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
     {% else %}
@@ -127,13 +127,9 @@
     {% if can_access_stats_user %}
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
     {% endif %}
+    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications</a>
-    <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
-    {% if is_owner_user %}
-    {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Owner-only development control panel">Dev</a>{% endif %}
-    <a class="{% if endpoint == 'portfolio_panel' %}nav-active{% endif %}" href="{{ url_for('portfolio_panel') }}" data-vis="{{ V }}" title="Owner-only personal portfolio dashboard">Portfolio</a>
-    {% endif %}
+    {% if is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>{% endif %}
     <span class="nav-spacer"></span>
     {% if access_profile_user.can_view_finance_stage or is_owner_user %}
     <a class="nav-button subtle {% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>

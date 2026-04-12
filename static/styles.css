@@ -3525,8 +3525,18 @@ code {
    can override this for tiles that genuinely need to be taller
    (e.g. the request event feed). */
 .tile { max-height: 600px; }
+/* Detail pages: tiles show the page purpose — no cap */
 .tile-request-header,
-.tile-request-events { max-height: none; }
+.tile-request-events,
+.tile-request-meta,
+.tile-request-actions,
+.tile-request-approvals,
+.tile-request-files,
+.tile-info,
+.tile-team,
+.tile-approval,
+.tile-downtime,
+.tile-activity { max-height: none; }
 /* Explainer tile: fixed height, details content scrolls inside.
    Opening "Show the full pipeline" never pushes other tiles. */
 .tile-request-explainer {

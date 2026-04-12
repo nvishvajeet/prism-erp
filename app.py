@@ -5290,6 +5290,7 @@ def inject_globals():
         "nav_instruments": nav_instruments,
         "nav_instruments_truncated": nav_instruments_truncated,
         "nav_pending_counts": nav_pending_counts(user),
+        "nav_notice_count": len(active_notices_for_user(user)) if user else 0,
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),

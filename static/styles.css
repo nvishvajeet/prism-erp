@@ -187,8 +187,8 @@ body {
   color: var(--ink);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
+  /* Topbar scrolls away; nav is the sticky element at top: 0.
+     Single sticky bar = no jitter, more vertical space. */
   z-index: 40;
   box-shadow: var(--shadow-soft);
   isolation: isolate;
@@ -548,7 +548,7 @@ a:hover {
   align-items: center;
   border-bottom: 1px solid var(--line);
   position: sticky;
-  top: 67px;
+  top: 0;
   z-index: 39;
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-soft);
@@ -3514,8 +3514,14 @@ code {
    (e.g. the request event feed). */
 .tile { max-height: 600px; }
 .tile-request-header,
-.tile-request-events,
-.tile-request-explainer { max-height: none; }
+.tile-request-events { max-height: none; }
+/* Explainer tile: fixed height, details content scrolls inside.
+   Opening "Show the full pipeline" never pushes other tiles. */
+.tile-request-explainer { max-height: 280px; }
+.tile-request-explainer .explainer-details {
+  overflow-y: auto;
+  max-height: 220px;
+}
 
 /* Override for dashboard tiles — smaller, snappier */
 .dashboard-tiles > .tile { max-height: 440px; }

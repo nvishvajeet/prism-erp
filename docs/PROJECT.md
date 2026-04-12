@@ -2,7 +2,7 @@
 
 **Version 1.2.0**
 
-A request-tracking and operator-workflow system for MIT-WPU's
+A request-tracking and operator-workflow system for
 Department of Research & Development. One Python process, one
 SQLite database, browser-based interface.
 
@@ -383,7 +383,7 @@ Main/
 │   ├── manifest.json            PWA manifest
 │   ├── favicon.ico
 │   ├── instrument-placeholder.svg
-│   ├── mitwpu-logo.webp
+│   ├── favicon.ico
 │   ├── instrument_images/       Uploaded instrument photos
 │   └── vendor/                  Pinned vendor assets
 │

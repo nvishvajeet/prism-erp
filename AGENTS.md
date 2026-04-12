@@ -14,7 +14,7 @@
 ## 1. What PRISM is
 
 PRISM is a LAN-first Flask sample-request and instrument workflow
-system for MIT-WPU's shared lab facility. Sequential approvals
+system for shared lab facilities. Sequential approvals
 (finance → professor → operator), queue management, per-request
 attachments, SHA-256 audit chain. Single binary, SQLite, no build
 step.

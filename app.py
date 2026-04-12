@@ -63,7 +63,7 @@ OWNER_EMAILS = {
     # and crawlers continue to work without an env var on dev machines.
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "vishvajeet.nagargoje@mitwpu.edu.in,admin@lab.local",
+        "vishvajeet.nagargoje@prism.local,admin@lab.local",
     ).split(",")
     if email.strip()
 }
@@ -4782,7 +4782,7 @@ def _seed_demo_notices() -> None:
             (
                 "site", None, "info",
                 "Welcome to the PRISM live demo",
-                "This is a public-facing demo of the MIT-WPU lab scheduler. Credentials are pre-filled by the /login?demo=1 shortcut. Try logging out and signing back in as operator@lab.local or requester@lab.local with the same password (12345) to see the per-role UI.",
+                "This is a public-facing demo of the PRISM Manager demo. Credentials are pre-filled by the /login?demo=1 shortcut. Try logging out and signing back in as operator@lab.local or requester@lab.local with the same password (12345) to see the per-role UI.",
                 admin_id,
             ),
             (
@@ -4907,7 +4907,7 @@ def seed_data() -> None:
             (name, email, demo_pw_hash, role),
         )
 
-    # ── v2.0.3 — Real CRF instrument inventory from the MIT-WPU brochure ──
+    # ── v2.0.3 — Real CRF instrument inventory from the PRISM brochure ──
     # 21 instruments across the imaging, spectroscopy, mechanical-test,
     # and battery-fab clusters. Numbering preserved for backwards
     # compat: INST-001 = FESEM (smoke_test fixture), INST-002 = ICP-MS,
@@ -5041,48 +5041,48 @@ def seed_data() -> None:
     # 1 dean + 14 faculty (each handles 2-9 instruments) + 16 operators
     # (each handles 2-5 instruments). Multi-instrument handling enforced.
     # Every instrument gets exactly 2 faculty in charge + 2 operators.
-    # New accounts use @crf.mitwpu.edu.in to keep them visually distinct
+    # New accounts use @prism.local to keep them visually distinct
     # from the @lab.local legacy demo personas (which smoke_test +
     # crawlers depend on for stable IDs).
     crf_personnel = [
         # Owner — singular per the v2.0.3 directive. OWNER_EMAILS env
         # var (top of file) gates god-view; this row gives the owner
         # an actual login. super_admin role mirrors the dean's level.
-        ("Vishvajeet Nagargoje", "vishvajeet.nagargoje@mitwpu.edu.in", "super_admin"),
+        ("Vishvajeet Nagargoje", "vishvajeet.nagargoje@prism.local", "super_admin"),
         # Dean (R&D)
-        ("Dr. Anand Bhalerao",  "dean.bhalerao@crf.mitwpu.edu.in",   "super_admin"),
+        ("Dr. Anand Bhalerao",  "dean.bhalerao@prism.local",   "super_admin"),
         # Faculty in charge
-        ("Dr. Sneha Kulkarni",  "kulkarni@crf.mitwpu.edu.in",        "professor_approver"),
-        ("Dr. Aditya Joshi",    "ajoshi@crf.mitwpu.edu.in",          "professor_approver"),
-        ("Dr. Meera Deshpande", "deshpande@crf.mitwpu.edu.in",       "professor_approver"),
-        ("Dr. Rahul Patil",     "rpatil@crf.mitwpu.edu.in",          "professor_approver"),
-        ("Dr. Kavita Iyer",     "kiyer@crf.mitwpu.edu.in",           "professor_approver"),
-        ("Dr. Vinod Karnik",    "karnik@crf.mitwpu.edu.in",          "professor_approver"),
-        ("Dr. Ananya Bose",     "bose@crf.mitwpu.edu.in",            "professor_approver"),
-        ("Dr. Suresh Kapoor",   "kapoor@crf.mitwpu.edu.in",          "professor_approver"),
-        ("Dr. Priya Menon",     "menon@crf.mitwpu.edu.in",           "professor_approver"),
-        ("Dr. Rohit Naik",      "rnaik@crf.mitwpu.edu.in",           "professor_approver"),
-        ("Dr. Sandeep Rao",     "srao@crf.mitwpu.edu.in",            "professor_approver"),
-        ("Dr. Latika Gokhale",  "gokhale@crf.mitwpu.edu.in",         "professor_approver"),
-        ("Dr. Manish Sharma",   "msharma@crf.mitwpu.edu.in",         "professor_approver"),
-        ("Dr. Vivek Gupta",     "vgupta@crf.mitwpu.edu.in",          "professor_approver"),
+        ("Dr. Sneha Kulkarni",  "kulkarni@prism.local",        "professor_approver"),
+        ("Dr. Aditya Joshi",    "ajoshi@prism.local",          "professor_approver"),
+        ("Dr. Meera Deshpande", "deshpande@prism.local",       "professor_approver"),
+        ("Dr. Rahul Patil",     "rpatil@prism.local",          "professor_approver"),
+        ("Dr. Kavita Iyer",     "kiyer@prism.local",           "professor_approver"),
+        ("Dr. Vinod Karnik",    "karnik@prism.local",          "professor_approver"),
+        ("Dr. Ananya Bose",     "bose@prism.local",            "professor_approver"),
+        ("Dr. Suresh Kapoor",   "kapoor@prism.local",          "professor_approver"),
+        ("Dr. Priya Menon",     "menon@prism.local",           "professor_approver"),
+        ("Dr. Rohit Naik",      "rnaik@prism.local",           "professor_approver"),
+        ("Dr. Sandeep Rao",     "srao@prism.local",            "professor_approver"),
+        ("Dr. Latika Gokhale",  "gokhale@prism.local",         "professor_approver"),
+        ("Dr. Manish Sharma",   "msharma@prism.local",         "professor_approver"),
+        ("Dr. Vivek Gupta",     "vgupta@prism.local",          "professor_approver"),
         # Operators (research assistants / lab technicians)
-        ("Asha Pawar",          "asha.pawar@crf.mitwpu.edu.in",      "operator"),
-        ("Bhargav Naik",        "bhargav.naik@crf.mitwpu.edu.in",    "operator"),
-        ("Chetan Joshi",        "chetan.joshi@crf.mitwpu.edu.in",    "operator"),
-        ("Divya Rane",          "divya.rane@crf.mitwpu.edu.in",      "operator"),
-        ("Esha Mhaskar",        "esha.mhaskar@crf.mitwpu.edu.in",    "operator"),
-        ("Farhan Sayyed",       "farhan.sayyed@crf.mitwpu.edu.in",   "operator"),
-        ("Gauri Kale",          "gauri.kale@crf.mitwpu.edu.in",      "operator"),
-        ("Hemant Patil",        "hemant.patil@crf.mitwpu.edu.in",    "operator"),
-        ("Indu Bhonsle",        "indu.bhonsle@crf.mitwpu.edu.in",    "operator"),
-        ("Jignesh Mehta",       "jignesh.mehta@crf.mitwpu.edu.in",   "operator"),
-        ("Kshitij Pandit",      "kshitij.pandit@crf.mitwpu.edu.in",  "operator"),
-        ("Lavanya Hegde",       "lavanya.hegde@crf.mitwpu.edu.in",   "operator"),
-        ("Mahesh Yadav",        "mahesh.yadav@crf.mitwpu.edu.in",    "operator"),
-        ("Nilesh Wagh",         "nilesh.wagh@crf.mitwpu.edu.in",     "operator"),
-        ("Omkar Bhide",         "omkar.bhide@crf.mitwpu.edu.in",     "operator"),
-        ("Pratik Salunke",      "pratik.salunke@crf.mitwpu.edu.in",  "operator"),
+        ("Asha Pawar",          "asha.pawar@prism.local",      "operator"),
+        ("Bhargav Naik",        "bhargav.naik@prism.local",    "operator"),
+        ("Chetan Joshi",        "chetan.joshi@prism.local",    "operator"),
+        ("Divya Rane",          "divya.rane@prism.local",      "operator"),
+        ("Esha Mhaskar",        "esha.mhaskar@prism.local",    "operator"),
+        ("Farhan Sayyed",       "farhan.sayyed@prism.local",   "operator"),
+        ("Gauri Kale",          "gauri.kale@prism.local",      "operator"),
+        ("Hemant Patil",        "hemant.patil@prism.local",    "operator"),
+        ("Indu Bhonsle",        "indu.bhonsle@prism.local",    "operator"),
+        ("Jignesh Mehta",       "jignesh.mehta@prism.local",   "operator"),
+        ("Kshitij Pandit",      "kshitij.pandit@prism.local",  "operator"),
+        ("Lavanya Hegde",       "lavanya.hegde@prism.local",   "operator"),
+        ("Mahesh Yadav",        "mahesh.yadav@prism.local",    "operator"),
+        ("Nilesh Wagh",         "nilesh.wagh@prism.local",     "operator"),
+        ("Omkar Bhide",         "omkar.bhide@prism.local",     "operator"),
+        ("Pratik Salunke",      "pratik.salunke@prism.local",  "operator"),
     ]
     for name, email, role in crf_personnel:
         db.execute(
@@ -5103,118 +5103,118 @@ def seed_data() -> None:
 
         # ── CRF faculty assignments (2 per instrument) ────────────
         # FESEM
-        ("deshpande@crf.mitwpu.edu.in", "INST-001", "faculty"),
-        ("rpatil@crf.mitwpu.edu.in",    "INST-001", "faculty"),
+        ("deshpande@prism.local", "INST-001", "faculty"),
+        ("rpatil@prism.local",    "INST-001", "faculty"),
         # ICP-MS
-        ("kulkarni@crf.mitwpu.edu.in",  "INST-002", "faculty"),
-        ("ajoshi@crf.mitwpu.edu.in",    "INST-002", "faculty"),
+        ("kulkarni@prism.local",  "INST-002", "faculty"),
+        ("ajoshi@prism.local",    "INST-002", "faculty"),
         # XRD
-        ("rpatil@crf.mitwpu.edu.in",    "INST-003", "faculty"),
-        ("kiyer@crf.mitwpu.edu.in",     "INST-003", "faculty"),
+        ("rpatil@prism.local",    "INST-003", "faculty"),
+        ("kiyer@prism.local",     "INST-003", "faculty"),
         # Raman
-        ("kulkarni@crf.mitwpu.edu.in",  "INST-004", "faculty"),
-        ("karnik@crf.mitwpu.edu.in",    "INST-004", "faculty"),
+        ("kulkarni@prism.local",  "INST-004", "faculty"),
+        ("karnik@prism.local",    "INST-004", "faculty"),
         # Particle/Zeta
-        ("deshpande@crf.mitwpu.edu.in", "INST-005", "faculty"),
-        ("bose@crf.mitwpu.edu.in",      "INST-005", "faculty"),
+        ("deshpande@prism.local", "INST-005", "faculty"),
+        ("bose@prism.local",      "INST-005", "faculty"),
         # Nanoindenter
-        ("kapoor@crf.mitwpu.edu.in",    "INST-006", "faculty"),
-        ("menon@crf.mitwpu.edu.in",     "INST-006", "faculty"),
+        ("kapoor@prism.local",    "INST-006", "faculty"),
+        ("menon@prism.local",     "INST-006", "faculty"),
         # Surface Profiler
-        ("menon@crf.mitwpu.edu.in",     "INST-007", "faculty"),
-        ("rnaik@crf.mitwpu.edu.in",     "INST-007", "faculty"),
+        ("menon@prism.local",     "INST-007", "faculty"),
+        ("rnaik@prism.local",     "INST-007", "faculty"),
         # Tribometer
-        ("kapoor@crf.mitwpu.edu.in",    "INST-008", "faculty"),
-        ("rnaik@crf.mitwpu.edu.in",     "INST-008", "faculty"),
+        ("kapoor@prism.local",    "INST-008", "faculty"),
+        ("rnaik@prism.local",     "INST-008", "faculty"),
         # Polarizing OM
-        ("kiyer@crf.mitwpu.edu.in",     "INST-009", "faculty"),
-        ("srao@crf.mitwpu.edu.in",      "INST-009", "faculty"),
+        ("kiyer@prism.local",     "INST-009", "faculty"),
+        ("srao@prism.local",      "INST-009", "faculty"),
         # Battery Fab
-        ("bose@crf.mitwpu.edu.in",      "INST-010", "faculty"),
-        ("srao@crf.mitwpu.edu.in",      "INST-010", "faculty"),
+        ("bose@prism.local",      "INST-010", "faculty"),
+        ("srao@prism.local",      "INST-010", "faculty"),
         # UV-Vis-DRS
-        ("ajoshi@crf.mitwpu.edu.in",    "INST-011", "faculty"),
-        ("gokhale@crf.mitwpu.edu.in",   "INST-011", "faculty"),
+        ("ajoshi@prism.local",    "INST-011", "faculty"),
+        ("gokhale@prism.local",   "INST-011", "faculty"),
         # UV-VIS-NIR
-        ("karnik@crf.mitwpu.edu.in",    "INST-012", "faculty"),
-        ("gokhale@crf.mitwpu.edu.in",   "INST-012", "faculty"),
+        ("karnik@prism.local",    "INST-012", "faculty"),
+        ("gokhale@prism.local",   "INST-012", "faculty"),
         # NABL mechanical line — both senior faculty cover all 9
-        ("msharma@crf.mitwpu.edu.in",   "INST-013", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-013", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-014", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-014", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-015", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-015", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-016", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-016", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-017", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-017", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-018", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-018", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-019", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-019", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-020", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-020", "faculty"),
-        ("msharma@crf.mitwpu.edu.in",   "INST-021", "faculty"),
-        ("vgupta@crf.mitwpu.edu.in",    "INST-021", "faculty"),
+        ("msharma@prism.local",   "INST-013", "faculty"),
+        ("vgupta@prism.local",    "INST-013", "faculty"),
+        ("msharma@prism.local",   "INST-014", "faculty"),
+        ("vgupta@prism.local",    "INST-014", "faculty"),
+        ("msharma@prism.local",   "INST-015", "faculty"),
+        ("vgupta@prism.local",    "INST-015", "faculty"),
+        ("msharma@prism.local",   "INST-016", "faculty"),
+        ("vgupta@prism.local",    "INST-016", "faculty"),
+        ("msharma@prism.local",   "INST-017", "faculty"),
+        ("vgupta@prism.local",    "INST-017", "faculty"),
+        ("msharma@prism.local",   "INST-018", "faculty"),
+        ("vgupta@prism.local",    "INST-018", "faculty"),
+        ("msharma@prism.local",   "INST-019", "faculty"),
+        ("vgupta@prism.local",    "INST-019", "faculty"),
+        ("msharma@prism.local",   "INST-020", "faculty"),
+        ("vgupta@prism.local",    "INST-020", "faculty"),
+        ("msharma@prism.local",   "INST-021", "faculty"),
+        ("vgupta@prism.local",    "INST-021", "faculty"),
 
         # ── CRF operator assignments (2 per instrument) ───────────
         # FESEM
-        ("chetan.joshi@crf.mitwpu.edu.in",  "INST-001", "operator"),
-        ("divya.rane@crf.mitwpu.edu.in",    "INST-001", "operator"),
+        ("chetan.joshi@prism.local",  "INST-001", "operator"),
+        ("divya.rane@prism.local",    "INST-001", "operator"),
         # ICP-MS
-        ("asha.pawar@crf.mitwpu.edu.in",    "INST-002", "operator"),
-        ("bhargav.naik@crf.mitwpu.edu.in",  "INST-002", "operator"),
+        ("asha.pawar@prism.local",    "INST-002", "operator"),
+        ("bhargav.naik@prism.local",  "INST-002", "operator"),
         # XRD
-        ("chetan.joshi@crf.mitwpu.edu.in",  "INST-003", "operator"),
-        ("esha.mhaskar@crf.mitwpu.edu.in",  "INST-003", "operator"),
+        ("chetan.joshi@prism.local",  "INST-003", "operator"),
+        ("esha.mhaskar@prism.local",  "INST-003", "operator"),
         # Raman
-        ("bhargav.naik@crf.mitwpu.edu.in",  "INST-004", "operator"),
-        ("farhan.sayyed@crf.mitwpu.edu.in", "INST-004", "operator"),
+        ("bhargav.naik@prism.local",  "INST-004", "operator"),
+        ("farhan.sayyed@prism.local", "INST-004", "operator"),
         # Particle/Zeta
-        ("divya.rane@crf.mitwpu.edu.in",    "INST-005", "operator"),
-        ("gauri.kale@crf.mitwpu.edu.in",    "INST-005", "operator"),
+        ("divya.rane@prism.local",    "INST-005", "operator"),
+        ("gauri.kale@prism.local",    "INST-005", "operator"),
         # Nanoindenter
-        ("hemant.patil@crf.mitwpu.edu.in",  "INST-006", "operator"),
-        ("jignesh.mehta@crf.mitwpu.edu.in", "INST-006", "operator"),
+        ("hemant.patil@prism.local",  "INST-006", "operator"),
+        ("jignesh.mehta@prism.local", "INST-006", "operator"),
         # Surface Profiler
-        ("hemant.patil@crf.mitwpu.edu.in",  "INST-007", "operator"),
-        ("indu.bhonsle@crf.mitwpu.edu.in",  "INST-007", "operator"),
+        ("hemant.patil@prism.local",  "INST-007", "operator"),
+        ("indu.bhonsle@prism.local",  "INST-007", "operator"),
         # Tribometer
-        ("indu.bhonsle@crf.mitwpu.edu.in",  "INST-008", "operator"),
-        ("jignesh.mehta@crf.mitwpu.edu.in", "INST-008", "operator"),
+        ("indu.bhonsle@prism.local",  "INST-008", "operator"),
+        ("jignesh.mehta@prism.local", "INST-008", "operator"),
         # Polarizing OM
-        ("esha.mhaskar@crf.mitwpu.edu.in",  "INST-009", "operator"),
-        ("kshitij.pandit@crf.mitwpu.edu.in","INST-009", "operator"),
+        ("esha.mhaskar@prism.local",  "INST-009", "operator"),
+        ("kshitij.pandit@prism.local","INST-009", "operator"),
         # Battery Fab
-        ("gauri.kale@crf.mitwpu.edu.in",    "INST-010", "operator"),
-        ("kshitij.pandit@crf.mitwpu.edu.in","INST-010", "operator"),
+        ("gauri.kale@prism.local",    "INST-010", "operator"),
+        ("kshitij.pandit@prism.local","INST-010", "operator"),
         # UV-Vis-DRS
-        ("asha.pawar@crf.mitwpu.edu.in",    "INST-011", "operator"),
-        ("lavanya.hegde@crf.mitwpu.edu.in", "INST-011", "operator"),
+        ("asha.pawar@prism.local",    "INST-011", "operator"),
+        ("lavanya.hegde@prism.local", "INST-011", "operator"),
         # UV-VIS-NIR
-        ("farhan.sayyed@crf.mitwpu.edu.in", "INST-012", "operator"),
-        ("lavanya.hegde@crf.mitwpu.edu.in", "INST-012", "operator"),
+        ("farhan.sayyed@prism.local", "INST-012", "operator"),
+        ("lavanya.hegde@prism.local", "INST-012", "operator"),
         # NABL UTM/Compression/Microscope group — Mahesh + Omkar
-        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-013", "operator"),
-        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-013", "operator"),
-        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-017", "operator"),
-        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-017", "operator"),
-        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-021", "operator"),
-        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-021", "operator"),
-        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-020", "operator"),
-        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-020", "operator"),
-        ("mahesh.yadav@crf.mitwpu.edu.in",  "INST-018", "operator"),
-        ("omkar.bhide@crf.mitwpu.edu.in",   "INST-018", "operator"),
+        ("mahesh.yadav@prism.local",  "INST-013", "operator"),
+        ("omkar.bhide@prism.local",   "INST-013", "operator"),
+        ("mahesh.yadav@prism.local",  "INST-017", "operator"),
+        ("omkar.bhide@prism.local",   "INST-017", "operator"),
+        ("mahesh.yadav@prism.local",  "INST-021", "operator"),
+        ("omkar.bhide@prism.local",   "INST-021", "operator"),
+        ("mahesh.yadav@prism.local",  "INST-020", "operator"),
+        ("omkar.bhide@prism.local",   "INST-020", "operator"),
+        ("mahesh.yadav@prism.local",  "INST-018", "operator"),
+        ("omkar.bhide@prism.local",   "INST-018", "operator"),
         # NABL Hardness/Fatigue group — Nilesh + Pratik
-        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-014", "operator"),
-        ("pratik.salunke@crf.mitwpu.edu.in","INST-014", "operator"),
-        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-015", "operator"),
-        ("pratik.salunke@crf.mitwpu.edu.in","INST-015", "operator"),
-        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-016", "operator"),
-        ("pratik.salunke@crf.mitwpu.edu.in","INST-016", "operator"),
-        ("nilesh.wagh@crf.mitwpu.edu.in",   "INST-019", "operator"),
-        ("pratik.salunke@crf.mitwpu.edu.in","INST-019", "operator"),
+        ("nilesh.wagh@prism.local",   "INST-014", "operator"),
+        ("pratik.salunke@prism.local","INST-014", "operator"),
+        ("nilesh.wagh@prism.local",   "INST-015", "operator"),
+        ("pratik.salunke@prism.local","INST-015", "operator"),
+        ("nilesh.wagh@prism.local",   "INST-016", "operator"),
+        ("pratik.salunke@prism.local","INST-016", "operator"),
+        ("nilesh.wagh@prism.local",   "INST-019", "operator"),
+        ("pratik.salunke@prism.local","INST-019", "operator"),
     ]
     for email, code, kind in assignments:
         user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]

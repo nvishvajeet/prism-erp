@@ -1,6 +1,6 @@
 # PRISM
 
-**Lab Scheduler for MIT-WPU's shared instrument facility.**
+**Lab Scheduler for shared instrument facilities.**
 Finance → professor → operator sequential approvals.
 Queue, attachments, SHA-256 audit chain.
 Single binary. SQLite. No build step.
@@ -189,7 +189,7 @@ single-operator sessions.
 
 ## License + credits
 
-Built by Vishvajeet N for MIT-WPU. Python 3.14 + Flask 3. No
+Built by Vishvajeet N. Python 3.14 + Flask 3. No
 telemetry. No external services on the happy path (Tailscale /
 Cloudflare tunnels are opt-in for public demo access only).
 Demo data and operational data are physically separated per

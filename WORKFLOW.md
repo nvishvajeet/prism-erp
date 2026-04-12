@@ -33,7 +33,7 @@
 ## 1. What this project is
 
 PRISM is a LAN-first Flask sample-request and instrument workflow
-system for MIT-WPU's shared lab facility. Sequential approvals
+system for shared lab facilities. Sequential approvals
 (finance → professor → operator), queue management, per-request
 attachments, SHA-256 audit chain. Single binary, SQLite, no build
 step. **Version 1.3.0 is the first stable release**; every hard
@@ -107,7 +107,7 @@ entry is a policy violation; flag it to the user before committing.
 
 LOCAL bare is the canonical origin. The Mac mini is both the warm
 backup mirror AND the canonical production host (`launchctl kickstart`
-serves PRISM to the MIT-WPU lab network). Deploys are **atomic**:
+serves PRISM to the lab network). Deploys are **atomic**:
 
 ```
 pull → .venv/bin/python scripts/smoke_test.py → launchctl kickstart

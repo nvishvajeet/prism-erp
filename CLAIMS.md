@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| opus-4.6-phase2-c4c5 | phase2-commits-4-5 | 2026-04-12T14:00 | app.py, templates/new_request.html, templates/request_detail.html | feat(instruments): custom fields in new_request + step notification |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude-opus-erp | docs-erp-primitives | 2026-04-12T00:00:00 | docs/ERP_PRIMITIVES.md, CLAIMS.md | next |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

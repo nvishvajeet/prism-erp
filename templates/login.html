@@ -6,7 +6,12 @@
    DEMO_MODE; operational deployments ignore the query param server-side
    (see _render_login_demo_prefill in app.py). #}
 {% set _demo_prefill = (request.args.get('demo') == '1') and demo_mode %}
-<section class="card narrow" data-vis="requester">
+<div class="login-page" data-vis="requester">
+<section class="card narrow login-card" data-vis="requester">
+  <div class="login-brand" data-vis="requester">
+    <span class="login-brand-name">PRISM</span>
+    <span class="login-brand-sub">ERP</span>
+  </div>
   <h2 data-vis="requester">Sign In</h2>
   {% if _demo_prefill %}
   <p class="hint" data-vis="requester">Demo account pre-filled — just hit <strong>Login</strong>.</p>
@@ -29,4 +34,5 @@
   </a>
   {% endif %}
 </section>
+</div>
 {% endblock %}

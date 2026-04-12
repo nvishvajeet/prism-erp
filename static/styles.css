@@ -9521,3 +9521,134 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
   background: var(--accent-soft, #17383d);
   border-color: rgba(127,209,212,0.2);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   LOGIN PAGE POLISH
+   ══════════════════════════════════════════════════════════════ */
+
+/* Full-viewport centring with subtle gradient background */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 4rem);
+  min-height: calc(100dvh - 4rem);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(74,122,158,0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 80% 20%, rgba(74,122,158,0.05) 0%, transparent 60%);
+}
+:root[data-theme="dark"] .login-page {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(127,209,212,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 80% 20%, rgba(127,209,212,0.04) 0%, transparent 60%);
+}
+
+/* Login card sizing and shadow */
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 2.5rem 2rem 2rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+}
+:root[data-theme="dark"] .login-card {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* PRISM wordmark above the form */
+.login-brand {
+  text-align: center;
+  margin-bottom: 0.25rem;
+  line-height: 1;
+}
+.login-brand-name {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.login-brand-sub {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.35rem;
+  letter-spacing: 0.12em;
+}
+
+/* "Sign In" heading tightened */
+.login-card h2 {
+  text-align: center;
+  margin-bottom: 1.25rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Clean focus glow on login inputs */
+.login-card input[type="email"],
+.login-card input[type="password"] {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.login-card input[type="email"]:focus,
+.login-card input[type="password"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(74,122,158,0.15);
+  outline: none;
+}
+:root[data-theme="dark"] .login-card input[type="email"]:focus,
+:root[data-theme="dark"] .login-card input[type="password"]:focus {
+  box-shadow: 0 0 0 3px rgba(127,209,212,0.18);
+}
+
+/* Google button spacing */
+.login-card .login-divider { margin: 1.25rem 0; }
+.login-card .btn-google-signin { margin-top: 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   SETTINGS PAGE POLISH
+   ══════════════════════════════════════════════════════════════ */
+
+/* Settings items: pad for hover background, smooth transition */
+.settings-item {
+  padding: 0.75rem 0.6rem;
+  margin: 0 -0.6rem;
+  transition: background 0.12s ease;
+  border-radius: 8px;
+}
+
+/* Link items: right-chevron indicator */
+.link-item {
+  gap: 0.3rem;
+}
+.link-item::after {
+  content: "\203A";
+  font-size: 1.2em;
+  font-weight: 600;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.link-item:hover::after {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Section separators between groups */
+.settings-group + .settings-group {
+  border-top: 1px solid var(--line);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Toggle switch: active press feedback */
+.toggle-rail {
+  transition: background 0.25s ease, box-shadow 0.15s ease;
+}
+.toggle input:active + .toggle-rail::after {
+  width: 28px;
+  border-radius: 14px;
+}
+.toggle input:focus-visible + .toggle-rail {
+  box-shadow: 0 0 0 3px rgba(74,122,158,0.2);
+}
+:root[data-theme="dark"] .toggle input:focus-visible + .toggle-rail {
+  box-shadow: 0 0 0 3px rgba(127,209,212,0.2);
+}

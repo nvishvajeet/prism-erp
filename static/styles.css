@@ -3673,7 +3673,9 @@ code {
 }
 
 /* Stats tiles — counters are short, activity feed is bounded */
-.stats-tiles > .tile { max-height: 520px; }
+/* Stats tiles: cap height so the page doesn't go on forever.
+   User: "what is the reason for all this stuff at the bottom" */
+.stats-tiles > .tile { max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .stats-tiles > .tile > :not(.section-head):not(h2):not(h3) {
   overflow-y: auto;
   min-height: 0;

@@ -3638,13 +3638,18 @@ code {
    new-request-tiles: sample submission form
    All are content pages where visibility > tile discipline.
    Dashboard/stats/finance keep their caps for overview density. */
-/* Cap instrument/request detail tiles so no single tile dominates.
-   User: "what is all this" — tiles spread over R6-R22 with empty space.
-   Each tile scrolls internally if content exceeds 18rem. */
-.inst-tiles > .tile { max-height: 18rem; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-/* Queue tile + full-width tiles get more room */
-.inst-tiles > .tile[class*="tile-queue"],
-.inst-tiles > .tile[style*="span 6"] { max-height: 24rem; }
+/* Fixed-size tiles — Apple widget contract. Every tile is the SAME
+   height regardless of content. Content scrolls inside. No tile
+   changes size based on what's in it. */
+.inst-tiles > .tile {
+  height: 16rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Queue tile gets more room — it's the main work surface */
+.inst-tiles > .tile[class*="tile-queue"] { height: 22rem; }
+/* Edit/metadata tile needs more room for the form */
+.inst-tiles > .tile-edit { height: 20rem; }
 .request-tiles > .tile,
 .sitemap-tiles > .tile,
 .new-request-tiles > .tile { max-height: none; }
@@ -7778,16 +7783,22 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 
 /* ── Quick Action cards — the primary variant uses var(--ink)
    as background which becomes light in dark mode. Invert. ── */
-:root[data-theme="dark"] .qa-card-primary {
-  background: var(--accent-soft);
-  color: var(--accent);
+/* Quick Actions: ALL cards uniform in dark mode too */
+:root[data-theme="dark"] .qa-card-primary,
+:root[data-theme="dark"] .qa-card-ghost,
+:root[data-theme="dark"] .qa-card {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .qa-card-primary:hover,
+:root[data-theme="dark"] .qa-card-ghost:hover,
+:root[data-theme="dark"] .qa-card:hover {
+  background: var(--hover-soft-strong);
   border-color: var(--accent);
 }
-:root[data-theme="dark"] .qa-card-primary:hover {
-  background: color-mix(in srgb, var(--accent) 20%, var(--panel-strong));
-}
-:root[data-theme="dark"] .qa-card-primary .qa-eyebrow { color: var(--accent); }
-:root[data-theme="dark"] .qa-card-primary .qa-label { color: var(--ink); }
+:root[data-theme="dark"] .qa-card .qa-eyebrow { color: var(--muted); }
+:root[data-theme="dark"] .qa-card .qa-label { color: var(--ink); }
 
 /* ── Filter pills (queue status toggles) — white bg + white
    text in dark mode because --surface isn't defined ──────── */

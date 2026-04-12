@@ -24,12 +24,12 @@ from ..harness import Harness, ROLE_PERSONAS
 # Mirror of app.ROLE_DISPLAY_NAMES — kept in sync by hand so the
 # crawler has zero runtime coupling to app.py.
 ROLE_DISPLAY_NAMES: dict[str, str] = {
-    "super_admin": "Facility Owner",
+    "super_admin": "Super Admin",
     "site_admin": "Site Admin",
-    "instrument_admin": "Instrument Admin",
-    "faculty_in_charge": "Faculty in Charge",
+    "instrument_admin": "Operational Admin",
+    "faculty_in_charge": "Faculty Admin",
     "operator": "Operator",
-    "professor_approver": "Professor Approver",
+    "professor_approver": "Approver",
     "finance_admin": "Finance Admin",
     "requester": "Lab Member",
 }

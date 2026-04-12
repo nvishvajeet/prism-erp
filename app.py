@@ -5104,24 +5104,21 @@ def seed_data() -> None:
 
 
 ROLE_DISPLAY_NAMES = {
-    "super_admin": "Facility Owner",
+    "super_admin": "Super Admin",
     "site_admin": "Site Admin",
-    "instrument_admin": "Instrument Admin",
-    "faculty_in_charge": "Faculty in Charge",
+    "instrument_admin": "Operational Admin",
+    "faculty_in_charge": "Faculty Admin",
     "operator": "Operator",
-    "professor_approver": "Professor Approver",
+    "professor_approver": "Approver",
     "finance_admin": "Finance Admin",
     "requester": "Lab Member",
 }
 
 ROLE_NEXT_ACTIONS = {
-    # One-line orientation per role — surfaces in the topbar and the
-    # sitemap page so the skeleton has a consistent "you are here" hint.
-    # Kept deliberately short: the page tiles carry the details.
     "super_admin": "Full facility control. Start at Stats or Users.",
     "site_admin": "Manage users and site-wide settings. Start at Admin → Users.",
     "instrument_admin": "Run your instruments. Start at Instruments or Schedule.",
-    "faculty_in_charge": "Oversee your instrument. Start at Instruments.",
+    "faculty_in_charge": "Oversee your instruments. Start at Instruments.",
     "operator": "Handle today's queue. Start at Schedule.",
     "professor_approver": "Approve pending requests. Start at Schedule → Under Review.",
     "finance_admin": "Clear finance approvals. Start at Schedule → Under Review.",
@@ -8444,6 +8441,53 @@ def _dev_panel_progress() -> dict:
             "done": len(entries),
             "open": 0,
         })
+
+    # v2.1.5 — Planned modules for the ROADMAP tile. These are
+    # forward-looking entries that show what's coming next. Each has
+    # open > 0 so the progress bar shows remaining work.
+    planned_modules = [
+        {
+            "name": "v2.2.0 — Equipment & Calibration Logbook",
+            "entries": [
+                {"label": "instrument_calibrations table + routes", "done": False},
+                {"label": "instrument_maintenance log", "done": False},
+                {"label": "NABL calibration-due dashboard", "done": False},
+            ],
+            "done": 0,
+            "open": 3,
+        },
+        {
+            "name": "v2.3.0 — Mailbox & Notifications",
+            "entries": [
+                {"label": "Internal feed (event-widget style)", "done": False},
+                {"label": ".eml download for external sends", "done": False},
+                {"label": "Group targets (operators:<inst>, role:<role>)", "done": False},
+                {"label": "Owner god-view (/admin/messages)", "done": False},
+            ],
+            "done": 0,
+            "open": 4,
+        },
+        {
+            "name": "v2.4.0 — Calendar iCal Feed",
+            "entries": [
+                {"label": "/calendar.ics per-user subscription", "done": False},
+                {"label": "Per-instrument .ics feed", "done": False},
+            ],
+            "done": 0,
+            "open": 2,
+        },
+        {
+            "name": "v2.5.0 — Responsive & Mobile",
+            "entries": [
+                {"label": "Table overflow wrappers", "done": False},
+                {"label": "Nav compaction < 640px", "done": False},
+                {"label": "Intermediate breakpoint 900px", "done": False},
+            ],
+            "done": 0,
+            "open": 3,
+        },
+    ]
+    versions.extend(planned_modules)
 
     # Current release: the latest semver tag wins. Falls back to
     # CHANGELOG.md only if no semver tags exist at all (greenfield

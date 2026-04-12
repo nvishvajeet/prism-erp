@@ -9,7 +9,23 @@ Current stable tag: **`v1.5.0`** — multi-role users graduated as a
 first-class hard attribute. [CHANGELOG](CHANGELOG.md) ·
 [Philosophy](docs/PHILOSOPHY.md) ·
 [Architecture](docs/PROJECT.md) ·
+[ERP Primitives](docs/ERP_PRIMITIVES.md) ·
 [Live demo](https://nvishvajeet.github.io/demo.html)
+
+### Fast mode
+
+PRISM uses a two-speed pre-push gate:
+
+- **Fast** (default, ~1s): every branch push runs `smoke` only —
+  33 routes × 3 roles. Catches critical regressions instantly.
+- **Full** (~20s): every tag push runs the complete `sanity` wave
+  (11 strategies, 190+ checks). Force it on any push with
+  `PRISM_FULL_GATE=1 git push origin ...`.
+
+AI agents and human developers get the same gate. The hook lives
+at `ops/git-hooks/pre-receive` and auto-installs via
+`./scripts/install_launchd.sh`. See `docs/ERP_PRIMITIVES.md` for
+the "add a new portal in 30 minutes" recipe.
 
 ---
 

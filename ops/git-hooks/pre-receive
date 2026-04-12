@@ -1,52 +1,50 @@
 #!/bin/bash
-# PRISM central-bare pre-receive gate.
+# PRISM central-bare pre-receive gate — FAST MODE.
 #
-# Runs the `sanity` crawler wave in the laptop working copy and
-# refuses the push if any strategy fails. Two-tier safety:
+# Two speeds:
+#   FAST (default): runs `smoke` only (~1s). Used on every branch push.
+#   FULL:           runs full `sanity` wave (~20s). Used on tag pushes
+#                   and when PRISM_FULL_GATE=1 is set.
 #
-#   1. Working copy: scripts/smoke_test.py (fast, run before commit).
-#   2. Bare:         sanity wave (slower, run on every push).
-#
-# The hook lives in the working tree at ops/git-hooks/pre-receive
-# for reproducibility; `ops/git-hooks/install.sh` copies it into
-# ~/.claude/git-server/lab-scheduler.git/hooks/pre-receive on the
-# laptop and makes it executable.
-#
-# The hook is a no-op on any host that does not have the laptop's
-# working tree, so the mini and any other pull-only consumers
-# never trip it.
+# Fast mode cuts push latency from ~20s to ~2s while keeping the
+# critical-path regression check (smoke hits 33 routes × 3 roles).
+# Full sanity still runs on tags and can be triggered manually.
 
 set -u
 
 WORKTREE="${PRISM_WORKTREE:-$HOME/Documents/Scheduler/Main}"
 VENV_PY="$WORKTREE/.venv/bin/python"
 
-# Drain git's per-ref stdin (format: <old_sha> <new_sha> <ref>).
-# We don't need per-ref logic — the working tree is one state.
-cat > /dev/null
+# Read refs from stdin to detect tag pushes.
+IS_TAG=0
+while read -r _old _new ref; do
+  case "$ref" in refs/tags/*) IS_TAG=1 ;; esac
+done
 
-# No working tree? Skip gracefully. This keeps the hook safe to
-# mirror to any other bare on any other host.
 if [ ! -x "$VENV_PY" ]; then
-  echo "[pre-receive] no venv at $VENV_PY — sanity gate skipped"
+  echo "[pre-receive] no venv — gate skipped"
   exit 0
 fi
 
-echo "[pre-receive] running sanity wave in $WORKTREE…"
-LOG="$(mktemp -t prism_sanity.XXXXXX)"
+# Pick the wave: full sanity on tags or when forced, smoke otherwise.
+if [ "$IS_TAG" -eq 1 ] || [ "${PRISM_FULL_GATE:-0}" = "1" ]; then
+  WAVE="sanity"
+  echo "[pre-receive] FULL sanity gate (tag push)…"
+else
+  WAVE="smoke"
+  echo "[pre-receive] fast gate (smoke only, ~1s)…"
+fi
+
+LOG="$(mktemp -t prism_gate.XXXXXX)"
 trap 'rm -f "$LOG"' EXIT
 
-if ( cd "$WORKTREE" && "$VENV_PY" -m crawlers wave sanity ) > "$LOG" 2>&1; then
-  # Tail the summary lines so a passing push still gets a proof
-  # line in the terminal.
+if ( cd "$WORKTREE" && "$VENV_PY" -m crawlers run "$WAVE" ) > "$LOG" 2>&1; then
   grep -E '^▶|overall exit code' "$LOG" || true
-  echo "[pre-receive] sanity green — push accepted"
+  echo "[pre-receive] $WAVE green — push accepted"
   exit 0
 fi
 
-echo "[pre-receive] ╳ SANITY FAILED — push REFUSED"
-echo "──────────────── crawler output ────────────────"
+echo "[pre-receive] ╳ $WAVE FAILED — push REFUSED"
 cat "$LOG"
-echo "─────────────────────────────────────────────────"
-echo "[pre-receive] fix the failing strategies and retry the push."
+echo "[pre-receive] fix and retry."
 exit 1

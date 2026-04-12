@@ -77,3 +77,4 @@ FOCS-submission/
 # Local HTTPS certs (mkcert-generated, never commit)
 cert.pem
 key.pem
+.mini_connection

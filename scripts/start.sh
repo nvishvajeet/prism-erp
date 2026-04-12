@@ -42,40 +42,38 @@ BIND_ADDR="${BIND_HOST}:${BIND_PORT}"
 
 case "$1" in
   --service)
-    echo "=== SERVICE MODE ==="
+    echo "=== SERVICE MODE (Gunicorn) ==="
     export LAB_SCHEDULER_DEBUG=0
     export LAB_SCHEDULER_AUTORELOAD=0
 
-    # Prefer Gunicorn if available (multi-worker, production-grade).
-    # Falls back to Flask dev server if gunicorn isn't installed.
-    if [ -x ".venv/bin/gunicorn" ]; then
-      WORKERS="${PRISM_WORKERS:-4}"
-      echo "    server:  gunicorn ($WORKERS workers)"
-      echo "    bind:    $BIND_ADDR"
-      if [ "$HAS_CERT" -eq 1 ]; then
-        echo "    https:   ON (mkcert)"
-        export LAB_SCHEDULER_HTTPS=true
-        export LAB_SCHEDULER_COOKIE_SECURE=true
-        exec .venv/bin/gunicorn app:app \
-          -w "$WORKERS" \
-          -b "$BIND_ADDR" \
-          --certfile "$CERT_FILE" \
-          --keyfile "$KEY_FILE" \
-          --access-logfile - \
-          --error-logfile -
-      else
-        echo "    https:   OFF (no cert.pem found)"
-        exec .venv/bin/gunicorn app:app \
-          -w "$WORKERS" \
-          -b "$BIND_ADDR" \
-          --access-logfile - \
-          --error-logfile -
-      fi
+    # Install gunicorn if missing
+    if [ ! -x ".venv/bin/gunicorn" ]; then
+      echo "    Installing gunicorn..."
+      .venv/bin/pip install -q gunicorn
+    fi
+
+    WORKERS="${PRISM_WORKERS:-4}"
+    echo "    server:  gunicorn ($WORKERS workers)"
+    echo "    bind:    $BIND_ADDR"
+
+    if [ "$HAS_CERT" -eq 1 ]; then
+      echo "    https:   ON"
+      export LAB_SCHEDULER_HTTPS=true
+      export LAB_SCHEDULER_COOKIE_SECURE=true
+      exec .venv/bin/gunicorn app:app \
+        -w "$WORKERS" \
+        -b "$BIND_ADDR" \
+        --certfile "$CERT_FILE" \
+        --keyfile "$KEY_FILE" \
+        --access-logfile - \
+        --error-logfile -
     else
-      echo "    server:  flask dev (install gunicorn for production)"
-      echo "    bind:    $BIND_ADDR"
-      echo "    demo:    ${LAB_SCHEDULER_DEMO_MODE:-0}"
-      exec "${PY_BIN}" app.py
+      echo "    https:   OFF (generate certs: mkcert -cert-file cert.pem -key-file key.pem localhost 127.0.0.1)"
+      exec .venv/bin/gunicorn app:app \
+        -w "$WORKERS" \
+        -b "$BIND_ADDR" \
+        --access-logfile - \
+        --error-logfile -
     fi
     ;;
   *)

@@ -244,6 +244,18 @@
   </article>
   {% endif %}
 
+  {# ── TILE: Quick Attendance — mark present from home page ── #}
+  {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
+  <article class="card tile tile-dash-attendance" data-vis="{{ V }}">
+    {{ card_heading("", "Attendance") }}
+    <form method="post" action="{{ url_for('attendance_quick_present') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <button type="submit" class="btn btn-primary attendance-mark-btn" data-vis="{{ V }}">Mark Present Today</button>
+    </form>
+    <a class="text-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Full attendance →</a>
+  </article>
+  {% endif %}
+
   {# ── TILE 6: Your Jobs — requester / non-admin landing shortcut ── #}
   {% if module_enabled('queue') and not has_instrument_area_access_user %}
   <article class="card tile tile-dash-your-jobs" data-vis="{{ V }}">

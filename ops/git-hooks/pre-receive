@@ -38,7 +38,12 @@ fi
 LOG="$(mktemp -t prism_gate.XXXXXX)"
 trap 'rm -f "$LOG"' EXIT
 
-if ( cd "$WORKTREE" && "$VENV_PY" -m crawlers run "$WAVE" ) > "$LOG" 2>&1; then
+if [ "$WAVE" = "sanity" ]; then
+  CMD="wave sanity"
+else
+  CMD="run $WAVE"
+fi
+if ( cd "$WORKTREE" && "$VENV_PY" -m crawlers $CMD ) > "$LOG" 2>&1; then
   grep -E '^▶|overall exit code' "$LOG" || true
   echo "[pre-receive] $WAVE green — push accepted"
   exit 0

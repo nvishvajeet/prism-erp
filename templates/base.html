@@ -160,8 +160,24 @@
       <a href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
       <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
       <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Users' }}</span>
-    {% elif endpoint in ['finance_portal', 'finance_grants_list', 'finance_grant_detail'] %}
+    {% elif endpoint in ['attendance_page', 'leave_request_new', 'admin_leave_queue', 'admin_attendance_calendar'] %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Attendance</span>
+    {% elif endpoint == 'notifications_page' %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Notifications</span>
+    {% elif endpoint == 'inbox' %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Inbox</span>
+    {% elif endpoint == 'finance_portal' %}
       <span class="breadcrumb-current" data-vis="{{ V }}">Finance</span>
+    {% elif endpoint == 'finance_grants_list' %}
+      <a href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">Grants</span>
+    {% elif endpoint == 'finance_grant_detail' %}
+      <a href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <a href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
+      <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
+      <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Grant' }}</span>
     {% elif endpoint == 'dev_panel' %}
       <span class="breadcrumb-current" data-vis="{{ V }}">Dev Console</span>
     {% elif endpoint == 'portfolio_panel' %}

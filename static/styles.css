@@ -78,6 +78,8 @@
   --op-maintenance: #c06565;
 
   /* Lifecycle Colors */
+  --surface: #ffffff;
+  --surface-alt: #f5f5f7;
   --lifecycle-done: #5d9b6a;
   --lifecycle-current: #3b6fc7;
   --lifecycle-ok: #5a9b68;
@@ -137,6 +139,8 @@
   --tone-rejected-bg: #351d22;
   --tone-rejected-border: #6f3b44;
   --tone-rejected-ink: #ffd8dd;
+  --surface: #1a2230;
+  --surface-alt: #202a35;
   --lifecycle-ok: #6bc5a0;
   --lifecycle-warn: #e8b84d;
   --lifecycle-danger: #e87474;
@@ -4966,7 +4970,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   width: 1rem;
   height: 1rem;
   cursor: pointer;
-  accent-color: #1a1a1f;
+  accent-color: var(--ink, #1a1a1f);
 }
 
 .tile-queue-schedule #centralQueueTable {
@@ -7647,6 +7651,11 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: var(--panel-strong);
   color: var(--ink);
   border-color: var(--line);
+}
+:root[data-theme="dark"] .queue-action-btn.accept {
+  background: var(--accent);
+  color: #0f1419;
+  border-color: var(--accent);
 }
 :root[data-theme="dark"] .queue-action-btn:hover,
 :root[data-theme="dark"] .inline-action-btn:hover {

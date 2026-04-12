@@ -8517,3 +8517,184 @@ form[action*="quick-present"] .primary-action:hover {
 .sitemap-tiles .settings-item { padding: 0.4rem 0.6rem; }
 .sitemap-tiles .settings-group { margin-bottom: 0.25rem; }
 .sitemap-tiles .group-title { font-size: 0.75rem; margin-bottom: 0.25rem; }
+
+/* =========================================================================
+   Jony Ive visual-hierarchy pass — 2026-04-12
+   Per-page: one question, one answer, one CSS change.
+   ========================================================================= */
+
+/* 1. DASHBOARD (/)
+   Q: Is the noticeboard section-head too heavy, stealing focus from Quick Actions?
+   A: Yes — the section-head label "NOTICEBOARD / 1 active" is visually as
+      loud as the Quick Actions tile. Reduce the noticeboard header weight
+      and increase spacing between dashboard tiles for breathing room.
+   Change: Soften the noticeboard section head, widen dashboard tile gap. */
+.dashboard-tiles { gap: 1rem; }
+.tile-dash-noticeboard > .section-head {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-bottom: 0.4rem;
+}
+.tile-dash-noticeboard > .section-head h2 {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* 2. INSTRUMENTS (/instruments)
+   Q: Does the LINKS column (Detail/History/Queue) create visual clutter?
+   A: Yes — three stacked text links per row create a noisy right edge.
+      Make them smaller and lighter so the instrument name dominates.
+   Change: Shrink link text, reduce opacity until hover. */
+.instrument-links a,
+.sortable-table td:last-child a {
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.instrument-links a:hover,
+.sortable-table td:last-child a:hover {
+  color: var(--accent);
+}
+/* Category group headers — lighter so instrument names stand out */
+.sortable-table .group-header td {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+  padding-top: 1rem;
+  padding-bottom: 0.3rem;
+}
+
+/* 3. INSTRUMENT DETAIL (/instruments/4)
+   Q: Does the "At A Glance" tile earn its space with only 3 numbers?
+   A: The big numbers are useful but the tile uses vertical space
+      inefficiently. Make the at-a-glance stats sit in a tighter row.
+   Change: Compact the at-a-glance stat spacing, enlarge the queue
+      section head to signal it as the primary workspace. */
+.tile-at-a-glance .stat {
+  padding: 0.5rem 0.6rem;
+}
+.tile-at-a-glance .stat .value {
+  font-size: 1.6rem;
+}
+.tile-queue .section-head h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* 4. SCHEDULE (/schedule)
+   Q: Should the Bulk Actions tile be visible when 0 items are selected?
+   A: No — it is visual noise. Collapse it visually when empty, and make
+      the filter bar more compact so the queue table is higher on screen.
+   Change: Fade and shrink the bulk-actions tile when showing "0 selected",
+      tighten filter tile padding. */
+.tile-bulk {
+  transition: opacity 0.2s ease, max-height 0.3s ease;
+}
+.tile-bulk[data-count="0"],
+.tile-bulk:has(.tile-bulk-count:empty) {
+  opacity: 0.45;
+  pointer-events: auto;
+}
+.tile-filters {
+  padding-bottom: 0.5rem;
+}
+/* Make the status pill row breathe slightly more */
+.filter-pill-row {
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+}
+
+/* 5. INBOX (/inbox)
+   Q: Is the "New message" button easy to find?
+   A: It is positioned well (top-right), but at 0.88rem it blends with
+      secondary elements. Make it slightly larger to clearly signal the
+      primary action.
+   Change: Increase compose button size and add subtle shadow. */
+.page-header-row .btn[href*="compose"],
+a.btn[href*="compose"] {
+  font-size: 0.92rem;
+  padding: 0.6rem 1.3rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* 6. FINANCE (/finance)
+   Q: Do the Internal/External blocks tell a clear story at a glance?
+   A: The two-column layout works, but both blocks use the same visual
+      weight. External (revenue) is the action-oriented side — give it
+      slightly more visual emphasis.
+   Change: Strengthen the External tile's left border and slightly bump
+      its header. */
+.finance-tiles .tile-external {
+  border-left: 3px solid var(--danger, #c06565);
+}
+.finance-tiles .tile-external > .section-head h2 {
+  font-size: 0.95rem;
+}
+/* Outstanding amounts — ensure the red stands out clearly */
+.finance-tiles .outstanding-amount {
+  font-weight: 700;
+}
+
+/* 7. NOTIFICATIONS (/notifications)
+   Q: Is the Notification Control Panel discoverable enough?
+   A: No — it is a collapsed <details> with a tiny disclosure triangle.
+      Users may never find it. Give it a visible border and a slightly
+      highlighted background to make it look interactive.
+   Change: Style the control panel summary as a tappable card. */
+details[open] > summary,
+.tile details > summary {
+  cursor: pointer;
+}
+.inst-tiles details > summary,
+.admin-notices-tiles details > summary,
+.sitemap-tiles details > summary {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--hover-soft, #f1f6fb);
+  font-weight: 600;
+  font-size: 0.82rem;
+  transition: background 0.15s ease;
+}
+.inst-tiles details > summary:hover,
+.admin-notices-tiles details > summary:hover,
+.sitemap-tiles details > summary:hover {
+  background: var(--hover-soft-strong, #ebf2f9);
+}
+.inst-tiles details[open] > summary,
+.admin-notices-tiles details[open] > summary,
+.sitemap-tiles details[open] > summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-bottom: 0;
+}
+
+/* 8. ATTENDANCE (/attendance)
+   Q: Is "Mark Present Today" the first thing you see?
+   A: Yes — the Ferrari red button is effective. But the attendance
+      summary stats below (Present/Absent/On Leave/Half Day) are small
+      and cramped. Give them more breathing room.
+   Change: Increase stat tile padding and font size for the daily
+      summary, and add subtle separator between the button and stats. */
+.tile-quick-mark .kpi-grid-dense .stat {
+  padding: 0.65rem 0.75rem;
+}
+.tile-quick-mark .kpi-grid-dense .stat .value {
+  font-size: 1.1rem;
+}
+.tile-quick-mark .kpi-grid-dense {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+/* Dark-mode counterparts for the new rules */
+:root[data-theme="dark"] .inst-tiles details > summary,
+:root[data-theme="dark"] .admin-notices-tiles details > summary,
+:root[data-theme="dark"] .sitemap-tiles details > summary {
+  background: var(--hover-soft, rgba(255,255,255,0.04));
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .finance-tiles .tile-external {
+  border-left-color: var(--danger, #c06565);
+}

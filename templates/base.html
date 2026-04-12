@@ -82,22 +82,16 @@
     {% endif %}
   </header>
 
+  {# ── UNIFIED NAV — adapts to each user's role + enabled modules ── #}
   {% if current_user %}
   <nav class="nav" data-vis="{{ V }}">
     {% set endpoint = request.endpoint or '' %}
-    {% if not access_profile_user.can_access_instruments %}
-    <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
-    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
-    <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox</a>
-    <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    <span class="nav-spacer"></span>
-    <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
-    {% else %}
 
-    {# ── Home ── #}
+    {# Home — always first #}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
 
-    {# ── Instruments module (Queue, Calendar, Stats live inside) ── #}
+    {# Instruments — dropdown with Queue/Calendar/Stats inside.
+       Primary app for operators/admins. Visible to anyone with instrument access. #}
     {% if module_enabled('instruments') and access_profile_user.can_access_instruments %}
     <div class="nav-dropdown" data-vis="{{ V }}">
       <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar', 'schedule', 'schedule_actions', 'request_detail', 'calendar', 'calendar_events', 'stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}"
@@ -131,28 +125,39 @@
     </div>
     {% endif %}
 
-    {# ── Inbox (universal) ── #}
-    {% if module_enabled('inbox') %}
-    <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
-    {% endif %}
-
-    {# ── Notifications (universal) ── #}
-    {% if module_enabled('notifications') %}
-    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
-    {% endif %}
-
-    {# ── Finance (role-gated, less prominent) ── #}
+    {# Finance — prominent for finance_admin/site_admin/super_admin/owner.
+       Their PRIMARY app. Flat link (no dropdown needed yet). #}
     {% if module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user) %}
     <a class="{% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
     {% endif %}
 
-    {# ── HR/Attendance (operators + admins only) ── #}
+    {# Inbox — universal, everyone sees it #}
+    {% if module_enabled('inbox') %}
+    <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
+    {% endif %}
+
+    {# Notifications — universal #}
+    {% if module_enabled('notifications') %}
+    <a class="{% if endpoint == 'notifications_page' %}nav-active{% endif %}" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+    {% endif %}
+
+    {# Attendance — operators + admins only (not requesters/faculty) #}
     {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
     <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
     {% endif %}
 
+    {# Settings — always #}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-    {% if module_enabled('admin') and is_owner_user %}<a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>{% endif %}
+
+    {# Dev — owner only #}
+    {% if module_enabled('admin') and is_owner_user %}
+    <a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>
+    {% endif %}
+
+    {# New Request shortcut — for users without instrument dropdown #}
+    {% if not access_profile_user.can_access_instruments %}
+    <span class="nav-spacer"></span>
+    <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}">New Request</a>
     {% endif %}
   </nav>
   {% endif %}

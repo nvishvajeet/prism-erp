@@ -7026,3 +7026,131 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ── v2.1.0 DARK-MODE COMPREHENSIVE OVERRIDE ──────────────────
+   Catches every hardcoded hex/named color in the light-mode CSS
+   that doesn't use var(--token). Light mode is untouched; this
+   block only fires when [data-theme="dark"] is set.
+
+   Grouped by category: backgrounds, text, borders, badges,
+   buttons, forms, toasts, calendar, finance, misc.            */
+
+/* ── Backgrounds ─────────────────────────────────────────── */
+:root[data-theme="dark"] .operation-status { background: var(--panel-strong); }
+:root[data-theme="dark"] .nav-menu a:hover { background: var(--hover-soft); }
+:root[data-theme="dark"] .dark-stat {
+  background: var(--panel-strong);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .dark-stat.stat-link:hover { background: var(--hover-soft-strong); }
+:root[data-theme="dark"] .badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:root[data-theme="dark"] .skip-nav { background: var(--panel-strong); color: var(--ink); }
+:root[data-theme="dark"] .toast { background: var(--panel-strong); color: var(--ink); border-color: var(--line); }
+:root[data-theme="dark"] .toast-error { background: #3d1a20; border-color: #6f3b44; color: #ffd8dd; }
+:root[data-theme="dark"] .toast-success { background: #1a3d22; border-color: #3b6f44; color: #d8ffdd; }
+:root[data-theme="dark"] .toast-info { background: #1a2a3d; border-color: #3b556f; color: #d8e8ff; }
+:root[data-theme="dark"] .toast-warning { background: #3d3320; border-color: #6f5b37; color: #f3dfbb; }
+:root[data-theme="dark"] code { background: var(--hover-soft); }
+:root[data-theme="dark"] .inline-code { background: var(--hover-soft); color: var(--accent); }
+:root[data-theme="dark"] .lifecycle-dot { background: var(--muted); border-color: var(--panel); }
+:root[data-theme="dark"] .input-filter-label { background: var(--panel-strong); }
+
+/* ── Text colors ─────────────────────────────────────────── */
+:root[data-theme="dark"] .link-button.primary,
+:root[data-theme="dark"] .link-button.primary:hover { color: var(--ink); }
+:root[data-theme="dark"] button { color: var(--ink); }
+:root[data-theme="dark"] .btn-primary { color: var(--ink); }
+:root[data-theme="dark"] .btn-primary:hover { color: var(--ink); }
+:root[data-theme="dark"] .btn-open-queue { color: var(--ink); }
+:root[data-theme="dark"] .btn-danger { color: var(--ink); }
+:root[data-theme="dark"] .primary-action { color: var(--ink); }
+
+/* ── Borders ─────────────────────────────────────────────── */
+:root[data-theme="dark"] td { border-bottom-color: var(--line); }
+:root[data-theme="dark"] th { border-bottom-color: var(--line); }
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  border-color: var(--line);
+  background: var(--panel-strong);
+}
+
+/* ── Badges / status chips ───────────────────────────────── */
+:root[data-theme="dark"] .badge-done { background: #183123; color: #d6f5dd; }
+:root[data-theme="dark"] .badge-active { background: #18283a; color: #c9ddff; }
+:root[data-theme="dark"] .badge-pending { background: #332a1d; color: #f3dfbb; }
+
+/* ── Notice severity badges ──────────────────────────────── */
+:root[data-theme="dark"] .notice-severity-critical { background: #4a1a1a; color: #ffb8b8; }
+:root[data-theme="dark"] .notice-severity-warning { background: #3d3015; color: #ffd98a; }
+:root[data-theme="dark"] .notice-severity-info { background: #1a2a3d; color: #b8d8ff; }
+
+/* ── Calendar ────────────────────────────────────────────── */
+:root[data-theme="dark"] .calendar-shell .fc-button {
+  background: var(--panel-strong);
+  border-color: var(--line);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .calendar-shell .fc-button:hover,
+:root[data-theme="dark"] .calendar-shell .fc-button:focus {
+  background: var(--hover-soft-strong);
+  border-color: var(--accent);
+}
+:root[data-theme="dark"] .calendar-shell .fc-button-primary:not(:disabled):active,
+:root[data-theme="dark"] .calendar-shell .fc-button-primary:not(:disabled).fc-button-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Finance portal ──────────────────────────────────────── */
+:root[data-theme="dark"] .finance-kpi-outstanding { color: var(--danger); }
+:root[data-theme="dark"] .finance-kpi-collected { color: var(--lifecycle-ok); }
+:root[data-theme="dark"] .finance-outstanding-pos { color: var(--danger); }
+:root[data-theme="dark"] .finance-invoice-status { color: var(--ink); }
+
+/* ── Admin panels ────────────────────────────────────────── */
+:root[data-theme="dark"] .admin-notice-delete-btn:hover {
+  background: #4a1a1a;
+  color: #ffb8b8;
+}
+
+/* ── Approval step badges ────────────────────────────────── */
+:root[data-theme="dark"] .step-badge-approved { background: #183123; color: #d6f5dd; }
+:root[data-theme="dark"] .step-badge-rejected { background: #351d22; color: #ffd8dd; }
+:root[data-theme="dark"] .step-badge-pending { background: #332a1d; color: #f3dfbb; }
+
+/* ── Queue board ─────────────────────────────────────────── */
+:root[data-theme="dark"] .queue-bucket-heading { color: var(--ink); }
+:root[data-theme="dark"] .queue-card { background: var(--panel-strong); border-color: var(--line); }
+:root[data-theme="dark"] .queue-card:hover { background: var(--hover-soft); }
+
+/* ── Instrument detail ───────────────────────────────────── */
+:root[data-theme="dark"] .control-mode.is-active {
+  background: rgba(127, 209, 212, 0.15);
+  border-color: var(--accent);
+}
+
+/* ── Misc ────────────────────────────────────────────────── */
+:root[data-theme="dark"] .card { background: var(--panel); border-color: var(--line); }
+:root[data-theme="dark"] .empty-state { color: var(--muted); }
+:root[data-theme="dark"] .hint { color: var(--muted); }
+:root[data-theme="dark"] .text-link { color: var(--accent); }
+:root[data-theme="dark"] .text-link:hover { color: var(--accent-hover); }
+:root[data-theme="dark"] .back-link { color: var(--muted); }
+:root[data-theme="dark"] hr { border-color: var(--line); }
+:root[data-theme="dark"] .mc-banner { background: var(--panel-strong); border-color: var(--line); }
+:root[data-theme="dark"] .mc-meta-cell dt { color: var(--muted); }
+:root[data-theme="dark"] .mc-meta-cell dd { color: var(--ink); }
+:root[data-theme="dark"] .mailing-list-badge-archived { background: #332a1d; color: #f3dfbb; }
+:root[data-theme="dark"] details summary { color: var(--ink); }
+:root[data-theme="dark"] .form-grid label { color: var(--ink); }
+:root[data-theme="dark"] .topbar-count-badge { background: var(--danger); color: var(--ink); }
+:root[data-theme="dark"] .inst-header-code { color: var(--muted); }
+:root[data-theme="dark"] .inst-header-title { color: var(--ink); }
+:root[data-theme="dark"] .hover-back-btn { color: var(--muted); background: var(--panel-strong); border-color: var(--line); }
+:root[data-theme="dark"] .hover-back-btn:hover { color: var(--ink); background: var(--hover-soft-strong); }

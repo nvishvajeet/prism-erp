@@ -16,7 +16,7 @@
     {% if receipt.receipt_image_path %}
       {% set ext = receipt.receipt_image_path.rsplit('.', 1)[-1]|lower %}
       {% if ext in ('jpg','jpeg','png','gif','webp') %}
-      <img src="/{{ receipt.receipt_image_path }}" alt="Receipt" style="max-width:100%;border-radius:8px;" data-vis="{{ V }}">
+      <img src="/{{ receipt.receipt_image_path }}" alt="Receipt" class="receipt-img" data-vis="{{ V }}">
       {% elif ext == 'pdf' %}
       <a class="btn" href="/{{ receipt.receipt_image_path }}" target="_blank" data-vis="{{ V }}">View PDF →</a>
       {% else %}
@@ -59,8 +59,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Note<textarea name="reviewer_note" rows="2" placeholder="Optional reviewer note..." data-vis="{{ V }}"></textarea></label>
       <div class="form-controls" data-vis="{{ V }}">
-        <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
-        <button type="submit" name="action" value="reject" class="btn" data-vis="{{ V }}">Reject</button>
+        <button type="submit" name="action" value="approve" class="btn btn-approve" data-vis="{{ V }}">Approve</button>
+        <button type="submit" name="action" value="reject" class="btn btn-reject" data-vis="{{ V }}">Reject</button>
       </div>
     </form>
   </article>

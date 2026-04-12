@@ -27,7 +27,7 @@
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Date</th>
           <th data-vis="{{ V }}">Title</th>
-          <th data-vis="{{ V }}">Amount</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
           <th data-vis="{{ V }}">Category</th>
           <th data-vis="{{ V }}">Status</th>
           {% if can_review %}<th data-vis="{{ V }}">Submitted by</th>{% endif %}
@@ -38,7 +38,7 @@
         <tr class="clickable-row" data-href="{{ url_for('receipt_detail', receipt_id=r.id) }}" data-bucket="{{ r.status }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}">{{ r.receipt_date[:10] if r.receipt_date else r.created_at[:10] }}</td>
           <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.title }}</strong></td>
-          <td data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.amount) }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.amount) }}</td>
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ r.category }}</span></td>
           <td data-vis="{{ V }}"><span class="badge status-{{ r.status }}" data-vis="{{ V }}">{{ r.status|capitalize }}</span></td>
           {% if can_review %}<td data-vis="{{ V }}">{{ r.submitter_name }}</td>{% endif %}

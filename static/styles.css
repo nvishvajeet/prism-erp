@@ -9124,3 +9124,60 @@ a.finance-kpi-link:active { transform: translateY(0); }
 /* Clickable table rows */
 tr.clickable-row { cursor: pointer; transition: background 0.12s; }
 tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
+
+/* ── UX Polish: Receipt / Invoice status badges ──────────── */
+.status-pending  { background: #fef3c7; color: #92400e; }
+.status-approved { background: #d1fae5; color: #065f46; }
+.status-rejected { background: var(--tone-rejected-bg); color: var(--tone-rejected-ink); }
+:root[data-theme="dark"] .status-pending  { background: rgba(234,179,8,0.15); color: #fbbf24; }
+:root[data-theme="dark"] .status-approved { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+
+/* Finance invoice status badges — consistent palette */
+.finance-status-pending { background: #fef3c7; color: #92400e; }
+.finance-status-partial { background: #dbeafe; color: #1e40af; }
+.finance-status-paid    { background: #d1fae5; color: #065f46; }
+.finance-status-void    { background: var(--surface, #f3f4f6); color: var(--muted, #6b7280); }
+:root[data-theme="dark"] .finance-status-pending { background: rgba(234,179,8,0.15); color: #fbbf24; }
+:root[data-theme="dark"] .finance-status-partial { background: rgba(59,130,246,0.18); color: #93bbfd; }
+:root[data-theme="dark"] .finance-status-paid    { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+:root[data-theme="dark"] .finance-status-void    { background: rgba(255,255,255,0.06); color: var(--muted); }
+
+/* Right-aligned amount column in receipt tables */
+.col-amount { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Receipt detail: constrain image */
+.receipt-img { max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; }
+
+/* Approve / Reject button distinction */
+.btn-approve {
+  background: #059669; color: #fff; border: none;
+}
+.btn-approve:hover { background: #047857; }
+.btn-reject {
+  background: var(--surface, #f3f4f6); color: var(--muted, #6b7280); border: 1px solid var(--border, #d1d5db);
+}
+.btn-reject:hover { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+:root[data-theme="dark"] .btn-approve { background: #047857; }
+:root[data-theme="dark"] .btn-approve:hover { background: #059669; }
+:root[data-theme="dark"] .btn-reject { background: var(--surface); color: var(--muted); border-color: var(--border); }
+:root[data-theme="dark"] .btn-reject:hover { background: rgba(220,38,38,0.18); color: #fca5a5; border-color: #6f3b44; }
+
+/* File upload area */
+.file-upload-area {
+  position: relative; border: 2px dashed var(--border, #d1d5db); border-radius: 12px;
+  padding: 1.5rem; text-align: center; transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.file-upload-area:hover,
+.file-upload-area.drag-over {
+  border-color: var(--accent); background: rgba(59,109,153,0.04);
+}
+.file-upload-area input[type="file"] {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
+}
+.file-upload-label {
+  display: block; font-size: 0.88rem; color: var(--muted); pointer-events: none;
+}
+.file-upload-label strong { color: var(--accent); }
+:root[data-theme="dark"] .file-upload-area { border-color: var(--border); }
+:root[data-theme="dark"] .file-upload-area:hover { background: rgba(59,109,153,0.08); }

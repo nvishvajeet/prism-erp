@@ -49,32 +49,31 @@
   <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("INTERNAL", "Grants & instrument operations") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Active grants</span>
         <strong class="finance-kpi-value" data-vis="{{ V }}">{{ by_instrument|length }}</strong>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      </a>
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Total budget</span>
         <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_owed) }}</strong>
-      </div>
+      </a>
     </div>
-    <a class="text-link top-gap" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">View all grants →</a>
   </article>
 
   {# ── TILE: External — incoming samples, payments ── #}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("EXTERNAL", "Incoming samples & revenue") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list', status='pending') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Outstanding</span>
         <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.outstanding) }}</strong>
         <span class="hint" data-vis="{{ V }}">{{ kpis.pending_count }} pending</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      </a>
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list', status='paid') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Collected</span>
         <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_paid) }}</strong>
         <span class="hint" data-vis="{{ V }}">{{ kpis.paid_count }} paid</span>
-      </div>
+      </a>
     </div>
   </article>
 
@@ -82,26 +81,26 @@
   <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
     {{ card_heading("OVERVIEW", "Full economy at a glance") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list', status='pending') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Outstanding</span>
         <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.outstanding) }}</strong>
         <span class="hint" data-vis="{{ V }}">{{ kpis.pending_count }} invoice{{ "s" if kpis.pending_count != 1 else "" }} open</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      </a>
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Total billed</span>
         <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_owed) }}</strong>
         <span class="hint" data-vis="{{ V }}">across all external requests</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      </a>
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list', status='paid') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Collected</span>
         <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_paid) }}</strong>
         <span class="hint" data-vis="{{ V }}">{{ kpis.paid_count }} paid</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
+      </a>
+      <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_spend') }}" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Collection rate</span>
         <strong class="finance-kpi-value" data-vis="{{ V }}">{% if kpis.total_owed > 0 %}{{ "{:.0f}".format(kpis.total_paid * 100 / kpis.total_owed) }}%{% else %}—{% endif %}</strong>
         <span class="hint" data-vis="{{ V }}">paid / billed</span>
-      </div>
+      </a>
     </div>
   </article>
 
@@ -122,7 +121,7 @@
       <tbody data-vis="{{ V }}">
         {% for row in by_instrument %}
         {% set out = row.owed - row.paid %}
-        <tr data-vis="{{ V }}">
+        <tr class="finance-clickable-row" data-href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ row.code }}</code> · {{ row.name }}</td>
           <td class="finance-num" data-vis="{{ V }}">{{ row.total_requests }}</td>
           <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.owed) }}</td>
@@ -194,4 +193,11 @@
   </article>
 
 </section>
+<script>
+(function(){
+  document.querySelectorAll('.finance-clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(){window.location=r.dataset.href;});
+  });
+})();
+</script>
 {% endblock %}

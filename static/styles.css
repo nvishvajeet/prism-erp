@@ -9400,3 +9400,17 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 
 /* Muted badge */
 .badge-muted { opacity: 0.5; }
+
+/* Clickable finance KPI cells */
+a.finance-kpi-link {
+  text-decoration: none; color: inherit; cursor: pointer;
+  border-radius: 10px; transition: background 0.15s, transform 0.1s;
+}
+a.finance-kpi-link:hover {
+  background: var(--hover, rgba(0,0,0,0.04)); transform: translateY(-1px);
+}
+a.finance-kpi-link:active { transform: translateY(0); }
+
+/* Clickable table rows */
+tr.finance-clickable-row { cursor: pointer; transition: background 0.12s; }
+tr.finance-clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }

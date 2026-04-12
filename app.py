@@ -3940,6 +3940,19 @@ def init_db() -> None:
         if "soft_accept_enabled" not in instrument_columns:
             cur.execute("ALTER TABLE instruments ADD COLUMN soft_accept_enabled INTEGER NOT NULL DEFAULT 0")
 
+        # Grant type (internal/DST/external) — mirrors instrument categories
+        grant_cols = {col[1] for col in cur.execute("PRAGMA table_info(grants)").fetchall()}
+        if "grant_type" not in grant_cols:
+            try:
+                cur.execute("ALTER TABLE grants ADD COLUMN grant_type TEXT NOT NULL DEFAULT 'internal'")
+            except Exception:
+                pass
+        if "department" not in grant_cols:
+            try:
+                cur.execute("ALTER TABLE grants ADD COLUMN department TEXT NOT NULL DEFAULT ''")
+            except Exception:
+                pass
+
         # Pricing & payment instructions per instrument (Form Control panel)
         inst_cols = {col[1] for col in cur.execute("PRAGMA table_info(instruments)").fetchall()}
         for col_name, col_sql in [
@@ -6582,6 +6595,17 @@ def finance_portal():
 
 
 def _user_can_view_finance(user: sqlite3.Row | None) -> bool:
+    """Finance portal access. Operators can view revenue for their
+    instruments (read-only); finance_admin/site_admin/super_admin/owner
+    get full access including grants and editing."""
+    if not user:
+        return False
+    roles = user_role_set(user)
+    return bool(roles & {"finance_admin", "super_admin", "site_admin", "operator", "instrument_admin"}) or is_owner(user)
+
+
+def _user_can_edit_finance(user: sqlite3.Row | None) -> bool:
+    """Full finance editing (grants, invoices). Excludes operators."""
     if not user:
         return False
     roles = user_role_set(user)
@@ -6661,7 +6685,7 @@ def finance_grants_list():
     )
 
 
-@app.route("/finance/grants/<int:grant_id>")
+@app.route("/finance/grants/<int:grant_id>", methods=["GET", "POST"])
 @login_required
 def finance_grant_detail(grant_id: int):
     """v2.0.0-alpha.2 — Single-grant drill-down via the peer graph.
@@ -6669,10 +6693,43 @@ def finance_grant_detail(grant_id: int):
     Walks grant → grant_allocations → projects → sample_requests →
     invoices → payments. amount_due / amount_paid / finance_status /
     receipt_number are derived per row; the template iteration
-    variable name (`inv`) is unchanged."""
+    variable name (`inv`) is unchanged.
+
+    POST: edit grant metadata (name, sponsor, PI, budget, dates,
+    grant_type, department, notes). Gated to finance editors only."""
     user = current_user()
     if not _user_can_view_finance(user):
         abort(403)
+
+    if request.method == "POST":
+        if not _user_can_edit_finance(user):
+            abort(403)
+        action = request.form.get("action", "")
+        if action == "update_grant_metadata":
+            db = get_db()
+            db.execute(
+                """UPDATE grants SET
+                    name = ?, sponsor = ?, grant_type = ?, department = ?,
+                    total_budget = ?, start_date = ?, end_date = ?,
+                    notes = ?, status = ?
+                 WHERE id = ?""",
+                (
+                    request.form.get("name", "").strip(),
+                    request.form.get("sponsor", "").strip(),
+                    request.form.get("grant_type", "internal").strip(),
+                    request.form.get("department", "").strip(),
+                    float(request.form.get("total_budget", "0") or 0),
+                    request.form.get("start_date", "").strip(),
+                    request.form.get("end_date", "").strip(),
+                    request.form.get("notes", "").strip(),
+                    request.form.get("status", "active").strip(),
+                    grant_id,
+                ),
+            )
+            db.commit()
+            log_action(user["id"], "grant", grant_id, "grant_metadata_updated", {})
+            flash("Grant metadata updated.", "success")
+            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
     grant = query_one(
         """
         SELECT g.*, pi.name AS pi_name, pi.email AS pi_email
@@ -6726,6 +6783,7 @@ def finance_grant_detail(grant_id: int):
         total_billed=total_billed,
         remaining=remaining,
         percent_used=percent_used,
+        can_edit_finance=_user_can_edit_finance(user),
     )
 
 

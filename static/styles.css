@@ -3535,13 +3535,17 @@ code {
    can override this for tiles that genuinely need to be taller
    (e.g. the request event feed). */
 .tile { max-height: 600px; }
-/* Detail pages: tiles show the page purpose — no cap.
-   inst-tiles is used by instrument detail + maintenance pages;
-   request-tiles by request detail. Both are detail pages where
-   content visibility > tile discipline. Dashboard/stats/finance
-   keep their caps. */
+/* Detail + navigation pages: tiles show the page purpose — no cap.
+   inst-tiles: instrument detail + maintenance pages
+   request-tiles: request detail
+   sitemap-tiles: settings/navigation page
+   new-request-tiles: sample submission form
+   All are content pages where visibility > tile discipline.
+   Dashboard/stats/finance keep their caps for overview density. */
 .inst-tiles > .tile,
-.request-tiles > .tile { max-height: none; }
+.request-tiles > .tile,
+.sitemap-tiles > .tile,
+.new-request-tiles > .tile { max-height: none; }
 /* Explainer tile: fixed height, details content scrolls inside.
    Opening "Show the full pipeline" never pushes other tiles. */
 .tile-request-explainer {

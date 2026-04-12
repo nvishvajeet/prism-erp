@@ -148,7 +148,7 @@
     var g = gridCoords(e.clientX, e.clientY);
     var label = 'R' + g.row + ',C' + g.col;
     var nearest = e.target.closest('[class]');
-    var context = nearest ? '.' + nearest.className.split(/\s+/')[0] : e.target.tagName.toLowerCase();
+    var context = nearest ? '.' + nearest.className.split(/\s+/)[0] : e.target.tagName.toLowerCase();
 
     // If the click target is a link, save state and let navigation
     // happen — recording resumes on the new page automatically.

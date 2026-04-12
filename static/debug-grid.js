@@ -89,9 +89,9 @@
       }
     }
     updateRows();
-    // Re-measure when content changes (e.g. expand/collapse tiles)
+    // Re-measure on resize only (MutationObserver was causing infinite
+    // loops — it observed its own grid element creation)
     window.addEventListener('resize', updateRows);
-    new MutationObserver(updateRows).observe(document.body, {childList: true, subtree: true, attributes: true});
 
     document.body.appendChild(gridContainer);
 
@@ -375,8 +375,7 @@
     if (e.key === 'g' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleGrid(); }
   });
 
-  // Auto-show grid on load
-  toggleGrid();
+  // Grid starts hidden — press 'g' or click 'Show Grid' to toggle
 
   // Auto-resume recording if we navigated here while recording
   if (restoreSessionState()) {

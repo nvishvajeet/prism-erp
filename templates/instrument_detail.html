@@ -385,18 +385,13 @@
         <button type="submit" data-vis="{{ V }}">Save Changes</button>
       </div>
     </form>
-  </section>
-  {% endif %}
 
-  {# ── Tile: Danger Zone ── #}
-  {% if can_archive_instrument or can_restore_instrument %}
-  <section class="card tile tile-danger" data-vis="{{ V }}">
-    {% call card_heading("", "Danger Zone") %}
-      <button type="button" class="link-button danger-toggle-btn" id="toggleDanger" data-toggle-target="#dangerBody" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Show</button>
-    {% endcall %}
-    <div class="danger-body" id="dangerBody" hidden data-vis="{{ V }}">
+    {# Danger Zone — inside metadata tile, not separate #}
+    {% if can_archive_instrument or can_restore_instrument %}
+    <details class="tile-inline-editor danger-section" style="margin-top: 1rem; border-top: 1px solid var(--line);" data-vis="{{ V }}">
+      <summary class="danger-toggle-btn" style="padding-top: 0.75rem; color: var(--danger);" data-vis="{{ V }}">Danger Zone</summary>
       {% if can_archive_instrument and instrument["status"] != "archived" %}
-      <form method="post" class="danger-form" data-vis="{{ V }}">
+      <form method="post" class="danger-form top-gap" data-vis="{{ V }}">
         <input type="hidden" name="action" value="archive_instrument">
         <p class="hint" data-vis="{{ V }}">Type the instrument code to archive permanently.</p>
         <label data-vis="{{ V }}">
@@ -406,12 +401,13 @@
       </form>
       {% endif %}
       {% if can_restore_instrument and instrument["status"] == "archived" %}
-      <form method="post" data-vis="{{ V }}">
+      <form method="post" class="top-gap" data-vis="{{ V }}">
         <input type="hidden" name="action" value="restore_instrument">
         <button type="submit" class="small-button" data-vis="{{ V }}">Restore Instrument</button>
       </form>
       {% endif %}
-    </div>
+    </details>
+    {% endif %}
   </section>
   {% endif %}
 

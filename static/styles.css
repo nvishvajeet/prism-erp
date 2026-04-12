@@ -3638,18 +3638,12 @@ code {
    new-request-tiles: sample submission form
    All are content pages where visibility > tile discipline.
    Dashboard/stats/finance keep their caps for overview density. */
-/* Fixed-size tiles — Apple widget contract. Every tile is the SAME
-   height regardless of content. Content scrolls inside. No tile
-   changes size based on what's in it. */
+/* Tiles grow to fit content — no forced scroll panes inside.
+   User: "don't scroll, make tiles bigger instead" */
 .inst-tiles > .tile {
-  height: 16rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  height: auto;
+  overflow: visible;
 }
-/* Queue tile gets more room — it's the main work surface */
-.inst-tiles > .tile[class*="tile-queue"] { height: 22rem; }
-/* Edit/metadata tile needs more room for the form */
-.inst-tiles > .tile-edit { height: 20rem; }
 .request-tiles > .tile,
 .sitemap-tiles > .tile,
 .new-request-tiles > .tile { max-height: none; }

@@ -877,6 +877,7 @@ def instrument_timeline_entries(instrument: sqlite3.Row, logs: list[sqlite3.Row]
                 "title": title,
                 "detail": detail,
                 "actor": log["actor_name"] or "System",
+                "action": log["action"],
             }
         )
     return entries
@@ -5628,7 +5629,7 @@ def inject_globals():
 def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
     """Return up to 5 actionable items for the logged-in user's role.
 
-    Each item: {label, detail, href, age}
+    Each item: {label, detail, href, age, icon}
     """
     roles = user_role_set(user)
     db = get_db()
@@ -5651,6 +5652,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
         )
         for r in rows:
             items.append({
+                "icon": "stamp",
                 "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
                 "detail": r["instrument_name"],
                 "href": url_for("request_detail", request_id=r["id"]),
@@ -5675,6 +5677,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
         for r in rows:
             items.append({
                 "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "icon": "banknote",
                 "detail": f"Finance clearance · {r['instrument_name']}",
                 "href": url_for("request_detail", request_id=r["id"]),
                 "age": r["created_at"],
@@ -5704,6 +5707,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
         for r in rows:
             items.append({
                 "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "icon": "flask",
                 "detail": f"{r['status'].replace('_', ' ').title()} · {r['instrument_name']}",
                 "href": url_for("request_detail", request_id=r["id"]),
                 "age": r["created_at"],
@@ -5730,6 +5734,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
             for r in rows:
                 items.append({
                     "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                    "icon": "inbox",
                     "detail": f"Needs intake · {r['instrument_name']}",
                     "href": url_for("request_detail", request_id=r["id"]),
                     "age": r["created_at"],
@@ -5753,6 +5758,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
             for r in rows:
                 items.append({
                     "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                    "icon": "clock",
                     "detail": f"Awaiting {r['approver_role']} · {r['instrument_name']}",
                     "href": url_for("request_detail", request_id=r["id"]),
                     "age": r["created_at"],
@@ -5776,6 +5782,7 @@ def _dashboard_action_items(user: sqlite3.Row) -> list[dict]:
         for r in rows:
             items.append({
                 "label": f"{r['request_no']} — {r['sample_name'] or 'Untitled'}",
+                "icon": "edit",
                 "detail": f"{r['status'].replace('_', ' ').title()} · {r['instrument_name']}",
                 "href": url_for("request_detail", request_id=r["id"]),
                 "age": r["created_at"],
@@ -6031,6 +6038,26 @@ def index():
             """,
         )
 
+    # ── Attendance streak (consecutive present days, up to last 7) ──
+    attendance_streak = 0
+    if module_enabled("attendance"):
+        try:
+            streak_rows = db.execute(
+                "SELECT date FROM attendance WHERE user_id = ? AND status = 'present' AND date >= date('now', '-7 days') ORDER BY date DESC",
+                (user["id"],),
+            ).fetchall()
+            if streak_rows:
+                from datetime import date as _date, timedelta
+                today = _date.today()
+                for i, r in enumerate(streak_rows):
+                    expected = (today - timedelta(days=i)).isoformat()
+                    if r[0] == expected:
+                        attendance_streak += 1
+                    else:
+                        break
+        except Exception:
+            attendance_streak = 0
+
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -6051,6 +6078,7 @@ def index():
         quick_actions=quick_actions_for_user(user),
         dash_action_items=_dashboard_action_items(user),
         dash_at_a_glance=_dashboard_at_a_glance(user),
+        attendance_streak=attendance_streak,
     )
 
 
@@ -9048,11 +9076,11 @@ def instrument_detail(instrument_id: int):
         row["user_id"] for row in query_all("SELECT user_id FROM instrument_faculty_admins WHERE instrument_id = ?", (instrument_id,))
     }
     selected_operator_rows = query_all(
-        f"SELECT id, name FROM users WHERE id IN ({','.join('?' for _ in selected_operator_ids)}) ORDER BY name",
+        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_operator_ids)}) ORDER BY name",
         tuple(sorted(selected_operator_ids)),
     ) if selected_operator_ids else []
     selected_faculty_rows = query_all(
-        f"SELECT id, name FROM users WHERE id IN ({','.join('?' for _ in selected_faculty_ids)}) ORDER BY name",
+        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_faculty_ids)}) ORDER BY name",
         tuple(sorted(selected_faculty_ids)),
     ) if selected_faculty_ids else []
     # v2.2.0 — subscribed requesters
@@ -9063,7 +9091,7 @@ def instrument_detail(instrument_id: int):
         )
     }
     selected_requester_rows = query_all(
-        f"SELECT id, name FROM users WHERE id IN ({','.join('?' for _ in selected_requester_ids)}) ORDER BY name",
+        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_requester_ids)}) ORDER BY name",
         tuple(sorted(selected_requester_ids)),
     ) if selected_requester_ids else []
     instrument_logs = query_all(

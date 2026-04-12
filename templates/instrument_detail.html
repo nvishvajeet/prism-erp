@@ -218,7 +218,7 @@
         {% if selected_operator_rows %}
         <div class="person-chip-stack" data-vis="{{ V }}">
           {% for p in selected_operator_rows %}
-          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id'])) }}
+          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id']), subtitle=p['email']) }}
           {% endfor %}
         </div>
         {% else %}
@@ -230,7 +230,7 @@
         {% if selected_faculty_rows %}
         <div class="person-chip-stack" data-vis="{{ V }}">
           {% for p in selected_faculty_rows %}
-          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id'])) }}
+          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id']), subtitle=p['email']) }}
           {% endfor %}
         </div>
         {% else %}
@@ -242,7 +242,7 @@
         <h3 class="section-kicker" data-vis="{{ V }}">Subscribers</h3>
         <div class="person-chip-stack" data-vis="{{ V }}">
           {% for p in selected_requester_rows %}
-          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id'])) }}
+          {{ person_chip(p["name"], user_id=p['id'], link=can_view_user_profile_id_user(p['id']), subtitle=p['email']) }}
           {% endfor %}
         </div>
       </div>
@@ -349,6 +349,7 @@
   {# ── Tile: Maintenance & Calibration (v2.2.0) ── #}
   <section class="card tile tile-maintenance" data-vis="{{ V }}">
     {% call card_heading("", "Maintenance") %}
+      {% if upcoming_downtime %}<span class="badge badge-amber badge-sm" title="{{ upcoming_downtime|length }} upcoming downtime window{{ 's' if upcoming_downtime|length > 1 }}" data-vis="{{ V }}">{{ upcoming_downtime|length }} upcoming</span>{% endif %}
       <a class="text-link" href="{{ url_for('instrument_maintenance_log', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Full log →</a>
     {% endcall %}
     <p class="hint" data-vis="{{ V }}">Calibration records, service history, NABL compliance.</p>
@@ -490,7 +491,7 @@
     <table class="activity-table" data-vis="{{ V }}">
       <tbody id="instEventsBody">
         {% for entry in instrument_timeline_entries %}
-        <tr data-pane-item data-vis="{{ V }}">
+        <tr data-pane-item data-action="{{ entry.action }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}">
             <div class="activity-row" data-vis="{{ V }}">
               <strong data-vis="{{ V }}">{{ entry.title }}</strong>

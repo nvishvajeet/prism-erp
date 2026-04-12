@@ -17,16 +17,19 @@
     {{ card_heading("NOTICEBOARD", active_notices|length|string ~ " active") }}
     <ul class="notice-list" data-vis="{{ V }}">
       {% for n in active_notices %}
-      <li class="notice notice-{{ n.severity }}" data-vis="{{ V }}">
-        <div class="notice-head" data-vis="{{ V }}">
-          <span class="notice-eyebrow" data-vis="{{ V }}">{{ n.scope_label|upper }}</span>
-          <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
-          <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:10] }}</span>
+      <li class="notice notice-{{ n.severity }} notice-clickable" data-vis="{{ V }}">
+        <div class="notice-link" data-vis="{{ V }}">
+          <div class="notice-head" data-vis="{{ V }}">
+            <span class="notice-severity-dot notice-dot-{{ n.severity }}" data-vis="{{ V }}"></span>
+            <span class="notice-eyebrow" data-vis="{{ V }}">{{ n.scope_label|upper }}</span>
+            <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
+            <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:10] }}</span>
+          </div>
+          <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
+          {% if n.body %}
+          <p class="notice-body notice-body-clamp" data-vis="{{ V }}">{{ n.body }}</p>
+          {% endif %}
         </div>
-        <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
-        {% if n.body %}
-        <p class="notice-body" data-vis="{{ V }}">{{ n.body }}</p>
-        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -49,14 +52,20 @@
     {% endcall %}
     <ul class="action-items-list" data-vis="{{ V }}">
       {% for item in dash_action_items %}
-      <li class="action-item" data-vis="{{ V }}">
+      <li class="action-item action-item-card" data-vis="{{ V }}">
         <a href="{{ item.href }}" class="action-item-link" data-vis="{{ V }}">
-          <span class="action-item-label" data-vis="{{ V }}">{{ item.label }}</span>
-          <span class="action-item-detail hint" data-vis="{{ V }}">{{ item.detail }}</span>
+          <span class="action-item-icon" data-icon="{{ item.icon|default('doc') }}" data-vis="{{ V }}"></span>
+          <span class="action-item-text" data-vis="{{ V }}">
+            <span class="action-item-label" data-vis="{{ V }}">{{ item.label }}</span>
+            <span class="action-item-detail hint" data-vis="{{ V }}">{{ item.detail }}</span>
+          </span>
+          <span class="action-item-meta" data-vis="{{ V }}">
+            {% if item.age %}
+            <span class="action-item-age hint" data-vis="{{ V }}">{{ time_ago(item.age) }}</span>
+            {% endif %}
+            <span class="action-item-arrow" data-vis="{{ V }}">&rsaquo;</span>
+          </span>
         </a>
-        {% if item.age %}
-        <span class="action-item-age hint" data-vis="{{ V }}">{{ time_ago(item.age) }}</span>
-        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -207,6 +216,7 @@
       <div class="dash-instrument-card" data-vis="{{ V }}">
         <div class="dash-instrument-card-head" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
+          <span class="dash-instrument-count-badge" data-vis="{{ V }}">{{ queue.rows|length }}</span>
         </div>
         {% if queue.rows %}
         <table class="dash-instrument-queue-table" data-vis="{{ V }}">
@@ -273,7 +283,13 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
         <button type="submit" class="btn btn-pill-sm attendance-mark-btn" data-vis="{{ V }}">Mark Present Today</button>
       </form>
-      <a class="text-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Full attendance →</a>
+      {% if attendance_streak and attendance_streak > 1 %}
+      <span class="attendance-streak" data-vis="{{ V }}">
+        <span class="attendance-streak-count" data-vis="{{ V }}">{{ attendance_streak }}d</span>
+        <span class="attendance-streak-label hint" data-vis="{{ V }}">streak</span>
+      </span>
+      {% endif %}
+      <a class="text-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Full attendance &rarr;</a>
     </div>
   </article>
   {% endif %}

@@ -10525,6 +10525,166 @@ def instrument_calendar(instrument_id: int, instrument):
     return redirect(url_for("calendar", instrument_id=instrument_id))
 
 
+@app.route("/calendar.ics")
+@login_required
+def calendar_ics():
+    """v2.2.1 — iCalendar subscription feed. Users add this URL to
+    Google Calendar / Apple Calendar / Outlook and get PRISM events
+    as a live-updating calendar. PRISM never talks to any API.
+
+    Events included:
+      - Scheduled sample requests (scheduled_for date)
+      - Instrument downtime windows (start/end)
+      - Calibrations due (from instrument_maintenance.next_due_at)
+
+    Scoped to the current user's visible instruments. Owner/admin
+    sees everything.
+    """
+    user = current_user()
+    now = datetime.utcnow()
+    range_start = now - timedelta(days=30)
+    range_end = now + timedelta(days=90)
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//PRISM Lab Scheduler//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        f"X-WR-CALNAME:PRISM — {user['name']}",
+    ]
+
+    def ical_dt(dt_str):
+        """Convert ISO datetime string to iCal DTSTART format."""
+        if not dt_str:
+            return None
+        clean = dt_str.replace("-", "").replace(":", "").replace("T", "T")[:15]
+        if "T" not in clean:
+            clean += "T000000"
+        return clean.replace("T", "T")
+
+    # 1. Scheduled requests
+    db = get_db()
+    roles = user_role_set(user)
+    if roles & {"super_admin", "site_admin"} or is_owner(user):
+        scope_clause = ""
+        scope_params: tuple = ()
+    else:
+        inst_ids = assigned_instrument_ids(user)
+        if inst_ids:
+            placeholders = ",".join("?" for _ in inst_ids)
+            scope_clause = f"AND sr.instrument_id IN ({placeholders})"
+            scope_params = tuple(inst_ids)
+        else:
+            scope_clause = "AND sr.requester_id = ?"
+            scope_params = (user["id"],)
+
+    scheduled = db.execute(
+        f"""
+        SELECT sr.request_no, sr.title, sr.scheduled_for, sr.sample_name,
+               i.name AS inst_name, i.code AS inst_code
+          FROM sample_requests sr
+          JOIN instruments i ON i.id = sr.instrument_id
+         WHERE sr.scheduled_for IS NOT NULL
+           AND sr.status NOT IN ('completed', 'rejected')
+           {scope_clause}
+         ORDER BY sr.scheduled_for
+         LIMIT 200
+        """,
+        scope_params,
+    ).fetchall()
+
+    for r in scheduled:
+        dt = ical_dt(r["scheduled_for"])
+        if not dt:
+            continue
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"DTSTART:{dt}",
+            f"DURATION:PT2H",
+            f"SUMMARY:[{r['inst_code']}] {r['title']}",
+            f"DESCRIPTION:Sample: {r['sample_name']} | Request: {r['request_no']}",
+            f"LOCATION:{r['inst_name']}",
+            f"UID:prism-req-{r['request_no']}@prism.local",
+            "END:VEVENT",
+        ])
+
+    # 2. Instrument downtime
+    downtime = db.execute(
+        """
+        SELECT d.start_time, d.end_time, d.reason,
+               i.name AS inst_name, i.code AS inst_code
+          FROM instrument_downtime d
+          JOIN instruments i ON i.id = d.instrument_id
+         WHERE d.end_time >= ?
+         ORDER BY d.start_time
+         LIMIT 100
+        """,
+        (range_start.isoformat(),),
+    ).fetchall()
+
+    for d in downtime:
+        start = ical_dt(d["start_time"])
+        end = ical_dt(d["end_time"])
+        if not start:
+            continue
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"DTSTART:{start}",
+        ])
+        if end:
+            lines.append(f"DTEND:{end}")
+        lines.extend([
+            f"SUMMARY:[DOWNTIME] {d['inst_code']} — {d['reason'] or 'Scheduled maintenance'}",
+            f"LOCATION:{d['inst_name']}",
+            f"UID:prism-dt-{d['inst_code']}-{start}@prism.local",
+            "END:VEVENT",
+        ])
+
+    # 3. Calibrations due
+    try:
+        calibrations = db.execute(
+            """
+            SELECT m.next_due_at, m.title, m.certificate_number,
+                   i.name AS inst_name, i.code AS inst_code
+              FROM instrument_maintenance m
+              JOIN instruments i ON i.id = m.instrument_id
+             WHERE m.event_type = 'calibration'
+               AND m.next_due_at IS NOT NULL
+               AND m.next_due_at >= ?
+             ORDER BY m.next_due_at
+             LIMIT 50
+            """,
+            (range_start.strftime("%Y-%m-%d"),),
+        ).fetchall()
+
+        for cal in calibrations:
+            dt = cal["next_due_at"]
+            if not dt:
+                continue
+            dt_ical = dt.replace("-", "") + "T090000"
+            lines.extend([
+                "BEGIN:VEVENT",
+                f"DTSTART:{dt_ical}",
+                f"DURATION:PT1H",
+                f"SUMMARY:[CALIBRATION DUE] {cal['inst_code']} — {cal['title']}",
+                f"DESCRIPTION:Certificate: {cal['certificate_number'] or 'pending'}",
+                f"LOCATION:{cal['inst_name']}",
+                f"UID:prism-cal-{cal['inst_code']}-{dt}@prism.local",
+                "END:VEVENT",
+            ])
+    except Exception:
+        pass  # instrument_maintenance table might not exist on older DBs
+
+    lines.append("END:VCALENDAR")
+    ics_content = "\r\n".join(lines)
+    return app.response_class(
+        ics_content,
+        mimetype="text/calendar",
+        headers={"Content-Disposition": "inline; filename=prism-calendar.ics"},
+    )
+
+
 # ─── v2.2.0 — Instrument maintenance log + notifications ─────────────
 
 

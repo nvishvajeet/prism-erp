@@ -6,7 +6,9 @@
 
   {# ── TILE 1: Filters — instrument, status, operator ── #}
   <article class="card tile tile-cal-filters" data-vis="{{ V }}">
-    {{ card_heading("", "Calendar") }}
+    {% call card_heading("", "Calendar") %}
+      <a class="text-link" href="{{ url_for('calendar_ics') }}" data-vis="{{ V }}" title="Subscribe in Google Calendar / Apple Calendar / Outlook">Subscribe .ics ↗</a>
+    {% endcall %}
     {% if instrument_selector_enabled %}
     <div class="filter-pill-row" data-vis="{{ V }}">
       <a class="filter-pill{% if not filters.instrument_id %} is-active{% endif %}" href="{{ url_for('calendar', instrument_id='', operator_id=filters.operator_id, show_scheduled=filters.show_scheduled, show_in_progress=filters.show_in_progress, show_completed=filters.show_completed, show_maintenance=filters.show_maintenance, view=filters.view, date=anchor_date.isoformat()) }}" data-vis="{{ V }}"><span class="filter-pill-label" data-vis="{{ V }}">All Instruments</span></a>

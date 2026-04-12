@@ -54,7 +54,7 @@
         <textarea name="description" rows="3" placeholder="Details, parts replaced, observations…" data-vis="{{ V }}"></textarea>
       </label>
       <label data-vis="{{ V }}">Date performed
-        <input type="date" name="performed_at" value="{{ now_iso()[:10] if now_iso else '' }}" data-vis="{{ V }}">
+        <input type="date" name="performed_at" data-vis="{{ V }}">
       </label>
       <label data-vis="{{ V }}">Next due date (for calibrations)
         <input type="date" name="next_due_at" data-vis="{{ V }}">

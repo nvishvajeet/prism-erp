@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| opus-4.6-abc | inbox-nav-completion-msg | 2026-04-12T12:00 | app.py, templates/base.html | feat(inbox): nav link + completion messages |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

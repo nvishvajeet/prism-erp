@@ -5404,6 +5404,7 @@ def inject_globals():
         "nav_instruments_truncated": nav_instruments_truncated,
         "nav_pending_counts": nav_pending_counts(user),
         "nav_notice_count": unread_notice_count(user) if user else 0,
+        "nav_inbox_unread": unread_message_count(user) if user else 0,
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
@@ -5824,6 +5825,27 @@ def unread_message_count(user: sqlite3.Row | None) -> int:
         return int(row["c"]) if row else 0
     except sqlite3.OperationalError:
         return 0
+
+
+def send_completion_inbox_message(operator_id: int, sample_request: sqlite3.Row | dict) -> None:
+    """Send a system inbox message to the requester when a request is completed.
+    Called from every code path that marks a request as completed."""
+    try:
+        recipient_id = sample_request["user_id"]
+        request_no = sample_request["request_no"]
+        instrument_name = sample_request.get("instrument_name") or ""
+        sample_name = sample_request.get("sample_name") or ""
+        subject = f"Request {request_no}: Completed"
+        body = (
+            f"Your request {request_no} for {sample_name} on {instrument_name} "
+            f"has been completed. Results are attached to the request."
+        )
+        execute(
+            "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at) VALUES (?, ?, ?, ?, ?, NULL)",
+            (operator_id, recipient_id, subject, body, now_iso()),
+        )
+    except Exception:
+        pass  # best-effort; don't break the completion flow
 
 
 def inbox_preview_for_user(user: sqlite3.Row | None, limit: int = 3) -> list[dict]:
@@ -8078,6 +8100,7 @@ def request_detail(request_id: int):
                     "status_changed",
                     {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
                 )
+                send_completion_inbox_message(user["id"], sample_request)
             else:
                 log_action(
                     user["id"],
@@ -8476,6 +8499,7 @@ def request_detail(request_id: int):
                     "resolved_and_completed",
                     {"results_summary": final_summary, "email_status": email_message},
                 )
+                send_completion_inbox_message(user["id"], sample_request)
             else:
                 execute(
                     "UPDATE sample_requests SET results_summary = ?, remarks = ?, updated_at = ? WHERE id = ?",
@@ -10245,6 +10269,7 @@ def schedule_actions():
             "completed_from_board",
             {"results_summary": results_summary, "email_status": email_message},
         )
+        send_completion_inbox_message(user["id"], sample_request)
         flash("Job marked done.", "success")
         write_request_metadata_snapshot(request_id)
         return redirect_to_queue(bucket_override="all", focus_request=True)

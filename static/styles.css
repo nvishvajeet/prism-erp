@@ -3714,14 +3714,20 @@ code {
 }
 
 /* Tile spans */
-.tile-info     { grid-column: span 4; }
-.tile-stats    { grid-column: span 2; }
+/* Instrument detail: restructured layout.
+   Row 1: Info(3) + Stats(3) — balanced header
+   Row 2: Queue(6) — full width, the main work surface
+   Row 3: Control(2) + Team(2) + Approval(2) — admin strip
+   Row 4: Downtime(2) + Maintenance+Notify(2) + Activity(2) — compact
+   Row 5: Metadata(4) + Danger(2) — editing at the bottom */
+.tile-info     { grid-column: span 3; }
+.tile-stats    { grid-column: span 3; }
 .tile-queue    { grid-column: 1 / -1; }
 .tile-control  { grid-column: span 2; }
 .tile-team     { grid-column: span 2; }
 .tile-approval { grid-column: span 2; }
-.tile-downtime { grid-column: span 3; }
-.tile-activity { grid-column: span 3; }
+.tile-downtime { grid-column: span 2; }
+.tile-activity { grid-column: span 2; }
 .tile-edit     { grid-column: span 4; }
 .tile-danger   { grid-column: span 2; }
 
@@ -8251,3 +8257,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* Maintenance + Notify: compact, span 2 each so they sit in one row with Activity */
+.tile-maintenance { grid-column: span 2; }
+.tile-notify      { grid-column: span 2; }

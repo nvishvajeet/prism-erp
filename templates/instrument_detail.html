@@ -283,7 +283,7 @@
   </section>
 
   {# ── Tile: Maintenance & Calibration (v2.2.0) ── #}
-  <section class="card tile" data-vis="{{ V }}">
+  <section class="card tile tile-maintenance" data-vis="{{ V }}">
     {% call card_heading("", "Maintenance") %}
       <a class="text-link" href="{{ url_for('instrument_maintenance_log', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Full log →</a>
     {% endcall %}
@@ -293,7 +293,7 @@
 
   {# ── Tile: Notify instrument subscribers (v2.2.0) ── #}
   {% if can_edit %}
-  <section class="card tile" data-vis="{{ V }}">
+  <section class="card tile tile-notify" data-vis="{{ V }}">
     {{ card_heading("", "Notify Subscribers") }}
     <form method="post" action="{{ url_for('instrument_notify', instrument_id=instrument['id']) }}" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">

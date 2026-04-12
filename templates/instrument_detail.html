@@ -55,6 +55,7 @@
       {{ stat_blob(queue_metrics.pending, "Pending", url_for('schedule', instrument_id=instrument['id'], bucket='pending'), tone='wait') }}
       {{ stat_blob(instrument_queue_counts['active'], "Active", url_for('schedule', instrument_id=instrument['id'], bucket='active'), tone='active') }}
       {{ stat_blob(instrument_queue_counts['done'], "Completed", url_for('schedule', instrument_id=instrument['id'], bucket='completed'), tone='completed') }}
+    </div>
   </section>
 
   {# ── Tile: Queue (full width) ── #}
@@ -64,6 +65,8 @@
         <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
         {% if can_view_history %}
         <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='completed') }}" data-vis="{{ V }}">History</a>
+        {% endif %}
+      </div>
     {% endcall %}
 
     {{ status_pills_row(

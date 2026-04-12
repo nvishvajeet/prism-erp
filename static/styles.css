@@ -9368,3 +9368,35 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
   border: none; background: none; cursor: pointer; padding: 0.2rem;
 }
 .todo-delete-btn:hover { opacity: 1; color: var(--danger); }
+
+.tile-span-3 { grid-column: span 3; }
+.tile-span-6, .tile-full-width { grid-column: 1 / -1; }
+
+/* Form section utilities */
+.form-section { padding: 0.75rem 1rem; }
+.form-section summary { cursor: pointer; font-weight: 600; padding: 0.75rem 1rem; }
+.form-field { margin-bottom: 0.5rem; }
+.form-field label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; }
+.form-field input, .form-field textarea, .form-field select {
+  width: 100%; padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9rem; background: var(--surface); color: var(--text);
+}
+.form-field textarea { resize: vertical; }
+.form-controls { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.form-controls > * { flex: 1; min-width: 120px; }
+
+/* Semantic color utilities */
+.color-ok { color: var(--lifecycle-ok, #2d8659); }
+.color-danger { color: var(--danger, #b84a4a); }
+.color-warm { color: var(--lifecycle-pending, #c4841d); }
+
+/* Metadata row */
+.meta-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px dashed var(--line); }
+.meta-row:last-child { border-bottom: none; }
+
+/* Top gap utility */
+.top-gap { margin-top: 1rem; }
+
+/* Muted badge */
+.badge-muted { opacity: 0.5; }

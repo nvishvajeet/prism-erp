@@ -41,7 +41,7 @@
         <span class="hint" data-vis="{{ V }}">{{ "{:.0f}".format(percent_used) }}% used</span>
       </div>
     </div>
-    <div class="finance-grant-bar-row" style="margin-top: 0.8rem;" data-vis="{{ V }}">
+    <div class="finance-grant-bar-row" class="top-gap" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
         <div class="finance-grant-bar-fill" style="width: {{ percent_used if percent_used <= 100 else 100 }}%" data-vis="{{ V }}"></div>
       </div>
@@ -62,14 +62,14 @@
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Status</dt><dd data-vis="{{ V }}">{{ grant.status|upper }}</dd></div>
     </dl>
     {% if grant.notes %}
-    <p class="hint" data-vis="{{ V }}" style="margin-top: 0.55rem;">{{ grant.notes }}</p>
+    <p class="hint top-gap" data-vis="{{ V }}">{{ grant.notes }}</p>
     {% endif %}
 
     {# Editable metadata form — finance editors only #}
     {% if can_edit_finance|default(false) %}
-    <details class="toggleable-form" data-vis="{{ V }}" style="margin-top: 0.75rem;">
+    <details class="toggleable-form top-gap" data-vis="{{ V }}">
       <summary class="text-link" data-vis="{{ V }}">Edit Metadata</summary>
-      <form method="post" class="form-grid" style="margin-top: 0.5rem;" data-vis="{{ V }}">
+      <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="update_grant_metadata" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Name <input type="text" name="name" value="{{ grant.name }}" required data-vis="{{ V }}"></label>

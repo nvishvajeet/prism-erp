@@ -27,7 +27,7 @@
 <section class="finance-tiles" data-vis="{{ V }}">
 
   {# ── Filter bar ── #}
-  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FILTERS", "Narrow down the invoice list") }}
     <form method="get" action="{{ url_for('finance_invoices_list') }}" class="finance-filter-bar" data-vis="{{ V }}">
       <div class="finance-filter-group" data-vis="{{ V }}">
@@ -63,7 +63,7 @@
   </article>
 
   {# ── Invoice table ── #}
-  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("INVOICES", invoices|length|string ~ " invoice" ~ ("s" if invoices|length != 1 else "")) }}
     {% if invoices %}
     <div class="finance-table-scroll" data-vis="{{ V }}">

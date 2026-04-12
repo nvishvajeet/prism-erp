@@ -12,38 +12,38 @@
 </header>
 
 {# ── New task form (collapsible) ── #}
-<section class="sitemap-tiles" data-vis="{{ V }}" style="margin-bottom:1rem;">
+<section class="dashboard-tiles" data-vis="{{ V }}">
   <article class="card tile" data-vis="{{ V }}">
-    <details data-vis="{{ V }}">
-      <summary style="cursor:pointer;font-weight:600;padding:0.75rem 1rem;" data-vis="{{ V }}">Add Task</summary>
-      <form method="post" action="{{ url_for('todo_new') }}" style="padding:0.75rem 1rem 1rem;" data-vis="{{ V }}">
+    <details class="form-section" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Add Task</summary>
+      <form method="post" action="{{ url_for('todo_new') }}" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="margin-bottom:0.5rem;" data-vis="{{ V }}">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Title</label>
-          <input type="text" name="title" required style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Title</label>
+          <input type="text" name="title" required data-vis="{{ V }}">
         </div>
-        <div style="margin-bottom:0.5rem;" data-vis="{{ V }}">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Description</label>
-          <textarea name="body" rows="2" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);resize:vertical;" data-vis="{{ V }}"></textarea>
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Description</label>
+          <textarea name="body" rows="2" data-vis="{{ V }}"></textarea>
         </div>
-        <div style="display:flex;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
-          <div style="flex:1;min-width:120px;" data-vis="{{ V }}">
-            <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Priority</label>
-            <select name="priority" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+        <div class="form-controls" data-vis="{{ V }}">
+          <div class="form-field" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Priority</label>
+            <select name="priority" data-vis="{{ V }}">
               <option value="low">Low</option>
               <option value="normal" selected>Normal</option>
               <option value="high">High</option>
               <option value="urgent">Urgent</option>
             </select>
           </div>
-          <div style="flex:1;min-width:140px;" data-vis="{{ V }}">
-            <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Due Date</label>
-            <input type="date" name="due_date" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+          <div class="form-field" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Due Date</label>
+            <input type="date" name="due_date" data-vis="{{ V }}">
           </div>
           {% if can_assign %}
-          <div style="flex:1;min-width:160px;" data-vis="{{ V }}">
-            <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Assign To</label>
-            <select name="user_id" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+          <div class="form-field" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Assign To</label>
+            <select name="user_id" data-vis="{{ V }}">
               <option value="">Myself</option>
               {% for u in assignable_users %}
               <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
@@ -103,7 +103,7 @@
 
 {# ── Assigned by Me ── #}
 {% if assigned_by_me %}
-<section class="inbox-tiles" data-vis="{{ V }}" style="margin-top:1rem;">
+<section class="inbox-tiles top-gap" data-vis="{{ V }}">
   <article class="card tile" data-vis="{{ V }}">
     {{ card_heading("Created by Me", "Assigned by Me", hint=(assigned_by_me|length ~ " tasks")) }}
     <ul class="todo-list" data-vis="{{ V }}">

@@ -40,32 +40,32 @@
 </nav>
 
 {% if is_owner_user or can_manage_members_user %}
-<section class="sitemap-tiles" data-vis="{{ V }}" style="margin-bottom:1rem;">
+<section class="dashboard-tiles" data-vis="{{ V }}">
   <article class="card tile" data-vis="{{ V }}">
-    <details data-vis="{{ V }}">
-      <summary style="cursor:pointer;font-weight:600;padding:0.75rem 1rem;" data-vis="{{ V }}">Notification Control Panel</summary>
-      <form method="post" action="{{ url_for('admin_notices_new') }}" style="padding:0.75rem 1rem 1rem;" data-vis="{{ V }}">
+    <details class="form-section" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Notification Control Panel</summary>
+      <form method="post" action="{{ url_for('admin_notices_new') }}" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div style="margin-bottom:0.5rem;" data-vis="{{ V }}">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Subject</label>
-          <input type="text" name="subject" required style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Subject</label>
+          <input type="text" name="subject" required data-vis="{{ V }}">
         </div>
-        <div style="margin-bottom:0.5rem;" data-vis="{{ V }}">
-          <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Body</label>
-          <textarea name="body" rows="3" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);resize:vertical;" data-vis="{{ V }}"></textarea>
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Body</label>
+          <textarea name="body" rows="3" data-vis="{{ V }}"></textarea>
         </div>
-        <div style="display:flex;gap:0.75rem;margin-bottom:0.75rem;" data-vis="{{ V }}">
-          <div style="flex:1;" data-vis="{{ V }}">
-            <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Severity</label>
-            <select name="severity" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+        <div class="form-controls" data-vis="{{ V }}">
+          <div class="form-field" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Severity</label>
+            <select name="severity" data-vis="{{ V }}">
               <option value="info">Info</option>
               <option value="warning">Warning</option>
               <option value="critical">Critical</option>
             </select>
           </div>
-          <div style="flex:1;" data-vis="{{ V }}">
-            <label style="display:block;font-size:0.85rem;margin-bottom:0.25rem;" data-vis="{{ V }}">Scope</label>
-            <select name="scope" style="width:100%;padding:0.4rem 0.5rem;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--surface);color:var(--text);" data-vis="{{ V }}">
+          <div class="form-field" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Scope</label>
+            <select name="scope" data-vis="{{ V }}">
               <option value="site">Site-wide</option>
             </select>
           </div>

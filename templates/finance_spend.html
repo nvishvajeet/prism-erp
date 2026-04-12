@@ -22,7 +22,7 @@
 <section class="finance-tiles" data-vis="{{ V }}">
 
   {# ── Grant filter ── #}
-  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FILTER", "Filter spend by grant") }}
     <form method="get" action="{{ url_for('finance_spend') }}" class="finance-filter-bar" data-vis="{{ V }}">
       <div class="finance-filter-group" data-vis="{{ V }}">
@@ -40,7 +40,7 @@
   </article>
 
   {# ── Unified spend table ── #}
-  <article class="card tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("SPEND LOG", "Payments + grant expenses combined") }}
     {% if entries %}
     <div class="finance-table-scroll" data-vis="{{ V }}">

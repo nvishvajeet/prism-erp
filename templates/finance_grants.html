@@ -51,7 +51,7 @@
           </div>
           <div class="finance-grant-meta hint" data-vis="{{ V }}">
             PI {{ g.pi_name or 'unassigned' }} · {{ g.sample_count }} sample{{ 's' if g.sample_count != 1 else '' }} charged · {{ g.start_date or '?' }} → {{ g.end_date or '?' }}
-            {% if g.status != 'active' %} · <strong>{{ g.status|upper }}</strong>{% endif %}
+            · <span class="grant-status-badge grant-status-{{ g.status }}">{{ g.status|upper }}</span>
           </div>
           <div class="finance-grant-bar-row" data-vis="{{ V }}">
             <div class="finance-grant-bar" data-vis="{{ V }}">

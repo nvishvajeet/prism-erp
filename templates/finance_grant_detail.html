@@ -43,7 +43,7 @@
     </div>
     <div class="finance-grant-bar-row" class="top-gap" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
-        <div class="finance-grant-bar-fill" style="width: {{ percent_used if percent_used <= 100 else 100 }}%" data-vis="{{ V }}"></div>
+        <div class="finance-grant-bar-fill{% if percent_used >= 100 %} grant-bar-over{% elif percent_used >= 80 %} grant-bar-warn{% endif %}" style="width: {{ percent_used if percent_used <= 100 else 100 }}%" data-vis="{{ V }}"></div>
       </div>
     </div>
   </article>

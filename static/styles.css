@@ -9311,6 +9311,55 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 :root[data-theme="dark"] .finance-status-paid    { background: rgba(16,185,129,0.15); color: #6ee7b7; }
 :root[data-theme="dark"] .finance-status-void    { background: rgba(255,255,255,0.06); color: var(--muted); }
 
+/* ── Grant status badges (grants list) ── */
+.grant-status-badge {
+  display: inline-block; padding: 0.12rem 0.45rem; border-radius: 4px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+.grant-status-active    { background: #d1fae5; color: #065f46; }
+.grant-status-completed,
+.grant-status-closed,
+.grant-status-exhausted { background: #e5e7eb; color: #4b5563; }
+.grant-status-frozen,
+.grant-status-suspended { background: #fee2e2; color: #991b1b; }
+:root[data-theme="dark"] .grant-status-active    { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+:root[data-theme="dark"] .grant-status-completed,
+:root[data-theme="dark"] .grant-status-closed,
+:root[data-theme="dark"] .grant-status-exhausted { background: rgba(255,255,255,0.08); color: #9ca3af; }
+:root[data-theme="dark"] .grant-status-frozen,
+:root[data-theme="dark"] .grant-status-suspended { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+/* ── Grant detail budget bar color zones ── */
+.grant-bar-warn { background: #e67700 !important; }
+.grant-bar-over { background: #c0392b !important; }
+
+/* ── Payment timeline colored dots ── */
+.payment-dot-paid    { background: #059669 !important; }
+.payment-dot-partial { background: #d97706 !important; }
+.payment-dot-pending { background: #9ca3af !important; }
+
+/* ── Remaining balance prominence ── */
+.finance-remaining-overdue dd,
+.finance-remaining-overdue { color: #dc2626; font-weight: 700; }
+.finance-remaining-paid dd,
+.finance-remaining-paid    { color: #059669; font-weight: 700; }
+.finance-remaining-pending dd { color: var(--ink); }
+:root[data-theme="dark"] .finance-remaining-overdue dd,
+:root[data-theme="dark"] .finance-remaining-overdue { color: #f87171; }
+:root[data-theme="dark"] .finance-remaining-paid dd,
+:root[data-theme="dark"] .finance-remaining-paid    { color: #6ee7b7; }
+
+/* ── Compact metadata grid (grant detail) ── */
+.mc-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.35rem 1rem; padding: 0.25rem 0; margin: 0;
+}
+.mc-meta-cell { display: flex; flex-direction: column; gap: 0.1rem; }
+.mc-meta-cell dt { font-size: 0.68rem; color: var(--hint, #888); text-transform: uppercase; letter-spacing: 0.03em; }
+.mc-meta-cell dd { font-size: 0.88rem; margin: 0; }
+
 /* Right-aligned amount column in receipt tables */
 .col-amount { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -9350,3 +9399,125 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .file-upload-label strong { color: var(--accent); }
 :root[data-theme="dark"] .file-upload-area { border-color: var(--border); }
 :root[data-theme="dark"] .file-upload-area:hover { background: rgba(59,109,153,0.08); }
+
+/* =========================================================================
+   POLISH — Schedule Queue & Request Detail (2026-04-12)
+   ========================================================================= */
+
+/* ── Schedule: status-colored left border on queue rows ── */
+.tile-queue-schedule #centralQueueTable tbody tr[data-status] {
+  border-left: 3.5px solid transparent;
+  transition: box-shadow 180ms ease, transform 180ms ease, background 120ms ease;
+}
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="completed"] {
+  border-left-color: var(--lifecycle-ok, #5a9b68);
+}
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="rejected"] {
+  border-left-color: var(--lifecycle-danger, #c06565);
+}
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="in_progress"],
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="scheduled"] {
+  border-left-color: var(--lifecycle-current, #3b6fc7);
+}
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="under_review"],
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="sample_submitted"],
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="sample_received"],
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="awaiting_sample_submission"],
+.tile-queue-schedule #centralQueueTable tbody tr[data-status="submitted"] {
+  border-left-color: var(--lifecycle-warn, #d1a64b);
+}
+
+/* ── Schedule: tappable hover lift on queue rows ── */
+.tile-queue-schedule #centralQueueTable tbody tr[data-status]:hover {
+  background: var(--hover-soft, #f1f6fb);
+  box-shadow: 0 2px 8px rgba(88, 112, 138, 0.09);
+  cursor: pointer;
+}
+
+/* ── Request detail: larger, more prominent status badge in header ── */
+.tile-request-header-status .badge {
+  font-size: 0.92rem;
+  padding: 0.35rem 0.85rem;
+  letter-spacing: 0.02em;
+  font-weight: 800;
+}
+
+/* ── Request detail: approval chain colored progress indicators ── */
+.approval-chain-step {
+  position: relative;
+  padding-left: 1.85rem;
+}
+.approval-chain-step::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  background: var(--line, #e3eaf1);
+  color: var(--muted, #738190);
+}
+.approval-chain-approved::before {
+  content: '\2713';
+  background: var(--tone-completed-bg, #eef8f1);
+  color: var(--tone-completed-ink, #4f7b5d);
+  border: 1.5px solid var(--tone-completed-border, #d5e8da);
+}
+.approval-chain-pending::before {
+  content: '\25F7';
+  background: var(--tone-wait-bg, #fbf5eb);
+  color: var(--tone-wait-ink, #8a6b3e);
+  border: 1.5px solid var(--tone-wait-border, #eddcc1);
+}
+.approval-chain-rejected::before {
+  content: '\2717';
+  background: var(--tone-rejected-bg, #fbf1f1);
+  color: var(--tone-rejected-ink, #9a5c5c);
+  border: 1.5px solid var(--tone-rejected-border, #efd9d9);
+}
+/* Future / not-yet-reached steps */
+.approval-chain-step:not(.approval-chain-approved):not(.approval-chain-pending):not(.approval-chain-rejected)::before {
+  content: '\2022';
+  background: var(--surface-alt, #f5f5f7);
+  color: var(--muted, #738190);
+  border: 1.5px solid var(--line, #e3eaf1);
+}
+
+/* ── Request detail: chat-thread styling for activity feed ── */
+.activity-feed-threaded .activity-entry.side-left {
+  align-self: flex-start;
+  border-radius: 0.15rem 0.75rem 0.75rem 0.75rem;
+  background: var(--surface-alt, #f5f5f7);
+}
+.activity-feed-threaded .activity-entry.side-right {
+  align-self: flex-end;
+  border-radius: 0.75rem 0.15rem 0.75rem 0.75rem;
+  background: var(--accent-soft, #eef5fb);
+  border-color: var(--tone-open-border, #d4e2ef);
+}
+.activity-feed-threaded .activity-entry.side-center {
+  align-self: center;
+  max-width: 90%;
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--line, #e3eaf1);
+  opacity: 0.85;
+  font-size: 0.8rem;
+}
+/* Dark mode thread tints */
+:root[data-theme="dark"] .activity-feed-threaded .activity-entry.side-left {
+  background: rgba(255,255,255,0.04);
+}
+:root[data-theme="dark"] .activity-feed-threaded .activity-entry.side-right {
+  background: var(--accent-soft, #17383d);
+  border-color: rgba(127,209,212,0.2);
+}

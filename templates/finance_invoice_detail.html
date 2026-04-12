@@ -34,18 +34,19 @@
   {# ── Invoice metadata ── #}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("INVOICE DETAILS", inv.invoice_number or '') }}
+    {% set _remaining_cls = "finance-remaining-" ~ ("paid" if remaining <= 0 else ("overdue" if derived_status == "overdue" else "pending")) %}
     {{ metadata_grid([
-      {"label": "Invoice Number", "value": inv.invoice_number or "N/A"},
-      {"label": "Request", "value": inv.request_no or "N/A", "href": url_for('request_detail', request_id=inv.request_id) if inv.request_id else ""},
-      {"label": "Description", "value": inv.description or inv.request_title or "N/A"},
-      {"label": "Amount Due", "value": "\u20b9{:,.2f}".format(inv.amount_due)},
-      {"label": "Amount Paid", "value": "\u20b9{:,.2f}".format(total_paid)},
-      {"label": "Remaining", "value": "\u20b9{:,.2f}".format(remaining)},
-      {"label": "Status", "value": derived_status|upper},
-      {"label": "Grant", "value": (inv.grant_code ~ " \u2014 " ~ inv.grant_name) if inv.grant_name else "None"},
-      {"label": "Issued", "value": inv.issued_at[:10] if inv.issued_at else "N/A"},
-      {"label": "Created by", "value": inv.created_by_name or "N/A"},
-      {"label": "Notes", "value": inv.notes or "None"},
+      ("Invoice Number", inv.invoice_number or "N/A"),
+      ("Request", inv.request_no or "N/A"),
+      ("Description", inv.description or inv.request_title or "N/A"),
+      ("Amount Due", "\u20b9{:,.2f}".format(inv.amount_due)),
+      ("Amount Paid", "\u20b9{:,.2f}".format(total_paid)),
+      ("Remaining", "\u20b9{:,.2f}".format(remaining), _remaining_cls),
+      ("Status", derived_status|upper),
+      ("Grant", (inv.grant_code ~ " \u2014 " ~ inv.grant_name) if inv.grant_name else "None"),
+      ("Issued", inv.issued_at[:10] if inv.issued_at else "N/A"),
+      ("Created by", inv.created_by_name or "N/A"),
+      ("Notes", inv.notes or "None"),
     ]) }}
   </article>
 
@@ -73,7 +74,7 @@
     <div class="payment-timeline" data-vis="{{ V }}">
       {% for p in payments %}
       <div class="payment-timeline-item" data-vis="{{ V }}">
-        <div class="payment-timeline-dot" data-vis="{{ V }}"></div>
+        <div class="payment-timeline-dot payment-dot-paid" data-vis="{{ V }}"></div>
         <div class="payment-timeline-content" data-vis="{{ V }}">
           <div class="payment-timeline-head" data-vis="{{ V }}">
             <strong data-vis="{{ V }}">&#8377;{{ "{:,.2f}".format(p.amount) }}</strong>

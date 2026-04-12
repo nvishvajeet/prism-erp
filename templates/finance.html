@@ -7,18 +7,51 @@
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Finance Portal</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">external billing</span>
+    <span class="inst-header-code" data-vis="{{ V }}">Economy Dashboard</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    <a class="btn btn-primary" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants & Budgets →</a>
+    <a class="btn" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
   </div>
 </header>
 
 <section class="finance-tiles" data-vis="{{ V }}">
 
-  {# ── TILE: KPI row — 4 headline numbers, Ferrari-dashboard ── #}
+  {# ── TILE: Internal — grants + instrument costs ── #}
+  <article class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+    {{ card_heading("INTERNAL", "Grants & instrument operations") }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Active grants</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">{{ by_instrument|length }}</strong>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Total budget</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_owed) }}</strong>
+      </div>
+    </div>
+    <a class="text-link top-gap" href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">View all grants →</a>
+  </article>
+
+  {# ── TILE: External — incoming samples, payments ── #}
+  <article class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+    {{ card_heading("EXTERNAL", "Incoming samples & revenue") }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Outstanding</span>
+        <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.outstanding) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ kpis.pending_count }} pending</span>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Collected</span>
+        <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(kpis.total_paid) }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ kpis.paid_count }} paid</span>
+      </div>
+    </div>
+  </article>
+
+  {# ── TILE: Full KPI row — combined view ── #}
   <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
-    {{ card_heading("HEADLINE", "External billing at a glance") }}
+    {{ card_heading("OVERVIEW", "Full economy at a glance") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
       <div class="finance-kpi-cell" data-vis="{{ V }}">
         <span class="finance-kpi-label" data-vis="{{ V }}">Outstanding</span>

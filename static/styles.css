@@ -3737,7 +3737,7 @@ code {
 .tile-downtime { grid-column: span 2; }
 .tile-activity { grid-column: span 2; }
 /* Metadata + Maintenance share a row (3+3=6) */
-.tile-edit     { grid-column: span 3; }
+.tile-edit     { grid-column: span 6; }
 .tile-maintenance { grid-column: span 3; }
 .tile-danger   { grid-column: span 2; }
 
@@ -8481,4 +8481,21 @@ form[action*="quick-present"] .primary-action:hover {
 }
 .inst-tiles > article[data-columns="6"] .notice-body {
   margin-top: 0.2rem;
+}
+
+/* Inventory add-item: bigger click target */
+.tile-inventory .form-toggle summary {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+.tile-inventory .form-toggle summary:hover {
+  background: var(--accent);
+  color: #fff;
 }

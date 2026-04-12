@@ -8317,3 +8317,32 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: var(--accent);
   color: var(--bg);
 }
+
+/* Unify notification cards with inbox row styling.
+   User: "notifications and inbox should look the same" */
+.inst-tiles > article[data-columns="6"] {
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  background: var(--panel);
+  padding: 0.65rem 0.85rem;
+}
+.inst-tiles > article[data-columns="6"].notice-unread {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
+.inst-tiles > article[data-columns="6"] h3 {
+  font-size: 0.92rem;
+  margin: 0.25rem 0 0.15rem;
+}
+.inst-tiles > article[data-columns="6"] > p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+:root[data-theme="dark"] .inst-tiles > article[data-columns="6"] {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .inst-tiles > article[data-columns="6"].notice-unread {
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel-strong));
+}

@@ -358,12 +358,16 @@
       });
     })();
   </script>
-  {# Grid overlay — append ?debug=1 to any URL to load grid-overlay.js.
-     Shows a 6-column grid, tile boundaries, and click-point markers
-     across the page for visual layout debugging. Not loaded in normal
-     browsing so it adds zero overhead. #}
+  {# Debug mode — append ?debug=1 to any URL.
+     Loads the numbered grid overlay (6 columns × rows, labeled
+     R1/C1..C6) + a voice feedback recorder. Press 'g' to toggle
+     the grid, click Record to speak, click Stop to save the
+     transcript to logs/debug_feedback.md. Claude reads that file
+     when you say "start debugging".
+     Also loads grid-overlay.js for tile-boundary markers. #}
   {% if request.args.get('debug') == '1' %}
   <script defer src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='debug-grid.js') }}"></script>
   {% endif %}
   <script defer src="{{ url_for('static', filename='keybinds.js') }}"></script>
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>

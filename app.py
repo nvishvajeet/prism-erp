@@ -11717,6 +11717,57 @@ def prism_clear():
     return jsonify(ok=True)
 
 
+# ── Debug feedback endpoint ─────────────────────────────────────
+# Voice-to-text debugging workflow: the user looks at the numbered
+# grid overlay (?debug=1), speaks into the mic describing issues
+# by grid reference, and the browser's Web Speech API transcribes
+# the audio. The transcript is POSTed here and appended to
+# logs/debug_feedback.md so Claude can read it later.
+
+FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
+
+@app.route("/debug/feedback", methods=["POST"])
+@login_required
+def debug_feedback():
+    """Append voice-transcribed debugging feedback to logs/debug_feedback.md.
+
+    Payload: { text, page, timestamp, grid_visible }
+    Enriched server-side with the logged-in user's name, role, and
+    the Flask endpoint that serves the page they were looking at.
+    """
+    data = request.get_json(silent=True)
+    if not data or not data.get("text"):
+        return jsonify(ok=False, error="no text"), 400
+
+    user = current_user()
+    user_label = f"{user['name']} ({user['role']})" if user else "anonymous"
+    page = data.get("page", "?")
+    ts = data.get("timestamp", datetime.now().isoformat())
+    grid = "grid visible" if data.get("grid_visible") else "grid off"
+    text = data["text"].strip()
+
+    clicks = data.get("clicks", [])
+    click_lines = ""
+    if clicks:
+        click_lines = "\n**Click markers:**\n"
+        for c in clicks:
+            click_lines += f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` ({c.get('page', '?')})\n"
+
+    entry = (
+        f"\n## {ts}\n\n"
+        f"**User:** {user_label}  \n"
+        f"**Page:** `{page}` ({grid})  \n"
+        f"{click_lines}\n"
+        f"{text}\n"
+    )
+
+    FEEDBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
+        f.write(entry)
+
+    return jsonify(ok=True, saved_to=str(FEEDBACK_LOG))
+
+
 if __name__ == "__main__":
     init_db()
     # Always auto-reload templates so changes appear without server restart

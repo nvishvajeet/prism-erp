@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}" class="hover-back-btn" title="Back to Grant">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}" data-vis="{{ V }}">← {{ grant.name }}</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Expenses</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ grant.code }}</span>
+  </div>
+</header>
+
+<section class="finance-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+    {{ card_heading("EXPENSE SUMMARY", expenses|length|string ~ " expense" ~ ("s" if expenses|length != 1 else "")) }}
+    <div class="finance-kpi-grid" data-vis="{{ V }}">
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Total expenses</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(total_expenses) }}</strong>
+      </div>
+      <div class="finance-kpi-cell" data-vis="{{ V }}">
+        <span class="finance-kpi-label" data-vis="{{ V }}">Count</span>
+        <strong class="finance-kpi-value" data-vis="{{ V }}">{{ expenses|length }}</strong>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+    {{ card_heading("EXPENSES", "Non-sample charges") }}
+    {% if expenses %}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for exp in expenses %}
+      <li class="finance-invoice-row" data-vis="{{ V }}">
+        <div class="finance-invoice-head" data-vis="{{ V }}">
+          <span class="notice-severity-info" data-vis="{{ V }}">{{ exp.expense_type|upper }}</span>
+          <strong class="finance-invoice-title" data-vis="{{ V }}">{{ exp.description }}</strong>
+          <span class="finance-invoice-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(exp.amount) }}</span>
+        </div>
+        <div class="finance-invoice-meta hint" data-vis="{{ V }}">
+          {% if exp.receipt_number %}receipt {{ exp.receipt_number }} · {% endif %}
+          {{ exp.recorder_name or 'system' }} · {{ exp.recorded_at[:10] }}
+          {% if exp.notes %} · {{ exp.notes }}{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No expenses recorded for this grant yet.") }}
+    {% endif %}
+  </article>
+
+  {% if can_edit_finance %}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("ADD EXPENSE", "Record a new charge") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Description <input type="text" name="description" required placeholder="e.g. Reagent purchase — NaCl 5kg" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Type
+        <select name="expense_type" data-vis="{{ V }}">
+          <option value="equipment">Equipment</option>
+          <option value="reagent">Reagent</option>
+          <option value="vendor">Vendor payment</option>
+          <option value="travel">Travel</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Receipt # <input type="text" name="receipt_number" placeholder="Optional" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Notes <textarea name="notes" rows="2" placeholder="Optional" data-vis="{{ V }}"></textarea></label>
+      <button type="submit" class="small-button" data-vis="{{ V }}">Record Expense</button>
+    </form>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

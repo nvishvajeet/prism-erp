@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}" class="hover-back-btn" title="Back to Grant">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}" data-vis="{{ V }}">← {{ grant.name }}</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Form Control</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ grant.code }}</span>
+  </div>
+</header>
+
+<div class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Tile 1: Approval Config (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Approval Config") }}
+    <p class="tile-lead" data-vis="{{ V }}">Grant-level approval settings. Large expenses above the budget warning threshold require additional sign-off from the PI or finance admin.</p>
+    <dl class="mc-meta-grid" data-vis="{{ V }}">
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">PI</dt><dd data-vis="{{ V }}">{{ grant.pi_name or '— not assigned —' }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Status</dt><dd data-vis="{{ V }}">{{ grant.status|upper }}</dd></div>
+      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Grant type</dt><dd data-vis="{{ V }}">{{ (grant.grant_type or 'internal')|upper }}</dd></div>
+    </dl>
+    <p class="tile-footnote" data-vis="{{ V }}">To change PI or grant metadata, use the <a class="text-link" href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}">grant detail page</a>.</p>
+  </section>
+
+  {# ── Tile 2: Budget Rules (full width) ── #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Budget Rules") }}
+    <p class="tile-lead" data-vis="{{ V }}">Set warning and freeze thresholds for grant spending. When spend reaches the warning threshold, the PI is alerted. At the freeze threshold, new charges are blocked.</p>
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_budget_rules" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Warning threshold (%)
+        <input type="number" step="1" min="0" max="100" name="warn_threshold_pct" value="{{ budget_rules.warn_threshold_pct }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Freeze threshold (%)
+        <input type="number" step="1" min="0" max="200" name="freeze_threshold_pct" value="{{ budget_rules.freeze_threshold_pct }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">
+        <input type="checkbox" name="require_receipt" value="1" {% if budget_rules.require_receipt %}checked{% endif %} data-vis="{{ V }}">
+        Require receipt for all expenses
+      </label>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save Budget Rules</button>
+    </form>
+  </section>
+
+  {# ── Tile 3: Overview (span 3) ── #}
+  <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+    {{ card_heading("", "Overview") }}
+    <ul class="tile-summary-list" data-vis="{{ V }}">
+      <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ expense_count }}</strong> expense{{ "s" if expense_count != 1 }} recorded</li>
+      <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ sample_count }}</strong> sample{{ "s" if sample_count != 1 }} charged</li>
+      <li data-vis="{{ V }}">Budget: <strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(grant.total_budget) }}</strong></li>
+      <li data-vis="{{ V }}">Warn at: <strong data-vis="{{ V }}">{{ budget_rules.warn_threshold_pct }}%</strong></li>
+    </ul>
+    <a class="text-link top-gap" href="{{ url_for('finance_grant_detail', grant_id=grant.id) }}" data-vis="{{ V }}">&larr; Back to {{ grant.name }}</a>
+  </section>
+
+</div>
+
+{% endblock %}

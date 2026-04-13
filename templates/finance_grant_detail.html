@@ -240,10 +240,15 @@
           <tr data-vis="{{ V }}">
             <td data-vis="{{ V }}">{{ e.description }}</td>
             <td data-vis="{{ V }}"><span class="badge">{{ e.expense_type|upper }}</span></td>
-            <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(e.amount or 0) }}</td>
+            <td class="num" data-vis="{{ V }}">
+              ₹{{ "{:,.0f}".format(e.amount or 0) }}
+              {% if e.original_currency and e.original_currency != 'INR' %}
+              <br><span class="hint">{{ e.original_currency }} {{ "{:,.2f}".format(e.original_amount) }} &#215; {{ e.exchange_rate }}</span>
+              {% endif %}
+            </td>
             <td data-vis="{{ V }}">{{ e.receipt_number or '—' }}</td>
             <td data-vis="{{ V }}">{{ e.recorder_name or '—' }}</td>
-            <td data-vis="{{ V }}">{{ e.recorded_at[:10] if e.recorded_at else '—' }}</td>
+            <td data-vis="{{ V }}">{{ e.expense_date or (e.recorded_at[:10] if e.recorded_at else '—') }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -259,7 +264,22 @@
       <form method="post" action="{{ url_for('finance_grant_expenses', grant_id=grant.id) }}" class="form-grid top-gap" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label data-vis="{{ V }}">Description <input type="text" name="description" required data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Expense Date <input type="date" name="expense_date" value="{{ today }}" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Currency
+          <select name="currency" id="expCurrencyInline" onchange="document.getElementById('expFxRowInline').style.display=this.value==='INR'?'none':'flex'" data-vis="{{ V }}">
+            <option value="INR" data-vis="{{ V }}">INR (₹)</option>
+            <option value="USD" data-vis="{{ V }}">USD ($)</option>
+            <option value="EUR" data-vis="{{ V }}">EUR</option>
+            <option value="GBP" data-vis="{{ V }}">GBP</option>
+            <option value="JPY" data-vis="{{ V }}">JPY</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Amount <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
+        <div id="expFxRowInline" style="display:none;flex-direction:column;gap:0.25rem;" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Exchange Rate (1 foreign = ? INR)
+            <input type="number" step="0.0001" name="exchange_rate" placeholder="e.g. 83.50" data-vis="{{ V }}">
+          </label>
+        </div>
         <label data-vis="{{ V }}">Type
           <select name="expense_type" data-vis="{{ V }}">
             <option value="equipment" data-vis="{{ V }}">Equipment</option>

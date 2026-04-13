@@ -4155,6 +4155,13 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_grant_expenses_grant ON grant_expenses(grant_id);
 
+            -- v2.1.0 currency support for grant expenses
+            -- original_amount: amount in foreign currency (NULL = INR)
+            -- original_currency: ISO 4217 code (NULL = INR)
+            -- exchange_rate: multiplier to convert to INR (NULL = 1.0)
+            -- expense_date: date the purchase was made
+            -- "amount" column remains the INR-equivalent for all aggregation
+
             CREATE TABLE IF NOT EXISTS grant_members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 grant_id INTEGER NOT NULL,
@@ -4343,6 +4350,18 @@ def init_db() -> None:
             "ALTER TABLE messages ADD COLUMN deleted_by_recipient INTEGER NOT NULL DEFAULT 0",
             # Phase 1b: permanent-hide (audit-safe delete from Deleted folder)
             "ALTER TABLE messages ADD COLUMN permanently_hidden INTEGER NOT NULL DEFAULT 0",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except Exception:
+                pass
+
+        # v2.1.0: currency support for grant expenses
+        for col_sql in [
+            "ALTER TABLE grant_expenses ADD COLUMN original_amount REAL",
+            "ALTER TABLE grant_expenses ADD COLUMN original_currency TEXT",
+            "ALTER TABLE grant_expenses ADD COLUMN exchange_rate REAL",
+            "ALTER TABLE grant_expenses ADD COLUMN expense_date TEXT",
         ]:
             try:
                 cur.execute(col_sql)
@@ -8285,6 +8304,7 @@ def finance_grant_detail(grant_id: int):
         admin_candidates=admin_candidates,
         grant_members=grant_members,
         all_users=all_users,
+        today=__import__("datetime").date.today().isoformat(),
     )
 
 
@@ -8306,26 +8326,50 @@ def finance_grant_expenses(grant_id: int):
         if not _user_can_edit_finance(user):
             abort(403)
         db = get_db()
+        raw_amount = float(request.form.get("amount", "0") or 0)
+        currency = request.form.get("currency", "INR").strip().upper()
+        exchange_rate_str = request.form.get("exchange_rate", "").strip()
+        expense_date = request.form.get("expense_date", "").strip() or now_iso()[:10]
+
+        # Compute INR amount
+        if currency and currency != "INR" and exchange_rate_str:
+            exchange_rate = float(exchange_rate_str)
+            inr_amount = round(raw_amount * exchange_rate, 2)
+            original_amount = raw_amount
+            original_currency = currency
+        else:
+            inr_amount = raw_amount
+            original_amount = None
+            original_currency = None
+            exchange_rate = None
+
         db.execute(
             """INSERT INTO grant_expenses
                (grant_id, description, amount, expense_type, receipt_number,
-                recorded_by_user_id, recorded_at, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                recorded_by_user_id, recorded_at, notes,
+                original_amount, original_currency, exchange_rate, expense_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 grant_id,
                 request.form.get("description", "").strip(),
-                float(request.form.get("amount", "0") or 0),
+                inr_amount,
                 request.form.get("expense_type", "equipment").strip(),
                 request.form.get("receipt_number", "").strip(),
                 user["id"],
                 now_iso(),
                 request.form.get("notes", "").strip(),
+                original_amount,
+                original_currency,
+                exchange_rate,
+                expense_date,
             ),
         )
         db.commit()
         log_action(user["id"], "grant", grant_id, "expense_recorded", {
             "description": request.form.get("description", "").strip(),
-            "amount": request.form.get("amount", "0"),
+            "amount": inr_amount,
+            "original": f"{original_currency} {original_amount}" if original_currency else None,
+            "rate": exchange_rate,
         })
         flash("Expense recorded.", "success")
         return redirect(url_for("finance_grant_expenses", grant_id=grant_id))
@@ -8339,12 +8383,14 @@ def finance_grant_expenses(grant_id: int):
         (grant_id,),
     )
     total_expenses = sum(e["amount"] or 0 for e in expenses)
+    from datetime import date as _date
     return render_template(
         "finance_grant_expenses.html",
         grant=grant,
         expenses=expenses,
         total_expenses=total_expenses,
         can_edit_finance=_user_can_edit_finance(user),
+        today=_date.today().isoformat(),
     )
 
 

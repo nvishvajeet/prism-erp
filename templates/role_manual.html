@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ manual.role_label }} Manual</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">role onboarding</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('index') }}" data-vis="{{ V }}">Continue to Home</a>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% call card_heading("WELCOME", manual.role_label) %}
+      <span class="badge" data-vis="{{ V }}">{{ manual.reason|replace('_', ' ')|title }}</span>
+    {% endcall %}
+    <p class="dash-hero-copy" data-vis="{{ V }}">{{ manual.headline }}</p>
+    <p class="hint" data-vis="{{ V }}">{{ manual.intro }}</p>
+    {% if manual.next_action %}
+    <div class="qa-grid" data-vis="{{ V }}">
+      <div class="qa-card qa-card-primary" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">START HERE</span>
+        <span class="qa-label" data-vis="{{ V }}">{{ manual.next_action }}</span>
+      </div>
+    </div>
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("ROLE", "What you are responsible for") }}
+    {% if manual.responsibilities %}
+    <ul class="notice-list" data-vis="{{ V }}">
+      {% for item in manual.responsibilities %}
+      <li class="notice notice-info" data-vis="{{ V }}">
+        <span class="notice-content" data-vis="{{ V }}">{{ item }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("This role has no specific responsibilities documented yet.") }}
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("FIRST STEPS", "What to do after logging in") }}
+    {% if manual.first_steps %}
+    <ol class="request-lifecycle" data-vis="{{ V }}" style="display:block;padding-left:1.25rem;">
+      {% for item in manual.first_steps %}
+      <li data-vis="{{ V }}" style="margin:0 0 0.7rem 0;">{{ item }}</li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    {{ empty_state("No first-step playbook is defined for this role yet.") }}
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MODULE GUIDE", "What parts of the portal matter for you") }}
+    {% if manual.modules %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Module</th>
+          <th data-vis="{{ V }}">How to use it</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for name, desc in manual.modules %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ name }}</strong></td>
+          <td data-vis="{{ V }}">{{ desc }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No module guide is available for this role.") }}
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PANES", "How to think about the screens and tiles") }}
+    {% if manual.pane_guides %}
+    <div class="action-items-list" data-vis="{{ V }}">
+      {% for title, desc in manual.pane_guides %}
+      <div class="action-item action-item-card" data-vis="{{ V }}">
+        <div class="action-item-text" data-vis="{{ V }}">
+          <span class="action-item-label" data-vis="{{ V }}">{{ title }}</span>
+          <span class="action-item-detail hint" data-vis="{{ V }}">{{ desc }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No pane guide is defined for this role yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

@@ -4361,6 +4361,11 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
             except:
                 pass
+        if "role_manual_notice" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN role_manual_notice TEXT NOT NULL DEFAULT ''")
+            except:
+                pass
 
         # Phase 6 W6.1 — Indexes for hot query paths.
         # Every query that filters by status, instrument, requester, or
@@ -6013,6 +6018,17 @@ ROLE_NEXT_ACTIONS = {
     "requester": "Submit and track your samples. Start at New Request.",
 }
 
+ROLE_MANUAL_HEADLINES = {
+    "super_admin": "You steward the whole system: people, portals, policy, and operational continuity.",
+    "site_admin": "You keep the organization running day to day across users, requests, finance, and settings.",
+    "instrument_admin": "You own instrument operations, readiness, queue movement, and local process quality.",
+    "faculty_in_charge": "You supervise instrument oversight, academic accountability, and approval quality.",
+    "operator": "You move work through the queue safely and keep turnaround predictable.",
+    "professor_approver": "You review requests, approve the right work, and keep the pipeline academically sound.",
+    "finance_admin": "You protect budgets, invoices, payments, and grant discipline.",
+    "requester": "You submit work clearly, track progress, and keep the lab supplied with what it needs to execute.",
+}
+
 
 def role_display_name(role: str | None) -> str:
     return ROLE_DISPLAY_NAMES.get(role or "", (role or "").replace("_", " ").title())
@@ -6020,6 +6036,152 @@ def role_display_name(role: str | None) -> str:
 
 def role_next_action(role: str | None) -> str:
     return ROLE_NEXT_ACTIONS.get(role or "", "")
+
+
+def _role_manual_intro(user: sqlite3.Row, reason: str | None = None, notice: str = "") -> str:
+    role = row_value(user, "role", "")
+    prefix = {
+        "role_changed": f"Your role is now {role_display_name(role)}.",
+        "login": f"You signed in as {role_display_name(role)}.",
+        "password_changed": f"Your password has been updated and you are ready to work as {role_display_name(role)}.",
+    }.get(reason or "", f"You are signed in as {role_display_name(role)}.")
+    extra = notice.strip()
+    if extra:
+        return f"{prefix} {extra}"
+    return prefix
+
+
+def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: str = "") -> dict[str, object]:
+    access = user_access_profile(user)
+    modules = []
+    if module_enabled("instruments") and access.get("can_access_instruments"):
+        modules.append(("Instruments", "Manage instruments, metadata, teams, downtime, approvals, pricing, and the request ecosystem around them."))
+    if module_enabled("queue") and access.get("can_access_schedule"):
+        modules.append(("Queue", "Take up work, receive samples, assign operators, schedule runs, and keep the active deck moving."))
+    if module_enabled("calendar") and access.get("can_access_calendar"):
+        modules.append(("Calendar", "See scheduled work, downtime, and date-driven operational commitments."))
+    if module_enabled("stats") and access.get("can_access_stats"):
+        modules.append(("Stats", "Read throughput, utilization, and turnaround patterns before changing operations."))
+    if module_enabled("finance") and access.get("can_view_finance_stage"):
+        modules.append(("Finance", "Review grants, invoices, payments, and budget discipline across the organization."))
+    if module_enabled("attendance") and access.get("_is_lab_staff"):
+        modules.append(("Attendance", "Mark presence, manage leave, and keep personnel state accurate."))
+    if module_enabled("receipts") and access.get("can_access_receipts"):
+        modules.append(("Receipts", "Submit or review expenses that eventually feed finance."))
+    if module_enabled("personnel") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
+        modules.append(("Personnel", "Manage staff records, salary configuration, and payroll context."))
+    if module_enabled("vehicles") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
+        modules.append(("Fleet", "Track vehicles, running cost, and driver assignment."))
+    if module_enabled("compute"):
+        modules.append(("Compute", "Submit jobs, inspect queue state, review failures, and coordinate with the worker-backed scheduler."))
+    if module_enabled("inbox"):
+        modules.append(("Inbox", "Use direct communication for follow-ups that should not live in a public workflow tile."))
+    if module_enabled("notifications"):
+        modules.append(("Notifications", "Use alerts as your change feed for approvals, completion, failures, and notices."))
+    if module_enabled("todos"):
+        modules.append(("Tasks", "Capture small pieces of work that should not disappear into chat or memory."))
+    if module_enabled("letters") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin") or user_has_role(user, "instrument_admin")):
+        modules.append(("Letters", "Produce official correspondence without leaving the ERP."))
+
+    role = row_value(user, "role", "")
+    responsibilities = {
+        "super_admin": [
+            "Manage users, role changes, instrument governance, and global operational health.",
+            "Use the dashboard and stats to see system-wide pressure before acting.",
+            "Treat the dev/admin surfaces as control tools, not everyday work surfaces for others.",
+        ],
+        "site_admin": [
+            "Coordinate users, active requests, notices, and site-wide operations.",
+            "Use queue, finance, and settings together when unblocking cross-team work.",
+            "Keep instruments staffed, visible, and properly assigned.",
+        ],
+        "instrument_admin": [
+            "Keep instrument metadata, downtime, approvals, inventory, and pricing correct.",
+            "Use queue and request detail pages to keep work moving and auditable.",
+            "Coordinate with operators rather than letting jobs age invisibly.",
+        ],
+        "faculty_in_charge": [
+            "Review instrument oversight, approvals, and research accountability.",
+            "Focus on whether a request should proceed, not just whether it exists.",
+            "Use request detail and instrument pages to supervise quality.",
+        ],
+        "operator": [
+            "Receive samples, schedule work, run jobs, and close the loop cleanly.",
+            "Keep remarks and result summaries usable for the requester and the audit chain.",
+            "Use queue, request detail, and attendance as your daily operating panes.",
+        ],
+        "professor_approver": [
+            "Review requests that need academic approval and move them decisively.",
+            "Check sample context and instrument intent before approving.",
+            "Use schedule and request detail as your main review surfaces.",
+        ],
+        "finance_admin": [
+            "Review finance approvals, grants, invoices, and payment state.",
+            "Protect budget discipline without slowing legitimate work more than necessary.",
+            "Use finance first, then queue/request detail when tracing a case.",
+        ],
+        "requester": [
+            "Submit complete requests, attach what the lab needs, and follow status updates.",
+            "Use request detail to track replies, issues, attachments, and results.",
+            "Treat notifications and inbox as the fastest way to know what changed.",
+        ],
+    }.get(role, [])
+
+    first_steps = {
+        "super_admin": ["Open Home and read the action items.", "Open Settings → Users to understand who has access.", "Open Instruments and confirm ownership/assignment patterns."],
+        "site_admin": ["Open Home and clear urgent action items.", "Open Settings to inspect users and notices.", "Open Queue to review items waiting on operations."],
+        "instrument_admin": ["Open Instruments and pick your area.", "Review downtime, approval settings, and operator assignments.", "Open Queue to see what is waiting on your instrument area."],
+        "faculty_in_charge": ["Open Instruments or Queue.", "Review pending approvals and request histories.", "Use request detail pages to decide whether work should continue."],
+        "operator": ["Open Queue.", "Look for sample-submitted, received, or scheduled work.", "Use request detail to update status, notes, and results."],
+        "professor_approver": ["Open Queue or request links from notifications.", "Review pending approval-stage work.", "Approve or reject clearly so the pipeline does not stall."],
+        "finance_admin": ["Open Finance.", "Review grants, invoices, and pending finance-stage work.", "Use Queue / request detail when tracing a billing context."],
+        "requester": ["Open New Request.", "Submit complete information and attach documents if needed.", "Track progress on request detail and notifications."],
+    }.get(role, [])
+
+    pane_guides = []
+    if access.get("can_access_instruments"):
+        pane_guides.append(("Instrument pages", "Use the main tiles for metadata, downtime, approvals, inventory, pricing, and history. Change only the pane that owns the truth."))
+    if access.get("can_access_schedule"):
+        pane_guides.append(("Queue and request panes", "Use queue for movement decisions and request detail for per-job context, conversation, attachments, and audit-safe updates."))
+    if access.get("can_view_finance_stage"):
+        pane_guides.append(("Finance panes", "Read grant health, invoice state, and payment progress together before changing financial state."))
+    if module_enabled("compute"):
+        pane_guides.append(("Compute panes", "Use dashboard for queue state, submit for new work, detail for logs/output, and catalog/admin for software governance."))
+    if module_enabled("attendance") and access.get("_is_lab_staff"):
+        pane_guides.append(("Attendance panes", "Use self-marking for everyday presence and the team/admin panes for leave and staffing visibility."))
+
+    return {
+        "role_label": role_display_name(role),
+        "headline": ROLE_MANUAL_HEADLINES.get(role, "You have a role-specific slice of CATALYST."),
+        "intro": _role_manual_intro(user, reason=reason, notice=notice),
+        "next_action": role_next_action(role),
+        "responsibilities": responsibilities,
+        "first_steps": first_steps,
+        "modules": modules,
+        "pane_guides": pane_guides,
+        "reason": reason or "login",
+    }
+
+
+def queue_role_manual(user_id: int, *, reason: str = "login", notice: str = "") -> None:
+    session["_role_manual_prompt"] = {
+        "user_id": user_id,
+        "reason": reason,
+        "notice": notice,
+    }
+
+
+def consume_role_manual_notice(user_id: int) -> str:
+    try:
+        row = query_one("SELECT role_manual_notice FROM users WHERE id = ?", (user_id,))
+    except sqlite3.OperationalError:
+        return ""
+    if not row:
+        return ""
+    notice = row_value(row, "role_manual_notice", "").strip()
+    if notice:
+        execute("UPDATE users SET role_manual_notice = '' WHERE id = ?", (user_id,))
+    return notice
 
 
 # ---------------------------------------------------------------------------
@@ -9271,8 +9433,13 @@ def demo_switch_role(role_key: str):
         flash("Demo role account not found.", "error")
         return redirect(url_for("index"))
     session["user_id"] = target_user["id"]
+    queue_role_manual(
+        target_user["id"],
+        reason="role_changed",
+        notice=f"You switched into the {target['label']} view. Review the role manual before using the portal.",
+    )
     flash(f"Switched to {target['label']} view.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("role_manual"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -9296,8 +9463,14 @@ def login():
                     "success",
                 )
                 return redirect(url_for("change_password"))
+            role_notice = consume_role_manual_notice(user["id"])
+            queue_role_manual(
+                user["id"],
+                reason="role_changed" if role_notice else "login",
+                notice=role_notice,
+            )
             flash(f"Signed in as {user['name']}.", "success")
-            return redirect(url_for("index"))
+            return redirect(url_for("role_manual"))
         # Log failed attempt — use user id if email matched but password wrong
         failed_uid = user["id"] if user else None
         log_action(failed_uid, "auth", failed_uid or 0, "login_failed", {"email": email, "ip": request.remote_addr or ""})
@@ -9366,8 +9539,14 @@ def auth_google_callback():
     session.clear()
     session["user_id"] = user["id"]
     session.permanent = True
+    role_notice = consume_role_manual_notice(user["id"])
+    queue_role_manual(
+        user["id"],
+        reason="role_changed" if role_notice else "login",
+        notice=role_notice,
+    )
     flash(f"Signed in as {user['name']} via Google.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("role_manual"))
 
 
 # ── System notification helper ──────────────────────────────────
@@ -13403,6 +13582,22 @@ def my_profile():
     return redirect(url_for("user_profile", user_id=current_user()["id"]))
 
 
+@app.route("/manual")
+@login_required
+def role_manual():
+    user = current_user()
+    prompt = session.pop("_role_manual_prompt", None) or {}
+    return render_template(
+        "role_manual.html",
+        title=f"{role_display_name(user['role'])} Manual",
+        manual=role_manual_payload(
+            user,
+            reason=prompt.get("reason"),
+            notice=prompt.get("notice", ""),
+        ),
+    )
+
+
 @app.route("/profile/change-password", methods=["GET", "POST"])
 @login_required
 def change_password():
@@ -13426,7 +13621,8 @@ def change_password():
         )
         log_action(user["id"], "user", user["id"], "password_changed", {})
         flash("Password changed successfully.", "success")
-        return redirect(url_for("my_profile"))
+        queue_role_manual(user["id"], reason="password_changed")
+        return redirect(url_for("role_manual"))
     return render_template("change_password.html", title="Change Password")
 
 
@@ -13566,8 +13762,12 @@ def user_profile(user_id: int):
             if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
                 abort(403)
             execute(
-                "UPDATE users SET role = ?, invite_status = 'active', active = 1 WHERE id = ?",
-                (new_role, user_id),
+                "UPDATE users SET role = ?, invite_status = 'active', active = 1, role_manual_notice = ? WHERE id = ?",
+                (
+                    new_role,
+                    f"An administrator changed your primary role from {role_display_name(target_user['role'])} to {role_display_name(new_role)}. Review this manual before continuing.",
+                    user_id,
+                ),
             )
             log_action(
                 viewer["id"], "user", user_id, "user_role_changed",
@@ -13587,6 +13787,13 @@ def user_profile(user_id: int):
                     "reload_url": url_for("user_profile", user_id=user_id),
                 })
             flash(f"Role updated to {role_display_name(new_role)}.", "success")
+            if user_id == viewer["id"]:
+                queue_role_manual(
+                    viewer["id"],
+                    reason="role_changed",
+                    notice=f"Your primary role is now {role_display_name(new_role)}.",
+                )
+                return redirect(url_for("role_manual"))
             return redirect(url_for("user_profile", user_id=user_id))
         if action == "update_user_role_set":
             # W1.3.7 — layer additional roles on top of users.role.
@@ -13625,7 +13832,21 @@ def user_profile(user_id: int):
                 viewer["id"], "user", user_id, "user_role_set_updated",
                 {"roles": sorted(checked), "email": target_user["email"]},
             )
+            execute(
+                "UPDATE users SET role_manual_notice = ? WHERE id = ?",
+                (
+                    "Your role access was updated by an administrator. Review the manual to see what panes, modules, and approvals you can now use.",
+                    user_id,
+                ),
+            )
             flash("Additional roles updated.", "success")
+            if user_id == viewer["id"]:
+                queue_role_manual(
+                    viewer["id"],
+                    reason="role_changed",
+                    notice="Your additional role access was updated. Review the manual for the current operating model.",
+                )
+                return redirect(url_for("role_manual"))
             return redirect(url_for("user_profile", user_id=user_id))
         if action == "update_user_instruments":
             # Bulk per-instrument assignment across the three lanes

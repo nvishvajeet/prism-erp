@@ -9637,3 +9637,7 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 /* Noticeboard: ensure <li> doesn't absorb clicks from <a> */
 .tile-dash-noticeboard .notice { padding: 0; }
 .tile-dash-noticeboard .notice-link { display: flex; width: 100%; }
+
+/* Read notifications: visually dimmed */
+.inbox-row:not(.notif-unread) { opacity: 0.55; }
+.inbox-row:not(.notif-unread):hover { opacity: 0.85; }

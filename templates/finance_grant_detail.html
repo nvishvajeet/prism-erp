@@ -17,7 +17,7 @@
 
 <section class="finance-tiles" data-vis="{{ V }}">
 
-  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+  <article class="card tile tile-finance-kpi tile-span-3" data-vis="{{ V }}">
     {{ card_heading("BUDGET", "Spend vs total") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
       <div class="finance-kpi-cell" data-vis="{{ V }}">
@@ -48,7 +48,7 @@
     </div>
   </article>
 
-  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+  <article class="card tile tile-finance-by-instrument tile-span-3" data-vis="{{ V }}">
     {{ card_heading("METADATA", "Grant header") }}
     <dl class="mc-meta-grid" data-vis="{{ V }}">
       <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Code</dt><dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ grant.code }}</code></dd></div>
@@ -108,6 +108,71 @@
            For now these fields are stored and displayed; actual approval chain
            integration is a future step. #}
         <button type="submit" class="small-button" data-vis="{{ V }}">Save</button>
+      </form>
+    </details>
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MEMBERS", grant_members|length|string ~ " member" ~ ("s" if grant_members|length != 1 else "")) }}
+    {% if grant_members %}
+    <table class="sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Email</th>
+          <th data-vis="{{ V }}">Role</th>
+          <th data-vis="{{ V }}">Added</th>
+          {% if can_edit_finance|default(false) %}<th data-vis="{{ V }}">Action</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for m in grant_members %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.name }}</strong></td>
+          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ m.email }}</span></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ m.role|upper }}</span></td>
+          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ m.added_at[:10] if m.added_at else '—' }}{% if m.added_by_name %} by {{ m.added_by_name }}{% endif %}</span></td>
+          {% if can_edit_finance|default(false) %}
+          <td data-vis="{{ V }}">
+            <form method="post" class="inline-form" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="remove_grant_member">
+              <input type="hidden" name="member_id" value="{{ m.id }}">
+              <button type="submit" class="text-link hint" title="Remove" data-vis="{{ V }}">&#10005;</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No members assigned to this grant yet.") }}
+    {% endif %}
+
+    {% if can_edit_finance|default(false) %}
+    <details class="toggleable-form top-gap" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">Add Member</summary>
+      <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_grant_member">
+        <label data-vis="{{ V }}">User
+          <select name="member_user_id" required data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">— Select —</option>
+            {% for u in all_users %}
+            <option value="{{ u.id }}" data-vis="{{ V }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Role
+          <select name="member_role" data-vis="{{ V }}">
+            <option value="member" data-vis="{{ V }}">Member (can expense)</option>
+            <option value="viewer" data-vis="{{ V }}">Viewer (can see)</option>
+            <option value="admin" data-vis="{{ V }}">Admin (can manage)</option>
+          </select>
+        </label>
+        <button type="submit" class="small-button" data-vis="{{ V }}">Add</button>
       </form>
     </details>
     {% endif %}

@@ -19,7 +19,7 @@
 <section class="dashboard-tiles" data-vis="{{ V }}">
 
   {# ── Tile 1: Quick Mark Attendance ── #}
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("QUICK MARK", "Record your attendance") }}
     <form method="post" action="{{ url_for('attendance_quick_present') }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -86,7 +86,7 @@
   </article>
 
   {# ── Tile 2: Leave Requests ── #}
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("LEAVE REQUESTS", pending_leaves|length|string ~ " total") }}
     {% if my_manager %}
     <p class="hint" data-vis="{{ V }}">Reports to: {{ my_manager.manager_name }}</p>
@@ -150,7 +150,7 @@
 
   {# ── Tile 3: My Team (managers only) ── #}
   {% if is_manager or is_admin %}
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("MY TEAM", team_members|length|string ~ " reports") }}
     {# Team attendance today #}
     {% if team_members %}

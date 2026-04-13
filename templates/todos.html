@@ -13,7 +13,7 @@
 
 {# ── New task form (collapsible) ── #}
 <section class="dashboard-tiles" data-vis="{{ V }}">
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     <details class="form-section" data-vis="{{ V }}">
       <summary data-vis="{{ V }}">Add Task</summary>
       <form method="post" action="{{ url_for('todo_new') }}" data-vis="{{ V }}">
@@ -60,7 +60,7 @@
 
 {# ── My Tasks ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("Assigned to Me", "My Tasks", hint=(my_todos|selectattr('status', 'equalto', 'open')|list|length ~ " open")) }}
     {% if my_todos %}
     <ul class="todo-list" data-vis="{{ V }}">
@@ -104,7 +104,7 @@
 {# ── Assigned by Me ── #}
 {% if assigned_by_me %}
 <section class="inbox-tiles top-gap" data-vis="{{ V }}">
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("Created by Me", "Assigned by Me", hint=(assigned_by_me|length ~ " tasks")) }}
     <ul class="todo-list" data-vis="{{ V }}">
       {% for t in assigned_by_me %}

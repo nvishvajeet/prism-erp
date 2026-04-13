@@ -13,7 +13,7 @@
 
 <section class="finance-tiles" data-vis="{{ V }}">
 
-  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+  <article class="card tile tile-finance-kpi tile-full-width" data-vis="{{ V }}">
     {{ card_heading("EXPENSE SUMMARY", expenses|length|string ~ " expense" ~ ("s" if expenses|length != 1 else "")) }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
       <div class="finance-kpi-cell" data-vis="{{ V }}">
@@ -27,7 +27,7 @@
     </div>
   </article>
 
-  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+  <article class="card tile tile-finance-outstanding tile-span-3" data-vis="{{ V }}">
     {{ card_heading("EXPENSES", "Non-sample charges") }}
     {% if expenses %}
     <ul class="finance-invoice-list" data-vis="{{ V }}">
@@ -52,7 +52,7 @@
   </article>
 
   {% if can_edit_finance %}
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("ADD EXPENSE", "Record a new charge") }}
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

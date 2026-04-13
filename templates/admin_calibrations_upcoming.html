@@ -12,7 +12,7 @@
 </header>
 
 <section class="finance-tiles" data-vis="{{ V }}">
-  <article class="card tile" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("UPCOMING", upcoming|length|string ~ " calibration" ~ ("s" if upcoming|length != 1 else "") ~ " due in the next 30 days") }}
     {% if upcoming %}
     <ul class="finance-invoice-list" data-vis="{{ V }}">

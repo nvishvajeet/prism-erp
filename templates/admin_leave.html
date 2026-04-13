@@ -13,7 +13,7 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("PENDING APPROVAL", pending|length|string ~ " request" ~ ("s" if pending|length != 1 else "")) }}
     {% if pending %}
     <table class="sortable-table" data-vis="{{ V }}">
@@ -55,7 +55,7 @@
     {% endif %}
   </article>
 
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("RECENT DECISIONS", recent|length|string ~ " processed") }}
     {% if recent %}
     <div class="tile-scroll" data-vis="{{ V }}">

@@ -162,8 +162,8 @@ MODULE_REGISTRY = {
     "receipts": {
         "label": "Receipts",
         "icon": "\U0001f9fe",
-        "nav_order": 3,
-        "description": "Expense receipt submission",
+        "nav_order": 0,
+        "description": "Expense receipt submission (accessible via /receipts, hidden from nav)",
         "nav_endpoint": "receipts_list",
         "nav_active_endpoints": {"receipts_list", "receipt_new", "receipt_detail", "receipt_review"},
     },
@@ -4134,6 +4134,20 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_grant_expenses_grant ON grant_expenses(grant_id);
 
+            CREATE TABLE IF NOT EXISTS grant_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grant_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                added_by_user_id INTEGER,
+                added_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (grant_id) REFERENCES grants(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE (grant_id, user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_grant_members_grant ON grant_members(grant_id);
+            CREATE INDEX IF NOT EXISTS idx_grant_members_user  ON grant_members(user_id);
+
             -- sample_requests gains a project_id FK for forward-lookup.
             -- Nullable in alpha.1 because the backfill stitches it after
             -- the fact; NOT NULL would block the tables-exist-before-
@@ -8002,6 +8016,34 @@ def finance_grant_detail(grant_id: int):
             log_action(user["id"], "grant", grant_id, "grant_metadata_updated", {})
             flash("Grant metadata updated.", "success")
             return redirect(url_for("finance_grant_detail", grant_id=grant_id))
+        elif action == "add_grant_member":
+            member_user_id = request.form.get("member_user_id", "").strip()
+            member_role = request.form.get("member_role", "member").strip()
+            if member_role not in ("member", "viewer", "admin"):
+                member_role = "member"
+            if member_user_id:
+                db = get_db()
+                try:
+                    db.execute(
+                        """INSERT INTO grant_members (grant_id, user_id, role, added_by_user_id, added_at)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (grant_id, int(member_user_id), member_role, user["id"], now_iso()),
+                    )
+                    db.commit()
+                    log_action(user["id"], "grant", grant_id, "grant_member_added", {"member_user_id": int(member_user_id), "role": member_role})
+                    flash("Member added.", "success")
+                except Exception:
+                    flash("User is already a member of this grant.", "warning")
+            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
+        elif action == "remove_grant_member":
+            member_id = request.form.get("member_id", "").strip()
+            if member_id:
+                db = get_db()
+                db.execute("DELETE FROM grant_members WHERE id = ? AND grant_id = ?", (int(member_id), grant_id))
+                db.commit()
+                log_action(user["id"], "grant", grant_id, "grant_member_removed", {"member_id": int(member_id)})
+                flash("Member removed.", "success")
+            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
     grant = query_one(
         """
         SELECT g.*, pi.name AS pi_name, pi.email AS pi_email,
@@ -8021,6 +8063,17 @@ def finance_grant_detail(grant_id: int):
     admin_candidates = query_all(
         "SELECT id, name FROM users WHERE role IN ('finance_admin','super_admin','site_admin','instrument_admin') ORDER BY name"
     )
+    grant_members = query_all(
+        """SELECT gm.id, gm.role, gm.added_at, u.id AS user_id, u.name, u.email,
+                  ab.name AS added_by_name
+             FROM grant_members gm
+             JOIN users u ON u.id = gm.user_id
+             LEFT JOIN users ab ON ab.id = gm.added_by_user_id
+            WHERE gm.grant_id = ?
+            ORDER BY gm.role, u.name""",
+        (grant_id,),
+    )
+    all_users = query_all("SELECT id, name, email FROM users ORDER BY name")
     charged = query_all(
         """
         SELECT
@@ -8065,6 +8118,8 @@ def finance_grant_detail(grant_id: int):
         percent_used=percent_used,
         can_edit_finance=_user_can_edit_finance(user),
         admin_candidates=admin_candidates,
+        grant_members=grant_members,
+        all_users=all_users,
     )
 
 

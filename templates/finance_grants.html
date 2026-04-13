@@ -13,7 +13,7 @@
 
 <section class="finance-tiles" data-vis="{{ V }}">
 
-  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+  <article class="card tile tile-finance-kpi tile-full-width" data-vis="{{ V }}">
     {{ card_heading("BUDGET TOTAL", "Every grant combined") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
       <div class="finance-kpi-cell" data-vis="{{ V }}">
@@ -35,7 +35,7 @@
     </div>
   </article>
 
-  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+  <article class="card tile tile-finance-by-instrument tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Grants") }}
     {% if grants %}
     <ul class="finance-grant-list" data-vis="{{ V }}">

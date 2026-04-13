@@ -19,7 +19,7 @@
 
 <section class="dashboard-tiles" data-vis="{{ V }}">
 
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("SUMMARY", target_date) }}
     <div class="dev-now-grid" data-vis="{{ V }}">
       <div class="dev-now-cell" data-vis="{{ V }}">
@@ -45,7 +45,7 @@
     </div>
   </article>
 
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("RECORDS", records|length|string ~ " marked") }}
     {% if records %}
     <table class="sortable-table" data-vis="{{ V }}">

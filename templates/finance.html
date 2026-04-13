@@ -78,7 +78,7 @@
   </article>
 
   {# ── TILE: Full KPI row — combined view ── #}
-  <article class="card tile tile-finance-kpi" data-vis="{{ V }}">
+  <article class="card tile tile-finance-kpi tile-full-width" data-vis="{{ V }}">
     {{ card_heading("OVERVIEW", "Full economy at a glance") }}
     <div class="finance-kpi-grid" data-vis="{{ V }}">
       <a class="finance-kpi-cell finance-kpi-link" href="{{ url_for('finance_invoices_list', status='pending') }}" data-vis="{{ V }}">
@@ -105,7 +105,7 @@
   </article>
 
   {# ── TILE: By-instrument aggregation ── #}
-  <article class="card tile tile-finance-by-instrument" data-vis="{{ V }}">
+  <article class="card tile tile-finance-by-instrument tile-full-width" data-vis="{{ V }}">
     {{ card_heading("BY INSTRUMENT", "Owed vs paid per instrument") }}
     {% if by_instrument %}
     <table class="finance-table sortable-table" data-vis="{{ V }}">
@@ -137,7 +137,7 @@
   </article>
 
   {# ── TILE: Outstanding invoices ── #}
-  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+  <article class="card tile tile-finance-outstanding tile-full-width" data-vis="{{ V }}">
     {{ card_heading("OUTSTANDING", outstanding|length|string ~ " invoice" ~ ("s" if outstanding|length != 1 else "") ~ " · newest first") }}
     {% if outstanding %}
     <ul class="finance-invoice-list" data-vis="{{ V }}">
@@ -165,7 +165,7 @@
   </article>
 
   {# ── TILE: Recently paid ── #}
-  <article class="card tile tile-finance-paid" data-vis="{{ V }}">
+  <article class="card tile tile-finance-paid tile-full-width" data-vis="{{ V }}">
     {{ card_heading("RECENTLY PAID", recently_paid|length|string ~ " paid invoices") }}
     {% if recently_paid %}
     <ul class="finance-invoice-list" data-vis="{{ V }}">

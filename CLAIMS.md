@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | ai-telemetry-two-lane-foundation | 2026-04-14 00:46 CEST | `app.py`, `templates/base.html`, `templates/dev_panel.html`, `templates/admin_ai_settings.html`, `templates/admin_ai_insights.html`, `CLAIMS.md` | `feat: add assistive and UX telemetry foundation` |
+| codex | ai-telemetry-two-lane-foundation | 2026-04-14 00:46 CEST | `app.py`, `templates/base.html`, `templates/dev_panel.html`, `templates/admin_ai_settings.html`, `templates/admin_ai_insights.html`, `scripts/worker_node.py`, `scripts/dispatch_worker_job.sh`, `docs/WORKER_NODE.md`, `README.md`, `WORKFLOW.md`, `CLAIMS.md` | `feat: add assistive and UX telemetry foundation` |
 
 ## Stale-claim recovery
 

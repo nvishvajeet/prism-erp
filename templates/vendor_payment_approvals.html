@@ -11,18 +11,38 @@
   </div>
 </header>
 
+{# ── Threshold Selector ── #}
 <section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("VIEW SETTINGS", "Choose your detail level") }}
+    <form method="get" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
+      <label data-vis="{{ V }}" style="flex:1;min-width:10rem;">
+        Detail threshold (₹)
+        <select name="threshold" data-vis="{{ V }}" onchange="this.form.submit()">
+          {% for t in [1000, 2000, 5000, 10000, 25000, 50000] %}
+          <option value="{{ t }}"{% if detail_threshold == t %} selected{% endif %} data-vis="{{ V }}">₹{{ "{:,.0f}".format(t) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <span class="hint" data-vis="{{ V }}">
+        Expenses ≤ ₹{{ "{:,.0f}".format(detail_threshold) }} are grouped below for batch approval.
+        Larger amounts are shown individually for review.
+      </span>
+    </form>
+  </article>
+</section>
 
-  {# ── Pending Approvals — phone-optimized cards ── #}
-  {% if pending %}
-  {% for po in pending %}
+{# ── Detailed Review (above threshold) ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  {% if detail_pending %}
+  {% for po in detail_pending %}
   <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-amber, #e6a800);">
     <div class="section-head" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
         <p class="section-kicker" data-vis="{{ V }}">{{ po.vendor_name }} · {{ po.category|title }}</p>
         <h2 data-vis="{{ V }}">{{ po.title }}</h2>
         <p class="hint" data-vis="{{ V }}">
-          ₹{{ "{:,.0f}".format(po.amount) }}
+          <strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</strong>
           {% if po.priority == 'high' %} · <strong style="color:var(--color-red,#c44);" data-vis="{{ V }}">URGENT</strong>{% endif %}
           · by {{ po.submitted_by_name or '—' }}
           · {{ po.created_at[:10] if po.created_at else '' }}
@@ -51,9 +71,64 @@
     </form>
   </article>
   {% endfor %}
-  {% else %}
+  {% elif not clubbed_pending %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ empty_state("No pending approvals.", "All purchase orders have been reviewed.") }}
+  </article>
+  {% endif %}
+
+  {# ── Clubbed Small Expenses (at or below threshold) — Batch Approve ── #}
+  {% if clubbed_pending %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-green, #34a853);">
+    {{ card_heading("SMALL EXPENSES (≤ ₹" ~ "{:,.0f}".format(detail_threshold) ~ ")",
+                     clubbed_pending|length|string ~ " items · ₹" ~ "{:,.0f}".format(clubbed_total) ~ " total") }}
+    <form method="post" action="{{ url_for('vendor_payment_batch_approve') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <table class="data-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}" style="width:2rem;">
+              <input type="checkbox" id="selectAll" checked data-vis="{{ V }}">
+            </th>
+            <th data-vis="{{ V }}">Title</th>
+            <th data-vis="{{ V }}">Vendor</th>
+            <th class="col-amount" data-vis="{{ V }}">Amount</th>
+            <th data-vis="{{ V }}">Category</th>
+            <th data-vis="{{ V }}">By</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for po in clubbed_pending %}
+          <tr data-vis="{{ V }}">
+            <td data-vis="{{ V }}">
+              <input type="checkbox" name="po_ids" value="{{ po.id }}" checked class="po-check" data-vis="{{ V }}">
+            </td>
+            <td data-vis="{{ V }}">
+              <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" data-vis="{{ V }}">{{ po.title }}</a>
+            </td>
+            <td data-vis="{{ V }}">{{ po.vendor_name }}</td>
+            <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</td>
+            <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ po.category }}</span></td>
+            <td data-vis="{{ V }}">{{ po.submitted_by_name or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <td data-vis="{{ V }}"></td>
+            <td colspan="2" data-vis="{{ V }}"><strong data-vis="{{ V }}">Total ({{ clubbed_pending|length }} items)</strong></td>
+            <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(clubbed_total) }}</strong></td>
+            <td colspan="2" data-vis="{{ V }}"></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Batch note (optional)" style="flex:1;min-width:10rem;" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:12rem;">
+          Batch Approve Selected (₹<span id="batchTotal">{{ "{:,.0f}".format(clubbed_total) }}</span>)
+        </button>
+      </div>
+    </form>
   </article>
   {% endif %}
 
@@ -70,6 +145,7 @@
           <th class="col-amount" data-vis="{{ V }}">Amount</th>
           <th data-vis="{{ V }}">Decision</th>
           <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Print</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
@@ -85,6 +161,9 @@
             </span>
           </td>
           <td data-vis="{{ V }}">{{ o.approved_at[:10] if o.approved_at else '—' }}</td>
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('vendor_payment_print', po_id=o.id) }}" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">🖨</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -96,12 +175,40 @@
 
 <script>
 (function(){
+  // Clickable rows
   document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
     r.addEventListener('click',function(e){
       if(e.target.closest('a,button,input,select,form'))return;
       window.location=r.dataset.href;
     });
   });
+  // Select all checkbox
+  var selectAll = document.getElementById('selectAll');
+  var checks = document.querySelectorAll('.po-check');
+  if(selectAll){
+    selectAll.addEventListener('change', function(){
+      checks.forEach(function(c){ c.checked = selectAll.checked; });
+      updateBatchTotal();
+    });
+    checks.forEach(function(c){
+      c.addEventListener('change', updateBatchTotal);
+    });
+  }
+  function updateBatchTotal(){
+    var total = 0;
+    checks.forEach(function(c){
+      if(c.checked){
+        var row = c.closest('tr');
+        var amtCell = row.querySelector('.col-amount');
+        if(amtCell){
+          var val = amtCell.textContent.replace(/[₹,\s]/g, '');
+          total += parseFloat(val) || 0;
+        }
+      }
+    });
+    var span = document.getElementById('batchTotal');
+    if(span) span.textContent = total.toLocaleString('en-IN');
+  }
 })();
 </script>
 {% endblock %}

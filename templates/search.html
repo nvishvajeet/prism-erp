@@ -43,7 +43,7 @@
         {% endcall %}
         <p class="hint search-group-hint" data-vis="{{ V }}">{{ section.hint }}</p>
         <div class="search-results" data-vis="{{ V }}">
-          {% for item in section.items %}
+          {% for item in section["items"] %}
           <a href="{{ item.url }}" class="search-result-item" data-vis="{{ V }}">
             <span class="badge search-type-badge" data-vis="{{ V }}">{{ item.type }}</span>
             <span class="search-result-body" data-vis="{{ V }}">

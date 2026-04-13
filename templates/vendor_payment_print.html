@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PO #{{ po.id }} — {{ po.title }} — Audit Record</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111; }
+    .print-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    .print-header h1 { font-size: 14pt; }
+    .print-header .meta { text-align: right; font-size: 9pt; color: #444; }
+    .filing-strip { background: #222; color: #fff; padding: 0.3rem 0.6rem; font-size: 10pt; font-weight: 700; margin-bottom: 1rem; display: flex; justify-content: space-between; }
+    .section { margin-bottom: 0.75rem; }
+    .section h3 { font-size: 10pt; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 0.15rem; margin-bottom: 0.4rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 0.5rem; }
+    td, th { padding: 0.25rem 0.5rem; text-align: left; font-size: 10pt; border-bottom: 1px solid #eee; }
+    td:first-child { width: 30%; color: #555; font-weight: 500; }
+    .amount-large { font-size: 18pt; font-weight: 700; }
+    .status-badge { display: inline-block; padding: 0.15rem 0.5rem; font-size: 9pt; font-weight: 600; border-radius: 3px; text-transform: uppercase; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .status-paid { background: #cce5ff; color: #004085; }
+    .status-pending { background: #fff3cd; color: #856404; }
+    .status-receipt { background: #d1e7dd; color: #0f5132; }
+    .timeline { border-left: 2px solid #ddd; margin-left: 0.5rem; padding-left: 0.75rem; }
+    .timeline-entry { margin-bottom: 0.4rem; }
+    .timeline-entry strong { font-size: 10pt; }
+    .timeline-entry .time { font-size: 8pt; color: #888; }
+    .sign-block { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 0.5rem; border-top: 1px solid #ddd; }
+    .sign-slot { width: 30%; text-align: center; }
+    .sign-slot .sign-line { border-bottom: 1px solid #111; height: 2rem; margin-bottom: 0.2rem; }
+    .sign-slot .sign-label { font-size: 8pt; color: #555; }
+    .footer { margin-top: 1.5rem; padding-top: 0.5rem; border-top: 1px solid #ddd; font-size: 8pt; color: #888; text-align: center; }
+    .retention { font-size: 8pt; color: #666; margin-top: 0.5rem; text-align: center; }
+    @media screen {
+      body { max-width: 210mm; margin: 1rem auto; padding: 1.5cm; border: 1px solid #ddd; }
+      .no-print { display: block; margin-bottom: 1rem; text-align: center; }
+      .no-print button { padding: 0.5rem 1.5rem; font-size: 12pt; cursor: pointer; }
+    }
+    @media print {
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button onclick="window.print()">🖨 Print This Record</button>
+    <button onclick="window.close()">Close</button>
+  </div>
+
+  <div class="filing-strip">
+    <span>FILE: {{ filing_cat }}</span>
+    <span>{{ fiscal_year }}</span>
+    <span>PO #{{ po.id }}</span>
+  </div>
+
+  <div class="print-header">
+    <div>
+      <h1>Purchase Order #{{ po.id }}</h1>
+      <p>{{ po.title }}</p>
+    </div>
+    <div class="meta">
+      <p>Generated: {{ now_iso()[:10] if now_iso is defined else '' }}</p>
+      <p>
+        {% set status_class = {'approved':'status-approved','rejected':'status-rejected','paid':'status-paid','pending_approval':'status-pending','receipt_uploaded':'status-receipt'} %}
+        <span class="status-badge {{ status_class.get(po.status, '') }}">{{ po.status|replace('_',' ')|upper }}</span>
+      </p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Order Details</h3>
+    <table>
+      <tr><td>Amount</td><td><span class="amount-large">₹{{ "{:,.2f}".format(po.amount) }}</span></td></tr>
+      <tr><td>Category</td><td>{{ po.category|title }}</td></tr>
+      <tr><td>Priority</td><td>{{ po.priority|title }}</td></tr>
+      <tr><td>Created</td><td>{{ po.created_at[:16] if po.created_at else '—' }}</td></tr>
+      {% if po.due_date %}<tr><td>Due Date</td><td>{{ po.due_date[:10] }}</td></tr>{% endif %}
+      {% if po.description %}<tr><td>Description</td><td>{{ po.description }}</td></tr>{% endif %}
+      {% if po.auto_approved %}<tr><td>Auto-Approved</td><td>Yes (below threshold)</td></tr>{% endif %}
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Vendor</h3>
+    <table>
+      <tr><td>Name</td><td><strong>{{ po.vendor_name }}</strong></td></tr>
+      {% if po.vendor_phone %}<tr><td>Phone</td><td>{{ po.vendor_phone }}</td></tr>{% endif %}
+      {% if po.vendor_gstin %}<tr><td>GSTIN</td><td>{{ po.vendor_gstin }}</td></tr>{% endif %}
+      {% if po.vendor_pan %}<tr><td>PAN</td><td>{{ po.vendor_pan }}</td></tr>{% endif %}
+      {% if po.vendor_address %}<tr><td>Address</td><td>{{ po.vendor_address }}</td></tr>{% endif %}
+      {% if po.vendor_upi %}<tr><td>UPI</td><td>{{ po.vendor_upi }}</td></tr>{% endif %}
+      {% if po.vendor_bank %}<tr><td>Bank</td><td>{{ po.vendor_bank }} — {{ po.vendor_bank_account or '' }}</td></tr>{% endif %}
+      {% if po.vendor_ifsc %}<tr><td>IFSC</td><td>{{ po.vendor_ifsc }}</td></tr>{% endif %}
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Audit Trail</h3>
+    <div class="timeline">
+      <div class="timeline-entry">
+        <strong>Submitted</strong> by {{ po.submitted_by_name or '—' }}
+        <span class="time">{{ po.created_at[:16] if po.created_at else '' }}</span>
+      </div>
+      {% if po.approved_at %}
+      <div class="timeline-entry">
+        <strong>{% if po.status == 'rejected' %}Rejected{% elif po.auto_approved %}Auto-approved{% else %}Approved{% endif %}</strong>
+        by {{ po.approved_by_name or 'System' }}
+        <span class="time">{{ po.approved_at[:16] }}</span>
+        {% if po.approval_note %}<br><em style="font-size:9pt;color:#555;">{{ po.approval_note }}</em>{% endif %}
+      </div>
+      {% endif %}
+      {% if po.paid_at %}
+      <div class="timeline-entry">
+        <strong>Paid</strong> by {{ po.paid_by_name or '—' }}
+        {% if po.payment_method %}via {{ po.payment_method }}{% endif %}
+        <span class="time">{{ po.paid_at[:16] }}</span>
+        {% if po.payment_reference %}<br><em style="font-size:9pt;color:#555;">Ref: {{ po.payment_reference }}</em>{% endif %}
+      </div>
+      {% endif %}
+      {% if po.receipt_path %}
+      <div class="timeline-entry">
+        <strong>Receipt uploaded</strong>
+        <br><em style="font-size:9pt;color:#555;">{{ po.receipt_path }}</em>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Payment Summary</h3>
+    <table>
+      <tr><td>Method</td><td>{{ po.payment_method or 'Not yet paid' }}</td></tr>
+      <tr><td>Reference</td><td>{{ po.payment_reference or '—' }}</td></tr>
+      <tr><td>Invoice</td><td>{{ po.invoice_path or 'None attached' }}</td></tr>
+      <tr><td>Receipt</td><td>{{ po.receipt_path or 'Not uploaded' }}</td></tr>
+    </table>
+  </div>
+
+  <div class="sign-block">
+    <div class="sign-slot">
+      <div class="sign-line"></div>
+      <div class="sign-label">Prepared by<br>{{ po.submitted_by_name or '___________' }}</div>
+    </div>
+    <div class="sign-slot">
+      <div class="sign-line"></div>
+      <div class="sign-label">Approved by<br>{{ po.approved_by_name or '___________' }}</div>
+    </div>
+    <div class="sign-slot">
+      <div class="sign-line"></div>
+      <div class="sign-label">Received by<br>___________</div>
+    </div>
+  </div>
+
+  <p class="retention">
+    RETENTION: 7 years from date of transaction per company policy.
+    File under: <strong>{{ filing_cat }}</strong> / {{ fiscal_year }} / PO-{{ po.id }}
+  </p>
+
+  <div class="footer">
+    Catalyst ERP · Purchase Order Audit Record · Auto-generated · Do not alter
+  </div>
+</body>
+</html>

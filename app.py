@@ -75,7 +75,7 @@ OWNER_EMAILS = {
     if email.strip()
 }
 # Vendor payment auto-approval: POs under this amount skip manual approval
-VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESHOLD", "5000"))
+VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESHOLD", "0"))
 
 DEMO_ROLE_SWITCHES = {
     "owner": {"label": "Owner", "email": "owner@catalyst.local"},
@@ -272,7 +272,8 @@ MODULE_REGISTRY = {
         "nav_endpoint": "vendor_payments_list",
         "nav_active_endpoints": {
             "vendor_payments_list", "vendor_payment_new", "vendor_payment_detail",
-            "vendor_payment_approve_queue", "vendor_list", "vendor_detail",
+            "vendor_payment_approve_queue", "vendor_payment_batch_approve",
+            "vendor_payment_print", "vendor_list", "vendor_detail",
             "vendor_new", "vendor_payment_reports",
         },
         "nav_badge_key": "pending_approvals",
@@ -16432,12 +16433,19 @@ def vendor_payment_approve(po_id):
 @app.route("/payments/approvals")
 @login_required
 def vendor_payment_approve_queue():
-    """Owner approval queue — phone-optimized."""
+    """Owner approval queue — phone-optimized with batch approve and
+    threshold-based clubbing. The owner can set a detail_threshold:
+    POs below that amount are grouped into a 'small expenses' summary
+    section and can be batch-approved with one tap. POs above the
+    threshold are shown individually for detailed review."""
     if not module_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not is_owner(user):
         abort(403)
+    # Threshold: owner can adjust via query param, defaults to auto-approve
+    detail_threshold = float(request.args.get("threshold",
+                             str(VENDOR_AUTO_APPROVE_THRESHOLD)))
     pending = query_all("""
         SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name
           FROM purchase_orders po
@@ -16446,6 +16454,10 @@ def vendor_payment_approve_queue():
          WHERE po.status = 'pending_approval'
          ORDER BY po.amount DESC
     """)
+    # Split into detail (above threshold) and clubbed (at or below)
+    detail_pending = [p for p in pending if p["amount"] > detail_threshold]
+    clubbed_pending = [p for p in pending if p["amount"] <= detail_threshold]
+    clubbed_total = sum(p["amount"] for p in clubbed_pending)
     recent_approved = query_all("""
         SELECT po.*, v.name AS vendor_name
           FROM purchase_orders po
@@ -16455,7 +16467,107 @@ def vendor_payment_approve_queue():
          ORDER BY po.approved_at DESC LIMIT 20
     """)
     return render_template("vendor_payment_approvals.html",
-                           pending=pending, recent_approved=recent_approved)
+                           pending=pending,
+                           detail_pending=detail_pending,
+                           clubbed_pending=clubbed_pending,
+                           clubbed_total=clubbed_total,
+                           detail_threshold=detail_threshold,
+                           recent_approved=recent_approved)
+
+
+@app.route("/payments/batch-approve", methods=["POST"])
+@login_required
+def vendor_payment_batch_approve():
+    """Batch approve multiple POs at once. Owner only."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not is_owner(user):
+        abort(403)
+    po_ids = request.form.getlist("po_ids")
+    note = request.form.get("note", "Batch approved").strip() or "Batch approved"
+    approved_count = 0
+    total_amount = 0
+    for po_id_str in po_ids:
+        try:
+            po_id = int(po_id_str)
+        except (ValueError, TypeError):
+            continue
+        po = query_one("SELECT * FROM purchase_orders WHERE id = ? AND status = 'pending_approval'", (po_id,))
+        if not po:
+            continue
+        execute("""UPDATE purchase_orders
+                   SET status = 'approved', approved_by_user_id = ?,
+                       approval_note = ?, approved_at = ?, updated_at = ?
+                   WHERE id = ?""",
+                (user["id"], note, now_iso(), now_iso(), po_id))
+        log_action(user["id"], "purchase_order", po_id, "po_batch_approved",
+                   {"note": note[:200]})
+        notify(po["submitted_by_user_id"], "payment",
+               f"Approved: {po['title']}",
+               f"Your payment request for ₹{po['amount']:,.0f} was approved (batch).",
+               href=url_for("vendor_payment_detail", po_id=po_id),
+               source_type="purchase_order", source_id=po_id)
+        approved_count += 1
+        total_amount += po["amount"]
+    if approved_count:
+        flash(f"Batch approved {approved_count} orders totalling ₹{total_amount:,.0f}.", "success")
+    else:
+        flash("No orders were approved.", "error")
+    return redirect(url_for("vendor_payment_approve_queue"))
+
+
+@app.route("/payments/print/<int:po_id>")
+@login_required
+def vendor_payment_print(po_id):
+    """Printable audit record for a purchase order. Designed for filing."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    po = query_one("""
+        SELECT po.*, v.name AS vendor_name, v.phone AS vendor_phone,
+               v.gstin AS vendor_gstin, v.pan AS vendor_pan,
+               v.address AS vendor_address,
+               v.upi_id AS vendor_upi, v.bank_name AS vendor_bank,
+               v.bank_account AS vendor_bank_account, v.ifsc_code AS vendor_ifsc,
+               u.name AS submitted_by_name,
+               a.name AS approved_by_name,
+               p.name AS paid_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN users a ON a.id = po.approved_by_user_id
+          LEFT JOIN users p ON p.id = po.paid_by_user_id
+         WHERE po.id = ?
+    """, (po_id,))
+    if not po:
+        abort(404)
+    # Determine filing category for cabinet storage
+    filing_categories = {
+        "vegetables": "PURCHASES / PERISHABLE",
+        "dairy": "PURCHASES / PERISHABLE",
+        "provisions": "PURCHASES / PROVISIONS",
+        "meat": "PURCHASES / PERISHABLE",
+        "fuel": "EXPENSES / TRANSPORT",
+        "equipment": "CAPITAL / EQUIPMENT",
+        "maintenance": "EXPENSES / MAINTENANCE",
+        "salary": "PAYROLL / SALARY",
+        "utilities": "EXPENSES / UTILITIES",
+        "insurance": "EXPENSES / COMPLIANCE",
+        "services": "EXPENSES / SERVICES",
+        "general": "EXPENSES / GENERAL",
+    }
+    filing_cat = filing_categories.get(po["category"], "EXPENSES / GENERAL")
+    fiscal_year = ""
+    if po["created_at"]:
+        from datetime import datetime as dt
+        d = dt.fromisoformat(po["created_at"][:10])
+        fy_start = d.year if d.month >= 4 else d.year - 1
+        fiscal_year = f"FY {fy_start}-{(fy_start+1) % 100:02d}"
+    return render_template("vendor_payment_print.html", po=po,
+                           filing_cat=filing_cat, fiscal_year=fiscal_year)
 
 
 @app.route("/payments/<int:po_id>/pay", methods=["POST"])
@@ -16962,11 +17074,24 @@ def global_search():
             {"type": "Grant", "title": r["name"], "code": r["code"], "meta": "Grant", "url": url_for("finance_grant_detail", grant_id=r["id"])}
             for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
         ]
+    vendors_found = []
+    po_found = []
+    if module_enabled("vendor_payments") and _user_can_manage_payments(user):
+        vendors_found = [
+            {"type": "Vendor", "title": r["name"], "code": r["category"], "meta": "Vendor", "url": url_for("vendor_detail", vendor_id=r["id"])}
+            for r in query_all("SELECT id, name, category FROM vendors WHERE name LIKE ? OR contact_person LIKE ? LIMIT 6", (like, like))
+        ]
+        po_found = [
+            {"type": "PO", "title": r["title"], "code": f"PO #{r['id']}", "meta": f"₹{r['amount']:,.0f}", "url": url_for("vendor_payment_detail", po_id=r["id"])}
+            for r in query_all("SELECT id, title, amount FROM purchase_orders WHERE title LIKE ? OR description LIKE ? LIMIT 6", (like, like))
+        ]
     grouped = [
         ("Instruments", "Machines, capacity, and intake state.", instruments_found),
         ("Requests", "Live jobs and historical samples.", requests_found),
         ("People", "Operators, requesters, and staff records.", users_found),
         ("Grants", "Budgets and finance records.", grants_found),
+        ("Vendors", "Registered payment vendors.", vendors_found),
+        ("Purchase Orders", "Vendor payments and approvals.", po_found),
     ]
     for title, hint, items in grouped:
         if not items:

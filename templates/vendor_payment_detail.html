@@ -19,6 +19,9 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">PO #{{ po.id }} — {{ po.title }}</h2>
     <span class="badge {{ tone.get(po.status, '') }}" data-vis="{{ V }}">{{ po.status|replace('_',' ')|title }}</span>
   </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('vendor_payment_print', po_id=po.id) }}" target="_blank" data-vis="{{ V }}">🖨 Print</a>
+  </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">

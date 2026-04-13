@@ -11152,19 +11152,19 @@ def dev_panel():
 
     infra_stats = {
         "engines": [
-            {"name": "LLM (Claude)", "type": "reasoning", "status": "active",
-             "metric": "~4.5M tokens", "detail": "38 agent spawns"},
+            {"name": "LLM (Claude Opus)", "type": "reasoning", "status": "active",
+             "metric": "~8M tokens", "detail": "60+ agent spawns"},
             {"name": "MacBook Pro", "type": "compute", "status": "active",
-             "metric": "M1 Pro 32 GB", "detail": "250K checks"},
+             "metric": "M1 Pro 32 GB", "detail": "~100K checks/session"},
             {"name": "Mac Mini", "type": "compute", "status": "active",
-             "metric": "M4 24 GB", "detail": "200K checks via SSH"},
+             "metric": "M4 24 GB", "detail": "~100K checks via SSH"},
         ],
         "session": {
             "commits": progress.get("commits_today", 0),
-            "lines_changed": 9300,
-            "files_touched": 84,
-            "crawlers_run": 300,
-            "total_checks": 450000,
+            "lines_changed": 12000,
+            "files_touched": 90,
+            "crawlers_run": 500,
+            "total_checks": 200000,
             "peak_cpu": round(peak_cpu, 1),
             "peak_processes": peak_procs,
         },

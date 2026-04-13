@@ -74,6 +74,9 @@ OWNER_EMAILS = {
     ).split(",")
     if email.strip()
 }
+# Vendor payment auto-approval: POs under this amount skip manual approval
+VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESHOLD", "5000"))
+
 DEMO_ROLE_SWITCHES = {
     "owner": {"label": "Owner", "email": "owner@catalyst.local"},
     "super_admin": {"label": "Super Admin", "email": "dean@catalyst.local"},
@@ -260,6 +263,23 @@ MODULE_REGISTRY = {
         "nav_endpoint": "personnel_list",
         "nav_active_endpoints": {"personnel_list", "personnel_detail", "payroll_view"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+    },
+    "vendor_payments": {
+        "label": "Payments",
+        "icon": "\U0001f4b8",
+        "nav_order": 3,
+        "description": "Vendor purchase orders & payment approvals",
+        "nav_endpoint": "vendor_payments_list",
+        "nav_active_endpoints": {
+            "vendor_payments_list", "vendor_payment_new", "vendor_payment_detail",
+            "vendor_payment_approve_queue", "vendor_list", "vendor_detail",
+            "vendor_new", "vendor_payment_reports",
+        },
+        "nav_badge_key": "pending_approvals",
+        "nav_access": lambda ap, is_owner: (
+            ap.get("_is_operational_nav") or is_owner
+            or bool(ap.get("_role_set", frozenset()) & {"finance_admin", "site_admin", "super_admin"})
+        ),
     },
     "compute": {
         "label": "Compute",
@@ -1516,7 +1536,18 @@ def nav_pending_counts(user) -> dict[str, int]:
         ).fetchone()[0]
         if own:
             queue_total += int(own)
-    return {"queue": queue_total} if queue_total else {}
+    counts = {"queue": queue_total} if queue_total else {}
+    # Vendor payment pending approvals count (for owner)
+    if is_owner(user) and module_enabled("vendor_payments"):
+        try:
+            pa = db.execute(
+                "SELECT COUNT(*) FROM purchase_orders WHERE status = 'pending_approval'"
+            ).fetchone()[0]
+            if pa:
+                counts["pending_approvals"] = int(pa)
+        except Exception:
+            pass
+    return counts
 
 
 def safe_token(value: str) -> str:
@@ -4753,6 +4784,65 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_salary_payments_period ON salary_payments(year, month);
         """)
 
+        # ── Vendor Payments module ─────────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS vendors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                contact_person TEXT NOT NULL DEFAULT '',
+                phone TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                gstin TEXT NOT NULL DEFAULT '',
+                pan TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT 'general',
+                bank_account TEXT NOT NULL DEFAULT '',
+                bank_name TEXT NOT NULL DEFAULT '',
+                ifsc_code TEXT NOT NULL DEFAULT '',
+                upi_id TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                notes TEXT NOT NULL DEFAULT '',
+                created_by_user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_vendors_active ON vendors(is_active);
+            CREATE INDEX IF NOT EXISTS idx_vendors_category ON vendors(category);
+
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vendor_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL DEFAULT 0,
+                category TEXT NOT NULL DEFAULT 'general',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'draft',
+                auto_approved INTEGER NOT NULL DEFAULT 0,
+                submitted_by_user_id INTEGER NOT NULL,
+                approved_by_user_id INTEGER,
+                approval_note TEXT NOT NULL DEFAULT '',
+                approved_at TEXT,
+                paid_by_user_id INTEGER,
+                paid_at TEXT,
+                payment_method TEXT NOT NULL DEFAULT '',
+                payment_reference TEXT NOT NULL DEFAULT '',
+                receipt_path TEXT NOT NULL DEFAULT '',
+                invoice_path TEXT NOT NULL DEFAULT '',
+                due_date TEXT,
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT,
+                FOREIGN KEY (vendor_id) REFERENCES vendors(id),
+                FOREIGN KEY (submitted_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (approved_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (paid_by_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_po_vendor ON purchase_orders(vendor_id);
+            CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status);
+            CREATE INDEX IF NOT EXISTS idx_po_submitted_by ON purchase_orders(submitted_by_user_id);
+            CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders(created_at);
+        """)
+
         # ── Compute / HPC Job Scheduler module ───────────────────
         cur.executescript("""
             CREATE TABLE IF NOT EXISTS compute_software (
@@ -4845,6 +4935,7 @@ def init_db() -> None:
     # so the /finance/grants portal renders populated budgets + spend.
     _seed_demo_grants()
     _seed_demo_vehicles()
+    _seed_demo_vendors()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -4979,6 +5070,87 @@ def _seed_demo_vehicles() -> None:
                 "INSERT INTO vehicle_drivers (vehicle_id, user_id, driver_name, is_primary, assigned_at) VALUES (?, ?, ?, ?, ?)",
                 (vid, uid, dname, is_primary, now),
             )
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+def _seed_demo_vendors() -> None:
+    """Seed demo vendors + purchase orders for the vendor payments module. Idempotent."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM vendors").fetchone()["c"]
+        if existing > 0:
+            return
+        now = now_iso()
+        cur = db.cursor()
+        # Look up the owner user for submitted_by
+        owner_row = db.execute("SELECT id FROM users WHERE email IN ({})".format(
+            ",".join("?" for _ in OWNER_EMAILS)), tuple(OWNER_EMAILS)).fetchone()
+        owner_id = owner_row["id"] if owner_row else 1
+        # Look up a finance user
+        finance_row = db.execute("SELECT u.id FROM users u JOIN user_roles ur ON ur.user_id = u.id WHERE ur.role IN ('finance_admin','site_admin') LIMIT 1").fetchone()
+        finance_id = finance_row["id"] if finance_row else owner_id
+
+        # ── Vendors ──
+        vendors = [
+            ("Shri Krishna Vegetables", "Ramesh Patil", "9876543210", "", "27AABCS1234A1Z5", "", "Pune", "vegetables", "", "", "", "ramesh@upi"),
+            ("Shubham Dairy", "Sunil Jadhav", "9823456789", "", "", "", "Pune", "dairy", "", "SBI", "31234567890", ""),
+            ("Metro Provisions", "Ajay Sharma", "9812345678", "metro@email.com", "27AABCM5678B2Y4", "ABCDE1234F", "PCMC, Pune", "provisions", "1234567890", "HDFC Bank", "50100123456789", "metro@upi"),
+            ("Green Fuel Station", "Vishal Kulkarni", "9801234567", "", "", "", "Wakad, Pune", "fuel", "", "", "", "greenfuel@upi"),
+            ("Kumar Electricals", "Sandeep Kumar", "9790123456", "", "", "", "Hinjewadi, Pune", "maintenance", "", "Bank of Baroda", "09870100012345", ""),
+        ]
+        vendor_ids = []
+        for v in vendors:
+            cur.execute(
+                """INSERT INTO vendors (name, contact_person, phone, email, gstin, pan,
+                   address, category, bank_account, bank_name, ifsc_code, upi_id,
+                   notes, created_by_user_id, created_at, is_active)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+                (*v, "", finance_id, now))
+            vendor_ids.append(cur.lastrowid)
+
+        # ── Purchase Orders ──
+        import random
+        statuses_and_amounts = [
+            # (vendor_idx, title, amount, category, status)
+            (0, "Weekly vegetable supply - Week 14", 12500, "vegetables", "receipt_uploaded"),
+            (0, "Weekly vegetable supply - Week 15", 11800, "vegetables", "paid"),
+            (0, "Weekly vegetable supply - Week 16", 13200, "vegetables", "approved"),
+            (0, "Daily vegetables - emergency order", 2500, "vegetables", "approved"),  # auto-approve
+            (1, "Monthly milk supply - March", 28000, "dairy", "receipt_uploaded"),
+            (1, "Monthly milk supply - April", 27500, "dairy", "pending_approval"),
+            (1, "Paneer + curd - special event", 4500, "dairy", "approved"),  # auto-approve
+            (2, "Monthly provisions - March", 45000, "provisions", "receipt_uploaded"),
+            (2, "Monthly provisions - April", 42000, "provisions", "pending_approval"),
+            (2, "Rice 50kg bags x 10", 22000, "provisions", "approved"),
+            (3, "Diesel for delivery van - March", 8500, "fuel", "paid"),
+            (3, "Diesel for delivery van - April", 9200, "fuel", "pending_approval"),
+            (4, "Kitchen exhaust fan repair", 3500, "maintenance", "approved"),  # auto-approve
+            (4, "Electrical wiring for new section", 18000, "maintenance", "draft"),
+        ]
+        for vidx, title, amount, category, status in statuses_and_amounts:
+            auto = 1 if amount <= 5000 else 0
+            approved_at = now if status not in ("draft", "pending_approval") else None
+            paid_at = now if status in ("paid", "receipt_uploaded") else None
+            cur.execute(
+                """INSERT INTO purchase_orders
+                   (vendor_id, title, description, amount, category, priority,
+                    status, auto_approved, submitted_by_user_id, approved_by_user_id,
+                    approval_note, approved_at, paid_by_user_id, paid_at,
+                    payment_method, payment_reference, receipt_path, invoice_path,
+                    due_date, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (vendor_ids[vidx], title, "", amount, category, "normal",
+                 status, auto, finance_id,
+                 owner_id if approved_at else None,
+                 "", approved_at,
+                 finance_id if paid_at else None, paid_at,
+                 "upi" if paid_at else "", "",
+                 "", "", None, now, now))
         db.commit()
     except Exception:
         pass
@@ -16109,6 +16281,459 @@ def payroll_pay():
            source_type="salary_payment", source_id=uid)
     flash(f"₹{net_pay:,.0f} paid to {emp_name} for {month}/{year}.", "success")
     return redirect(url_for("payroll_view", year=year, month=int(month)))
+
+
+# ── Vendor Payments module ──────────────────────────────────────
+
+PO_STATUS_TRANSITIONS = {
+    "draft":             {"pending_approval", "approved"},  # approved = auto-approve
+    "pending_approval":  {"approved", "rejected"},
+    "approved":          {"paid"},
+    "rejected":          {"pending_approval"},  # resubmit
+    "paid":              {"receipt_uploaded"},
+    "receipt_uploaded":  set(),
+    "cancelled":         set(),
+}
+
+PO_CATEGORIES = [
+    ("vegetables",  "Vegetables & Produce"),
+    ("dairy",       "Dairy & Milk"),
+    ("provisions",  "Provisions & Groceries"),
+    ("meat",        "Meat & Poultry"),
+    ("fuel",        "Fuel & Transport"),
+    ("equipment",   "Equipment & Appliances"),
+    ("maintenance", "Maintenance & Repairs"),
+    ("salary",      "Salary & Wages"),
+    ("utilities",   "Utilities (Electric, Water, Gas)"),
+    ("insurance",   "Insurance & Compliance"),
+    ("services",    "Professional Services"),
+    ("general",     "General / Other"),
+]
+
+
+def _user_can_manage_payments(user) -> bool:
+    if not user:
+        return False
+    if is_owner(user):
+        return True
+    return bool(user_role_set(user) & {"finance_admin", "super_admin", "site_admin"})
+
+
+@app.route("/vendors")
+@login_required
+def vendor_list():
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    vendors = query_all("""
+        SELECT v.*, u.name AS created_by_name,
+               (SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = v.id) AS po_count,
+               (SELECT COALESCE(SUM(amount), 0) FROM purchase_orders
+                WHERE vendor_id = v.id AND status IN ('paid','receipt_uploaded')) AS total_paid
+          FROM vendors v
+          LEFT JOIN users u ON u.id = v.created_by_user_id
+         ORDER BY v.is_active DESC, v.name ASC
+    """)
+    return render_template("vendors.html", vendors=vendors)
+
+
+@app.route("/vendors/new", methods=["GET", "POST"])
+@login_required
+def vendor_new():
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if not name:
+            flash("Vendor name is required.", "error")
+            return redirect(url_for("vendor_new"))
+        vid = execute(
+            """INSERT INTO vendors (name, contact_person, phone, email, gstin, pan,
+               address, category, bank_account, bank_name, ifsc_code, upi_id,
+               notes, created_by_user_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (name, request.form.get("contact_person", "").strip(),
+             request.form.get("phone", "").strip(),
+             request.form.get("email", "").strip(),
+             request.form.get("gstin", "").strip(),
+             request.form.get("pan", "").strip(),
+             request.form.get("address", "").strip(),
+             request.form.get("category", "general").strip(),
+             request.form.get("bank_account", "").strip(),
+             request.form.get("bank_name", "").strip(),
+             request.form.get("ifsc_code", "").strip(),
+             request.form.get("upi_id", "").strip(),
+             request.form.get("notes", "").strip(),
+             user["id"], now_iso()))
+        log_action(user["id"], "vendor", vid, "vendor_created", {"name": name})
+        flash(f"Vendor '{name}' registered.", "success")
+        return redirect(url_for("vendor_list"))
+    return render_template("vendor_form.html", vendor=None, categories=PO_CATEGORIES)
+
+
+@app.route("/vendors/<int:vendor_id>")
+@login_required
+def vendor_detail(vendor_id):
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    vendor = query_one("SELECT * FROM vendors WHERE id = ?", (vendor_id,))
+    if not vendor:
+        abort(404)
+    orders = query_all("""
+        SELECT po.*, u.name AS submitted_by_name
+          FROM purchase_orders po
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+         WHERE po.vendor_id = ?
+         ORDER BY po.created_at DESC LIMIT 50
+    """, (vendor_id,))
+    total_paid = sum(o["amount"] for o in orders if o["status"] in ("paid", "receipt_uploaded"))
+    return render_template("vendor_detail.html", vendor=vendor, orders=orders,
+                           total_paid=total_paid)
+
+
+@app.route("/payments")
+@login_required
+def vendor_payments_list():
+    """Main payment list — shows all POs grouped by status."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    status_filter = request.args.get("status", "")
+    base_query = """
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+    """
+    if status_filter:
+        rows = query_all(base_query + " WHERE po.status = ? ORDER BY po.created_at DESC", (status_filter,))
+    else:
+        rows = query_all(base_query + " ORDER BY po.created_at DESC LIMIT 200")
+    # Stats
+    pending = sum(1 for r in rows if r["status"] == "pending_approval")
+    approved = sum(1 for r in rows if r["status"] == "approved")
+    paid_total = sum(r["amount"] for r in rows if r["status"] in ("paid", "receipt_uploaded"))
+    total_orders = len(rows)
+    # Monthly spend
+    month_spend = query_one("""
+        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
+        WHERE status IN ('paid','receipt_uploaded')
+          AND paid_at >= date('now','start of month')
+    """)
+    return render_template("vendor_payments.html", orders=rows,
+                           pending=pending, approved=approved,
+                           paid_total=paid_total, total_orders=total_orders,
+                           month_spend=month_spend["total"] if month_spend else 0,
+                           status_filter=status_filter, categories=PO_CATEGORIES)
+
+
+@app.route("/payments/new", methods=["GET", "POST"])
+@login_required
+def vendor_payment_new():
+    """Create a new purchase order."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    vendors = query_all("SELECT id, name, category FROM vendors WHERE is_active = 1 ORDER BY name")
+    if request.method == "POST":
+        vendor_id = int(request.form.get("vendor_id", "0"))
+        title = request.form.get("title", "").strip()
+        amount = float(request.form.get("amount", "0") or "0")
+        if not title or not vendor_id or amount <= 0:
+            flash("Title, vendor, and amount are required.", "error")
+            return redirect(url_for("vendor_payment_new"))
+        description = request.form.get("description", "").strip()
+        category = request.form.get("category", "general").strip()
+        priority = request.form.get("priority", "normal").strip()
+        due_date = request.form.get("due_date", "").strip() or None
+        # Handle invoice upload
+        invoice_path = ""
+        uploaded = request.files.get("invoice")
+        if uploaded and uploaded.filename:
+            safe_name = secure_filename(uploaded.filename)
+            upload_dir = Path("data") / "purchase_orders"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            invoice_path = f"po_{user['id']}_{ts}_{safe_name}"
+            uploaded.save(str(upload_dir / invoice_path))
+        # Auto-approve if under threshold
+        auto = amount <= VENDOR_AUTO_APPROVE_THRESHOLD
+        status = "approved" if auto else "pending_approval"
+        po_id = execute(
+            """INSERT INTO purchase_orders
+               (vendor_id, title, description, amount, category, priority,
+                status, auto_approved, submitted_by_user_id, invoice_path,
+                due_date, created_at, approved_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (vendor_id, title, description, amount, category, priority,
+             status, 1 if auto else 0, user["id"], invoice_path,
+             due_date, now_iso(), now_iso() if auto else None))
+        vendor = query_one("SELECT name FROM vendors WHERE id = ?", (vendor_id,))
+        vendor_name = vendor["name"] if vendor else "Unknown"
+        log_action(user["id"], "purchase_order", po_id, "po_submitted",
+                   {"amount": amount, "vendor": vendor_name, "auto_approved": auto})
+        if auto:
+            flash(f"PO #{po_id} auto-approved (under threshold). Ready for payment.", "success")
+            # Notify owner informatively
+            for owner_u in query_all("SELECT id FROM users"):
+                if is_owner(dict(owner_u)):
+                    notify(owner_u["id"], "payment",
+                           f"[Auto] {title} — ₹{amount:,.0f}",
+                           f"Auto-approved PO to {vendor_name}.",
+                           href=url_for("vendor_payment_detail", po_id=po_id),
+                           source_type="purchase_order", source_id=po_id)
+                    break
+        else:
+            flash(f"PO #{po_id} submitted for approval.", "success")
+            # Notify owner for action
+            for owner_u in query_all("SELECT id, email FROM users"):
+                if owner_u["email"].strip().lower() in OWNER_EMAILS:
+                    notify(owner_u["id"], "payment",
+                           f"Approve: {title} — ₹{amount:,.0f}",
+                           f"Payment to {vendor_name} needs your approval.",
+                           href=url_for("vendor_payment_detail", po_id=po_id),
+                           source_type="purchase_order", source_id=po_id)
+                    break
+        return redirect(url_for("vendor_payments_list"))
+    return render_template("vendor_payment_form.html", vendors=vendors,
+                           categories=PO_CATEGORIES)
+
+
+@app.route("/payments/<int:po_id>")
+@login_required
+def vendor_payment_detail(po_id):
+    """View PO detail with full timeline."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    po = query_one("""
+        SELECT po.*, v.name AS vendor_name, v.phone AS vendor_phone,
+               v.upi_id AS vendor_upi, v.bank_name AS vendor_bank,
+               v.bank_account AS vendor_bank_account, v.ifsc_code AS vendor_ifsc,
+               u.name AS submitted_by_name,
+               a.name AS approved_by_name,
+               p.name AS paid_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN users a ON a.id = po.approved_by_user_id
+          LEFT JOIN users p ON p.id = po.paid_by_user_id
+         WHERE po.id = ?
+    """, (po_id,))
+    if not po:
+        abort(404)
+    can_approve = is_owner(user) and po["status"] == "pending_approval"
+    can_pay = _user_can_manage_payments(user) and po["status"] == "approved"
+    can_upload_receipt = _user_can_manage_payments(user) and po["status"] == "paid"
+    return render_template("vendor_payment_detail.html", po=po,
+                           can_approve=can_approve, can_pay=can_pay,
+                           can_upload_receipt=can_upload_receipt)
+
+
+@app.route("/payments/<int:po_id>/approve", methods=["POST"])
+@login_required
+def vendor_payment_approve(po_id):
+    """Owner approves or rejects a PO."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not is_owner(user):
+        abort(403)
+    po = query_one("SELECT * FROM purchase_orders WHERE id = ?", (po_id,))
+    if not po or po["status"] != "pending_approval":
+        flash("Cannot approve this order.", "error")
+        return redirect(url_for("vendor_payments_list"))
+    action = request.form.get("action", "").strip()
+    note = request.form.get("note", "").strip()
+    if action == "approve":
+        execute("""UPDATE purchase_orders
+                   SET status = 'approved', approved_by_user_id = ?,
+                       approval_note = ?, approved_at = ?, updated_at = ?
+                   WHERE id = ?""",
+                (user["id"], note, now_iso(), now_iso(), po_id))
+        log_action(user["id"], "purchase_order", po_id, "po_approved",
+                   {"note": note[:200]})
+        notify(po["submitted_by_user_id"], "payment",
+               f"Approved: {po['title']}",
+               f"Your payment request for ₹{po['amount']:,.0f} was approved." +
+               (f" Note: {note}" if note else ""),
+               href=url_for("vendor_payment_detail", po_id=po_id),
+               source_type="purchase_order", source_id=po_id)
+        flash(f"PO #{po_id} approved.", "success")
+    elif action == "reject":
+        if not note:
+            flash("Please provide a reason for rejection.", "error")
+            return redirect(url_for("vendor_payment_detail", po_id=po_id))
+        execute("""UPDATE purchase_orders
+                   SET status = 'rejected', approved_by_user_id = ?,
+                       approval_note = ?, approved_at = ?, updated_at = ?
+                   WHERE id = ?""",
+                (user["id"], note, now_iso(), now_iso(), po_id))
+        log_action(user["id"], "purchase_order", po_id, "po_rejected",
+                   {"note": note[:200]})
+        notify(po["submitted_by_user_id"], "payment",
+               f"Rejected: {po['title']}",
+               f"Your payment request for ₹{po['amount']:,.0f} was rejected. Reason: {note}",
+               href=url_for("vendor_payment_detail", po_id=po_id),
+               source_type="purchase_order", source_id=po_id)
+        flash(f"PO #{po_id} rejected.", "success")
+    return redirect(url_for("vendor_payment_approve_queue"))
+
+
+@app.route("/payments/approvals")
+@login_required
+def vendor_payment_approve_queue():
+    """Owner approval queue — phone-optimized."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not is_owner(user):
+        abort(403)
+    pending = query_all("""
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+         WHERE po.status = 'pending_approval'
+         ORDER BY po.amount DESC
+    """)
+    recent_approved = query_all("""
+        SELECT po.*, v.name AS vendor_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+         WHERE po.status IN ('approved', 'rejected')
+           AND po.approved_at >= datetime('now', '-7 days')
+         ORDER BY po.approved_at DESC LIMIT 20
+    """)
+    return render_template("vendor_payment_approvals.html",
+                           pending=pending, recent_approved=recent_approved)
+
+
+@app.route("/payments/<int:po_id>/pay", methods=["POST"])
+@login_required
+def vendor_payment_mark_paid(po_id):
+    """Mark an approved PO as paid."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    po = query_one("SELECT * FROM purchase_orders WHERE id = ?", (po_id,))
+    if not po or po["status"] != "approved":
+        flash("Only approved orders can be marked as paid.", "error")
+        return redirect(url_for("vendor_payments_list"))
+    method = request.form.get("payment_method", "").strip()
+    reference = request.form.get("payment_reference", "").strip()
+    execute("""UPDATE purchase_orders
+               SET status = 'paid', paid_by_user_id = ?, paid_at = ?,
+                   payment_method = ?, payment_reference = ?, updated_at = ?
+               WHERE id = ?""",
+            (user["id"], now_iso(), method, reference, now_iso(), po_id))
+    log_action(user["id"], "purchase_order", po_id, "po_paid",
+               {"method": method, "reference": reference})
+    flash(f"PO #{po_id} marked as paid.", "success")
+    return redirect(url_for("vendor_payment_detail", po_id=po_id))
+
+
+@app.route("/payments/<int:po_id>/receipt", methods=["POST"])
+@login_required
+def vendor_payment_upload_receipt(po_id):
+    """Upload payment receipt for a paid PO."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    po = query_one("SELECT * FROM purchase_orders WHERE id = ?", (po_id,))
+    if not po or po["status"] != "paid":
+        flash("Only paid orders can have receipts uploaded.", "error")
+        return redirect(url_for("vendor_payments_list"))
+    uploaded = request.files.get("receipt")
+    if not uploaded or not uploaded.filename:
+        flash("Please select a receipt file.", "error")
+        return redirect(url_for("vendor_payment_detail", po_id=po_id))
+    safe_name = secure_filename(uploaded.filename)
+    upload_dir = Path("data") / "purchase_orders" / "receipts"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    receipt_path = f"receipt_{po_id}_{safe_name}"
+    uploaded.save(str(upload_dir / receipt_path))
+    execute("""UPDATE purchase_orders
+               SET status = 'receipt_uploaded', receipt_path = ?, updated_at = ?
+               WHERE id = ?""",
+            (receipt_path, now_iso(), po_id))
+    log_action(user["id"], "purchase_order", po_id, "receipt_uploaded",
+               {"file": receipt_path})
+    flash(f"Receipt uploaded for PO #{po_id}.", "success")
+    return redirect(url_for("vendor_payment_detail", po_id=po_id))
+
+
+@app.route("/payments/reports")
+@login_required
+def vendor_payment_reports():
+    """Vendor payment reports dashboard."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    # Monthly spend
+    monthly = query_all("""
+        SELECT strftime('%Y-%m', paid_at) AS month,
+               SUM(amount) AS total, COUNT(*) AS count
+          FROM purchase_orders
+         WHERE status IN ('paid','receipt_uploaded') AND paid_at IS NOT NULL
+         GROUP BY strftime('%Y-%m', paid_at)
+         ORDER BY month DESC LIMIT 12
+    """)
+    # By vendor
+    by_vendor = query_all("""
+        SELECT v.name, SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+          JOIN vendors v ON v.id = po.vendor_id
+         WHERE po.status IN ('paid','receipt_uploaded')
+         GROUP BY po.vendor_id
+         ORDER BY total DESC LIMIT 20
+    """)
+    # By category
+    by_category = query_all("""
+        SELECT po.category, SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+         WHERE po.status IN ('paid','receipt_uploaded')
+         GROUP BY po.category
+         ORDER BY total DESC
+    """)
+    # Totals
+    grand_total = sum(r["total"] for r in by_vendor)
+    this_month = query_one("""
+        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
+        WHERE status IN ('paid','receipt_uploaded')
+          AND paid_at >= date('now','start of month')
+    """)
+    pending_amount = query_one("""
+        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
+        WHERE status IN ('pending_approval','approved')
+    """)
+    return render_template("vendor_payment_reports.html",
+                           monthly=monthly, by_vendor=by_vendor,
+                           by_category=by_category,
+                           grand_total=grand_total,
+                           this_month=this_month["total"] if this_month else 0,
+                           pending_amount=pending_amount["total"] if pending_amount else 0,
+                           categories=dict(PO_CATEGORIES))
 
 
 # ── Compute / HPC Job Scheduler module ─────────────────────────

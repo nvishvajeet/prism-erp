@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+{% set tone = {
+  'draft': '',
+  'pending_approval': 'status-queued',
+  'approved': 'status-active',
+  'rejected': 'status-archived',
+  'paid': 'status-active',
+  'receipt_uploaded': 'status-active',
+  'cancelled': 'status-archived'
+} %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">PO #{{ po.id }} — {{ po.title }}</h2>
+    <span class="badge {{ tone.get(po.status, '') }}" data-vis="{{ V }}">{{ po.status|replace('_',' ')|title }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Order Info ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PURCHASE ORDER", "#" ~ po.id|string) }}
+    {{ metadata_grid([
+      ("Amount", "₹" ~ "{:,.2f}".format(po.amount)),
+      ("Vendor", po.vendor_name or '—'),
+      ("Category", po.category|title),
+      ("Priority", po.priority|title),
+      ("Submitted by", po.submitted_by_name or '—'),
+      ("Created", po.created_at[:16] if po.created_at else '—'),
+      ("Due Date", po.due_date[:10] if po.due_date else 'Not set'),
+    ]) }}
+    {% if po.description %}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">{{ po.description }}</p>
+    </div>
+    {% endif %}
+    {% if po.auto_approved %}
+    <div style="padding:0.25rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+      <span class="badge status-active" data-vis="{{ V }}">Auto-approved (≤ threshold)</span>
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Vendor Payment Details ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("VENDOR PAYMENT INFO", po.vendor_name or '') }}
+    {{ metadata_grid([
+      ("Phone", po.vendor_phone or 'Not on file'),
+      ("UPI ID", po.vendor_upi or 'Not on file'),
+      ("Bank", (po.vendor_bank or '') ~ (' — ' ~ po.vendor_bank_account if po.vendor_bank_account else '')),
+      ("IFSC", po.vendor_ifsc or 'Not on file'),
+    ]) }}
+  </article>
+
+  {# ── Approval / Timeline ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TIMELINE", "") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      <div class="activity-entry activity-entry-note" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-meta" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ po.submitted_by_name or 'System' }}</strong>
+            <span class="activity-entry-time" data-vis="{{ V }}">{{ po.created_at[:16] if po.created_at else '' }}</span>
+          </div>
+          <div class="activity-entry-text" data-vis="{{ V }}">Submitted PO for ₹{{ "{:,.0f}".format(po.amount) }} to {{ po.vendor_name }}</div>
+        </div>
+      </div>
+      {% if po.approved_at %}
+      <div class="activity-entry activity-entry-note" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-meta" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ po.approved_by_name or ('System' if po.auto_approved else '—') }}</strong>
+            <span class="activity-entry-time" data-vis="{{ V }}">{{ po.approved_at[:16] if po.approved_at else '' }}</span>
+          </div>
+          <div class="activity-entry-text" data-vis="{{ V }}">
+            {% if po.status == 'rejected' %}Rejected{% elif po.auto_approved %}Auto-approved (under threshold){% else %}Approved{% endif %}
+            {% if po.approval_note %} — {{ po.approval_note }}{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% if po.paid_at %}
+      <div class="activity-entry activity-entry-note" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-meta" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ po.paid_by_name or '—' }}</strong>
+            <span class="activity-entry-time" data-vis="{{ V }}">{{ po.paid_at[:16] if po.paid_at else '' }}</span>
+          </div>
+          <div class="activity-entry-text" data-vis="{{ V }}">
+            Marked as paid{% if po.payment_method %} via {{ po.payment_method }}{% endif %}{% if po.payment_reference %} (Ref: {{ po.payment_reference }}){% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% if po.receipt_path %}
+      <div class="activity-entry activity-entry-note" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-text" data-vis="{{ V }}">Receipt uploaded: {{ po.receipt_path }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+
+  {# ── Actions ── #}
+  {% if can_approve %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("APPROVE / REJECT", "Owner action required") }}
+    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Note (required for rejection)
+        <textarea name="note" rows="2" placeholder="Optional approval note, required if rejecting…" data-vis="{{ V }}"></textarea>
+      </label>
+      <div style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
+        <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve ₹{{ "{:,.0f}".format(po.amount) }}</button>
+        <button type="submit" name="action" value="reject" class="btn" style="background:var(--color-red,#c44);color:#fff;" data-vis="{{ V }}">Reject</button>
+      </div>
+    </form>
+  </article>
+  {% endif %}
+
+  {% if can_pay %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MARK AS PAID", "Record payment details") }}
+    <form method="post" action="{{ url_for('vendor_payment_mark_paid', po_id=po.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Payment Method
+        <select name="payment_method" data-vis="{{ V }}">
+          <option value="upi" data-vis="{{ V }}">UPI</option>
+          <option value="bank_transfer" data-vis="{{ V }}">Bank Transfer / NEFT</option>
+          <option value="cash" data-vis="{{ V }}">Cash</option>
+          <option value="cheque" data-vis="{{ V }}">Cheque</option>
+          <option value="other" data-vis="{{ V }}">Other</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Payment Reference
+        <input type="text" name="payment_reference" placeholder="UPI txn ID, cheque no., etc." data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Mark Paid — ₹{{ "{:,.0f}".format(po.amount) }}</button>
+    </form>
+  </article>
+  {% endif %}
+
+  {% if can_upload_receipt %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("UPLOAD RECEIPT", "Attach payment proof") }}
+    <form method="post" action="{{ url_for('vendor_payment_upload_receipt', po_id=po.id) }}" enctype="multipart/form-data" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="file-upload-area" id="receiptArea" data-vis="{{ V }}">
+        <input type="file" name="receipt" accept=".jpg,.jpeg,.png,.pdf" required data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Choose receipt</strong> or drag here<br>JPG, PNG, or PDF</span>
+      </div>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Upload Receipt</button>
+    </form>
+  </article>
+  {% endif %}
+
+  {# ── Attachments ── #}
+  {% if po.invoice_path %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("ATTACHMENTS", "") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p data-vis="{{ V }}">Invoice: <strong data-vis="{{ V }}">{{ po.invoice_path }}</strong></p>
+    </div>
+  </article>
+  {% endif %}
+
+</section>
+
+<script>
+(function(){
+  var area=document.getElementById('receiptArea');
+  if(!area)return;
+  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+  var inp=area.querySelector('input[type="file"]');
+  if(inp) inp.addEventListener('change',function(){
+    var lbl=area.querySelector('.file-upload-label');
+    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+  });
+})();
+</script>
+{% endblock %}

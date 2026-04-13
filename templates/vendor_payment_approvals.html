@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Approval Queue</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ pending|length }} pending</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Pending Approvals — phone-optimized cards ── #}
+  {% if pending %}
+  {% for po in pending %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-amber, #e6a800);">
+    <div class="section-head" data-vis="{{ V }}">
+      <div data-vis="{{ V }}">
+        <p class="section-kicker" data-vis="{{ V }}">{{ po.vendor_name }} · {{ po.category|title }}</p>
+        <h2 data-vis="{{ V }}">{{ po.title }}</h2>
+        <p class="hint" data-vis="{{ V }}">
+          ₹{{ "{:,.0f}".format(po.amount) }}
+          {% if po.priority == 'high' %} · <strong style="color:var(--color-red,#c44);" data-vis="{{ V }}">URGENT</strong>{% endif %}
+          · by {{ po.submitted_by_name or '—' }}
+          · {{ po.created_at[:10] if po.created_at else '' }}
+        </p>
+        {% if po.description %}
+        <p class="hint" data-vis="{{ V }}" style="margin-top:0.25rem;">{{ po.description[:200] }}{{ '…' if po.description|length > 200 else '' }}</p>
+        {% endif %}
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid" style="padding:0.5rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Note
+        <input type="text" name="note" placeholder="Optional note (required for rejection)" data-vis="{{ V }}">
+      </label>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
+        <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Approve ₹{{ "{:,.0f}".format(po.amount) }}
+        </button>
+        <button type="submit" name="action" value="reject" class="btn" data-vis="{{ V }}" style="flex:0;min-width:5rem;background:var(--color-red,#c44);color:#fff;">
+          Reject
+        </button>
+        <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" class="btn" data-vis="{{ V }}" style="flex:0;min-width:5rem;">
+          Details
+        </a>
+      </div>
+    </form>
+  </article>
+  {% endfor %}
+  {% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ empty_state("No pending approvals.", "All purchase orders have been reviewed.") }}
+  </article>
+  {% endif %}
+
+  {# ── Recently Approved / Rejected ── #}
+  {% if recent_approved %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT DECISIONS", "Last 7 days") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Title</th>
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Decision</th>
+          <th data-vis="{{ V }}">Date</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for o in recent_approved %}
+        <tr class="clickable-row" data-href="{{ url_for('vendor_payment_detail', po_id=o.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ o.id }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ o.title }}</strong></td>
+          <td data-vis="{{ V }}">{{ o.vendor_name }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(o.amount) }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if o.status == 'approved' %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+              {{ o.status|title }}
+            </span>
+          </td>
+          <td data-vis="{{ V }}">{{ o.approved_at[:10] if o.approved_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+})();
+</script>
+{% endblock %}

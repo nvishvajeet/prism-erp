@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New Purchase Order</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Order Details") }}
+    <form method="post" enctype="multipart/form-data" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label data-vis="{{ V }}">Vendor
+        <select name="vendor_id" required data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Select vendor…</option>
+          {% for v in vendors %}
+          <option value="{{ v.id }}" data-vis="{{ V }}">{{ v.name }}{% if v.category %} ({{ v.category }}){% endif %}</option>
+          {% endfor %}
+        </select>
+        <span class="hint" data-vis="{{ V }}">
+          Don't see the vendor? <a href="{{ url_for('vendor_new') }}" data-vis="{{ V }}">Register new vendor</a>
+        </span>
+      </label>
+
+      <label data-vis="{{ V }}">Title
+        <input type="text" name="title" required placeholder="e.g. Monthly vegetable supply" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Amount (₹)
+        <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00" data-vis="{{ V }}">
+        <span class="hint" data-vis="{{ V }}">Orders ≤ ₹5,000 are auto-approved.</span>
+      </label>
+
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          {% for val, lbl in categories %}
+          <option value="{{ val }}" data-vis="{{ V }}">{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Priority
+        <select name="priority" data-vis="{{ V }}">
+          <option value="normal" selected data-vis="{{ V }}">Normal</option>
+          <option value="high" data-vis="{{ V }}">High — Urgent</option>
+          <option value="low" data-vis="{{ V }}">Low — Can Wait</option>
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Due Date (optional)
+        <input type="date" name="due_date" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Description
+        <textarea name="description" rows="3" placeholder="What is this purchase for? Include quantities if applicable…" data-vis="{{ V }}"></textarea>
+      </label>
+
+      <div class="file-upload-area" id="uploadArea" data-vis="{{ V }}">
+        <input type="file" name="invoice" accept=".jpg,.jpeg,.png,.pdf" data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Attach Invoice / Quotation</strong> (optional)<br>JPG, PNG, or PDF</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Purchase Order</button>
+    </form>
+  </article>
+</section>
+
+<script>
+(function(){
+  var area=document.getElementById('uploadArea');
+  if(!area)return;
+  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+  var inp=area.querySelector('input[type="file"]');
+  if(inp) inp.addEventListener('change',function(){
+    var lbl=area.querySelector('.file-upload-label');
+    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+  });
+})();
+</script>
+{% endblock %}

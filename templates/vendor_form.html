@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_list') }}" class="hover-back-btn" title="Back to Vendors">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">← Vendors</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ "Edit Vendor" if vendor else "Register Vendor" }}</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Vendor Details") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label data-vis="{{ V }}">Vendor Name *
+        <input type="text" name="name" required placeholder="e.g. Shri Krishna Vegetables" value="{{ vendor.name if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Contact Person
+        <input type="text" name="contact_person" placeholder="e.g. Ramesh Patil" value="{{ vendor.contact_person if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Phone
+        <input type="tel" name="phone" placeholder="e.g. 9876543210" value="{{ vendor.phone if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Email
+        <input type="email" name="email" placeholder="optional" value="{{ vendor.email if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          {% for val, lbl in categories %}
+          <option value="{{ val }}"{% if vendor and vendor.category == val %} selected{% endif %} data-vis="{{ V }}">{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">GSTIN
+        <input type="text" name="gstin" placeholder="22AAAAA0000A1Z5" value="{{ vendor.gstin if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">PAN
+        <input type="text" name="pan" placeholder="ABCDE1234F" value="{{ vendor.pan if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Address
+        <textarea name="address" rows="2" placeholder="Full address" data-vis="{{ V }}">{{ vendor.address if vendor else '' }}</textarea>
+      </label>
+
+      {{ card_heading("PAYMENT DETAILS", "Bank / UPI info for payments") }}
+
+      <label data-vis="{{ V }}">UPI ID
+        <input type="text" name="upi_id" placeholder="e.g. vendor@upi" value="{{ vendor.upi_id if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Bank Name
+        <input type="text" name="bank_name" placeholder="e.g. State Bank of India" value="{{ vendor.bank_name if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Bank Account No.
+        <input type="text" name="bank_account" placeholder="Account number" value="{{ vendor.bank_account if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">IFSC Code
+        <input type="text" name="ifsc_code" placeholder="e.g. SBIN0001234" value="{{ vendor.ifsc_code if vendor else '' }}" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Notes
+        <textarea name="notes" rows="2" placeholder="Any internal notes about this vendor…" data-vis="{{ V }}">{{ vendor.notes if vendor else '' }}</textarea>
+      </label>
+
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">{{ "Update Vendor" if vendor else "Register Vendor" }}</button>
+    </form>
+  </article>
+</section>
+{% endblock %}

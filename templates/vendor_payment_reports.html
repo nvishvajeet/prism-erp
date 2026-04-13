@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Payment Reports</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── KPI Summary ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": "₹" ~ "{:,.0f}".format(grand_total),     "label": "Grand Total Paid"},
+      {"value": "₹" ~ "{:,.0f}".format(this_month),       "label": "This Month",       "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(pending_amount),   "label": "Pending / Approved", "tone": "amber"},
+    ]) }}
+  </article>
+
+  {# ── Monthly Spend Chart ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MONTHLY SPEND", "Last 12 months") }}
+    {% if monthly %}
+    <div style="padding:0.75rem;max-height:20rem;" data-vis="{{ V }}">
+      <canvas id="monthlyChart" data-vis="{{ V }}"></canvas>
+    </div>
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Month</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Orders</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for m in monthly %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.month }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(m.total) }}</td>
+          <td data-vis="{{ V }}">{{ m.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No payment data yet.", "Complete some payments to see monthly trends.") }}
+    {% endif %}
+  </article>
+
+  {# ── By Vendor ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SPEND BY VENDOR", "Top 20 vendors by total paid") }}
+    {% if by_vendor %}
+    <div style="padding:0.75rem;max-height:20rem;" data-vis="{{ V }}">
+      <canvas id="vendorChart" data-vis="{{ V }}"></canvas>
+    </div>
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Paid</th>
+          <th data-vis="{{ V }}">Orders</th>
+          <th data-vis="{{ V }}">Share</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for v in by_vendor %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ v.name }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total) }}</td>
+          <td data-vis="{{ V }}">{{ v.count }}</td>
+          <td data-vis="{{ V }}">{{ "{:.1f}".format(v.total / grand_total * 100 if grand_total else 0) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No vendor payment data yet.") }}
+    {% endif %}
+  </article>
+
+  {# ── By Category ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SPEND BY CATEGORY", "Breakdown by expense type") }}
+    {% if by_category %}
+    <div style="padding:0.75rem;max-height:20rem;" data-vis="{{ V }}">
+      <canvas id="categoryChart" data-vis="{{ V }}"></canvas>
+    </div>
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Category</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Paid</th>
+          <th data-vis="{{ V }}">Orders</th>
+          <th data-vis="{{ V }}">Share</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for c in by_category %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ categories.get(c.category, c.category)|title if categories else c.category|title }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(c.total) }}</td>
+          <td data-vis="{{ V }}">{{ c.count }}</td>
+          <td data-vis="{{ V }}">{{ "{:.1f}".format(c.total / grand_total * 100 if grand_total else 0) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No category data yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+(function(){
+  var cs = getComputedStyle(document.documentElement);
+  var primary = cs.getPropertyValue('--color-primary').trim() || '#3b6d99';
+  var green = cs.getPropertyValue('--color-green').trim() || '#34a853';
+  var amber = cs.getPropertyValue('--color-amber').trim() || '#e6a800';
+  var red = cs.getPropertyValue('--color-red').trim() || '#c44';
+  var palette = [primary, green, amber, red, '#6c5ce7', '#00b894', '#fdcb6e', '#e17055', '#0984e3', '#636e72', '#d63031', '#00cec9'];
+
+  {% if monthly %}
+  new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ monthly|map(attribute='month')|list|reverse|tojson }},
+      datasets: [{
+        label: 'Monthly Spend (₹)',
+        data: {{ monthly|map(attribute='total')|list|reverse|tojson }},
+        backgroundColor: primary + '99',
+        borderColor: primary,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: function(v){ return '₹' + v.toLocaleString('en-IN'); } } } }
+    }
+  });
+  {% endif %}
+
+  {% if by_vendor %}
+  new Chart(document.getElementById('vendorChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ by_vendor|map(attribute='name')|list|tojson }},
+      datasets: [{
+        data: {{ by_vendor|map(attribute='total')|list|tojson }},
+        backgroundColor: palette.slice(0, {{ by_vendor|length }})
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right' } }
+    }
+  });
+  {% endif %}
+
+  {% if by_category %}
+  new Chart(document.getElementById('categoryChart'), {
+    type: 'doughnut',
+    data: {
+      labels: {{ by_category|map(attribute='category')|list|tojson }},
+      datasets: [{
+        data: {{ by_category|map(attribute='total')|list|tojson }},
+        backgroundColor: palette.slice(0, {{ by_category|length }})
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right' } }
+    }
+  });
+  {% endif %}
+})();
+</script>
+{% endblock %}

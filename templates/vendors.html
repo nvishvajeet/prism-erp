@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Vendors</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ vendors|length }} registered</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('vendor_new') }}" data-vis="{{ V }}">+ New Vendor</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {% set active_count = vendors|selectattr('is_active')|list|length %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": vendors|length|string,    "label": "Total Vendors"},
+      {"value": active_count|string,      "label": "Active",   "tone": "green"},
+      {"value": (vendors|length - active_count)|string, "label": "Inactive", "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(vendors|sum(attribute='total_paid')), "label": "Total Paid"},
+    ]) }}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "All Vendors") }}
+    <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    {% if vendors %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Contact</th>
+          <th data-vis="{{ V }}">Orders</th>
+          <th class="col-amount" data-vis="{{ V }}">Paid</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody id="vendorBody" data-vis="{{ V }}">
+        {% for v in vendors %}
+        <tr class="clickable-row" data-href="{{ url_for('vendor_detail', vendor_id=v.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ v.name }}</strong>
+            {% if v.contact_person %}<br><span class="hint" data-vis="{{ V }}">{{ v.contact_person }}</span>{% endif %}
+          </td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ v.category|title }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if v.phone %}{{ v.phone }}{% endif %}
+            {% if v.email %}<br><span class="hint" data-vis="{{ V }}">{{ v.email }}</span>{% endif %}
+          </td>
+          <td data-vis="{{ V }}">{{ v.po_count }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total_paid) }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if v.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+              {{ "Active" if v.is_active else "Inactive" }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No vendors registered.", "Add your first vendor to start creating purchase orders.", "Register Vendor", url_for('vendor_new')) }}
+    {% endif %}
+  </article>
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+  var searchInput=document.getElementById('vendorSearch');
+  var rows=document.querySelectorAll('#vendorBody tr');
+  if(searchInput){
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

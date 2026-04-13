@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, metadata_grid, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_list') }}" class="hover-back-btn" title="Back to Vendors">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">← Vendors</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ vendor.name }}</h2>
+    <span class="badge {% if vendor.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+      {{ "Active" if vendor.is_active else "Inactive" }}
+    </span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── KPI ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": orders|length|string,                    "label": "Total Orders"},
+      {"value": "₹" ~ "{:,.0f}".format(total_paid),     "label": "Total Paid", "tone": "green"},
+      {"value": orders|selectattr('status','equalto','pending_approval')|list|length|string, "label": "Pending", "tone": "amber"},
+    ]) }}
+  </article>
+
+  {# ── Vendor Info ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("VENDOR DETAILS", vendor.category|title) }}
+    {{ metadata_grid([
+      ("Contact Person", vendor.contact_person or '—'),
+      ("Phone", vendor.phone or '—'),
+      ("Email", vendor.email or '—'),
+      ("GSTIN", vendor.gstin or '—'),
+      ("PAN", vendor.pan or '—'),
+      ("Address", vendor.address or '—'),
+      ("UPI ID", vendor.upi_id or '—'),
+      ("Bank", (vendor.bank_name or '') ~ (' — ' ~ vendor.bank_account if vendor.bank_account else '')),
+      ("IFSC", vendor.ifsc_code or '—'),
+      ("Registered", vendor.created_at[:10] if vendor.created_at else '—'),
+    ]) }}
+    {% if vendor.notes %}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">{{ vendor.notes }}</p>
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Purchase Orders ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PURCHASE ORDERS", orders|length|string ~ " orders") }}
+    {% if orders %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Title</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Submitted by</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for o in orders %}
+        {% set tone = {
+          'draft': '',
+          'pending_approval': 'status-queued',
+          'approved': 'status-active',
+          'rejected': 'status-archived',
+          'paid': 'status-active',
+          'receipt_uploaded': 'status-active',
+          'cancelled': 'status-archived'
+        } %}
+        <tr class="clickable-row" data-href="{{ url_for('vendor_payment_detail', po_id=o.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ o.id }}</code></td>
+          <td data-vis="{{ V }}">{{ o.created_at[:10] if o.created_at else '—' }}</td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ o.title }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(o.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge {{ tone.get(o.status, '') }}" data-vis="{{ V }}">{{ o.status|replace('_',' ')|title }}</span></td>
+          <td data-vis="{{ V }}">{{ o.submitted_by_name or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No orders for this vendor yet.", "Create a purchase order to get started.", "New PO", url_for('vendor_payment_new')) }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+})();
+</script>
+{% endblock %}

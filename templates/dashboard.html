@@ -180,37 +180,57 @@
   </article>
   {% endif %}
 
-  {# ── TILE 3: Quick Intake — sample_submitted rows needing assignment / acceptance ── #}
-  {% if module_enabled('queue') and has_instrument_area_access_user and pending_receipt_lookup_rows %}
+  {# ── TILE 3: Quick Intake — card-based view of active samples ── #}
+  {% if module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
   <article class="card tile tile-dash-quick-intake" data-vis="{{ V }}">
     {% call card_heading("", "Quick Intake") %}
       <a class="text-link" href="{{ url_for('schedule', bucket='sample_submitted') }}" data-vis="{{ V }}">Open Queue</a>
     {% endcall %}
     <label class="quick-intake-search" data-vis="{{ V }}">
-      <input type="text" id="quickIntakeSearch" placeholder="Type job number, sample name, or requester" data-vis="{{ V }}">
+      <input type="text" id="quickIntakeSearch" placeholder="Search by number, name, or requester…" data-vis="{{ V }}">
     </label>
-    {% call paginated_pane('quickIntake', page_size=6, max_height='none') %}
-    <table class="quick-intake-table" data-vis="{{ V }}">
-      <tbody id="quickIntakeBody" data-vis="{{ V }}">
-      {% for row in pending_receipt_lookup_rows %}
-      <tr data-pane-item data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}" data-request-id="{{ row['id'] }}" data-vis="{{ V }}">
-        <td data-vis="{{ V }}">
-          <div class="quick-intake-block" data-vis="{{ V }}">
-            <div class="quick-intake-content" data-vis="{{ V }}">
-              <strong data-vis="{{ V }}">{{ row["request_no"] }}</strong>
-              <span data-vis="{{ V }}">{{ row["sample_name"] }}</span>
-              <span class="hint" data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["created_at"]) }}</span>
-            </div>
-            <div class="quick-intake-actions" data-vis="{{ V }}">
-              {{ queue_action_stack(row, operators, url_for('schedule_actions'), can_accept=(row['status'] == 'sample_submitted'), can_assign=True) }}
-            </div>
-          </div>
-        </td>
-      </tr>
+    <div class="quick-intake-grid" id="quickIntakeBody" data-vis="{{ V }}">
+      {% for row in quick_intake_rows %}
+      {% set st = row['status'] %}
+      {% set tone = 'scheduled' if st == 'scheduled' else 'pending' if st == 'sample_submitted' else 'approved' if st == 'sample_received' else 'in_progress' if st == 'in_progress' else 'pending' %}
+      <div class="quick-intake-card quick-intake-card-{{ tone }}"
+           data-lookup="{{ (row['request_no'] ~ ' ' ~ (row['sample_name'] or '') ~ ' ' ~ (row['requester_name'] or ''))|lower }}"
+           data-vis="{{ V }}">
+        <div class="quick-intake-card-body" data-vis="{{ V }}">
+          <span class="quick-intake-reqno" data-vis="{{ V }}">{{ row['request_no'] }}</span>
+          <strong class="quick-intake-sample" data-vis="{{ V }}">{{ row['sample_name'] or '—' }}</strong>
+          <span class="quick-intake-requester hint" data-vis="{{ V }}">{{ row['requester_name'] or '' }}</span>
+          <span class="quick-intake-instrument badge-sm" data-vis="{{ V }}">{{ row['instrument_name'] }}</span>
+        </div>
+        <div class="quick-intake-actions" data-vis="{{ V }}">
+          {% if st == 'sample_submitted' %}
+          <form method="post" action="{{ url_for('schedule_actions') }}" data-vis="{{ V }}">
+            <input type="hidden" name="action" value="mark_received">
+            <input type="hidden" name="request_id" value="{{ row['id'] }}">
+            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">Accept</button>
+          </form>
+          <form method="post" action="{{ url_for('schedule_actions') }}" data-vis="{{ V }}">
+            <input type="hidden" name="action" value="decline">
+            <input type="hidden" name="request_id" value="{{ row['id'] }}">
+            <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">Decline</button>
+          </form>
+          {% else %}
+          <a href="{{ url_for('request_detail', request_id=row['id']) }}" class="qi-btn qi-btn-view" data-vis="{{ V }}">View</a>
+          {% endif %}
+        </div>
+      </div>
       {% endfor %}
-      </tbody>
-    </table>
-    {% endcall %}
+    </div>
+    {% if quick_intake_total > 6 %}
+    <div class="quick-intake-overflow" data-vis="{{ V }}">
+      <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">View all {{ quick_intake_total }} in Queue &rarr;</a>
+    </div>
+    {% endif %}
+  </article>
+  {% elif module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
+  <article class="card tile tile-dash-quick-intake" data-vis="{{ V }}">
+    {{ card_heading("", "Quick Intake") }}
+    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">All caught up — no samples awaiting action</p>
   </article>
   {% endif %}
 
@@ -306,22 +326,19 @@
 
 </section>
 
-{% if module_enabled('queue') and has_instrument_area_access_user and pending_receipt_lookup_rows %}
+{% if module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
 <script>
   (function () {
     const input = document.getElementById("quickIntakeSearch");
     const body = document.getElementById("quickIntakeBody");
     if (!input || !body) return;
-    const items = Array.from(body.querySelectorAll("[data-pane-item]"));
+    const cards = Array.from(body.querySelectorAll(".quick-intake-card"));
     input.addEventListener("input", function () {
       const token = input.value.trim().toLowerCase();
-      items.forEach(function (item) {
-        const match = !token || (item.dataset.lookup || "").includes(token);
-        item.hidden = !match;
+      cards.forEach(function (card) {
+        const match = !token || (card.dataset.lookup || "").includes(token);
+        card.hidden = !match;
       });
-      if (window.panes && window.panes.quickIntake && typeof window.panes.quickIntake.refresh === "function") {
-        window.panes.quickIntake.refresh();
-      }
     });
   })();
 </script>

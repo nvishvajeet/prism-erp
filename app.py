@@ -6131,6 +6131,8 @@ def index():
     instrument_fifo_queue: list[dict] = []
     instrument_fifo_total: int = 0
     pending_receipt_lookup_rows: list[sqlite3.Row] = []
+    quick_intake_rows: list[sqlite3.Row] = []
+    quick_intake_total: int = 0
     if has_instrument_area_access(user):
         fifo_rows = query_all(
             f"""
@@ -6166,6 +6168,9 @@ def index():
         pending_receipt_lookup_rows = [
             row for row in fifo_rows if row["status"] == "sample_submitted"
         ][:5]
+        # Quick Intake cards: up to 6 rows across all active statuses
+        quick_intake_rows = list(fifo_rows)[:6]
+        quick_intake_total = len(fifo_rows)
     dashboard_metrics = dashboard_analytics(user) if can_access_stats(user) else None
     req_pulse = requester_pulse(user)
     profile = user_access_profile(user)
@@ -6219,6 +6224,8 @@ def index():
         instrument_fifo_queue=instrument_fifo_queue,
         instrument_fifo_total=instrument_fifo_total if has_instrument_area_access(user) else 0,
         pending_receipt_lookup_rows=pending_receipt_lookup_rows if can_operate_queue else [],
+        quick_intake_rows=quick_intake_rows if can_operate_queue else [],
+        quick_intake_total=quick_intake_total if can_operate_queue else 0,
         operators=operators,
         can_operate_queue=can_operate_queue,
         role_switches=DEMO_ROLE_SWITCHES,

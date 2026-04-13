@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | docs-satyajeet-technical-primer | 2026-04-13 20:11 CEST | `docs/SATYAJEET_ONBOARDING.md`, `README.md`, `CLAIMS.md` | `docs: expand Satyajeet onboarding technical primer` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

@@ -254,7 +254,210 @@ Pause and ask before doing these:
 - deciding to widen scope into hot shared files
 - promoting a "maybe" into a major-version promise
 
-## 9. What the philosophy means in practice
+## 9. Basic technical primer
+
+This section is for the case where terminal commands are still new.
+
+### 9.1 What a terminal command is
+
+A terminal command is just a short instruction to the computer.
+
+Examples:
+
+- `pwd` = show "where am I?"
+- `ls` = show files in this folder
+- `cd <path>` = move into a folder
+- `git status` = show what changed
+- `python` = run Python
+
+You do not need to memorize everything. What matters is learning what a
+few important commands mean in this project.
+
+### 9.2 The commands you will see most often
+
+```bash
+pwd
+ls
+cd ~/Documents/Scheduler/Main
+git status
+git pull origin v1.3.0-stable-release
+git add <file>
+git commit -m "message"
+git push origin v1.3.0-stable-release
+./venv/bin/python scripts/smoke_test.py
+./venv/bin/python -m crawlers wave sanity
+ssh vishwajeet@100.115.176.118
+```
+
+### 9.3 What `sudo` means
+
+`sudo` means: "run this command with administrator permission."
+
+Use `sudo` carefully. In this project, if you are not sure why a command
+needs `sudo`, do not run it yourself. Ask the agent or ask the human
+operator.
+
+Examples of places where `sudo` might appear:
+
+- installing something system-wide
+- copying files into protected system folders
+- changing service configuration
+
+Examples of places where you usually do **not** need `sudo`:
+
+- editing project files
+- running smoke tests
+- running crawlers
+- normal `git pull`, `git commit`, `git push`
+
+### 9.4 What Homebrew is
+
+Homebrew is the package manager on macOS.
+
+It is how tools get installed, for example:
+
+- Python
+- git
+- caddy
+
+Example command:
+
+```bash
+brew install python@3.12 git
+```
+
+Meaning: install those tools on the Mac.
+
+If an agent asks to use Homebrew, it usually means it wants to install a
+missing dependency.
+
+### 9.5 What `ssh` is
+
+`ssh` means "connect to another machine securely from the terminal."
+
+Example:
+
+```bash
+ssh vishwajeet@100.115.176.118
+```
+
+Meaning:
+
+- connect to the Mac mini
+- log in as user `vishwajeet`
+- open a remote terminal there
+
+This is how we run remote verification or inspect the production host.
+
+### 9.6 What HTTPS is
+
+HTTPS is the secure form of HTTP, the protocol browsers use to load
+websites.
+
+Simple version:
+
+- `http://` = normal web traffic
+- `https://` = encrypted web traffic
+
+Why it matters:
+
+- login cookies are safer
+- browsers trust the connection more
+- public-facing deployment feels professional
+
+### 9.7 What a domain is
+
+A domain is the human-readable web address for a site.
+
+Examples:
+
+- `catalysterp.org`
+- a Tailscale HTTPS hostname
+
+The domain points users to the server. It is separate from the code.
+
+### 9.8 What a server is
+
+In this project, the "server" is the program that runs the app and
+responds to browser requests.
+
+Here:
+
+- your MacBook can run a dev server locally
+- the Mac mini runs the production-serving version
+
+### 9.9 What a virtual environment is
+
+The `venv` or `.venv` folder is a Python environment just for this
+project.
+
+When you see:
+
+```bash
+./venv/bin/python
+```
+
+it means:
+
+- use the Python that belongs to this repo
+- do not accidentally use some other system Python
+
+That keeps dependencies stable.
+
+## 10. What technical things you can ask agents to do
+
+Even if you do not know the commands yourself, you can still direct
+agents very effectively.
+
+Good asks:
+
+- "read these docs and summarize the system"
+- "run smoke and tell me what failed"
+- "run sanity locally and on the Mac mini"
+- "crawl the app and produce an improvement plan"
+- "claim this wave and implement it"
+- "explain what this command does before running it"
+- "show me where the route/template/module lives"
+- "prepare a safe deploy"
+- "check if this requires sudo or not"
+- "tell me whether this should be a read agent or write agent task"
+
+Even better asks:
+
+- "read-only task, do not edit, only report findings"
+- "write task, claim files first and follow the full git lifecycle"
+- "use the Mac mini as verifier"
+- "run local crawlers but keep the editing machine responsive"
+- "explain the result in plain English"
+
+### 10.1 Good examples
+
+Examples you can literally use:
+
+- "Read-only task. Run a deep crawl on attendance and summarize the top five issues."
+- "Write task. Claim the vendor registry wave and implement it safely."
+- "Before doing anything, explain the commands you plan to run."
+- "Use local crawlers and the Mac mini verifier."
+- "Do not use sudo unless you explain why it is necessary."
+
+### 10.2 What not to ask vaguely
+
+Avoid prompts like:
+
+- "just do something"
+- "fix everything"
+- "use all machines however you want"
+
+Those are too loose and make ownership worse.
+
+Better:
+
+- give a bounded goal
+- say whether it is read-only or write work
+- say whether you want explanation
+- say whether the Mac mini should be used
+
+## 11. What the philosophy means in practice
 
 CATALYST follows an Apple / Jony Ive / Ferrari design discipline.
 
@@ -275,7 +478,7 @@ When you watch an agent work, ask:
 
 That is the correct review lens.
 
-## 10. What the current big program is
+## 12. What the current big program is
 
 The active larger initiative is `v2.0`.
 
@@ -297,7 +500,7 @@ The first `v2.0` waves are:
 
 Read `docs/V2_GAP_MAP.md` for the full shape.
 
-## 11. If you want to understand the system by watching prompts
+## 13. If you want to understand the system by watching prompts
 
 When you watch an experienced session for 20 minutes, look for this
 loop:
@@ -318,7 +521,7 @@ That loop is the operating system.
 If the session does not show ownership, verification, and a clean git
 exit, it is not a good session no matter how clever the code sounds.
 
-## 12. Your first safe session
+## 14. Your first safe session
 
 If this is your first hands-on session, do this:
 
@@ -333,7 +536,7 @@ If this is your first hands-on session, do this:
 
 That sequence teaches the system without risking the branch.
 
-## 13. The shortest verbal summary
+## 15. The shortest verbal summary
 
 If you had to explain this setup in 30 seconds:
 

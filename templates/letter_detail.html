@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block hover_back %}<a href="{{ url_for('letters_list') }}" class="hover-back-btn" title="Back to Letters">&#8592;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('letters_list') }}" data-vis="{{ V }}">&#8592; Letters</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ letter.title }}</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('letter_print', letter_id=letter.id) }}" class="btn btn-primary" target="_blank" data-vis="{{ V }}">Print as PDF</a>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div class="detail-grid" data-vis="{{ V }}">
+      <div class="detail-row" data-vis="{{ V }}">
+        <span class="detail-label" data-vis="{{ V }}">Status</span>
+        <span data-vis="{{ V }}"><span class="badge badge-{{ 'info' if letter.status == 'draft' else 'success' }}">{{ letter.status }}</span></span>
+      </div>
+      <div class="detail-row" data-vis="{{ V }}">
+        <span class="detail-label" data-vis="{{ V }}">Recipient</span>
+        <span data-vis="{{ V }}">{{ letter.recipient or '(none)' }}</span>
+      </div>
+      <div class="detail-row" data-vis="{{ V }}">
+        <span class="detail-label" data-vis="{{ V }}">Author</span>
+        <span data-vis="{{ V }}">{{ author_name }}</span>
+      </div>
+      <div class="detail-row" data-vis="{{ V }}">
+        <span class="detail-label" data-vis="{{ V }}">Created</span>
+        <span data-vis="{{ V }}">{{ letter.created_at[:10] if letter.created_at else '' }}</span>
+      </div>
+      <div class="detail-row" data-vis="{{ V }}">
+        <span class="detail-label" data-vis="{{ V }}">Letterhead</span>
+        <span data-vis="{{ V }}">{{ letter.letterhead }}</span>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <h3 data-vis="{{ V }}">Body</h3>
+    <div style="white-space: pre-wrap; line-height: 1.6;" data-vis="{{ V }}">{{ letter.body }}</div>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <h3 data-vis="{{ V }}">Edit</h3>
+    <form method="post" action="{{ url_for('letter_update', letter_id=letter.id) }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Title</label>
+        <input type="text" name="title" required value="{{ letter.title }}" data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Recipient</label>
+        <input type="text" name="recipient" value="{{ letter.recipient }}" data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Letterhead</label>
+        <select name="letterhead" data-vis="{{ V }}">
+          <option value="default" {% if letter.letterhead == 'default' %}selected{% endif %}>Default</option>
+          <option value="MITWPU" {% if letter.letterhead == 'MITWPU' %}selected{% endif %}>MITWPU</option>
+        </select>
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Body</label>
+        <textarea name="body" rows="10" data-vis="{{ V }}">{{ letter.body }}</textarea>
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Status</label>
+        <select name="status" data-vis="{{ V }}">
+          <option value="draft" {% if letter.status == 'draft' %}selected{% endif %}>Draft</option>
+          <option value="sent" {% if letter.status == 'sent' %}selected{% endif %}>Sent</option>
+        </select>
+      </div>
+      <div class="form-controls" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save</button>
+      </div>
+    </form>
+  </article>
+</section>
+
+{% endblock %}

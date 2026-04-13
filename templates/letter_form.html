@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block hover_back %}<a href="{{ url_for('letters_list') }}" class="hover-back-btn" title="Back to Letters">&#8592;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('letters_list') }}" data-vis="{{ V }}">&#8592; Letters</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{% if letter %}Edit Letter{% else %}New Letter{% endif %}</h2>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <form method="post" action="{% if letter %}{{ url_for('letter_update', letter_id=letter.id) }}{% else %}{{ url_for('letter_new') }}{% endif %}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Title / Subject</label>
+        <input type="text" name="title" required value="{{ letter.title if letter else '' }}" data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Recipient</label>
+        <input type="text" name="recipient" value="{{ letter.recipient if letter else '' }}" placeholder="Name, department, or address" data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Letterhead</label>
+        <select name="letterhead" data-vis="{{ V }}">
+          <option value="default" {% if not letter or letter.letterhead == 'default' %}selected{% endif %}>Default</option>
+          <option value="MITWPU" {% if letter and letter.letterhead == 'MITWPU' %}selected{% endif %}>MITWPU</option>
+        </select>
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Body</label>
+        <textarea name="body" rows="12" data-vis="{{ V }}">{{ letter.body if letter else '' }}</textarea>
+      </div>
+      {% if letter %}
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Status</label>
+        <select name="status" data-vis="{{ V }}">
+          <option value="draft" {% if letter.status == 'draft' %}selected{% endif %}>Draft</option>
+          <option value="sent" {% if letter.status == 'sent' %}selected{% endif %}>Sent</option>
+        </select>
+      </div>
+      {% endif %}
+      <div class="form-controls" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">{% if letter %}Save{% else %}Create Letter{% endif %}</button>
+        <a href="{{ url_for('letters_list') }}" class="btn" data-vis="{{ V }}">Cancel</a>
+      </div>
+    </form>
+  </article>
+</section>
+
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&#8592;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&#8592; Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Letters</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('letter_new') }}" class="btn btn-primary" data-vis="{{ V }}">+ New Letter</a>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+{% if letters %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <table class="sortable-table" data-vis="{{ V }}">
+      <thead>
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Title</th>
+          <th data-vis="{{ V }}">Recipient</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Author</th>
+          <th data-vis="{{ V }}">Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in letters %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><a href="{{ url_for('letter_detail', letter_id=l.id) }}" data-vis="{{ V }}">{{ l.title }}</a></td>
+          <td data-vis="{{ V }}">{{ l.recipient }}</td>
+          <td data-vis="{{ V }}"><span class="badge badge-{{ 'info' if l.status == 'draft' else 'success' }}">{{ l.status }}</span></td>
+          <td data-vis="{{ V }}">{{ l.author_name }}</td>
+          <td data-vis="{{ V }}">{{ l.created_at[:10] if l.created_at else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+{% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <p class="hint" data-vis="{{ V }}">No letters yet. Create one to get started.</p>
+  </article>
+{% endif %}
+</section>
+
+{% endblock %}

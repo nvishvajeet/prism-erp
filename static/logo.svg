@@ -1,11 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#1a3a5c"/>
       <stop offset="100%" style="stop-color:#2d6a9f"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="80" fill="url(#g1)"/>
-  <polygon points="256,60 440,410 72,410" fill="none" stroke="#ffffff" stroke-width="28" stroke-linejoin="round" opacity="0.9"/>
-  <text x="256" y="330" text-anchor="middle" font-family="ui-sans-serif,-apple-system,Helvetica" font-size="180" font-weight="800" fill="#ffffff">P</text>
+  <rect width="512" height="512" rx="80" fill="url(#cg)"/>
+  <!-- Catalyst symbol: hexagonal ring (like a chemical catalyst) -->
+  <polygon points="256,100 370,165 370,295 256,360 142,295 142,165" fill="none" stroke="#ffffff" stroke-width="20" stroke-linejoin="round" opacity="0.3"/>
+  <!-- C monogram -->
+  <text x="256" y="290" text-anchor="middle" font-family="ui-sans-serif,-apple-system,Helvetica" font-size="200" font-weight="800" fill="#ffffff">C</text>
 </svg>

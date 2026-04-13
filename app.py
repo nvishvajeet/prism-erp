@@ -46,8 +46,8 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
-ORG_NAME = os.environ.get("PRISM_ORG_NAME", "PRISM")
-ORG_TAGLINE = os.environ.get("PRISM_ORG_TAGLINE", "Lab & Research Management")
+ORG_NAME = os.environ.get("PRISM_ORG_NAME", "Catalyst ERP")
+ORG_TAGLINE = os.environ.get("PRISM_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -209,6 +209,15 @@ MODULE_REGISTRY = {
         "nav_endpoint": "todos_page",
         "nav_active_endpoints": {"todos_page", "todo_new", "todo_complete", "todo_delete", "todo_update"},
         "nav_access": lambda ap, is_owner: True,
+    },
+    "letters": {
+        "label": "Letters",
+        "icon": "\u2709\ufe0f",
+        "nav_order": 8,
+        "description": "Create letters on institute letterhead",
+        "nav_endpoint": "letters_list",
+        "nav_active_endpoints": {"letters_list", "letter_new", "letter_detail", "letter_print"},
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "queue": {
         "label": "Queue",
@@ -4592,6 +4601,23 @@ def init_db() -> None:
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_user ON expense_receipts(submitted_by_user_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_status ON expense_receipts(status)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS letters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                author_user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                recipient TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                letterhead TEXT NOT NULL DEFAULT 'default',
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT,
+                FOREIGN KEY (author_user_id) REFERENCES users(id)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_letters_author ON letters(author_user_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_letters_status ON letters(status)")
 
         # Additive column migrations for v1.1.0
         for col_sql in [
@@ -9106,6 +9132,105 @@ def todo_delete(todo_id: int):
     flash("Task deleted.", "success")
     tab = request.form.get("tab", "my")
     return redirect(url_for("todos_page", tab=tab))
+
+
+# ── Letters module ─────────────────────────────────────────────────────
+
+@app.route("/letters", methods=["GET"])
+@login_required
+def letters_list():
+    """List user's letters. Admins see all."""
+    user = current_user()
+    ap = user_access_profile(user)
+    if is_owner(user) or user["role"] in ("super_admin", "site_admin"):
+        letters = query_all(
+            "SELECT l.*, u.name AS author_name FROM letters l "
+            "JOIN users u ON u.id = l.author_user_id "
+            "ORDER BY l.created_at DESC"
+        )
+    else:
+        letters = query_all(
+            "SELECT l.*, u.name AS author_name FROM letters l "
+            "JOIN users u ON u.id = l.author_user_id "
+            "WHERE l.author_user_id = ? ORDER BY l.created_at DESC",
+            (user["id"],),
+        )
+    return render_template("letters.html", title="Letters", letters=letters)
+
+
+@app.route("/letters/new", methods=["GET", "POST"])
+@login_required
+def letter_new():
+    """Create a new letter."""
+    user = current_user()
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        recipient = request.form.get("recipient", "").strip()
+        body = request.form.get("body", "").strip()
+        letterhead = request.form.get("letterhead", "default").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(url_for("letter_new"))
+        ts = now_iso()
+        lid = execute(
+            "INSERT INTO letters (author_user_id, title, body, recipient, letterhead, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user["id"], title, body, recipient, letterhead, ts, ts),
+        )
+        flash("Letter created.", "success")
+        return redirect(url_for("letter_detail", letter_id=lid))
+    return render_template("letter_form.html", title="New Letter", letter=None)
+
+
+@app.route("/letters/<int:letter_id>", methods=["GET"])
+@login_required
+def letter_detail(letter_id: int):
+    """View a letter."""
+    user = current_user()
+    letter = query_one("SELECT * FROM letters WHERE id = ?", (letter_id,))
+    if not letter:
+        abort(404)
+    if letter["author_user_id"] != user["id"] and not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
+        abort(403)
+    author = query_one("SELECT name FROM users WHERE id = ?", (letter["author_user_id"],))
+    return render_template("letter_detail.html", title=letter["title"], letter=letter, author_name=author["name"] if author else "Unknown")
+
+
+@app.route("/letters/<int:letter_id>/print", methods=["GET"])
+@login_required
+def letter_print(letter_id: int):
+    """Render letter on letterhead for printing."""
+    user = current_user()
+    letter = query_one("SELECT * FROM letters WHERE id = ?", (letter_id,))
+    if not letter:
+        abort(404)
+    if letter["author_user_id"] != user["id"] and not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
+        abort(403)
+    author = query_one("SELECT name FROM users WHERE id = ?", (letter["author_user_id"],))
+    return render_template("letter_print.html", letter=letter, author_name=author["name"] if author else "Unknown")
+
+
+@app.route("/letters/<int:letter_id>/update", methods=["POST"])
+@login_required
+def letter_update(letter_id: int):
+    """Edit a letter."""
+    user = current_user()
+    letter = query_one("SELECT * FROM letters WHERE id = ?", (letter_id,))
+    if not letter:
+        abort(404)
+    if letter["author_user_id"] != user["id"] and not is_owner(user):
+        abort(403)
+    title = request.form.get("title", "").strip()
+    recipient = request.form.get("recipient", "").strip()
+    body = request.form.get("body", "").strip()
+    letterhead = request.form.get("letterhead", "default").strip()
+    status = request.form.get("status", letter["status"]).strip()
+    execute(
+        "UPDATE letters SET title = ?, recipient = ?, body = ?, letterhead = ?, status = ?, updated_at = ? WHERE id = ?",
+        (title, recipient, body, letterhead, status, now_iso(), letter_id),
+    )
+    flash("Letter updated.", "success")
+    return redirect(url_for("letter_detail", letter_id=letter_id))
 
 
 # ── External email queue helper ─────────────────────────────────

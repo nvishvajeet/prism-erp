@@ -1,6 +1,6 @@
-# PRISM
+# Catalyst ERP
 
-> Open-source ERP for research facilities. One file. Any institution.
+> Open-source ERP for Research & Operations. One file. Any institution.
 
 ## Install
 

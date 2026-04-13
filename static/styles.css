@@ -9660,3 +9660,8 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .mc-infra-stat { text-align: center; }
 .mc-infra-stat strong { display: block; font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mc-infra-stat span { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Notifications dropdown: hover to preview, click to navigate */
+.notif-hover-dropdown .notif-panel { display: none; }
+.notif-hover-dropdown:hover .notif-panel { display: block; }
+.notif-hover-dropdown .nav-trigger { cursor: pointer; }

@@ -126,12 +126,33 @@
         </div>
       </div>
 
-      {# ── Notifications — direct link (user preference: no dropdown) ── #}
+      {# ── Notifications — hover opens preview, click goes to page ── #}
       {% elif nav.key == 'notifications' %}
-      <a class="{% if nav.active %}nav-active{% endif %}" href="{{ nav.url }}" data-vis="{{ V }}">
-        {{- nav.label -}}
-        {%- if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif -%}
-      </a>
+      <div class="nav-dropdown notif-dropdown notif-hover-dropdown" data-vis="{{ V }}">
+        <a class="nav-trigger {% if nav.active %}nav-active{% endif %}"
+           href="{{ nav.url }}" data-vis="{{ V }}">{{ nav.label }}{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+        <div class="notif-panel" role="menu" aria-label="Recent notifications" data-vis="{{ V }}">
+          <div class="notif-panel-header" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">Notifications</strong>
+            {% if nav_notice_count %}<span class="notif-panel-count" data-vis="{{ V }}">{{ nav_notice_count }} unread</span>{% endif %}
+          </div>
+          {% if recent_notices %}
+          <div class="notif-panel-list" data-vis="{{ V }}">
+            {% for n in recent_notices %}
+            <a href="{{ n.href or nav.url }}" class="notif-panel-item{% if not n.is_read %} notif-unread{% endif %}" data-vis="{{ V }}">
+              <span class="notif-item-body" data-vis="{{ V }}">
+                <span class="notif-item-subject" data-vis="{{ V }}">{{ n.subject }}</span>
+                <span class="notif-item-meta" data-vis="{{ V }}">{{ time_ago(n.created_at) }}</span>
+              </span>
+            </a>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="notif-panel-empty" data-vis="{{ V }}">No recent notifications</div>
+          {% endif %}
+          <a href="{{ nav.url }}" class="notif-panel-footer" data-vis="{{ V }}">View all →</a>
+        </div>
+      </div>
 
       {# ── Generic link (inbox, finance, attendance, receipts, admin, future modules) ── #}
       {% else %}

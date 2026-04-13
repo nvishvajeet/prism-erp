@@ -9074,6 +9074,15 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 .panel-block {
   padding: 0.75rem;
 }
+.panel-block-tight-top {
+  padding: 0.25rem 0.75rem 0.5rem;
+}
+.panel-block-standard {
+  padding: 0.5rem 0.75rem;
+}
+.panel-block-standard-bottom {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
 .tile-width-narrow {
   max-width: 20rem;
 }
@@ -9125,6 +9134,77 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 }
 .util-fill {
   width: var(--util-pct, 0%);
+}
+.control-flex-wrap {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.control-flex-compact {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.control-flex-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.control-flex-fill {
+  flex: 1;
+  min-width: 8rem;
+}
+.control-flex-fill-wide {
+  flex: 1;
+  min-width: 10rem;
+}
+.control-min-width-sm {
+  min-width: 5rem;
+}
+.control-min-width-md {
+  min-width: 8rem;
+}
+.control-min-width-lg {
+  min-width: 10rem;
+}
+.control-min-width-xl {
+  min-width: 12rem;
+}
+.form-inline-shell {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.tile-accent-amber {
+  border-left: 3px solid var(--tone-amber, #f59e0b);
+}
+.tile-accent-green {
+  border-left: 3px solid var(--tone-green, #2d8659);
+}
+.tile-accent-danger {
+  border-left: 3px solid var(--danger, #b84a4a);
+}
+.badge-solid-green {
+  background: var(--tone-green, #2d8659);
+  color: #fff;
+}
+.badge-solid-amber {
+  background: var(--tone-amber, #f59e0b);
+  color: #fff;
+}
+.badge-solid-blue {
+  background: var(--tone-blue, #3b82f6);
+  color: #fff;
+}
+.badge-solid-red {
+  background: var(--tone-red, #ef4444);
+  color: #fff;
+}
+.copy-urgent {
+  color: var(--danger, #b84a4a);
+}
+.row-muted {
+  opacity: 0.6;
 }
 
 /* Muted badge */

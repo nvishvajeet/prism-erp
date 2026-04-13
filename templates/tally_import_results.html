@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('tally_import') }}" class="hover-back-btn" title="Back to Import">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tally_import') }}" data-vis="{{ V }}">← Import</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Reconciliation Results</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% set match_pct = "{:.0f}".format(matched / total * 100) if total > 0 else "0" %}
+    {{ kpi_grid([
+      {"value": total|string,                  "label": "Total Tally Entries"},
+      {"value": matched|string,                "label": "Matched in CATALYST",   "tone": "green"},
+      {"value": unmatched_count|string,         "label": "Unmatched",             "tone": "amber"},
+      {"value": match_pct ~ "%",               "label": "Reconciliation Rate"},
+    ]) }}
+  </article>
+
+  {% if tally_rows %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TALLY ENTRIES", total|string ~ " rows") }}
+    <input type="text" id="tallySearch" class="table-search-input" placeholder="Search entries…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">Vch No</th>
+          <th data-vis="{{ V }}">Narration</th>
+          <th data-vis="{{ V }}">Ledger</th>
+          <th class="col-amount" data-vis="{{ V }}">Debit</th>
+          <th class="col-amount" data-vis="{{ V }}">Credit</th>
+          <th data-vis="{{ V }}">CATALYST Match</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in tally_rows %}
+        <tr data-vis="{{ V }}"{% if not r.match %} style="background:var(--color-amber-bg, rgba(230,168,0,0.08));"{% endif %}>
+          <td data-vis="{{ V }}">{{ r.date }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ r.type }}</span></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ r.number }}</code></td>
+          <td data-vis="{{ V }}">{{ r.narration[:50] }}{{ '…' if r.narration|length > 50 else '' }}</td>
+          <td data-vis="{{ V }}">{{ r.ledger }}</td>
+          <td class="col-amount" data-vis="{{ V }}">{% if r.debit > 0 %}₹{{ "{:,.0f}".format(r.debit) }}{% endif %}</td>
+          <td class="col-amount" data-vis="{{ V }}">{% if r.credit > 0 %}₹{{ "{:,.0f}".format(r.credit) }}{% endif %}</td>
+          <td data-vis="{{ V }}">
+            {% if r.match %}
+            <span class="badge status-active" data-vis="{{ V }}">{{ r.match }}</span>
+            {% else %}
+            <span class="badge status-queued" data-vis="{{ V }}">Unmatched</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  var searchInput=document.getElementById('tallySearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('tbody tr');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){ r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none'; });
+    });
+  }
+})();
+</script>
+{% endblock %}

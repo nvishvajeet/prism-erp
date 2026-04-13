@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('tally_export_page') }}" class="hover-back-btn" title="Back to Tally">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tally_export_page') }}" data-vis="{{ V }}">← Tally</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Import Tally Day Book</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TALLY DAY BOOK IMPORT", "Upload CSV for reconciliation against CATALYST records") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        Export your Tally Day Book as CSV (Gateway of Tally > Display More Reports > Day Book > Export).
+        CATALYST will match each Tally entry against its own purchase orders and salary records,
+        flagging any unmatched entries for review.
+      </p>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% if companies and companies|length > 1 %}
+      <label data-vis="{{ V }}">Company
+        <select name="company_id" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All Companies</option>
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+
+      <div class="file-upload-area" id="uploadArea" data-vis="{{ V }}">
+        <input type="file" name="daybook_file" accept=".csv" required data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Choose Tally Day Book CSV</strong> or drag here</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Import & Reconcile</button>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("HOW TO EXPORT FROM TALLY", "Step-by-step") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <ol style="padding-left:1.25rem;line-height:1.8;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}">Open Tally Prime on your Windows machine</li>
+        <li data-vis="{{ V }}">Go to <strong>Gateway of Tally > Display More Reports > Day Book</strong></li>
+        <li data-vis="{{ V }}">Set the date range for the period you want to reconcile</li>
+        <li data-vis="{{ V }}">Press <strong>Ctrl+E</strong> or click <strong>Export</strong></li>
+        <li data-vis="{{ V }}">Choose <strong>CSV (Comma Delimited)</strong> format</li>
+        <li data-vis="{{ V }}">Save the file and upload it here</li>
+      </ol>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">
+        Expected columns: Date, Voucher Type, Voucher No, Narration, Debit, Credit, Ledger Name.
+        The system auto-detects common Tally export formats.
+      </p>
+    </div>
+  </article>
+</section>
+
+<script>
+(function(){
+  var area=document.getElementById('uploadArea');
+  if(!area)return;
+  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+  var inp=area.querySelector('input[type="file"]');
+  if(inp) inp.addEventListener('change',function(){
+    var lbl=area.querySelector('.file-upload-label');
+    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+  });
+})();
+</script>
+{% endblock %}

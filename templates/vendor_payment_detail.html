@@ -40,22 +40,22 @@
       ("Due Date", po.due_date[:10] if po.due_date else 'Not set'),
     ]) }}
     {% if po.is_intercompany and po.counterparty_name %}
-    <div style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
+    <div class="panel-block-tight-top" data-vis="{{ V }}">
       <span class="badge status-queued" data-vis="{{ V }}">Inter-company → {{ po.counterparty_name }}</span>
     </div>
     {% endif %}
     {% if po.description %}
-    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+    <div class="panel-block-standard" data-vis="{{ V }}">
       <p class="hint" data-vis="{{ V }}">{{ po.description }}</p>
     </div>
     {% endif %}
     {% if po.auto_approved %}
-    <div style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
+    <div class="panel-block-tight-top" data-vis="{{ V }}">
       <span class="badge status-active" data-vis="{{ V }}">Auto-approved (≤ threshold)</span>
     </div>
     {% endif %}
     {% if po.audit_status %}
-    <div style="padding:0.25rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+    <div class="panel-block-standard-bottom" data-vis="{{ V }}">
       {% if po.audit_status == 'audited' %}
       <span class="badge status-active" data-vis="{{ V }}">Audited{% if po.audited_at %} — {{ po.audited_at[:10] }}{% endif %}</span>
       {% elif po.audit_status == 'flagged' %}
@@ -130,14 +130,14 @@
   {% if can_approve %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("APPROVE / REJECT", "Owner action required") }}
-    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid panel-block" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Note (required for rejection)
         <textarea name="note" rows="2" placeholder="Optional approval note, required if rejecting…" data-vis="{{ V }}"></textarea>
       </label>
-      <div style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
+      <div class="control-flex-actions" data-vis="{{ V }}">
         <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve ₹{{ "{:,.0f}".format(po.amount) }}</button>
-        <button type="submit" name="action" value="reject" class="btn" style="background:var(--danger);color:#fff;" data-vis="{{ V }}">Reject</button>
+        <button type="submit" name="action" value="reject" class="btn btn-danger" data-vis="{{ V }}">Reject</button>
       </div>
     </form>
   </article>
@@ -146,7 +146,7 @@
   {% if can_pay %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("MARK AS PAID", "Record payment details") }}
-    <form method="post" action="{{ url_for('vendor_payment_mark_paid', po_id=po.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('vendor_payment_mark_paid', po_id=po.id) }}" class="form-grid panel-block" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Payment Method
         <select name="payment_method" data-vis="{{ V }}">
@@ -168,7 +168,7 @@
   {% if can_upload_receipt %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("UPLOAD RECEIPT", "Attach payment proof") }}
-    <form method="post" action="{{ url_for('vendor_payment_upload_receipt', po_id=po.id) }}" enctype="multipart/form-data" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('vendor_payment_upload_receipt', po_id=po.id) }}" enctype="multipart/form-data" class="form-grid panel-block" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="file-upload-area" id="receiptArea" data-vis="{{ V }}">
         <input type="file" name="receipt" accept=".jpg,.jpeg,.png,.pdf" required data-vis="{{ V }}">
@@ -183,7 +183,7 @@
   {% if po.invoice_path %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ATTACHMENTS", "") }}
-    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+    <div class="panel-block-standard" data-vis="{{ V }}">
       <p data-vis="{{ V }}">Invoice: <strong data-vis="{{ V }}">{{ po.invoice_path }}</strong></p>
     </div>
   </article>

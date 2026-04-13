@@ -6,8 +6,11 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">← Filing</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">Tally Export</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Tally Integration</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ current_fy }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('tally_import') }}" data-vis="{{ V }}">Import Day Book</a>
   </div>
 </header>
 
@@ -15,73 +18,121 @@
 
   {# ── How It Works ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("TALLY INTEGRATION", "Export payment vouchers for Tally Prime / Tally ERP 9") }}
+    {{ card_heading("CATALYST → TALLY", "Export vouchers for direct import into Tally Prime") }}
     <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
       <p class="hint" data-vis="{{ V }}">
-        Export all paid transactions as Tally-compatible files. Each purchase order becomes a Payment voucher entry
-        with the correct debit (expense ledger) and credit (bank/cash) legs. Import into Tally to avoid double-entry.
+        CATALYST generates Tally-ready files so Prashant doesn't have to re-enter transactions manually.
+        Every purchase, salary, inter-company charge, and GST purchase becomes a proper Tally voucher.
       </p>
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.75rem;" data-vis="{{ V }}">
-        <div style="flex:1;min-width:12rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">CSV Format</strong>
-          <p class="hint" data-vis="{{ V }}">Open in Excel, review, then import via Tally's data import wizard. Best for first-time use.</p>
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.75rem;" data-vis="{{ V }}">
+        <div style="flex:1;min-width:10rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Payment Vouchers</strong>
+          <p class="hint" data-vis="{{ V }}">Vendor purchases → Bank/Cash debit</p>
         </div>
-        <div style="flex:1;min-width:12rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">Tally XML Format</strong>
-          <p class="hint" data-vis="{{ V }}">Direct import into Tally Prime via Gateway > Import Data > Vouchers. Fastest for regular use.</p>
+        <div style="flex:1;min-width:10rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Salary Journals</strong>
+          <p class="hint" data-vis="{{ V }}">Monthly payroll → Salary Expenses debit</p>
+        </div>
+        <div style="flex:1;min-width:10rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Inter-Company</strong>
+          <p class="hint" data-vis="{{ V }}">Sister company charges → Debtor/Creditor journals</p>
+        </div>
+        <div style="flex:1;min-width:10rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">GST Purchases</strong>
+          <p class="hint" data-vis="{{ V }}">GSTIN vendors → CGST/SGST/IGST ITC entries</p>
         </div>
       </div>
     </div>
   </article>
 
-  {# ── Export by Financial Year ── #}
+  {# ── Export by FY with voucher type breakdown ── #}
   {% if fys %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("EXPORT BY FINANCIAL YEAR", "Select FY and format") }}
+    {{ card_heading("EXPORT BY FINANCIAL YEAR", "All voucher types") }}
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Financial Year</th>
-          <th data-vis="{{ V }}">Transactions</th>
-          <th class="col-amount" data-vis="{{ V }}">Total Value</th>
-          <th data-vis="{{ V }}">Export CSV</th>
-          <th data-vis="{{ V }}">Export XML</th>
+          <th data-vis="{{ V }}">FY</th>
+          <th data-vis="{{ V }}">Payments</th>
+          <th data-vis="{{ V }}">Salary</th>
+          <th data-vis="{{ V }}">Inter-Co.</th>
+          <th data-vis="{{ V }}">GST Purch.</th>
+          <th data-vis="{{ V }}">All CSV</th>
+          <th data-vis="{{ V }}">All XML</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
         {% for fy in fys %}
-        {% set fc = fy_counts.get(fy, {"count": 0, "total": 0}) %}
+        {% set fc = fy_counts.get(fy, {}) %}
+        {% set pay = fc.get('payments', {"count": 0, "total": 0}) %}
+        {% set sal = fc.get('salary', {"count": 0, "total": 0}) %}
+        {% set ic = fc.get('intercompany', {"count": 0, "total": 0}) %}
+        {% set gst = fc.get('gst_purchase', {"count": 0, "total": 0}) %}
+        {% set total_count = pay.count + sal.count + ic.count + gst.count %}
         <tr data-vis="{{ V }}">
           <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ fy }}</strong></td>
-          <td data-vis="{{ V }}">{{ fc.count }}</td>
-          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(fc.total) }}</td>
           <td data-vis="{{ V }}">
-            {% if fc.count > 0 %}
-            <a href="{{ url_for('tally_export', fy=fy, format='csv') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">CSV</a>
-            {% else %}
-            <span class="hint" data-vis="{{ V }}">—</span>
-            {% endif %}
+            {% if pay.count > 0 %}
+            <span data-vis="{{ V }}">{{ pay.count }} (₹{{ "{:,.0f}".format(pay.total) }})</span>
+            {% else %}—{% endif %}
           </td>
           <td data-vis="{{ V }}">
-            {% if fc.count > 0 %}
-            <a href="{{ url_for('tally_export', fy=fy, format='tally_xml') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">XML</a>
-            {% else %}
-            <span class="hint" data-vis="{{ V }}">—</span>
-            {% endif %}
+            {% if sal.count > 0 %}
+            <span data-vis="{{ V }}">{{ sal.count }} (₹{{ "{:,.0f}".format(sal.total) }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if ic.count > 0 %}
+            <span data-vis="{{ V }}">{{ ic.count }} (₹{{ "{:,.0f}".format(ic.total) }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if gst.count > 0 %}
+            <span data-vis="{{ V }}">{{ gst.count }} (₹{{ "{:,.0f}".format(gst.total) }})</span>
+            {% else %}—{% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if total_count > 0 %}
+            <a href="{{ url_for('tally_export', fy=fy, format='csv', type='all') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">CSV</a>
+            {% else %}—{% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if total_count > 0 %}
+            <a href="{{ url_for('tally_export', fy=fy, format='tally_xml', type='all') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">XML</a>
+            {% else %}—{% endif %}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </article>
+
+  {# ── Export by Voucher Type ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("EXPORT BY TYPE", "Download specific voucher categories") }}
+    <div style="padding:0.5rem 0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
+      {% for fy in fys[:3] %}
+      <div style="flex:1;min-width:14rem;border:1px solid var(--border-color,#ddd);border-radius:4px;padding:0.5rem;" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ fy }}</strong>
+        <div style="display:flex;flex-direction:column;gap:0.25rem;margin-top:0.25rem;" data-vis="{{ V }}">
+          <a href="{{ url_for('tally_export', fy=fy, format='csv', type='payment') }}" class="text-link" data-vis="{{ V }}">Payments only (CSV)</a>
+          <a href="{{ url_for('tally_export', fy=fy, format='csv', type='salary') }}" class="text-link" data-vis="{{ V }}">Salary only (CSV)</a>
+          <a href="{{ url_for('tally_export', fy=fy, format='csv', type='intercompany') }}" class="text-link" data-vis="{{ V }}">Inter-company only (CSV)</a>
+          <a href="{{ url_for('tally_export', fy=fy, format='csv', type='gst_purchase') }}" class="text-link" data-vis="{{ V }}">GST Purchases only (CSV)</a>
+          <a href="{{ url_for('tally_export', fy=fy, format='tally_xml', type='all') }}" class="text-link" data-vis="{{ V }}">All types (Tally XML)</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
   {% endif %}
 
   {# ── Custom Export ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("CUSTOM EXPORT", "Filter by company or month") }}
+    {{ card_heading("CUSTOM EXPORT", "Filter by company, type, or month") }}
     <form method="get" action="{{ url_for('tally_export') }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
-        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        <label data-vis="{{ V }}" style="flex:1;min-width:7rem;">
           Financial Year
           <select name="fy" data-vis="{{ V }}">
             {% for fy in fys %}
@@ -89,8 +140,18 @@
             {% endfor %}
           </select>
         </label>
+        <label data-vis="{{ V }}" style="flex:1;min-width:7rem;">
+          Voucher Type
+          <select name="type" data-vis="{{ V }}">
+            <option value="all" data-vis="{{ V }}">All Types</option>
+            <option value="payment" data-vis="{{ V }}">Payment Vouchers</option>
+            <option value="salary" data-vis="{{ V }}">Salary Journals</option>
+            <option value="intercompany" data-vis="{{ V }}">Inter-Company Journals</option>
+            <option value="gst_purchase" data-vis="{{ V }}">GST Purchase Entries</option>
+          </select>
+        </label>
         {% if companies and companies|length > 1 %}
-        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        <label data-vis="{{ V }}" style="flex:1;min-width:7rem;">
           Company
           <select name="company" data-vis="{{ V }}">
             <option value="" data-vis="{{ V }}">All Companies</option>
@@ -100,7 +161,7 @@
           </select>
         </label>
         {% endif %}
-        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        <label data-vis="{{ V }}" style="flex:1;min-width:7rem;">
           Format
           <select name="format" data-vis="{{ V }}">
             <option value="csv" data-vis="{{ V }}">CSV (Excel-friendly)</option>
@@ -114,31 +175,64 @@
 
   {# ── Tally Setup Guide ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("TALLY SETUP", "One-time ledger setup in Tally") }}
+    {{ card_heading("TALLY SETUP", "One-time ledger setup in Tally Prime") }}
     <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
-      <p class="hint" data-vis="{{ V }}">Before importing, create these ledgers in Tally if they don't exist:</p>
+      <p class="hint" data-vis="{{ V }}">Before first import, create these ledgers in Tally. After that, all imports auto-map.</p>
       <table class="data-table" data-vis="{{ V }}" style="margin-top:0.5rem;">
         <thead data-vis="{{ V }}">
           <tr data-vis="{{ V }}">
             <th data-vis="{{ V }}">Ledger Name</th>
             <th data-vis="{{ V }}">Group</th>
-            <th data-vis="{{ V }}">Purpose</th>
+            <th data-vis="{{ V }}">Voucher Type</th>
           </tr>
         </thead>
         <tbody data-vis="{{ V }}">
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Bank Account</td><td data-vis="{{ V }}">Bank Accounts</td><td data-vis="{{ V }}">NEFT/UPI payments</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Cash</td><td data-vis="{{ V }}">Cash-in-Hand</td><td data-vis="{{ V }}">Cash payments</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vegetables & Produce Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Perishable purchases</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Dairy & Milk Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Dairy purchases</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Provisions & Groceries Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Bulk provisions</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Fuel & Transport Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Transport costs</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Equipment & Appliances Expenses</td><td data-vis="{{ V }}">Fixed Assets</td><td data-vis="{{ V }}">Capital purchases</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Maintenance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Repairs</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Salary Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payroll</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Utilities Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Bills</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Insurance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Compliance</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Services Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Professional fees</td></tr>
-          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">General Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Miscellaneous</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Bank Account</strong></td><td data-vis="{{ V }}">Bank Accounts</td><td data-vis="{{ V }}">Payment, Salary</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Cash</strong></td><td data-vis="{{ V }}">Cash-in-Hand</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vegetables & Produce Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Payment, GST Purchase</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Dairy & Milk Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Payment, GST Purchase</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Provisions & Groceries Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Payment, GST Purchase</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Fuel & Transport Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Equipment & Appliances Expenses</td><td data-vis="{{ V }}">Fixed Assets</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Maintenance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Salary Expenses</strong></td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Salary Journal</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Utilities Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Insurance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Services Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">General Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payment</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Input CGST</strong></td><td data-vis="{{ V }}">Duties & Taxes</td><td data-vis="{{ V }}">GST Purchase (intra-state)</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Input SGST</strong></td><td data-vis="{{ V }}">Duties & Taxes</td><td data-vis="{{ V }}">GST Purchase (intra-state)</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Input IGST</strong></td><td data-vis="{{ V }}">Duties & Taxes</td><td data-vis="{{ V }}">GST Purchase (inter-state)</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Gopal Doodh Dairy</strong></td><td data-vis="{{ V }}">Sundry Debtors</td><td data-vis="{{ V }}">Inter-Company Journal</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Raj Services</strong></td><td data-vis="{{ V }}">Sundry Debtors</td><td data-vis="{{ V }}">Inter-Company Journal</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">SuryaJyoti</strong></td><td data-vis="{{ V }}">Sundry Debtors</td><td data-vis="{{ V }}">Inter-Company Journal</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}"><strong data-vis="{{ V }}">Ravikiran Mess</strong></td><td data-vis="{{ V }}">Sundry Creditors</td><td data-vis="{{ V }}">Inter-Company Journal</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  {# ── GST Tax Codes Info ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("GST TAX CODES", "Auto-applied based on vendor GSTIN") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        CATALYST detects whether a purchase is intra-state or inter-state from the first 2 digits of vendor GSTIN
+        vs your company GSTIN. It auto-splits into CGST+SGST (same state) or IGST (different state) at 18% default rate.
+        Tally's GST module will reconcile these against your GSTR-2B during return filing.
+      </p>
+      <table class="data-table" data-vis="{{ V }}" style="margin-top:0.5rem;">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Scenario</th>
+            <th data-vis="{{ V }}">Tax Applied</th>
+            <th data-vis="{{ V }}">Tally Ledger</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vendor in same state (e.g. both MH)</td><td data-vis="{{ V }}">9% CGST + 9% SGST</td><td data-vis="{{ V }}">Input CGST + Input SGST</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vendor in different state</td><td data-vis="{{ V }}">18% IGST</td><td data-vis="{{ V }}">Input IGST</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vendor without GSTIN</td><td data-vis="{{ V }}">No ITC (Payment only)</td><td data-vis="{{ V }}">Expense ledger only</td></tr>
         </tbody>
       </table>
     </div>

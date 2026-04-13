@@ -15,8 +15,8 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("VIEW SETTINGS", "Choose your detail level") }}
-    <form method="get" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
-      <label data-vis="{{ V }}" style="flex:1;min-width:10rem;">
+    <form method="get" class="form-inline-shell control-flex-wrap" data-vis="{{ V }}">
+      <label class="control-flex-fill-wide" data-vis="{{ V }}">
         Detail threshold (₹)
         <select name="threshold" data-vis="{{ V }}" onchange="this.form.submit()">
           {% for t in [1000, 2000, 5000, 10000, 25000, 50000] %}
@@ -36,35 +36,35 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   {% if detail_pending %}
   {% for po in detail_pending %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-amber, #e6a800);">
+  <article class="card tile tile-full-width tile-accent-amber" data-vis="{{ V }}">
     <div class="section-head" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
         <p class="section-kicker" data-vis="{{ V }}">{% if po.company_short %}{{ po.company_short }} · {% endif %}{{ po.vendor_name }} · {{ po.category|title }}</p>
         <h2 data-vis="{{ V }}">{{ po.title }}</h2>
         <p class="hint" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</strong>
-          {% if po.priority == 'high' %} · <strong style="color:var(--danger);" data-vis="{{ V }}">URGENT</strong>{% endif %}
+          {% if po.priority == 'high' %} · <strong class="copy-urgent" data-vis="{{ V }}">URGENT</strong>{% endif %}
           · by {{ po.submitted_by_name or '—' }}
           · {{ po.created_at[:10] if po.created_at else '' }}
         </p>
         {% if po.description %}
-        <p class="hint" data-vis="{{ V }}" style="margin-top:0.25rem;">{{ po.description[:200] }}{{ '…' if po.description|length > 200 else '' }}</p>
+        <p class="hint top-gap" data-vis="{{ V }}">{{ po.description[:200] }}{{ '…' if po.description|length > 200 else '' }}</p>
         {% endif %}
       </div>
     </div>
-    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid" style="padding:0.5rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid form-inline-shell" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Note
         <input type="text" name="note" placeholder="Optional note (required for rejection)" data-vis="{{ V }}">
       </label>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
-        <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+      <div class="control-flex-actions" data-vis="{{ V }}">
+        <button type="submit" name="action" value="approve" class="btn btn-primary control-flex-fill control-min-width-md" data-vis="{{ V }}">
           Approve ₹{{ "{:,.0f}".format(po.amount) }}
         </button>
-        <button type="submit" name="action" value="reject" class="btn" data-vis="{{ V }}" style="flex:0;min-width:5rem;background:var(--color-red,#c44);color:#fff;">
+        <button type="submit" name="action" value="reject" class="btn btn-danger control-min-width-sm" data-vis="{{ V }}">
           Reject
         </button>
-        <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" class="btn" data-vis="{{ V }}" style="flex:0;min-width:5rem;">
+        <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" class="btn control-min-width-sm" data-vis="{{ V }}">
           Details
         </a>
       </div>
@@ -79,7 +79,7 @@
 
   {# ── Clubbed Small Expenses (at or below threshold) — Batch Approve ── #}
   {% if clubbed_pending %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-green, #34a853);">
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("SMALL EXPENSES (≤ ₹" ~ "{:,.0f}".format(detail_threshold) ~ ")",
                      clubbed_pending|length|string ~ " items · ₹" ~ "{:,.0f}".format(clubbed_total) ~ " total") }}
     <form method="post" action="{{ url_for('vendor_payment_batch_approve') }}" data-vis="{{ V }}">
@@ -87,7 +87,7 @@
       <table class="data-table" data-vis="{{ V }}">
         <thead data-vis="{{ V }}">
           <tr data-vis="{{ V }}">
-            <th data-vis="{{ V }}" style="width:2rem;">
+            <th data-vis="{{ V }}" class="control-min-width-sm">
               <input type="checkbox" id="selectAll" checked data-vis="{{ V }}">
             </th>
             <th data-vis="{{ V }}">Title</th>
@@ -124,9 +124,9 @@
           </tr>
         </tfoot>
       </table>
-      <div style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;" data-vis="{{ V }}">
-        <input type="text" name="note" placeholder="Batch note (optional)" style="flex:1;min-width:10rem;" data-vis="{{ V }}">
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:12rem;">
+      <div class="panel-block-standard-bottom control-flex-compact" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Batch note (optional)" class="control-flex-fill-wide" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary control-min-width-xl" data-vis="{{ V }}">
           Batch Approve Selected (₹<span id="batchTotal">{{ "{:,.0f}".format(clubbed_total) }}</span>)
         </button>
       </div>

@@ -17,9 +17,9 @@
 {# ── Filters ── #}
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <form method="get" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
+    <form method="get" class="form-inline-shell control-flex-wrap" data-vis="{{ V }}">
       {% if companies and companies|length > 1 %}
-      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+      <label class="control-flex-fill" data-vis="{{ V }}">
         Company
         <select name="company" data-vis="{{ V }}" onchange="this.form.submit()">
           <option value="" data-vis="{{ V }}">All Companies</option>
@@ -29,7 +29,7 @@
         </select>
       </label>
       {% endif %}
-      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+      <label class="control-flex-fill" data-vis="{{ V }}">
         Period
         <select name="period" data-vis="{{ V }}" onchange="this.form.submit()">
           <option value="" data-vis="{{ V }}">All Periods</option>
@@ -60,14 +60,14 @@
 {# ── Unaudited Transactions — Batch Audit ── #}
 {% if unaudited_rows %}
 <section class="inst-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-amber,#e6a800);">
+  <article class="card tile tile-full-width tile-accent-amber" data-vis="{{ V }}">
     {{ card_heading("PENDING AUDIT", unaudited_count|string ~ " transactions awaiting review") }}
     <form method="post" action="{{ url_for('ca_audit_batch') }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <table class="data-table" data-vis="{{ V }}">
         <thead data-vis="{{ V }}">
           <tr data-vis="{{ V }}">
-            <th data-vis="{{ V }}" style="width:2rem;">
+            <th data-vis="{{ V }}" class="control-min-width-sm">
               <input type="checkbox" id="selectAll" checked data-vis="{{ V }}">
             </th>
             <th data-vis="{{ V }}">#</th>
@@ -106,12 +106,12 @@
           {% endfor %}
         </tbody>
       </table>
-      <div style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;" data-vis="{{ V }}">
-        <input type="text" name="note" placeholder="Audit note (optional)" style="flex:1;min-width:10rem;" data-vis="{{ V }}">
-        <button type="submit" name="action" value="audit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:10rem;">
+      <div class="panel-block-standard-bottom control-flex-compact" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Audit note (optional)" class="control-flex-fill-wide" data-vis="{{ V }}">
+        <button type="submit" name="action" value="audit" class="btn btn-primary control-min-width-lg" data-vis="{{ V }}">
           Audit Selected
         </button>
-        <button type="submit" name="action" value="flag" class="btn" data-vis="{{ V }}" style="min-width:8rem;background:var(--danger);color:#fff;">
+        <button type="submit" name="action" value="flag" class="btn btn-danger control-min-width-md" data-vis="{{ V }}">
           Flag Selected
         </button>
       </div>
@@ -123,7 +123,7 @@
 {# ── Flagged Transactions ── #}
 {% if flagged_rows %}
 <section class="inst-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--danger,#c44);">
+  <article class="card tile tile-full-width tile-accent-danger" data-vis="{{ V }}">
     {{ card_heading("FLAGGED FOR REVIEW", flagged_count|string ~ " items need attention") }}
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
@@ -149,10 +149,10 @@
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ po.company_short or '—' }}</span></td>
           <td data-vis="{{ V }}">{{ po.audit_note or '—' }}</td>
           <td data-vis="{{ V }}">
-            <form method="post" action="{{ url_for('ca_audit_single', po_id=po.id) }}" style="display:inline;" data-vis="{{ V }}">
+            <form method="post" action="{{ url_for('ca_audit_single', po_id=po.id) }}" class="inline-form inline-form-single" data-vis="{{ V }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="action" value="audit">
-              <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="padding:0.25rem 0.5rem;font-size:0.8rem;">Resolve</button>
+              <button type="submit" class="btn btn-primary btn-sm" data-vis="{{ V }}">Resolve</button>
             </form>
           </td>
         </tr>
@@ -208,11 +208,11 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("AUDIT SIGN-OFF", "Certify audit completion for a period") }}
-    <form method="post" action="{{ url_for('ca_audit_signoff') }}" class="form-grid" style="padding:0.5rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('ca_audit_signoff') }}" class="form-grid form-inline-shell" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
         {% if companies and companies|length > 1 %}
-        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        <label class="control-flex-fill" data-vis="{{ V }}">
           Company
           <select name="company_id" data-vis="{{ V }}">
             <option value="" data-vis="{{ V }}">All Companies</option>
@@ -222,7 +222,7 @@
           </select>
         </label>
         {% endif %}
-        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        <label class="control-flex-fill" data-vis="{{ V }}">
           Period
           <select name="period" data-vis="{{ V }}">
             <option value="" data-vis="{{ V }}">All Periods</option>

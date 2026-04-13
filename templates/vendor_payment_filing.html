@@ -35,8 +35,8 @@
   {# ── Print Batch Selector ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("BATCH PRINT", "Print all transactions for filing") }}
-    <form method="get" action="{{ url_for('vendor_payment_print_batch') }}" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
-      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+    <form method="get" action="{{ url_for('vendor_payment_print_batch') }}" class="form-inline-shell control-flex-wrap" data-vis="{{ V }}">
+      <label class="control-flex-fill" data-vis="{{ V }}">
         Month
         <select name="month" data-vis="{{ V }}">
           <option value="" data-vis="{{ V }}">All months</option>
@@ -45,7 +45,7 @@
           {% endfor %}
         </select>
       </label>
-      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+      <label class="control-flex-fill" data-vis="{{ V }}">
         Folder
         <select name="folder" data-vis="{{ V }}">
           <option value="" data-vis="{{ V }}">All folders</option>
@@ -56,7 +56,7 @@
           {% endfor %}
         </select>
       </label>
-      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+      <label class="control-flex-fill" data-vis="{{ V }}">
         Status
         <select name="status" data-vis="{{ V }}">
           <option value="paid,receipt_uploaded,approved" data-vis="{{ V }}">Paid + Approved</option>
@@ -65,13 +65,13 @@
           <option value="paid,receipt_uploaded,approved,pending_approval,rejected,draft" data-vis="{{ V }}">Everything</option>
         </select>
       </label>
-      <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:8rem;">🖨 Print Batch</button>
+      <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}">🖨 Print Batch</button>
     </form>
   </article>
 
   {# ── Folder Cards ── #}
   {% for f in folders %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid {% if f.paper_needed %}var(--color-amber,#e6a800){% else %}var(--color-green,#34a853){% endif %};">
+  <article class="card tile tile-full-width {% if f.paper_needed %}tile-accent-amber{% else %}tile-accent-green{% endif %}" data-vis="{{ V }}">
     <div class="section-head" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
         <p class="section-kicker" data-vis="{{ V }}">
@@ -96,7 +96,7 @@
       ("Paper Filing", "Required" if f.paper_needed else "Not needed — digital records sufficient"),
     ], compact=True) }}
     {% else %}
-    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+    <div class="panel-block-standard" data-vis="{{ V }}">
       <span class="hint" data-vis="{{ V }}">No transactions in this folder yet.</span>
     </div>
     {% endif %}
@@ -106,7 +106,7 @@
   {# ── Recommendations ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FILING RECOMMENDATIONS", "Which folders can go digital?") }}
-    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+    <div class="panel-block-standard" data-vis="{{ V }}">
       <table class="data-table" data-vis="{{ V }}">
         <thead data-vis="{{ V }}">
           <tr data-vis="{{ V }}">

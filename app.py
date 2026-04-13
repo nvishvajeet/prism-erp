@@ -7057,8 +7057,22 @@ def notifications_page():
             "created_at": row.get("created_at", ""),
             "author_name": "",
         })
-    # Sort unified by created_at DESC
+    for item in unified:
+        item["href"] = item.get("href") or url_for("notifications_page", cat=item.get("category", "all"))
+        item["kind_label"] = "System" if item.get("kind") == "system" else "Notice"
+        if item.get("category") == "request":
+            item["action_label"] = "Open request"
+        elif item.get("category") == "finance":
+            item["action_label"] = "Open finance"
+        elif item.get("category") == "instrument":
+            item["action_label"] = "Open instrument"
+        elif item.get("category") == "admin":
+            item["action_label"] = "Review notice"
+        else:
+            item["action_label"] = "Open"
+    # Surface unread items first, then sort newest first inside each group.
     unified.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    unified.sort(key=lambda x: 1 if x.get("is_read") else 0)
     # Filter by category if not "all"
     if cat and cat != "all":
         unified = [n for n in unified if n["category"] == cat]
@@ -7070,11 +7084,17 @@ def notifications_page():
     for s in sys_rows:
         c = dict(s).get("category", "request")
         cat_counts[c] = cat_counts.get(c, 0) + 1
+    unread_count = sum(1 for n in unified if not n.get("is_read"))
+    actionable_count = sum(1 for n in unified if n.get("href"))
+    recent_unread = [n for n in unified if not n.get("is_read")][:3]
     return render_template(
         "notifications.html",
         notices=unified,
         active_cat=cat,
         cat_counts=cat_counts,
+        unread_count=unread_count,
+        actionable_count=actionable_count,
+        recent_unread=recent_unread,
     )
 
 
@@ -7174,6 +7194,67 @@ def inbox():
         )
 
     unread = sum(1 for r in rows if not r["read_at"])
+    folder_counts = {
+        "inbox": query_one(
+            """
+            SELECT COUNT(*) AS c
+              FROM messages
+             WHERE recipient_id = ? AND deleted_by_recipient = 0
+               AND permanently_hidden = 0
+            """,
+            (target_user_id,),
+        )["c"],
+        "sent": query_one(
+            """
+            SELECT COUNT(*) AS c
+              FROM messages
+             WHERE sender_id = ? AND deleted_by_sender = 0
+               AND permanently_hidden = 0
+            """,
+            (target_user_id,),
+        )["c"],
+        "deleted": query_one(
+            """
+            SELECT COUNT(*) AS c
+              FROM messages
+             WHERE ((recipient_id = ? AND deleted_by_recipient = 1)
+                 OR (sender_id = ? AND deleted_by_sender = 1))
+               AND permanently_hidden = 0
+            """,
+            (target_user_id, target_user_id),
+        )["c"],
+    }
+    notice_rows = active_notices_for_user(user)
+    try:
+        sys_notice_rows = query_all(
+            """
+            SELECT id, title, category, href, is_read, created_at
+              FROM system_notifications
+             WHERE user_id = ?
+             ORDER BY created_at DESC
+             LIMIT 5
+            """,
+            (user["id"],),
+        )
+    except sqlite3.OperationalError:
+        sys_notice_rows = []
+    inbox_notifications = []
+    for notice in notice_rows[:3]:
+        inbox_notifications.append({
+            "title": notice.get("subject", "Notice"),
+            "category": "admin",
+            "href": url_for("notifications_page", cat="admin"),
+            "is_read": bool(notice.get("is_read")),
+        })
+    for row in sys_notice_rows[:3]:
+        inbox_notifications.append({
+            "title": row["title"],
+            "category": row["category"] or "request",
+            "href": row["href"] or url_for("notifications_page", cat=row["category"] or "all"),
+            "is_read": bool(row["is_read"]),
+        })
+    inbox_notifications.sort(key=lambda item: item["is_read"])
+    notification_unread = sum(1 for item in inbox_notifications if not item["is_read"])
     return render_template(
         "inbox.html",
         messages=rows,
@@ -7181,6 +7262,9 @@ def inbox():
         folder=folder,
         viewing_as=viewing_as,
         target_user_id=target_user_id if viewing_as else None,
+        folder_counts=folder_counts,
+        inbox_notifications=inbox_notifications[:4],
+        notification_unread=notification_unread,
     )
 
 
@@ -15719,24 +15803,61 @@ def debug_feedback():
 @app.route("/search")
 @login_required
 def global_search():
+    user = current_user()
     q = request.args.get("q", "").strip()
+    shortcuts = [
+        {"label": "Dashboard", "hint": "See current workload and action items.", "url": url_for("index")},
+        {"label": "Inbox", "hint": "Messages and internal coordination.", "url": url_for("inbox")},
+    ]
+    if can_access_schedule(user):
+        shortcuts.append({"label": "Queue", "hint": "Work the live request stream.", "url": url_for("schedule")})
+    if has_instrument_area_access(user):
+        shortcuts.append({"label": "Instruments", "hint": "Browse machine status and queues.", "url": url_for("instruments")})
+    if module_enabled("finance") and can_access_finance(user):
+        shortcuts.append({"label": "Finance", "hint": "Grants, invoices, and spend.", "url": url_for("finance_portal")})
     if len(q) < 2:
-        return render_template("search.html", query=q, results=[], title="Search")
+        return render_template("search.html", query=q, results=[], sections=[], total_results=0, shortcuts=shortcuts, title="Search")
     results = []
+    sections = []
     like = f"%{q}%"
-    # Instruments
-    for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 5", (like, like)):
-        results.append({"type": "Instrument", "title": r["name"], "code": r["code"], "url": url_for("instrument_detail", instrument_id=r["id"])})
-    # Requests
-    for r in query_all("SELECT id, request_no, title FROM sample_requests WHERE request_no LIKE ? OR title LIKE ? OR sample_name LIKE ? LIMIT 5", (like, like, like)):
-        results.append({"type": "Request", "title": r["title"], "code": r["request_no"], "url": url_for("request_detail", request_id=r["id"])})
-    # Users
-    for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 5", (like, like)):
-        results.append({"type": "User", "title": r["name"], "code": r["email"], "url": url_for("user_profile", user_id=r["id"])})
-    # Grants
-    for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 5", (like, like)):
-        results.append({"type": "Grant", "title": r["name"], "code": r["code"], "url": url_for("finance_grant_detail", grant_id=r["id"])})
-    return render_template("search.html", query=q, results=results, title="Search")
+    instruments_found = [
+        {"type": "Instrument", "title": r["name"], "code": r["code"], "meta": "Machine", "url": url_for("instrument_detail", instrument_id=r["id"])}
+        for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
+    ]
+    requests_found = [
+        {"type": "Request", "title": r["title"], "code": r["request_no"], "meta": "Sample request", "url": url_for("request_detail", request_id=r["id"])}
+        for r in query_all("SELECT id, request_no, title FROM sample_requests WHERE request_no LIKE ? OR title LIKE ? OR sample_name LIKE ? LIMIT 6", (like, like, like))
+    ]
+    users_found = [
+        {"type": "User", "title": r["name"], "code": r["email"], "meta": "User profile", "url": url_for("user_profile", user_id=r["id"])}
+        for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 6", (like, like))
+    ]
+    grants_found = []
+    if module_enabled("finance") and can_access_finance(user):
+        grants_found = [
+            {"type": "Grant", "title": r["name"], "code": r["code"], "meta": "Grant", "url": url_for("finance_grant_detail", grant_id=r["id"])}
+            for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
+        ]
+    grouped = [
+        ("Instruments", "Machines, capacity, and intake state.", instruments_found),
+        ("Requests", "Live jobs and historical samples.", requests_found),
+        ("People", "Operators, requesters, and staff records.", users_found),
+        ("Grants", "Budgets and finance records.", grants_found),
+    ]
+    for title, hint, items in grouped:
+        if not items:
+            continue
+        sections.append({"title": title, "hint": hint, "count": len(items), "items": items})
+        results.extend(items)
+    return render_template(
+        "search.html",
+        query=q,
+        results=results,
+        sections=sections,
+        total_results=len(results),
+        shortcuts=shortcuts,
+        title="Search",
+    )
 
 
 # ── Feature: Audit Log Viewer (admin-only) ──────────────────────────

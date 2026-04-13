@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | ux-search-notify-refresh | 2026-04-13 17:15 CEST | `app.py`, `templates/search.html`, `templates/notifications.html`, `templates/inbox.html`, `static/styles.css`, `CLAIMS.md` | `feat: improve search and notifications UX` |
+| _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery
 

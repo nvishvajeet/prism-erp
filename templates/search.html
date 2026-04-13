@@ -1,29 +1,66 @@
 {% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
 {% block content %}
-<section data-vis="{{ V }}">
-  <h2 data-vis="{{ V }}">Search{% if query %}: "{{ query }}"{% endif %}</h2>
 
-  <form action="{{ url_for('global_search') }}" method="get" class="search-page-form" data-vis="{{ V }}">
-    <input type="search" name="q" value="{{ query }}" placeholder="Search instruments, requests, users, grants..." autofocus data-vis="{{ V }}">
-    <button type="submit" data-vis="{{ V }}">Search</button>
-  </form>
+<section class="search-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-span-4 tile-search-hero" data-vis="{{ V }}">
+    {% call card_heading("SEARCH", "Find anything fast") %}
+      {% if total_results %}
+      <span class="badge badge-active" data-vis="{{ V }}">{{ total_results }} matches</span>
+      {% endif %}
+    {% endcall %}
+    <p class="tile-lead" data-vis="{{ V }}">
+      Search across instruments, requests, people, and grants from one place.
+      Built for jump-navigation, not just lookup.
+    </p>
+    <form action="{{ url_for('global_search') }}" method="get" class="search-page-form" data-vis="{{ V }}">
+      <input type="search" name="q" value="{{ query }}" placeholder="Search instruments, requests, users, grants..." autofocus data-vis="{{ V }}">
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Search</button>
+    </form>
+    {% if query and query|length < 2 %}
+    <p class="hint" data-vis="{{ V }}">Use at least 2 characters so the result groups stay useful.</p>
+    {% endif %}
+  </article>
 
-  {% if query and query|length >= 2 %}
-    {% if results %}
-    <div class="search-results" data-vis="{{ V }}">
-      {% for item in results %}
-      <a href="{{ item.url }}" class="search-result-item" data-vis="{{ V }}">
-        <span class="badge search-type-badge" data-vis="{{ V }}">{{ item.type }}</span>
-        <span class="search-result-title" data-vis="{{ V }}">{{ item.title }}</span>
-        <span class="search-result-code hint" data-vis="{{ V }}">{{ item.code }}</span>
+  <article class="card tile tile-span-2 tile-search-shortcuts" data-vis="{{ V }}">
+    {{ card_heading("QUICK JUMP", "Common destinations") }}
+    <div class="search-shortcuts" data-vis="{{ V }}">
+      {% for item in shortcuts %}
+      <a href="{{ item.url }}" class="search-shortcut-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ item.label }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ item.hint }}</span>
       </a>
       {% endfor %}
     </div>
+  </article>
+
+  {% if query and query|length >= 2 %}
+    {% if sections %}
+      {% for section in sections %}
+      <article class="card tile tile-full-width tile-search-group" data-vis="{{ V }}">
+        {% call card_heading(section.title|upper, section.title) %}
+          <span class="hint" data-vis="{{ V }}">{{ section.count }} match{% if section.count != 1 %}es{% endif %}</span>
+        {% endcall %}
+        <p class="hint search-group-hint" data-vis="{{ V }}">{{ section.hint }}</p>
+        <div class="search-results" data-vis="{{ V }}">
+          {% for item in section.items %}
+          <a href="{{ item.url }}" class="search-result-item" data-vis="{{ V }}">
+            <span class="badge search-type-badge" data-vis="{{ V }}">{{ item.type }}</span>
+            <span class="search-result-body" data-vis="{{ V }}">
+              <span class="search-result-title" data-vis="{{ V }}">{{ item.title }}</span>
+              <span class="search-result-meta hint" data-vis="{{ V }}">{{ item.meta }}</span>
+            </span>
+            <span class="search-result-code hint" data-vis="{{ V }}">{{ item.code }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
     {% else %}
-    <p class="hint" data-vis="{{ V }}">No results found for "{{ query }}".</p>
+    <article class="card tile tile-full-width" data-vis="{{ V }}">
+      {{ empty_state("No results found.", "Try a request number, instrument code, person name, or grant code.") }}
+    </article>
     {% endif %}
-  {% elif query %}
-    <p class="hint" data-vis="{{ V }}">Please enter at least 2 characters.</p>
   {% endif %}
 </section>
 {% endblock %}

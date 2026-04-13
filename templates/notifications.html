@@ -24,6 +24,41 @@
   </div>
 </header>
 
+<section class="search-tiles notif-command-center" data-vis="{{ V }}">
+  <article class="card tile tile-span-4" data-vis="{{ V }}">
+    {{ card_heading("TRIAGE", "Notification control center") }}
+    <div class="search-shortcuts notif-summary-grid" data-vis="{{ V }}">
+      <div class="search-shortcut-card notif-summary-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ unread_count }}</strong>
+        <span class="hint" data-vis="{{ V }}">Unread now</span>
+      </div>
+      <div class="search-shortcut-card notif-summary-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ actionable_count }}</strong>
+        <span class="hint" data-vis="{{ V }}">Clickable items</span>
+      </div>
+      <a href="{{ url_for('inbox') }}" class="search-shortcut-card notif-summary-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">Inbox</strong>
+        <span class="hint" data-vis="{{ V }}">Jump to messages and coordination</span>
+      </a>
+    </div>
+  </article>
+  <article class="card tile tile-span-2" data-vis="{{ V }}">
+    {{ card_heading("FOCUS", "Unread first") }}
+    {% if recent_unread %}
+    <ul class="search-compact-list" data-vis="{{ V }}">
+      {% for n in recent_unread %}
+      <li data-vis="{{ V }}">
+        <a href="{{ n.href }}" class="text-link" data-vis="{{ V }}">{{ n.title }}</a>
+        <span class="hint" data-vis="{{ V }}">{{ n.scope_label }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">Nothing urgent right now.</p>
+    {% endif %}
+  </article>
+</section>
+
 {# ── Category filter pills — same visual as inbox folder tabs ── #}
 <nav class="inbox-folder-tabs" data-vis="{{ V }}">
   {% set tabs = [('all', 'All'), ('request', 'Requests'), ('finance', 'Finance'), ('instrument', 'Instruments'), ('admin', 'Admin')] %}
@@ -44,17 +79,21 @@
     <ul class="inbox-list" data-vis="{{ V }}">
       {% for n in notices %}
       <li class="inbox-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
-        <a class="inbox-row-link" href="{{ n.href if n.href else url_for('admin_notices') }}" data-vis="{{ V }}">
+        <a class="inbox-row-link notif-row-link" href="{{ n.href }}" data-vis="{{ V }}">
           <div class="inbox-row-head" data-vis="{{ V }}">
             {% if not n.is_read %}<span class="inbox-unread-dot" aria-hidden="true" data-vis="{{ V }}"></span>{% endif %}
             <strong class="inbox-subject" data-vis="{{ V }}">{{ n.title }}</strong>
             <span class="hint inbox-sent" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
           </div>
           <div class="inbox-row-meta" data-vis="{{ V }}">
-            <span class="inbox-from hint" data-vis="{{ V }}">{{ n.scope_label }}{% if n.author_name %} · {{ n.author_name }}{% endif %}</span>
+            <span class="inbox-from hint" data-vis="{{ V }}">{{ n.kind_label }} · {{ n.scope_label }}{% if n.author_name %} · {{ n.author_name }}{% endif %}</span>
             {% if n.body %}
             <span class="inbox-preview hint" data-vis="{{ V }}">· {{ n.body[:120] }}{% if n.body|length > 120 %}…{% endif %}</span>
             {% endif %}
+          </div>
+          <div class="notif-row-actions" data-vis="{{ V }}">
+            <span class="badge badge-role" data-vis="{{ V }}">{{ n.category }}</span>
+            <span class="text-link" data-vis="{{ V }}">{{ n.action_label }} →</span>
           </div>
         </a>
         {% if not n.is_read %}

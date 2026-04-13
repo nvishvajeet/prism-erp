@@ -19,13 +19,39 @@
 
 <nav class="inbox-folder-tabs" data-vis="{{ V }}">
   {% set folder = folder|default('inbox') %}
-  <a class="inbox-folder-tab{% if folder == 'inbox' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='inbox') }}" data-vis="{{ V }}">Inbox</a>
-  <a class="inbox-folder-tab{% if folder == 'sent' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='sent') }}" data-vis="{{ V }}">Sent</a>
-  <a class="inbox-folder-tab{% if folder == 'deleted' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='deleted') }}" data-vis="{{ V }}">Deleted</a>
+  <a class="inbox-folder-tab{% if folder == 'inbox' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='inbox', user_id=target_user_id) if target_user_id else url_for('inbox', folder='inbox') }}" data-vis="{{ V }}">Inbox{% if folder_counts.inbox %}<sup data-vis="{{ V }}">{{ folder_counts.inbox }}</sup>{% endif %}</a>
+  <a class="inbox-folder-tab{% if folder == 'sent' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='sent', user_id=target_user_id) if target_user_id else url_for('inbox', folder='sent') }}" data-vis="{{ V }}">Sent{% if folder_counts.sent %}<sup data-vis="{{ V }}">{{ folder_counts.sent }}</sup>{% endif %}</a>
+  <a class="inbox-folder-tab{% if folder == 'deleted' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('inbox', folder='deleted', user_id=target_user_id) if target_user_id else url_for('inbox', folder='deleted') }}" data-vis="{{ V }}">Deleted{% if folder_counts.deleted %}<sup data-vis="{{ V }}">{{ folder_counts.deleted }}</sup>{% endif %}</a>
 </nav>
 
 <section class="inbox-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-inbox-list" data-vis="{{ V }}">
+  <article class="card tile tile-span-2" data-vis="{{ V }}">
+    {{ card_heading("CONTROL", "Stay on top of follow-ups") }}
+    <div class="search-shortcuts" data-vis="{{ V }}">
+      <a href="{{ url_for('message_compose') }}" class="search-shortcut-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">New message</strong>
+        <span class="hint" data-vis="{{ V }}">Start a direct conversation</span>
+      </a>
+      <a href="{{ url_for('notifications_page') }}" class="search-shortcut-card" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ notification_unread }}</strong>
+        <span class="hint" data-vis="{{ V }}">Unread notifications</span>
+      </a>
+    </div>
+    {% if inbox_notifications %}
+    <ul class="search-compact-list" data-vis="{{ V }}">
+      {% for item in inbox_notifications %}
+      <li data-vis="{{ V }}">
+        <a href="{{ item.href }}" class="text-link" data-vis="{{ V }}">{{ item.title }}</a>
+        <span class="hint" data-vis="{{ V }}">{{ item.category }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No system notices competing for attention.</p>
+    {% endif %}
+  </article>
+
+  <article class="card tile tile-span-4 tile-inbox-list" data-vis="{{ V }}">
     {{ card_heading("MESSAGES", unread|string ~ " unread") }}
     <input type="text" id="inboxSearch" class="table-search-input" placeholder="Search messages…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if messages %}

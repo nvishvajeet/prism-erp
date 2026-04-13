@@ -259,11 +259,12 @@
     it securely. {{ target_user["name"] }} will be required to choose
     their own password on next login.
   </p>
-  <form method="post" class="inline-form" data-vis="{{ V }}"
-        onsubmit="return confirm('Issue a new temporary password for {{ target_user.email }}? Their current password will be invalidated.');">
+  <form method="post" class="inline-form" data-vis="{{ V }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="reset_password">
-    <button type="submit" data-vis="{{ V }}">Reset Password</button>
+    <button type="button" class="confirm-gate" data-vis="{{ V }}"
+            onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">Reset Password</button>
+    <button type="submit" class="btn btn-danger" style="display:none;" data-vis="{{ V }}">Confirm reset for {{ target_user.email }}?</button>
   </form>
 </section>
 {% endif %}

@@ -7188,12 +7188,14 @@ def message_delete(message_id: int):
     )
     if already_deleted:
         execute("UPDATE messages SET permanently_hidden = 1 WHERE id = ?", (message_id,))
+        log_action(user["id"], "message", message_id, "message_permanently_hidden", {"subject": msg["subject"][:80] if msg.get("subject") else ""})
         flash("Message permanently removed.", "success")
     else:
         if is_recipient:
             execute("UPDATE messages SET deleted_by_recipient = 1 WHERE id = ?", (message_id,))
         elif is_sender:
             execute("UPDATE messages SET deleted_by_sender = 1 WHERE id = ?", (message_id,))
+        log_action(user["id"], "message", message_id, "message_deleted", {"by": "recipient" if is_recipient else "sender"})
         flash("Message moved to Deleted.", "success")
     return redirect(url_for("inbox", folder="deleted" if already_deleted else "inbox"))
 
@@ -8690,6 +8692,7 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
+            log_action(user["id"], "auth", user["id"], "login", {"ip": request.remote_addr or ""})
             # W1.3.8 password hygiene: if the admin issued a temporary
             # password (create_user or reset_password), force the user
             # to set their own before they can use the app.
@@ -8702,12 +8705,18 @@ def login():
                 return redirect(url_for("change_password"))
             flash(f"Signed in as {user['name']}.", "success")
             return redirect(url_for("index"))
+        # Log failed attempt — use user id if email matched but password wrong
+        failed_uid = user["id"] if user else None
+        log_action(failed_uid, "auth", failed_uid or 0, "login_failed", {"email": email, "ip": request.remote_addr or ""})
         flash("Invalid login.", "error")
     return render_template("login.html")
 
 
 @app.route("/logout")
 def logout():
+    uid = session.get("user_id")
+    if uid:
+        log_action(uid, "auth", uid, "logout", {})
     session.clear()
     return redirect(url_for("login"))
 
@@ -9424,6 +9433,7 @@ def instrument_detail(instrument_id: int):
             grant_id = request.form.get("default_grant_id", "").strip()
             execute("UPDATE instruments SET default_grant_id = ? WHERE id = ?",
                     (int(grant_id) if grant_id else None, instrument_id))
+            log_action(user["id"], "instrument", instrument_id, "default_grant_updated", {"grant_id": int(grant_id) if grant_id else None})
             flash("Default grant updated.", "success")
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         abort(400)
@@ -13825,6 +13835,7 @@ def attendance_team_mark():
     else:
         execute("INSERT INTO attendance (user_id, date, status, check_in, created_at) VALUES (?, ?, ?, ?, ?)",
                 (user_id, today, status, now_iso(), now_iso()))
+    log_action(user["id"], "attendance", user_id, "attendance_marked", {"date": today, "status": status})
     flash("Attendance marked.", "success")
     return redirect(url_for("attendance_team"))
 
@@ -13856,6 +13867,7 @@ def attendance_team_mark_all():
             execute("INSERT INTO attendance (user_id, date, status, check_in, created_at) VALUES (?, ?, 'present', ?, ?)",
                     (m["id"], today, now_iso(), now_iso()))
         count += 1
+    log_action(user["id"], "attendance", 0, "attendance_mark_all", {"date": today, "count": count})
     flash("%d marked present." % count, "success")
     return redirect(url_for("attendance_team"))
 
@@ -14627,6 +14639,7 @@ def activate():
             "UPDATE users SET name = ?, password_hash = ?, invite_status = 'active' WHERE id = ?",
             (name or user["name"], generate_password_hash(password, method='pbkdf2:sha256'), user["id"]),
         )
+        log_action(user["id"], "user", user["id"], "account_activated", {"email": user["email"]})
         flash("Account activated. You can log in now.", "success")
         return redirect(url_for("login"))
     return render_template("activate.html")
@@ -14723,6 +14736,7 @@ def receipt_new():
             uploaded.save(save_dir / filename)
             receipt_image_path = f"uploads/receipts/{cur_id}/{filename}"
             execute("UPDATE expense_receipts SET receipt_image_path = ? WHERE id = ?", (receipt_image_path, cur_id))
+        log_action(user["id"], "receipt", cur_id, "receipt_submitted", {"title": title, "amount": amount, "category": category})
         flash("Receipt submitted.", "success")
         return redirect(url_for("receipt_detail", receipt_id=cur_id))
     return render_template("receipt_form.html")
@@ -14756,9 +14770,11 @@ def receipt_review(receipt_id):
     note = request.form.get("reviewer_note", "").strip()
     if action == "approve":
         execute("UPDATE expense_receipts SET status='approved', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+        log_action(user["id"], "receipt", receipt_id, "receipt_approved", {"note": note[:200]})
         flash("Receipt approved.", "success")
     elif action == "reject":
         execute("UPDATE expense_receipts SET status='rejected', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+        log_action(user["id"], "receipt", receipt_id, "receipt_rejected", {"note": note[:200]})
         flash("Receipt rejected.", "error")
     return redirect(url_for("receipt_detail", receipt_id=receipt_id))
 
@@ -14837,6 +14853,41 @@ def global_search():
     for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 5", (like, like)):
         results.append({"type": "Grant", "title": r["name"], "code": r["code"], "url": url_for("finance_grant_detail", grant_id=r["id"])})
     return render_template("search.html", query=q, results=results, title="Search")
+
+
+# ── Feature: Audit Log Viewer (admin-only) ──────────────────────────
+@app.route("/admin/audit-log")
+@login_required
+def audit_log_viewer():
+    """Central audit log — visible only to owner, super_admin, site_admin."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (is_owner(user) or roles & {"super_admin", "site_admin"}):
+        abort(403)
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 100
+    entity_filter = request.args.get("entity", "").strip()
+    action_filter = request.args.get("action", "").strip()
+    where_clauses = []
+    params: list = []
+    if entity_filter:
+        where_clauses.append("al.entity_type = ?")
+        params.append(entity_filter)
+    if action_filter:
+        where_clauses.append("al.action LIKE ?")
+        params.append(f"%{action_filter}%")
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    total = query_one(f"SELECT COUNT(*) AS c FROM audit_logs al{where_sql}", tuple(params))["c"]
+    rows = query_all(
+        f"SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id{where_sql} ORDER BY al.id DESC LIMIT ? OFFSET ?",
+        tuple(params) + (per_page, (page - 1) * per_page),
+    )
+    entity_types = [r["entity_type"] for r in query_all("SELECT DISTINCT entity_type FROM audit_logs ORDER BY entity_type")]
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template(
+        "audit_log.html", logs=rows, page=page, total_pages=total_pages, total=total,
+        entity_filter=entity_filter, action_filter=action_filter, entity_types=entity_types,
+    )
 
 
 # ── Feature: Audit Log CSV Export ────────────────────────────────────

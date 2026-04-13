@@ -48,7 +48,9 @@
           <span class="hint" data-vis="{{ V }}">{{ ml.member_count }} member{{ "s" if ml.member_count != 1 else "" }}</span>
           <form method="post" action="{{ url_for('admin_mailing_list_delete', list_id=ml.id) }}" class="admin-notice-delete-form" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
-            <button type="submit" class="admin-notice-delete-btn" title="Delete list" onclick="return confirm('Delete this mailing list?');" data-vis="{{ V }}">&times;</button>
+            <button type="button" class="admin-notice-delete-btn confirm-gate" title="Delete list" data-vis="{{ V }}"
+                    onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">&times;</button>
+            <button type="submit" class="btn btn-danger" style="display:none;font-size:0.8em;" data-vis="{{ V }}">Delete?</button>
           </form>
         </div>
         {% if ml.description %}

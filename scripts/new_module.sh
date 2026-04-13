@@ -115,63 +115,157 @@ echo -e "  ${GREEN}+${RESET} MODULE_REGISTRY entry (nav_order=${NEXT_ORDER})"
 # ── 2. Create templates ──────────────────────────────────────
 TMPL_DIR="$PROJECT_DIR/templates"
 
-if [[ -f "$SKELETON_DIR/list.html.template" ]]; then
-    echo -e "  ${GREEN}+${RESET} templates/${MODULE}_list.html"
-    substitute "$SKELETON_DIR/list.html.template" > "$TMPL_DIR/${MODULE}_list.html"
-fi
+for SKEL in list detail form_control; do
+    if [[ -f "$SKELETON_DIR/${SKEL}.html.template" ]]; then
+        OUT="$TMPL_DIR/${MODULE}_${SKEL}.html"
+        substitute "$SKELETON_DIR/${SKEL}.html.template" > "$OUT"
+        echo -e "  ${GREEN}+${RESET} templates/${MODULE}_${SKEL}.html"
+    fi
+done
 
-if [[ -f "$SKELETON_DIR/detail.html.template" ]]; then
-    echo -e "  ${GREEN}+${RESET} templates/${MODULE}_detail.html"
-    substitute "$SKELETON_DIR/detail.html.template" > "$TMPL_DIR/${MODULE}_detail.html"
-fi
+# Create a minimal new-item form template
+cat > "$TMPL_DIR/${MODULE}_new.html" << NEWTPL
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('${MODULE}_list') }}" class="hover-back-btn" title="Back">&#8592;</a>{% endblock %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('${MODULE}_list') }}" data-vis="{{ V }}">&#8592; ${LABEL}</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New ${ENTITY_TITLE}</h2>
+  </div>
+</header>
+<section class="${MODULE}-tiles" data-vis="{{ V }}">
+  <article class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Create ${ENTITY_TITLE}") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Name
+        <input type="text" name="name" required data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create</button>
+    </form>
+  </article>
+</section>
+{% endblock %}
+NEWTPL
+echo -e "  ${GREEN}+${RESET} templates/${MODULE}_new.html"
 
-# ── 3. Append route stubs to app.py ─────────────────────────
+# ── 3. Append full routes from skeleton to app.py ────────────
 ROUTE_MARKER="# ─── END OF ROUTES"
 if grep -q "$ROUTE_MARKER" "$APP_PY"; then
     INSERT_BEFORE=$(grep -n "$ROUTE_MARKER" "$APP_PY" | head -1 | cut -d: -f1)
 else
-    # Append before the last if __name__ block, or at end
     INSERT_BEFORE=$(grep -n 'if __name__' "$APP_PY" | tail -1 | cut -d: -f1)
 fi
 
-ROUTES_BLOCK="
+# Generate routes from the full skeleton template
+ROUTES_BLOCK=$(substitute "$SKELETON_DIR/routes.py.template")
+# Wrap with module_enabled guard and audit logging
+ROUTES_FINAL="
 # ── ${MODULE_UPPER} MODULE ROUTES ────────────────────────────────────
+
 @app.route('/${MODULE}')
 @login_required
 def ${MODULE}_list():
+    \"\"\"List all ${ENTITY_PLURAL}.\"\"\"
     if not module_enabled('${MODULE}'):
         abort(404)
+    user = current_user()
     items = query_all('SELECT * FROM ${MODULE} ORDER BY created_at DESC')
-    return render_template('${MODULE}_list.html', title='${LABEL}', items=items)
+    stats = {
+        'total': len(items),
+        'active': sum(1 for i in items if i['status'] == 'active'),
+        'completed': sum(1 for i in items if i['status'] == 'completed'),
+    }
+    return render_template('${MODULE}_list.html', items=items, stats=stats)
 
 
-@app.route('/${MODULE}/<int:${ENTITY}_id>')
+@app.route('/${MODULE}/<int:${ENTITY}_id>', methods=['GET', 'POST'])
 @login_required
 def ${MODULE}_detail(${ENTITY}_id):
+    \"\"\"Detail page for a single ${ENTITY}.\"\"\"
     if not module_enabled('${MODULE}'):
         abort(404)
+    user = current_user()
     item = query_one('SELECT * FROM ${MODULE} WHERE id = ?', (${ENTITY}_id,))
     if not item:
         abort(404)
-    return render_template('${MODULE}_detail.html', title='${LABEL} Detail', item=item)
+    events = query_all(
+        'SELECT e.*, u.name AS actor_name FROM ${MODULE}_events e LEFT JOIN users u ON u.id = e.user_id WHERE e.${ENTITY}_id = ? ORDER BY e.created_at DESC',
+        (${ENTITY}_id,),
+    )
+    if request.method == 'POST':
+        action = request.form.get('action', '')
+        if action == 'update_status':
+            new_status = request.form.get('status', '').strip()
+            execute('UPDATE ${MODULE} SET status = ?, updated_at = ? WHERE id = ?', (new_status, now_iso(), ${ENTITY}_id))
+            log_action(user['id'], '${MODULE}', ${ENTITY}_id, 'status_changed', {'status': new_status})
+            flash('Status updated.', 'success')
+        return redirect(url_for('${MODULE}_detail', ${ENTITY}_id=${ENTITY}_id))
+    return render_template('${MODULE}_detail.html', item=item, events=events)
+
+
+@app.route('/${MODULE}/<int:${ENTITY}_id>/form-control', methods=['GET', 'POST'])
+@login_required
+def ${MODULE}_form_control(${ENTITY}_id):
+    \"\"\"Approval config + custom fields for a ${ENTITY}.\"\"\"
+    if not module_enabled('${MODULE}'):
+        abort(404)
+    user = current_user()
+    item = query_one('SELECT * FROM ${MODULE} WHERE id = ?', (${ENTITY}_id,))
+    if not item:
+        abort(404)
+    approval_config = query_all(
+        'SELECT ac.*, u.name AS approver_name FROM ${MODULE}_approval_config ac LEFT JOIN users u ON u.id = ac.approver_user_id WHERE ac.${ENTITY}_id = ? ORDER BY ac.step_order',
+        (${ENTITY}_id,),
+    )
+    custom_fields = query_all(
+        'SELECT * FROM ${MODULE}_custom_fields WHERE ${ENTITY}_id = ? ORDER BY sort_order',
+        (${ENTITY}_id,),
+    )
+    return render_template(
+        '${MODULE}_form_control.html',
+        item=item, approval_config=approval_config, custom_fields=custom_fields,
+    )
+
+
+@app.route('/${MODULE}/new', methods=['GET', 'POST'])
+@login_required
+def ${MODULE}_new():
+    \"\"\"Create a new ${ENTITY}.\"\"\"
+    if not module_enabled('${MODULE}'):
+        abort(404)
+    user = current_user()
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('Name is required.', 'error')
+            return redirect(url_for('${MODULE}_new'))
+        new_id = execute(
+            'INSERT INTO ${MODULE} (name, status, created_by_user_id, created_at, updated_at) VALUES (?, \\'draft\\', ?, ?, ?)',
+            (name, user['id'], now_iso(), now_iso()),
+        )
+        log_action(user['id'], '${MODULE}', new_id, '${ENTITY}_created', {'name': name})
+        flash('${ENTITY_TITLE} created.', 'success')
+        return redirect(url_for('${MODULE}_detail', ${ENTITY}_id=new_id))
+    return render_template('${MODULE}_new.html')
 
 "
 
 if [[ -n "${INSERT_BEFORE:-}" ]]; then
-    # Use python to insert since the block has special chars
     python3 -c "
-import sys
 lines = open('$APP_PY').readlines()
 insert_at = $INSERT_BEFORE - 1
-block = '''$ROUTES_BLOCK'''
+block = '''$ROUTES_FINAL'''
 lines.insert(insert_at, block)
 open('$APP_PY', 'w').writelines(lines)
 "
 else
-    echo "$ROUTES_BLOCK" >> "$APP_PY"
+    echo "$ROUTES_FINAL" >> "$APP_PY"
 fi
 
-echo -e "  ${GREEN}+${RESET} Route stubs: /${MODULE}, /${MODULE}/<id>"
+echo -e "  ${GREEN}+${RESET} Routes: /${MODULE}, /${MODULE}/<id>, /${MODULE}/<id>/form-control, /${MODULE}/new"
 
 # ── 4. Schema migration ─────────────────────────────────────
 MIGRATION_DIR="$PROJECT_DIR/migrations"
@@ -203,9 +297,16 @@ fi
 echo ""
 echo -e "${BOLD}Done!${RESET} Module ${GREEN}${MODULE}${RESET} scaffolded."
 echo ""
+echo "  Generated files:"
+echo -e "    ${CYAN}templates/${MODULE}_list.html${RESET}         — list page"
+echo -e "    ${CYAN}templates/${MODULE}_detail.html${RESET}       — detail dashboard"
+echo -e "    ${CYAN}templates/${MODULE}_form_control.html${RESET} — approval + custom fields"
+echo -e "    ${CYAN}templates/${MODULE}_new.html${RESET}          — create form"
+echo -e "    ${CYAN}migrations/${MODULE}_schema.sql${RESET}       — DB schema"
+echo ""
 echo "  Next steps:"
-echo -e "  1. Create the DB table:  ${CYAN}sqlite3 data/demo/lab_scheduler.db < migrations/${MODULE}_schema.sql${RESET}"
+echo -e "  1. Create the DB table:  ${CYAN}sqlite3 data/operational/lab_scheduler.db < migrations/${MODULE}_schema.sql${RESET}"
 echo -e "  2. Enable the module:    ${CYAN}PRISM_MODULES=...,${MODULE}${RESET}  (or leave PRISM_MODULES unset for all)"
-echo -e "  3. Customise templates:  ${CYAN}templates/${MODULE}_list.html${RESET}, ${CYAN}templates/${MODULE}_detail.html${RESET}"
-echo -e "  4. Run smoke test:       ${CYAN}.venv/bin/python scripts/smoke_test.py${RESET}"
+echo -e "  3. Customise templates + routes to your domain"
+echo -e "  4. Run smoke test:       ${CYAN}.venv/bin/python -m crawlers wave sanity${RESET}"
 echo ""

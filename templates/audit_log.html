@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">&#8592;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&#8592; Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Audit Log</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ total }} entries</span>
+  </div>
+</header>
+
+<section class="admin-notices-tiles" data-vis="{{ V }}">
+
+  {# ── Filters ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("FILTERS", "Narrow the log") }}
+    <form method="get" action="{{ url_for('audit_log_viewer') }}" class="form-grid" style="display:flex;gap:1rem;align-items:end;flex-wrap:wrap;padding:0.75rem;" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Entity type
+        <select name="entity" data-vis="{{ V }}">
+          <option value="">All</option>
+          {% for et in entity_types %}
+          <option value="{{ et }}" {{ 'selected' if et == entity_filter else '' }}>{{ et }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Action contains
+        <input type="text" name="action" value="{{ action_filter }}" placeholder="e.g. deleted" data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Filter</button>
+      {% if entity_filter or action_filter %}
+      <a href="{{ url_for('audit_log_viewer') }}" class="text-link" data-vis="{{ V }}">Clear</a>
+      {% endif %}
+    </form>
+  </article>
+
+  {# ── Log table ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("LOG", "Chronological record of all actions") }}
+    <div class="scroll-pane" data-vis="{{ V }}">
+      <table class="sortable-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">#</th>
+            <th data-vis="{{ V }}">Time</th>
+            <th data-vis="{{ V }}">Actor</th>
+            <th data-vis="{{ V }}">Entity</th>
+            <th data-vis="{{ V }}">Action</th>
+            <th data-vis="{{ V }}">Details</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for row in logs %}
+          <tr data-vis="{{ V }}">
+            <td data-vis="{{ V }}" style="font-variant-numeric:tabular-nums;opacity:0.5;">{{ row.id }}</td>
+            <td data-vis="{{ V }}" style="white-space:nowrap;font-variant-numeric:tabular-nums;">{{ row.created_at[:19] }}</td>
+            <td data-vis="{{ V }}">{{ row.actor_name or ('system' if not row.actor_id else 'uid:' ~ row.actor_id) }}</td>
+            <td data-vis="{{ V }}"><code>{{ row.entity_type }}:{{ row.entity_id }}</code></td>
+            <td data-vis="{{ V }}"><code>{{ row.action }}</code></td>
+            <td data-vis="{{ V }}" style="max-width:30rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.85em;opacity:0.8;">{{ row.payload_json if row.payload_json != '{}' else '' }}</td>
+          </tr>
+          {% endfor %}
+          {% if not logs %}
+          <tr data-vis="{{ V }}"><td colspan="6" style="text-align:center;padding:2rem;opacity:0.5;" data-vis="{{ V }}">No log entries found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {# ── Pagination ── #}
+    {% if total_pages > 1 %}
+    <div style="display:flex;gap:0.5rem;justify-content:center;padding:0.75rem;" data-vis="{{ V }}">
+      {% if page > 1 %}
+      <a href="{{ url_for('audit_log_viewer', page=page-1, entity=entity_filter, action=action_filter) }}" class="btn btn-secondary" data-vis="{{ V }}">&#8592; Prev</a>
+      {% endif %}
+      <span style="line-height:2.2;opacity:0.6;" data-vis="{{ V }}">Page {{ page }} of {{ total_pages }}</span>
+      {% if page < total_pages %}
+      <a href="{{ url_for('audit_log_viewer', page=page+1, entity=entity_filter, action=action_filter) }}" class="btn btn-secondary" data-vis="{{ V }}">Next &#8594;</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Export ── #}
+  <article class="card tile" style="max-width:20rem;" data-vis="{{ V }}">
+    {{ card_heading("EXPORT", "Download full log as CSV") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <a href="{{ url_for('audit_export') }}" class="btn btn-primary" data-vis="{{ V }}">Download CSV</a>
+    </div>
+  </article>
+
+</section>
+
+{% endblock %}

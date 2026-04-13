@@ -15,7 +15,9 @@
     {% if can_edit_finance and derived_status != 'void' and derived_status != 'paid' %}
     <form method="post" action="{{ url_for('finance_invoice_void', invoice_id=inv.id) }}" style="display:inline;" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-danger" onclick="return confirm('Void this invoice? This cannot be undone.')" data-vis="{{ V }}">Void Invoice</button>
+      <button type="button" class="btn btn-danger confirm-gate" data-vis="{{ V }}"
+              onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">Void Invoice</button>
+      <button type="submit" class="btn btn-danger" style="display:none;" data-vis="{{ V }}">Confirm void?</button>
     </form>
     {% endif %}
   </div>

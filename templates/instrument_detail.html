@@ -486,7 +486,7 @@
   {% endif %}
 
   {# ── Tile: Activity ── #}
-  <section class="card tile tile-span-3 tile-activity" data-vis="{{ V }}">
+  <section class="card tile tile-full-width tile-activity" data-vis="{{ V }}">
     {{ card_heading("", "Recent Activity") }}
     {% if instrument_timeline_entries %}
     {% call paginated_pane('instEvents', page_size=6, max_height='none') %}

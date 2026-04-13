@@ -6029,6 +6029,13 @@ def _dashboard_at_a_glance(user: sqlite3.Row) -> list[dict]:
     return stats
 
 
+@app.route("/hub")
+def hub():
+    """Public landing page — project directory + AI agent infrastructure reference."""
+    from datetime import datetime as _dt
+    return render_template("hub.html", machine_time=_dt.now().strftime("%Y-%m-%d %H:%M"))
+
+
 @app.route("/")
 @login_required
 def index():

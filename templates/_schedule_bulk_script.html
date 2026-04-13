@@ -1,0 +1,58 @@
+{# Bulk selection + bulk tile reveal — extracted from schedule.html #}
+<script>
+  (function () {
+    const tile = document.getElementById('bulkTile');
+    if (!tile) return;
+    const form = document.getElementById('bulkForm');
+    const idsField = document.getElementById('bulkRequestIds');
+    const countLabel = document.getElementById('bulkCount');
+    const clearBtn = document.getElementById('bulkClear');
+    const selectAll = document.getElementById('bulkSelectAll');
+    const body = document.getElementById('centralQueueBody');
+    if (!body) return;
+    const boxes = Array.from(body.querySelectorAll('.bulk-row-check'));
+
+    function visibleBoxes() { return boxes.filter(function (b) { return !b.closest('tr').hidden; }); }
+    function selected() { return boxes.filter(function (b) { return b.checked && !b.closest('tr').hidden; }); }
+
+    function sync() {
+      const chosen = selected();
+      const count = chosen.length;
+      tile.hidden = count === 0;
+      countLabel.textContent = count + (count === 1 ? ' selected' : ' selected');
+      idsField.value = chosen.map(function (b) { return b.value; }).join(',');
+      if (selectAll) {
+        const vis = visibleBoxes();
+        selectAll.checked = vis.length > 0 && chosen.length === vis.length;
+        selectAll.indeterminate = chosen.length > 0 && chosen.length < vis.length;
+      }
+    }
+
+    boxes.forEach(function (b) { b.addEventListener('change', sync); });
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        const target = selectAll.checked;
+        visibleBoxes().forEach(function (b) { b.checked = target; });
+        sync();
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        boxes.forEach(function (b) { b.checked = false; });
+        sync();
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        if (!idsField.value) { e.preventDefault(); return; }
+      });
+    }
+
+    // Expose so the filter handler can drop hidden rows from selection
+    window.__schedulePruneBulkSelection = sync;
+    sync();
+  })();
+</script>

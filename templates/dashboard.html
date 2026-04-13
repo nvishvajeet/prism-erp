@@ -274,61 +274,7 @@
   {% endif %}
 
   {# ── TILE 4: Instrument Queues — inline grid of up to 9 instrument mini-queues ── #}
-  {% if module_enabled('queue') and has_instrument_area_access_user and not instrument_fifo_queue %}
-  <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
-    {% call card_heading("FLOW", "Instrument Queues") %}
-      <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
-    {% endcall %}
-    {{ empty_state("No queued work across any instrument.",
-                   "When requests come in, they'll appear here first.",
-                   "New Request", url_for('new_request')) }}
-  </article>
-  {% endif %}
-  {% if module_enabled('queue') and has_instrument_area_access_user and instrument_fifo_queue %}
-  <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
-    {% call card_heading("FLOW", "Instrument Queues") %}
-      <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
-    {% endcall %}
-    <div class="dash-instrument-grid" data-vis="{{ V }}">
-      {% for queue in instrument_fifo_queue %}
-      <div class="dash-instrument-card" data-vis="{{ V }}">
-        <div class="dash-instrument-card-head" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ instrument_name_link({"instrument_id": queue.instrument_id, "instrument_name": queue.instrument_name}) }}</strong>
-          <span class="dash-instrument-count-badge" data-vis="{{ V }}">{{ queue.rows|length }}</span>
-        </div>
-        {% if queue.rows %}
-        <table class="dash-instrument-queue-table" data-vis="{{ V }}">
-          <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Status</th><th data-vis="{{ V }}">Queued</th></tr></thead>
-          <tbody data-vis="{{ V }}">
-          {% for row in queue.rows[:5] %}
-            <tr class="clickable-row" data-href="{{ url_for('request_detail', request_id=row['id']) }}" data-vis="{{ V }}">
-              <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
-              <td data-vis="{{ V }}">{{ status_block(row, show_group=False, show_summary=False, link=False) }}</td>
-              <td data-vis="{{ V }}">{{ format_dt(row["sample_submitted_at"] or row["sample_received_at"] or row["created_at"]) }}</td>
-            </tr>
-          {% endfor %}
-          {% if queue.rows|length > 5 %}
-            <tr class="overflow-indicator" data-vis="{{ V }}">
-              <td colspan="3" data-vis="{{ V }}">
-                <a href="{{ url_for('schedule', instrument_id=queue.instrument_id) }}" data-vis="{{ V }}">{{ queue.rows|length - 5 }} more →</a>
-              </td>
-            </tr>
-          {% endif %}
-          </tbody>
-        </table>
-        {% else %}
-        {{ empty_state("No jobs queued", "Requests will appear here once submitted.", "New Request", url_for('new_request', instrument_id=queue.instrument_id)) }}
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
-    {% if instrument_fifo_total > 9 %}
-    <div class="dash-instrument-overflow" data-vis="{{ V }}">
-      <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ instrument_fifo_total - 9 }} more instruments with active jobs →</a>
-    </div>
-    {% endif %}
-  </article>
-  {% endif %}
+  {% include "_dashboard_instrument_queues.html" %}
 
   {# ── TILE 5: Upcoming Downtime ── #}
   {% if upcoming_downtime %}

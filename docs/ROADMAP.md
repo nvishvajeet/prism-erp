@@ -1,39 +1,71 @@
-# PRISM roadmap — historical pointer
+# Catalyst ERP — Roadmap
 
-The authoritative forward plan is `docs/NEXT_WAVES.md` as of
-2026-04-11 @ `18cef1f`. This file is kept for historical context
-only — do not edit it, and do not read it for planning.
+## Current State (V1)
 
-## What ROADMAP.md used to be
+14 modules, 129 routes, 15,694 lines, 64 templates.
+Two deployments: MIT-WPU CRF + Ravikiran Services.
+Domain: catalysterp.org. GitHub: nvishvajeet/prism-erp.
 
-Before 2026-04-11, this file was a version-scoped wave backlog
-written as long prose. It carried a `Current state` snapshot for
-the then-current `v1.3.x` line, per-wave descriptions for the
-upcoming `W1.3.6` through `W1.4.0` patches, a `Crawler waves at a
-glance` table, and a `Guardrails` section covering wave timing,
-crawler-proof commit policy, and the `.tile-*` / `data-vis`
-contract for new tiles.
+## Immediate (V1.1)
 
-## Why it was superseded
+### Infrastructure
+- [ ] Permanent Cloudflare Tunnel (resolve QUIC issues)
+- [ ] Auto-start on boot (launchd for Flask + cloudflared)
+- [ ] Daily DB backup automation
+- [ ] Health monitoring (uptime ping + crash alert)
 
-A single prose file went stale quickly: waves shipped, plans
-shifted, and the checkbox-in-the-middle-of-a-paragraph pattern
-was invisible to any crawler. `NEXT_WAVES.md` replaces it with a
-tighter structure — a progress-of-features table, a
-blocked/HARD-TODO exception list, and a parallel task board —
-that the dev panel's WAVES tile parses directly, so it stays
-fresh by construction instead of by agent discipline.
+### Security
+- [ ] Rate limiting on login
+- [ ] 2FA via TOTP
+- [ ] Password policy enforcement
 
-## Where to find what
+### Mobile
+- [ ] PWA Service Worker (offline + push notifications)
+- [ ] Camera integration for receipt photos
 
-* `docs/NEXT_WAVES.md` — forward plan, progress-of-features
-  table, blocked/HARD-TODO exception list, parallel task board.
-* `CHANGELOG.md` — shipped work per version.
-* `CLAIMS.md` — live agent activity (advisory lock board).
-* `AGENTS.md` — vendor-neutral agent onboarding.
-* `WORKFLOW.md` — Claude-specific Level-2 rules.
-* `docs/PROJECT.md` — architecture spec (deep reference).
+## Near-Term (V1.2)
 
-The pre-supersession contents of this file are preserved in
-`git log docs/ROADMAP.md`; `1365db1` is the last commit before
-retirement.
+### Finance
+- [ ] Vendor management (registry, payment history, rates)
+- [ ] Invoice PDF generation
+- [ ] Budget alerts (80%/100% utilization)
+- [ ] Monthly P&L report (PDF export)
+
+### Personnel
+- [ ] Leave calendar (visual)
+- [ ] Overtime calculation from attendance
+- [ ] Document vault (PAN, Aadhar, offer letter storage)
+
+### Vehicles
+- [ ] Trip logging (start/end, distance, purpose)
+- [ ] Fuel efficiency trends (km/liter)
+- [ ] Service reminders (by km or date)
+
+### Communication
+- [ ] SendGrid email delivery
+- [ ] Google OAuth login
+- [ ] WhatsApp notifications
+
+## Medium-Term (V2.0)
+
+- [ ] Procurement module (POs, vendor quotes, GRN)
+- [ ] Inventory module (stock levels, reorder points)
+- [ ] REST API for mobile apps
+- [ ] Multi-tenant (single deploy, multiple orgs)
+- [ ] Plugin system (community modules via CLI)
+
+## Long-Term (V3.0)
+
+- [ ] AI Assistant ("How much did we spend on fuel in March?")
+- [ ] Predictive maintenance (ML model)
+- [ ] Native mobile app (iOS/Android)
+
+## Integration Gaps
+
+| Gap | Effort |
+|-----|--------|
+| Vehicles fuel → Finance spend reports | Low |
+| Personnel birthdays → Notifications | Low |
+| Attendance streaks → Personnel alerts | Medium |
+| Finance → Letters (payment letters) | Low |
+| Calendar → All modules (unified view) | High |

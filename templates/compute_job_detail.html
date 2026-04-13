@@ -66,6 +66,12 @@
         <button type="submit" class="btn danger" data-vis="{{ V }}">Cancel Job</button>
       </form>
       {% endif %}
+      {% if job.status in ('failed', 'needs_attention', 'cancelled') and (is_mine or can_manage) %}
+      <form method="post" action="{{ url_for('compute_job_requeue', job_id=job.id) }}" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Requeue Job</button>
+      </form>
+      {% endif %}
       {% if has_output %}
       <a class="btn btn-primary" href="{{ url_for('compute_job_output', job_id=job.id) }}" data-vis="{{ V }}">Download Output</a>
       {% endif %}

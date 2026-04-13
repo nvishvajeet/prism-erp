@@ -64,6 +64,36 @@
     {% endif %}
   </article>
 
+  {# ── Needs Attention (dependency/license errors) ── #}
+  {% if attention %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("NEEDS ATTENTION", attention|length|string ~ " jobs need admin action") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Job</th>
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Error</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for j in attention %}
+        <tr class="clickable-row" data-href="{{ url_for('compute_job_detail', job_id=j.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ j.id }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ j.title }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ j.software_name or 'custom' }}</span></td>
+          <td data-vis="{{ V }}">{{ j.user_name }}</td>
+          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ j.stderr_log[:120] if j.stderr_log else 'Check logs' }}{{ '…' if j.stderr_log and j.stderr_log|length > 120 else '' }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint" style="margin-top:0.5rem;padding:0 0.75rem;" data-vis="{{ V }}">These jobs failed due to missing software, libraries, or licenses. Install the dependency and resubmit.</p>
+  </article>
+  {% endif %}
+
   {# ── Queue ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("QUEUE", queued|length|string ~ " waiting") }}

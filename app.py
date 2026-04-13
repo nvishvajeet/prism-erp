@@ -15905,6 +15905,15 @@ def compute_dashboard():
          ORDER BY j.completed_at DESC
          LIMIT 50
     """)
+    # Needs attention (dependency/license errors)
+    attention = query_all("""
+        SELECT j.*, u.name AS user_name, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.user_id
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.status = 'needs_attention'
+         ORDER BY j.completed_at DESC
+    """)
     # Stats
     total_jobs = query_one("SELECT COUNT(*) AS c FROM compute_jobs")["c"]
     my_running = sum(1 for j in running if j["user_id"] == user["id"])
@@ -15915,7 +15924,7 @@ def compute_dashboard():
                            running=running, queued=queued, recent=recent,
                            total_jobs=total_jobs, my_running=my_running,
                            my_queued=my_queued, can_manage=can_manage,
-                           software=software)
+                           attention=attention, software=software)
 
 
 @app.route("/compute/submit", methods=["GET", "POST"])
@@ -16054,6 +16063,34 @@ def compute_job_cancel(job_id: int):
     return redirect(url_for("compute_dashboard"))
 
 
+@app.route("/compute/jobs/<int:job_id>/requeue", methods=["POST"])
+@login_required
+def compute_job_requeue(job_id: int):
+    """Requeue a failed/needs_attention job (admin or job owner)."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["user_id"] != user["id"] and not can_manage:
+        abort(403)
+    if job["status"] not in ("failed", "needs_attention", "cancelled"):
+        flash("Only failed or cancelled jobs can be requeued.", "error")
+        return redirect(url_for("compute_job_detail", job_id=job_id))
+    execute("""UPDATE compute_jobs
+               SET status = 'queued', started_at = NULL, completed_at = NULL,
+                   exit_code = NULL, stdout_log = '', stderr_log = '',
+                   output_filename = '', created_at = ?
+               WHERE id = ?""",
+            (now_iso(), job_id))
+    log_action(user["id"], "compute", job_id, "job_requeued", {})
+    _compute_update_queue_positions()
+    flash(f"Job #{job_id} requeued.", "success")
+    return redirect(url_for("compute_dashboard"))
+
+
 @app.route("/compute/jobs/<int:job_id>/output")
 @login_required
 def compute_job_output(job_id: int):
@@ -16142,7 +16179,18 @@ def compute_api_complete_job():
     stdout_log = data.get("stdout", "")[:50000]  # cap at 50k chars
     stderr_log = data.get("stderr", "")[:50000]
     output_filename = data.get("output_filename", "")
-    status = "completed" if exit_code == 0 else "failed"
+    # Detect dependency/license errors → "needs_attention" status
+    _dep_keywords = ("not found", "no such file", "command not found",
+                     "module not found", "import error", "license",
+                     "permission denied", "cannot find", "not installed",
+                     "No module named", "ModuleNotFoundError",
+                     "FileNotFoundError", "error while loading shared")
+    stderr_lower = stderr_log.lower()
+    is_dep_error = exit_code != 0 and any(kw.lower() in stderr_lower for kw in _dep_keywords)
+    if is_dep_error:
+        status = "needs_attention"
+    else:
+        status = "completed" if exit_code == 0 else "failed"
     execute("""UPDATE compute_jobs
                SET status = ?, completed_at = ?, exit_code = ?,
                    stdout_log = ?, stderr_log = ?, output_filename = ?
@@ -16152,12 +16200,27 @@ def compute_api_complete_job():
     # Notify the user
     job = query_one("SELECT user_id, title FROM compute_jobs WHERE id = ?", (job_id,))
     if job:
-        icon = "completed" if status == "completed" else "failed"
-        notify(job["user_id"], "compute",
-               f"Job {icon}: {job['title']}",
-               f"Job #{job_id} finished with exit code {exit_code}.",
-               href=url_for("compute_job_detail", job_id=job_id),
-               source_type="compute_job", source_id=job_id)
+        if status == "needs_attention":
+            # Notify user that job needs admin help
+            notify(job["user_id"], "compute",
+                   f"Job needs attention: {job['title']}",
+                   f"Job #{job_id} failed — likely missing software or license. An admin has been notified.",
+                   href=url_for("compute_job_detail", job_id=job_id),
+                   source_type="compute_job", source_id=job_id)
+            # Notify all admins/owners
+            for admin in query_all("SELECT id FROM users WHERE role IN ('super_admin','site_admin')"):
+                notify(admin["id"], "compute",
+                       f"Compute: dependency issue — {job['title']}",
+                       f"Job #{job_id} failed with a missing dependency or license error. Check stderr for details.",
+                       href=url_for("compute_job_detail", job_id=job_id),
+                       source_type="compute_job", source_id=job_id)
+        else:
+            icon = "completed" if status == "completed" else "failed"
+            notify(job["user_id"], "compute",
+                   f"Job {icon}: {job['title']}",
+                   f"Job #{job_id} finished with exit code {exit_code}.",
+                   href=url_for("compute_job_detail", job_id=job_id),
+                   source_type="compute_job", source_id=job_id)
     _compute_update_queue_positions()
     return jsonify({"status": "ok"})
 

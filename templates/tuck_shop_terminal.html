@@ -43,12 +43,41 @@
     {% endif %}
   </article>
 
+  {# ── Keyboard Quick Entry ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("KEYBOARD BILLING", "Type code + qty, press Enter. Space = cash checkout. Esc = clear.") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <label class="control-flex-fill-wide" data-vis="{{ V }}">
+          Item Code + Qty
+          <input type="text" id="kbInput" placeholder="e.g. TEA 2  or  SAM  or  BIS 3" autofocus autocomplete="off" data-vis="{{ V }}" style="font-size:1.4rem;letter-spacing:0.08em;font-family:monospace;">
+        </label>
+      </div>
+      <div id="kbFeedback" style="margin-top:0.5rem;font-size:1rem;font-weight:600;min-height:1.5rem;" data-vis="{{ V }}"></div>
+      <div style="margin-top:0.25rem;" data-vis="{{ V }}">
+        <p class="hint" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Shortcuts:</strong>
+          <code class="inline-code" data-vis="{{ V }}">Enter</code> = add item &middot;
+          <code class="inline-code" data-vis="{{ V }}">Space×2</code> = cash checkout &middot;
+          <code class="inline-code" data-vis="{{ V }}">Esc</code> = clear cart &middot;
+          <code class="inline-code" data-vis="{{ V }}">Tab</code> = QR/UPI checkout
+        </p>
+        <p class="hint" data-vis="{{ V }}">Item codes (first 2-3 letters of name):</p>
+        <div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.25rem;" data-vis="{{ V }}">
+          {% for item in items %}
+          <span class="badge" style="font-family:monospace;font-size:0.8rem;" data-vis="{{ V }}">{{ item.name[:3]|upper }}={{ item.name }} (₹{{ "{:,.0f}".format(item.price) }})</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </article>
+
   {# ── Cart ── #}
   <article class="card tile tile-third" style="position:sticky;top:1rem;" data-vis="{{ V }}">
     {{ card_heading("CART", "Current order") }}
     <div style="padding:0.75rem;" data-vis="{{ V }}">
       <div id="cartItems" style="min-height:100px;" data-vis="{{ V }}">
-        <p class="hint" id="cartEmpty" data-vis="{{ V }}">Tap items to add…</p>
+        <p class="hint" id="cartEmpty" data-vis="{{ V }}">Tap items or type codes…</p>
       </div>
       <hr style="border-color:var(--color-separator);" data-vis="{{ V }}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin:0.5rem 0;" data-vis="{{ V }}">
@@ -57,13 +86,13 @@
       </div>
       <div id="payRefRow" style="display:none;margin-top:0.5rem;" data-vis="{{ V }}">
         <input type="text" id="posPayRef" placeholder="UPI / Transaction Ref" autocomplete="off" style="width:100%;font-size:0.9rem;" data-vis="{{ V }}">
-        <span class="hint" data-vis="{{ V }}">Enter ref, then tap Confirm QR</span>
+        <span class="hint" data-vis="{{ V }}">Enter ref, then press Enter</span>
       </div>
       <div class="control-flex-wrap" style="margin-top:0.75rem;gap:0.4rem;" data-vis="{{ V }}">
-        <button id="payCash" class="btn btn-primary" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">💵 Cash</button>
-        <button id="payQR" class="btn" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">📱 QR / UPI</button>
+        <button id="payCash" class="btn btn-primary" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">Cash [Space]</button>
+        <button id="payQR" class="btn" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">QR/UPI [Tab]</button>
       </div>
-      <button id="clearCart" class="btn" style="width:100%;margin-top:0.5rem;font-size:0.85rem;" data-vis="{{ V }}">Clear Cart</button>
+      <button id="clearCart" class="btn" style="width:100%;margin-top:0.5rem;font-size:0.85rem;" data-vis="{{ V }}">Clear [Esc]</button>
       <div id="saleResult" style="margin-top:0.5rem;min-height:1.5rem;" data-vis="{{ V }}"></div>
     </div>
   </article>
@@ -78,6 +107,33 @@
   var cartEmpty = document.getElementById('cartEmpty');
   var cartTotal = document.getElementById('cartTotal');
   var saleResult = document.getElementById('saleResult');
+  var kbInput = document.getElementById('kbInput');
+  var kbFeedback = document.getElementById('kbFeedback');
+
+  // Build item lookup index from data attributes (code = first 2-3 letters of name)
+  var itemIndex = {};
+  document.querySelectorAll('.pos-item-btn').forEach(function(btn){
+    var name = btn.dataset.name;
+    var id = btn.dataset.id;
+    var price = parseFloat(btn.dataset.price);
+    // Index by 2-letter and 3-letter prefix
+    var key2 = name.substring(0,2).toUpperCase();
+    var key3 = name.substring(0,3).toUpperCase();
+    if(!itemIndex[key2]) itemIndex[key2] = {id:id, name:name, price:price};
+    itemIndex[key3] = {id:id, name:name, price:price};
+    // Also full name uppercase
+    itemIndex[name.toUpperCase()] = {id:id, name:name, price:price};
+  });
+
+  function addToCart(id, name, price, qty){
+    qty = qty || 1;
+    if(cart[id]){
+      cart[id].qty += qty;
+    } else {
+      cart[id] = {name: name, price: price, qty: qty};
+    }
+    renderCart();
+  }
 
   function renderCart(){
     var keys = Object.keys(cart);
@@ -88,38 +144,32 @@
       return;
     }
     cartEmpty.style.display = 'none';
-    // Remove old lines
     cartEl.querySelectorAll('.cart-line').forEach(function(e){e.remove();});
     var total = 0;
     keys.forEach(function(id){
       var it = cart[id];
       var line = document.createElement('div');
       line.className = 'cart-line';
-      line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.06));';
+      line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--color-separator);';
       line.innerHTML =
         '<div style="flex:1;">' +
           '<span style="font-weight:600;">' + it.name + '</span>' +
-          '<span class="hint" style="margin-left:0.5rem;">×' + it.qty + '</span>' +
+          '<span class="hint" style="margin-left:0.5rem;">&times;' + it.qty + '</span>' +
         '</div>' +
         '<span style="font-weight:700;margin:0 0.5rem;">₹' + (it.price * it.qty) + '</span>' +
-        '<button style="background:none;border:none;color:var(--tone-red);cursor:pointer;font-size:1rem;padding:0.2rem 0.4rem;" data-remove="' + id + '">✗</button>';
+        '<button style="background:none;border:none;color:var(--tone-red);cursor:pointer;font-size:1rem;padding:0.2rem 0.4rem;" data-remove="' + id + '">&times;</button>';
       cartEl.appendChild(line);
       total += it.price * it.qty;
     });
     cartTotal.textContent = '₹' + total.toLocaleString('en-IN');
   }
 
-  // Add to cart
+  // Tap-to-add from item grid
   if(grid) grid.addEventListener('click', function(e){
     var btn = e.target.closest('.pos-item-btn');
     if(!btn) return;
-    var id = btn.dataset.id;
-    if(cart[id]){
-      cart[id].qty++;
-    } else {
-      cart[id] = {name: btn.dataset.name, price: parseFloat(btn.dataset.price), qty: 1};
-    }
-    renderCart();
+    addToCart(btn.dataset.id, btn.dataset.name, parseFloat(btn.dataset.price), 1);
+    kbInput.focus();
   });
 
   // Remove from cart
@@ -135,6 +185,7 @@
     cart = {};
     renderCart();
     saleResult.innerHTML = '';
+    kbInput.focus();
   });
 
   // Category filter
@@ -146,18 +197,21 @@
       document.querySelectorAll('.pos-item-btn').forEach(function(item){
         item.style.display = (cat === 'all' || item.dataset.cat === cat) ? '' : 'none';
       });
+      kbInput.focus();
     });
   });
 
   var payRefRow = document.getElementById('payRefRow');
   var posPayRef = document.getElementById('posPayRef');
   var pendingQR = false;
+  var lastSpaceTime = 0;
 
   function submitSale(method, ref){
     var keys = Object.keys(cart);
-    if(!keys.length) return;
+    if(!keys.length){ kbFeedback.textContent = 'Cart is empty'; return; }
     var items = keys.map(function(id){ return {id: parseInt(id), qty: cart[id].qty}; });
     saleResult.innerHTML = '<span class="hint">Recording…</span>';
+    kbFeedback.textContent = 'Processing...';
     fetch('{{ url_for("tuck_shop_api_record_sale") }}', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
@@ -166,38 +220,142 @@
     .then(function(r){return r.json();})
     .then(function(data){
       if(data.ok){
-        saleResult.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.1rem;">✓ Sale #' + data.sale_id + ' — ₹' + data.total + ' (' + data.payment.toUpperCase() + ')</span>';
+        saleResult.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.1rem;">Sale #' + data.sale_id + ' — ₹' + data.total + ' (' + data.payment.toUpperCase() + ')</span>';
+        kbFeedback.innerHTML = '<span style="color:var(--tone-green);">DONE — Sale #' + data.sale_id + ' ₹' + data.total + '</span>';
         cart = {};
         renderCart();
         payRefRow.style.display = 'none';
         posPayRef.value = '';
         pendingQR = false;
+        // Auto-print receipt
+        setTimeout(function(){ window.print(); }, 400);
       } else {
         saleResult.innerHTML = '<span style="color:var(--tone-red);">' + (data.error||'Error') + '</span>';
+        kbFeedback.innerHTML = '<span style="color:var(--tone-red);">' + (data.error||'Error') + '</span>';
       }
     })
     .catch(function(){
       saleResult.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+      kbFeedback.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
     });
   }
 
+  // Keyboard entry: parse "CODE QTY" and add to cart
+  function processKeyboardEntry(raw){
+    raw = raw.trim().toUpperCase();
+    if(!raw) return;
+    // Split into code and optional qty
+    var parts = raw.split(/\s+/);
+    var code = parts[0];
+    var qty = parts.length > 1 ? parseInt(parts[1]) : 1;
+    if(isNaN(qty) || qty < 1) qty = 1;
+    // Look up item
+    var match = itemIndex[code];
+    if(!match){
+      // Try partial match — find closest
+      var keys = Object.keys(itemIndex);
+      for(var i=0; i<keys.length; i++){
+        if(keys[i].indexOf(code) === 0){
+          match = itemIndex[keys[i]];
+          break;
+        }
+      }
+    }
+    if(match){
+      addToCart(match.id, match.name, match.price, qty);
+      kbFeedback.innerHTML = '<span style="color:var(--tone-green);">+ ' + match.name + ' &times;' + qty + ' = ₹' + (match.price * qty) + '</span>';
+    } else {
+      kbFeedback.innerHTML = '<span style="color:var(--tone-red);">Unknown item: ' + code + '</span>';
+    }
+  }
+
+  // Keyboard shortcuts on the input field
+  if(kbInput){
+    kbInput.addEventListener('keydown', function(e){
+      // Enter = add item to cart
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        var val = kbInput.value.trim();
+        if(val){
+          processKeyboardEntry(val);
+          kbInput.value = '';
+        }
+        return;
+      }
+      // Escape = clear cart
+      if(e.key === 'Escape'){
+        e.preventDefault();
+        cart = {};
+        renderCart();
+        kbInput.value = '';
+        kbFeedback.textContent = 'Cart cleared';
+        saleResult.innerHTML = '';
+        return;
+      }
+      // Tab = QR/UPI checkout
+      if(e.key === 'Tab'){
+        e.preventDefault();
+        if(!Object.keys(cart).length){ kbFeedback.textContent = 'Cart is empty'; return; }
+        if(!pendingQR){
+          payRefRow.style.display = '';
+          posPayRef.focus();
+          pendingQR = true;
+          kbFeedback.textContent = 'Enter UPI ref, then press Enter';
+        }
+        return;
+      }
+      // Double-space = cash checkout
+      if(e.key === ' '){
+        var now = Date.now();
+        if(kbInput.value.trim() === '' && now - lastSpaceTime < 500){
+          e.preventDefault();
+          submitSale('cash');
+          kbInput.value = '';
+          lastSpaceTime = 0;
+          return;
+        }
+        lastSpaceTime = now;
+      }
+    });
+    // Keep focus on input
+    setTimeout(function(){ kbInput.focus(); }, 200);
+  }
+
+  // Button clicks
   document.getElementById('payCash').addEventListener('click', function(){ submitSale('cash'); });
   document.getElementById('payQR').addEventListener('click', function(){
     if(!pendingQR){
-      // First click: show ref input
       payRefRow.style.display = '';
       posPayRef.focus();
       pendingQR = true;
-      document.getElementById('payQR').textContent = '✓ Confirm QR';
+      document.getElementById('payQR').textContent = 'Confirm QR';
     } else {
-      // Second click: submit with ref
       submitSale('qr', posPayRef.value.trim());
     }
   });
-  // Also submit on Enter in ref field
   posPayRef.addEventListener('keypress', function(e){
-    if(e.key === 'Enter'){ e.preventDefault(); submitSale('qr', posPayRef.value.trim()); }
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      submitSale('qr', posPayRef.value.trim());
+    }
+  });
+
+  // Re-focus keyboard input after any click outside
+  document.addEventListener('click', function(e){
+    if(kbInput && !e.target.closest('input, button, select, a')){
+      kbInput.focus();
+    }
   });
 })();
 </script>
+
+<style>
+@media print {
+  nav, .hover-back-btn, .inst-header, .pos-cat-btn, .pos-item-btn,
+  #kbInput, #kbFeedback, .hint, .btn, button, #posItemGrid,
+  [class*="tile-accent"], [class*="keyboard"] { display: none !important; }
+  .card { box-shadow: none !important; border: 1px solid var(--ink) !important; }
+  #cartItems, #cartTotal, #saleResult { display: block !important; }
+}
+</style>
 {% endblock %}

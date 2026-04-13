@@ -59,7 +59,7 @@
         </thead>
         <tbody data-vis="{{ V }}">
           {% for e in entries %}
-          <tr class="{% if e.entry_type == 'expense' %}finance-spend-expense{% endif %}" data-vis="{{ V }}">
+          <tr class="{% if e.entry_type == 'expense' %}finance-spend-expense{% endif %}{% if e.entry_type == 'payment' and e.invoice_id %} clickable-row{% endif %}" {% if e.entry_type == 'payment' and e.invoice_id %}data-href="{{ url_for('finance_invoice_detail', invoice_id=e.invoice_id) }}"{% endif %} data-vis="{{ V }}">
             <td data-vis="{{ V }}">{{ e.event_date[:10] if e.event_date else '&mdash;' }}</td>
             <td data-vis="{{ V }}">
               <span class="finance-type-badge finance-type-{{ e.entry_type }}" data-vis="{{ V }}">{{ e.entry_type|title }}</span>

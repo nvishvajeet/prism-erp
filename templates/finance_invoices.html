@@ -86,8 +86,8 @@
             <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.invoice_number or '&mdash;' }}</code></td>
             <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ inv.request_no or '&mdash;' }}</code></td>
             <td class="finance-desc-cell" data-vis="{{ V }}">{{ inv.description[:60] if inv.description else inv.request_title[:60] if inv.request_title else '&mdash;' }}</td>
-            <td class="finance-num" data-vis="{{ V }}">&pound;{{ "{:,.2f}".format(inv.amount_due) }}</td>
-            <td class="finance-num" data-vis="{{ V }}">&pound;{{ "{:,.2f}".format(inv.amount_paid) }}</td>
+            <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.2f}".format(inv.amount_due) }}</td>
+            <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.2f}".format(inv.amount_paid) }}</td>
             <td data-vis="{{ V }}">
               <span class="finance-status-pill finance-status-{{ inv.derived_status }}" data-vis="{{ V }}">{{ inv.derived_status|upper }}</span>
             </td>

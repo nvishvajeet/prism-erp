@@ -24,6 +24,32 @@
     ]) }}
   </article>
 
+  {# ── New Grant Form ── #}
+  <article class="card tile tile-full-width" id="new" data-vis="{{ V }}">
+    {{ card_heading("", "Create Grant") }}
+    <details class="toggleable-form" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">+ New Grant</summary>
+      <form method="post" action="{{ url_for('finance_grants_list') }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label data-vis="{{ V }}">Code <input type="text" name="code" required placeholder="e.g. DST-SERB-2026" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Name <input type="text" name="name" required placeholder="Grant title" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Sponsor <input type="text" name="sponsor" placeholder="Funding agency" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Total Budget (₹) <input type="number" step="0.01" name="total_budget" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Start Date <input type="date" name="start_date" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">End Date <input type="date" name="end_date" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Grant Type
+          <select name="grant_type" data-vis="{{ V }}">
+            <option value="external" data-vis="{{ V }}">External</option>
+            <option value="internal" data-vis="{{ V }}">Internal</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Department <input type="text" name="department" placeholder="e.g. School of Engineering" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Notes <input type="text" name="notes" placeholder="Optional" data-vis="{{ V }}"></label>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create Grant</button>
+      </form>
+    </details>
+  </article>
+
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Grants") }}
     {% if grants %}

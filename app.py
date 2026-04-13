@@ -7552,6 +7552,14 @@ def finance_invoices_list():
         except (ValueError, TypeError):
             pass
 
+    instrument_filter = request.args.get("instrument_id", "")
+    if instrument_filter:
+        try:
+            where_clauses.append("sr.instrument_id = ?")
+            params.append(int(instrument_filter))
+        except (ValueError, TypeError):
+            pass
+
     if date_from:
         where_clauses.append("inv.issued_at >= ?")
         params.append(date_from)
@@ -7935,7 +7943,7 @@ def finance_spend():
         f"""SELECT
               p.id, p.amount, p.method, p.receipt_number, p.paid_at AS event_date,
               p.notes, 'payment' AS entry_type,
-              inv.invoice_number, inv.grant_id,
+              inv.id AS invoice_id, inv.invoice_number, inv.grant_id,
               g.name AS grant_name, g.code AS grant_code,
               sr.request_no, u.name AS recorded_by_name
             FROM payments p
@@ -7954,7 +7962,7 @@ def finance_spend():
         f"""SELECT
               ge.id, ge.amount, ge.expense_type AS method, ge.receipt_number,
               ge.recorded_at AS event_date, ge.notes, 'expense' AS entry_type,
-              '' AS invoice_number, ge.grant_id,
+              NULL AS invoice_id, '' AS invoice_number, ge.grant_id,
               g.name AS grant_name, g.code AS grant_code,
               ge.description AS request_no, u.name AS recorded_by_name
             FROM grant_expenses ge
@@ -7981,7 +7989,7 @@ def finance_spend():
     )
 
 
-@app.route("/finance/grants")
+@app.route("/finance/grants", methods=["GET", "POST"])
 @login_required
 def finance_grants_list():
     """v2.0.0-alpha.2 — Grants inventory reads via the new peer graph.
@@ -7997,6 +8005,34 @@ def finance_grants_list():
     user = current_user()
     if not _user_can_view_finance(user):
         abort(403)
+
+    if request.method == "POST":
+        if not _user_can_edit_finance(user):
+            abort(403)
+        code = request.form.get("code", "").strip()
+        name = request.form.get("name", "").strip()
+        if not code or not name:
+            flash("Code and name are required.", "error")
+            return redirect(url_for("finance_grants_list"))
+        sponsor = request.form.get("sponsor", "").strip()
+        total_budget = float(request.form.get("total_budget", 0) or 0)
+        start_date = request.form.get("start_date", "").strip() or None
+        end_date = request.form.get("end_date", "").strip() or None
+        grant_type = request.form.get("grant_type", "external").strip()
+        department = request.form.get("department", "").strip()
+        notes = request.form.get("notes", "").strip()
+        new_id = execute(
+            """INSERT INTO grants (code, name, sponsor, total_budget, start_date, end_date,
+               grant_type, department, notes, status, pi_user_id, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+            (code, name, sponsor, total_budget, start_date, end_date,
+             grant_type, department, notes, user["id"], now_iso()),
+        )
+        get_db().commit()
+        log_action(user["id"], "grant", new_id, "grant_created", {"code": code, "name": name, "budget": total_budget})
+        flash(f"Grant {code} created.", "success")
+        return redirect(url_for("finance_grant_detail", grant_id=new_id))
+
     rows = query_all(
         """
         SELECT
@@ -8083,13 +8119,14 @@ def finance_grant_detail(grant_id: int):
             administered_by_user_id = request.form.get("administered_by_user_id", "").strip()
             db.execute(
                 """UPDATE grants SET
-                    name = ?, sponsor = ?, grant_type = ?, department = ?,
+                    code = ?, name = ?, sponsor = ?, grant_type = ?, department = ?,
                     total_budget = ?, start_date = ?, end_date = ?,
                     notes = ?, status = ?,
                     portfolio_manager_id = ?,
                     administered_by_user_id = ?
                  WHERE id = ?""",
                 (
+                    request.form.get("code", "").strip(),
                     request.form.get("name", "").strip(),
                     request.form.get("sponsor", "").strip(),
                     request.form.get("grant_type", "internal").strip(),

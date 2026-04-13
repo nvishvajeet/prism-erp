@@ -49,7 +49,7 @@
       </thead>
       <tbody data-vis="{{ V }}">
         {% for row in by_instrument %}
-        <tr class="clickable-row" data-href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">
+        <tr class="clickable-row" data-href="{{ url_for('finance_invoices_list', instrument_id=row.id) }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ row.code }}</code> · {{ row.name }}</td>
           <td class="finance-num" data-vis="{{ V }}">{{ row.total_requests }}</td>
           <td class="finance-num" data-vis="{{ V }}">{{ row.owed_fmt }}</td>

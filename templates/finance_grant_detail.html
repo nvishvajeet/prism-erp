@@ -17,6 +17,7 @@
     {% if can_edit_finance|default(false) %}
     <a class="btn" href="#metaEditTile" data-vis="{{ V }}">Edit</a>
     <a class="btn" href="#addMemberTile" data-vis="{{ V }}">Add Member</a>
+    <a class="btn" href="{{ url_for('finance_grant_form_control', grant_id=grant.id) }}" data-vis="{{ V }}">Settings</a>
     {% endif %}
   </div>
 </header>
@@ -62,11 +63,20 @@
       <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="update_grant_metadata" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Code <input type="text" name="code" value="{{ grant.code }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Name <input type="text" name="name" value="{{ grant.name }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Sponsor <input type="text" name="sponsor" value="{{ grant.sponsor }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Total Budget (₹) <input type="number" step="0.01" name="total_budget" value="{{ grant.total_budget }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Start <input type="date" name="start_date" value="{{ grant.start_date or '' }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">End <input type="date" name="end_date" value="{{ grant.end_date or '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Grant Type
+          <select name="grant_type" data-vis="{{ V }}">
+            <option value="external" {% if (grant.grant_type or 'external') == 'external' %}selected{% endif %} data-vis="{{ V }}">External</option>
+            <option value="internal" {% if grant.grant_type == 'internal' %}selected{% endif %} data-vis="{{ V }}">Internal</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Department <input type="text" name="department" value="{{ grant.department or '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Notes <input type="text" name="notes" value="{{ grant.notes or '' }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Status
           <select name="status" data-vis="{{ V }}">
             <option value="active" {% if grant.status == 'active' %}selected{% endif %} data-vis="{{ V }}">Active</option>

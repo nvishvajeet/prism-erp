@@ -253,6 +253,31 @@
     {% endif %}
   </section>
 
+  {# ── Tile: Finance (finance_admin / super_admin / owner only) ── #}
+  {% if module_enabled('finance') and (is_owner_user or current_user.role in ('finance_admin', 'super_admin', 'site_admin')) %}
+  <section class="card tile" data-vis="{{ V }}">
+    {% call card_heading("", "Finance") %}
+      {% if instrument.default_grant_id %}
+      <span class="badge badge-green" data-vis="{{ V }}">Linked</span>
+      {% endif %}
+    {% endcall %}
+    <p class="tile-lead" data-vis="{{ V }}">Default grant for charging samples on this instrument.</p>
+    <form method="post" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_finance">
+      <label data-vis="{{ V }}">Charge to Grant
+        <select name="default_grant_id" data-vis="{{ V }}">
+          <option value="">— None —</option>
+          {% for g in grants %}
+          <option value="{{ g.id }}" {% if g.id == instrument.default_grant_id %}selected{% endif %}>{{ g.code }} — {{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm top-gap" data-vis="{{ V }}">Save</button>
+    </form>
+  </section>
+  {% endif %}
+
   {# ── Tile: Inventory ── #}
   <section class="card tile tile-inventory" data-vis="{{ V }}">
     {{ card_heading("", "Inventory") }}
@@ -345,31 +370,6 @@
   {% endif %}
 
   {# Downtime tile removed — merged into Control Panel above #}
-
-  {# ── Tile: Finance ── #}
-  {% if can_edit and module_enabled('finance') %}
-  <section class="card tile" data-vis="{{ V }}">
-    {% call card_heading("", "Finance") %}
-      {% if instrument.default_grant_id %}
-      <span class="badge badge-green" data-vis="{{ V }}">Linked</span>
-      {% endif %}
-    {% endcall %}
-    <p class="tile-lead" data-vis="{{ V }}">Default grant for charging samples on this instrument.</p>
-    <form method="post" data-vis="{{ V }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="action" value="update_finance">
-      <label data-vis="{{ V }}">Charge to Grant
-        <select name="default_grant_id" data-vis="{{ V }}">
-          <option value="">— None —</option>
-          {% for g in grants %}
-          <option value="{{ g.id }}" {% if g.id == instrument.default_grant_id %}selected{% endif %}>{{ g.code }} — {{ g.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <button type="submit" class="btn btn-primary btn-sm top-gap" data-vis="{{ V }}">Save</button>
-    </form>
-  </section>
-  {% endif %}
 
   {# ── Tile: Maintenance & Calibration (v2.2.0) ── #}
   <section class="card tile tile-maintenance" data-vis="{{ V }}">

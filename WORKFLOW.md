@@ -259,7 +259,17 @@ minimum LLM token spend:
      └────────────┘    └─────────────┘
 ```
 
-### 5.1  Task partitioning
+### 5.1  Task partitioning — FIRST STEP IN EVERY TASK
+
+**Before writing any code, the LLM MUST:**
+1. Identify which local-machine jobs to fire FIRST (crawlers, tests, stress)
+2. Launch them in background on BOTH machines immediately
+3. THEN start the LLM reasoning/editing work while machines grind
+
+**This is not optional.** Every task starts with `ssh mini ... &` and
+`./venv/bin/python -m crawlers ... &` BEFORE the LLM reads a single file.
+The machines verify the PREVIOUS commit while the LLM works on the NEXT one.
+This pipeline means zero idle compute.
 
 **Rule: anything that can be verified empirically runs on a machine,
 not in the LLM's reasoning budget.**

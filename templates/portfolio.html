@@ -328,7 +328,7 @@ setTimeout(function () { window.location.reload(); }, 600000);
 
 {# ─── Charts row: portfolio value + allocation doughnut ── #}
 <div class="inst-tiles" data-vis="{{ V }}">
-  <section class="card tile" style="grid-column: span 2" data-vis="{{ V }}">
+  <section class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("VALUE", "Portfolio value (replayed from logged orders)") }}
     {% if pf.value_series and pf.value_series | length > 1 %}
     <canvas id="pfValueChart" height="160" data-vis="{{ V }}"></canvas>

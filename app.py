@@ -203,9 +203,9 @@ MODULE_REGISTRY = {
         "icon": "\u2705",
         "nav_order": 7,
         "description": "Assignable task list",
-        "nav_endpoint": None,
-        "nav_active_endpoints": set(),
-        "nav_order": 0,  # hidden from nav until route exists
+        "nav_endpoint": "todos_page",
+        "nav_active_endpoints": {"todos_page", "todo_new", "todo_complete", "todo_delete", "todo_update"},
+        "nav_access": lambda ap, is_owner: True,
     },
     "queue": {
         "label": "Queue",
@@ -4524,6 +4524,11 @@ def init_db() -> None:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_user_todos_user ON user_todos(user_id, status)")
+        # v1.3.1 — add category column to user_todos
+        try:
+            cur.execute("ALTER TABLE user_todos ADD COLUMN category TEXT NOT NULL DEFAULT 'general'")
+        except Exception:
+            pass  # column already exists
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS expense_receipts (
@@ -8662,17 +8667,19 @@ def unread_system_notification_count(user) -> int:
     return row["c"] if row else 0
 
 
-# ── Todo list routes ──────────────────────────────────────────────
+# ── Todo / Task routes ────────────────────────────────────────────
+
+_TODO_CATEGORIES = ("general", "instrument", "finance", "admin", "personal")
 
 def _can_assign_todo_to(assigner, target_user_id: int) -> bool:
-    """Check if assigner can assign a todo to target_user_id."""
+    """Check if assigner can assign a todo/task to target_user_id."""
     if not assigner:
         return False
     role = assigner["role"]
-    # Dean / owner can assign to anyone
+    # super_admin / owner / site_admin can assign to anyone
     if is_owner(assigner) or role in ("super_admin", "site_admin"):
         return True
-    # instrument_admin can assign to users on their instruments
+    # instrument_admin can assign to operators/faculty on their instruments
     if role == "instrument_admin":
         managed = {r["user_id"] for r in query_all(
             "SELECT user_id FROM instrument_operators WHERE instrument_id IN (SELECT instrument_id FROM instrument_admins WHERE user_id = ?)",
@@ -8683,53 +8690,118 @@ def _can_assign_todo_to(assigner, target_user_id: int) -> bool:
             (assigner["id"],),
         )}
         return target_user_id in managed
+    # finance_admin can assign to other finance users
+    if role == "finance_admin":
+        finance_ids = {r["id"] for r in query_all(
+            "SELECT id FROM users WHERE role = 'finance_admin' AND active = 1"
+        )}
+        return target_user_id in finance_ids
     return False
+
+
+def _assignable_users_for(user):
+    """Return list of users this person can assign tasks to."""
+    if is_owner(user) or user["role"] in ("super_admin", "site_admin"):
+        return query_all(
+            "SELECT id, name, email FROM users WHERE active = 1 AND invite_status = 'active' AND id != ? ORDER BY name",
+            (user["id"],),
+        )
+    if user["role"] == "instrument_admin":
+        rows = query_all(
+            """SELECT DISTINCT u.id, u.name, u.email FROM users u
+               WHERE u.active = 1 AND u.invite_status = 'active' AND u.id != ? AND (
+                 u.id IN (SELECT user_id FROM instrument_operators WHERE instrument_id IN (SELECT instrument_id FROM instrument_admins WHERE user_id = ?))
+                 OR u.id IN (SELECT user_id FROM instrument_requesters WHERE instrument_id IN (SELECT instrument_id FROM instrument_admins WHERE user_id = ?))
+               ) ORDER BY u.name""",
+            (user["id"], user["id"], user["id"]),
+        )
+        return rows
+    if user["role"] == "finance_admin":
+        return query_all(
+            "SELECT id, name, email FROM users WHERE role = 'finance_admin' AND active = 1 AND id != ? ORDER BY name",
+            (user["id"],),
+        )
+    return []
+
+
+_TODO_ORDER_SQL = """ORDER BY
+    CASE t.status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
+    CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+    t.due_date ASC NULLS LAST, t.created_at DESC"""
 
 
 @app.route("/todos", methods=["GET"])
 @login_required
 def todos_page():
-    """User's todo list: assigned to them + created by them."""
+    """Task & Todo hub with three tabs: my todos, assigned to me, assigned by me."""
     user = current_user()
-    my_todos = query_all(
-        """SELECT t.*, u.name AS assigned_by_name
-           FROM user_todos t
-           LEFT JOIN users u ON u.id = t.assigned_by_user_id
-           WHERE t.user_id = ? ORDER BY
-             CASE t.status WHEN 'open' THEN 0 ELSE 1 END,
-             CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
-             t.due_date ASC NULLS LAST, t.created_at DESC""",
-        (user["id"],),
-    )
-    assigned_by_me = query_all(
-        """SELECT t.*, u.name AS assignee_name
-           FROM user_todos t
-           LEFT JOIN users u ON u.id = t.user_id
-           WHERE t.assigned_by_user_id = ? AND t.user_id != ? ORDER BY
-             CASE t.status WHEN 'open' THEN 0 ELSE 1 END,
-             t.created_at DESC""",
-        (user["id"], user["id"]),
-    )
-    # Users this person can assign to
-    can_assign = is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")
-    assignable_users = []
-    if can_assign:
-        assignable_users = query_all(
-            "SELECT id, name, email FROM users WHERE active = 1 AND invite_status = 'active' ORDER BY name"
+    tab = request.args.get("tab", "my")
+    if tab not in ("my", "assigned", "by_me"):
+        tab = "my"
+
+    if tab == "my":
+        items = query_all(
+            f"""SELECT t.*, u.name AS assigner_name, u2.name AS assignee_name
+               FROM user_todos t
+               LEFT JOIN users u ON u.id = t.assigned_by_user_id
+               LEFT JOIN users u2 ON u2.id = t.user_id
+               WHERE t.user_id = ? AND (t.assigned_by_user_id IS NULL OR t.assigned_by_user_id = ?)
+               {_TODO_ORDER_SQL}""",
+            (user["id"], user["id"]),
         )
+    elif tab == "assigned":
+        items = query_all(
+            f"""SELECT t.*, u.name AS assigner_name, u2.name AS assignee_name
+               FROM user_todos t
+               LEFT JOIN users u ON u.id = t.assigned_by_user_id
+               LEFT JOIN users u2 ON u2.id = t.user_id
+               WHERE t.user_id = ? AND t.assigned_by_user_id IS NOT NULL AND t.assigned_by_user_id != ?
+               {_TODO_ORDER_SQL}""",
+            (user["id"], user["id"]),
+        )
+    else:  # by_me
+        items = query_all(
+            f"""SELECT t.*, u.name AS assigner_name, u2.name AS assignee_name
+               FROM user_todos t
+               LEFT JOIN users u ON u.id = t.assigned_by_user_id
+               LEFT JOIN users u2 ON u2.id = t.user_id
+               WHERE t.assigned_by_user_id = ? AND t.user_id != ?
+               {_TODO_ORDER_SQL}""",
+            (user["id"], user["id"]),
+        )
+
+    # Tab counts for badges
+    my_count = query_one(
+        "SELECT COUNT(*) AS c FROM user_todos WHERE user_id = ? AND (assigned_by_user_id IS NULL OR assigned_by_user_id = ?) AND status != 'done'",
+        (user["id"], user["id"]),
+    )["c"]
+    assigned_count = query_one(
+        "SELECT COUNT(*) AS c FROM user_todos WHERE user_id = ? AND assigned_by_user_id IS NOT NULL AND assigned_by_user_id != ? AND status != 'done'",
+        (user["id"], user["id"]),
+    )["c"]
+    by_me_count = query_one(
+        "SELECT COUNT(*) AS c FROM user_todos WHERE assigned_by_user_id = ? AND user_id != ? AND status != 'done'",
+        (user["id"], user["id"]),
+    )["c"]
+
+    assignable_users = _assignable_users_for(user)
+
     return render_template(
         "todos.html",
-        my_todos=my_todos,
-        assigned_by_me=assigned_by_me,
-        can_assign=can_assign,
+        items=items,
+        tab=tab,
+        my_count=my_count,
+        assigned_count=assigned_count,
+        by_me_count=by_me_count,
         assignable_users=assignable_users,
+        categories=_TODO_CATEGORIES,
     )
 
 
 @app.route("/todos/new", methods=["POST"])
 @login_required
 def todo_new():
-    """Create a new todo item."""
+    """Create a new todo or assigned task."""
     user = current_user()
     title = request.form.get("title", "").strip()
     if not title:
@@ -8737,10 +8809,13 @@ def todo_new():
         return redirect(url_for("todos_page"))
     body = request.form.get("body", "").strip()
     priority = request.form.get("priority", "normal").strip()
-    if priority not in ("low", "normal", "high", "urgent"):
+    if priority not in ("normal", "high", "urgent"):
         priority = "normal"
     due_date = request.form.get("due_date", "").strip() or None
-    assign_to = request.form.get("user_id", "").strip()
+    category = request.form.get("category", "general").strip()
+    if category not in _TODO_CATEGORIES:
+        category = "general"
+    assign_to = request.form.get("assign_to", "").strip()
     if assign_to:
         target_id = int(assign_to)
         if target_id != user["id"] and not _can_assign_todo_to(user, target_id):
@@ -8749,14 +8824,14 @@ def todo_new():
     else:
         target_id = user["id"]
     execute(
-        "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, due_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (target_id, user["id"], title, body, priority, due_date, now_iso()),
+        "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, due_date, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (target_id, user["id"], title, body, priority, due_date, category, now_iso()),
     )
     # Notify assignee if it's someone else
     if target_id != user["id"]:
         try:
-            notify(target_id, "request", f"New task: {title}",
-                   f"Assigned by {user['name']}", url_for("todos_page"),
+            notify(target_id, "task", f"New task: {title}",
+                   f"Assigned by {user['name']}", url_for("todos_page", tab="assigned"),
                    "user_todo", None)
         except Exception:
             pass
@@ -8764,20 +8839,46 @@ def todo_new():
     return redirect(url_for("todos_page"))
 
 
+@app.route("/todos/<int:todo_id>/update", methods=["POST"])
+@login_required
+def todo_update(todo_id: int):
+    """Update status or fields of a todo/task."""
+    user = current_user()
+    todo = query_one("SELECT * FROM user_todos WHERE id = ?", (todo_id,))
+    if not todo or (todo["user_id"] != user["id"] and todo["assigned_by_user_id"] != user["id"]):
+        abort(403)
+    status = request.form.get("status", "").strip()
+    if status in ("open", "in_progress", "done"):
+        completed_at = now_iso() if status == "done" else None
+        execute(
+            "UPDATE user_todos SET status = ?, completed_at = ? WHERE id = ?",
+            (status, completed_at, todo_id),
+        )
+    title = request.form.get("title", "").strip()
+    if title:
+        execute("UPDATE user_todos SET title = ? WHERE id = ?", (title, todo_id))
+    body = request.form.get("body")
+    if body is not None:
+        execute("UPDATE user_todos SET body = ? WHERE id = ?", (body.strip(), todo_id))
+    flash("Task updated.", "success")
+    return redirect(url_for("todos_page", tab=request.form.get("tab", "my")))
+
+
 @app.route("/todos/<int:todo_id>/complete", methods=["POST"])
 @login_required
 def todo_complete(todo_id: int):
-    """Mark a todo as completed."""
+    """Mark a todo as done."""
     user = current_user()
     todo = query_one("SELECT * FROM user_todos WHERE id = ?", (todo_id,))
     if not todo or (todo["user_id"] != user["id"] and todo["assigned_by_user_id"] != user["id"]):
         abort(403)
     execute(
-        "UPDATE user_todos SET status = 'completed', completed_at = ? WHERE id = ?",
+        "UPDATE user_todos SET status = 'done', completed_at = ? WHERE id = ?",
         (now_iso(), todo_id),
     )
     flash("Task completed.", "success")
-    return redirect(url_for("todos_page"))
+    tab = request.form.get("tab", "my")
+    return redirect(url_for("todos_page", tab=tab))
 
 
 @app.route("/todos/<int:todo_id>/delete", methods=["POST"])
@@ -8790,7 +8891,8 @@ def todo_delete(todo_id: int):
         abort(403)
     execute("DELETE FROM user_todos WHERE id = ?", (todo_id,))
     flash("Task deleted.", "success")
-    return redirect(url_for("todos_page"))
+    tab = request.form.get("tab", "my")
+    return redirect(url_for("todos_page", tab=tab))
 
 
 # ── External email queue helper ─────────────────────────────────

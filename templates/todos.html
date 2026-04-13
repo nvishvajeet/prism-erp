@@ -6,136 +6,134 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">Tasks</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">{{ my_todos|selectattr('status', 'equalto', 'open')|list|length }} open</span>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Tasks &amp; Todos</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <button id="toggleNewTask" class="btn btn-primary" onclick="document.getElementById('newTaskForm').toggleAttribute('hidden')" data-vis="{{ V }}">+ New</button>
   </div>
 </header>
 
-{# ── New task form (collapsible) ── #}
+{# ── Create form (hidden, toggles open) ── #}
 <section class="dashboard-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <details class="form-section" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Add Task</summary>
-      <form method="post" action="{{ url_for('todo_new') }}" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <article class="card tile tile-full-width" id="newTaskForm" hidden data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('todo_new') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Title</label>
+        <input type="text" name="title" required data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Details</label>
+        <textarea name="body" rows="2" data-vis="{{ V }}"></textarea>
+      </div>
+      <div class="form-controls" data-vis="{{ V }}">
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Title</label>
-          <input type="text" name="title" required data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Assign to</label>
+          <select name="assign_to" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">Myself</option>
+            {% for u in assignable_users %}
+            <option value="{{ u.id }}" data-vis="{{ V }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Description</label>
-          <textarea name="body" rows="2" data-vis="{{ V }}"></textarea>
+          <label data-vis="{{ V }}">Priority</label>
+          <select name="priority" data-vis="{{ V }}">
+            <option value="normal" data-vis="{{ V }}">Normal</option>
+            <option value="high" data-vis="{{ V }}">High</option>
+            <option value="urgent" data-vis="{{ V }}">Urgent</option>
+          </select>
         </div>
-        <div class="form-controls" data-vis="{{ V }}">
-          <div class="form-field" data-vis="{{ V }}">
-            <label data-vis="{{ V }}">Priority</label>
-            <select name="priority" data-vis="{{ V }}">
-              <option value="low">Low</option>
-              <option value="normal" selected>Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-          <div class="form-field" data-vis="{{ V }}">
-            <label data-vis="{{ V }}">Due Date</label>
-            <input type="date" name="due_date" data-vis="{{ V }}">
-          </div>
-          {% if can_assign %}
-          <div class="form-field" data-vis="{{ V }}">
-            <label data-vis="{{ V }}">Assign To</label>
-            <select name="user_id" data-vis="{{ V }}">
-              <option value="">Myself</option>
-              {% for u in assignable_users %}
-              <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
-              {% endfor %}
-            </select>
-          </div>
-          {% endif %}
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Due date</label>
+          <input type="date" name="due_date" data-vis="{{ V }}">
         </div>
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create Task</button>
-      </form>
-    </details>
+        <div class="form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Category</label>
+          <select name="category" data-vis="{{ V }}">
+            {% for cat in categories %}
+            <option value="{{ cat }}" data-vis="{{ V }}">{{ cat|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create</button>
+    </form>
   </article>
 </section>
 
-{# ── My Tasks ── #}
+{# ── Tabs: My Todos | Assigned to Me | Assigned by Me ── #}
+<nav class="inbox-folder-tabs" data-vis="{{ V }}">
+  <a class="inbox-folder-tab{% if tab == 'my' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('todos_page', tab='my') }}" data-vis="{{ V }}">
+    My Todos{% if my_count %} <span class="badge badge-count" data-vis="{{ V }}">{{ my_count }}</span>{% endif %}
+  </a>
+  <a class="inbox-folder-tab{% if tab == 'assigned' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('todos_page', tab='assigned') }}" data-vis="{{ V }}">
+    Assigned to Me{% if assigned_count %} <span class="badge badge-count" data-vis="{{ V }}">{{ assigned_count }}</span>{% endif %}
+  </a>
+  <a class="inbox-folder-tab{% if tab == 'by_me' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('todos_page', tab='by_me') }}" data-vis="{{ V }}">
+    Assigned by Me{% if by_me_count %} <span class="badge badge-count" data-vis="{{ V }}">{{ by_me_count }}</span>{% endif %}
+  </a>
+</nav>
+
+{# ── Task list — inbox style ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("Assigned to Me", "My Tasks", hint=(my_todos|selectattr('status', 'equalto', 'open')|list|length ~ " open")) }}
-    {% if my_todos %}
-    <ul class="todo-list" data-vis="{{ V }}">
-      {% for t in my_todos %}
-      <li class="todo-row{% if t.status == 'completed' %} todo-row-done{% endif %}" data-vis="{{ V }}">
-        <div class="todo-row-left" data-vis="{{ V }}">
-          {% if t.status == 'open' %}
-          <form method="post" action="{{ url_for('todo_complete', todo_id=t.id) }}" class="todo-check-form" data-vis="{{ V }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="todo-checkbox" title="Mark complete" data-vis="{{ V }}"></button>
-          </form>
-          {% else %}
-          <span class="todo-checkbox todo-checkbox-done" data-vis="{{ V }}">&#10003;</span>
+    {% if items %}
+    {% for item in items %}
+    <div class="inbox-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
+      {# Checkbox / complete toggle #}
+      <div class="todo-row-left" data-vis="{{ V }}">
+        {% if item.status != 'done' %}
+        <form method="post" action="{{ url_for('todo_complete', todo_id=item.id) }}" class="todo-check-form" data-vis="{{ V }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          <button type="submit" class="todo-checkbox" title="Mark done" data-vis="{{ V }}"></button>
+        </form>
+        {% else %}
+        <span class="todo-checkbox todo-checkbox-done" data-vis="{{ V }}">&#10003;</span>
+        {% endif %}
+      </div>
+
+      {# Body #}
+      <div class="inbox-row-body" style="flex:1; min-width:0;" data-vis="{{ V }}">
+        <strong class="{% if item.status == 'done' %}todo-title-done{% endif %}" data-vis="{{ V }}">{{ item.title }}</strong>
+        <span class="hint" data-vis="{{ V }}">
+          {% if tab == 'assigned' and item.assigner_name %}from {{ item.assigner_name }}{% endif %}
+          {% if tab == 'by_me' and item.assignee_name %}&rarr; {{ item.assignee_name }}{% endif %}
+          &middot; {{ item.category }}
+          {% if item.due_date %} &middot; due {{ item.due_date }}{% endif %}
+          {% if item.status == 'in_progress' %} &middot; <em>in progress</em>{% endif %}
+        </span>
+      </div>
+
+      {# Priority badge + status toggle + delete #}
+      <div class="todo-row-right" data-vis="{{ V }}">
+        <span class="badge todo-priority-{{ item.priority }}" data-vis="{{ V }}">{{ item.priority|upper }}</span>
+        {% if item.status != 'done' %}
+        <form method="post" action="{{ url_for('todo_update', todo_id=item.id) }}" class="todo-status-form" style="display:inline;" data-vis="{{ V }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          {% if item.status == 'open' %}
+          <input type="hidden" name="status" value="in_progress">
+          <button type="submit" class="btn btn-sm btn-secondary" title="Start" data-vis="{{ V }}">&#9654;</button>
+          {% elif item.status == 'in_progress' %}
+          <input type="hidden" name="status" value="open">
+          <button type="submit" class="btn btn-sm btn-secondary" title="Pause" data-vis="{{ V }}">&#10074;&#10074;</button>
           {% endif %}
-          <div class="todo-content" data-vis="{{ V }}">
-            <span class="todo-title{% if t.status == 'completed' %} todo-title-done{% endif %}" data-vis="{{ V }}">{{ t.title }}</span>
-            {% if t.body %}<span class="todo-body hint" data-vis="{{ V }}">{{ t.body[:120] }}</span>{% endif %}
-            <span class="todo-meta hint" data-vis="{{ V }}">
-              {% if t.assigned_by_name and t.assigned_by_user_id != t.user_id %}From {{ t.assigned_by_name }} · {% endif %}
-              {% if t.due_date %}Due {{ t.due_date }} · {% endif %}
-              {{ t.created_at[:10] if t.created_at else '' }}
-            </span>
-          </div>
-        </div>
-        <div class="todo-row-right" data-vis="{{ V }}">
-          <span class="badge todo-priority-{{ t.priority }}" data-vis="{{ V }}">{{ t.priority|upper }}</span>
-          <form method="post" action="{{ url_for('todo_delete', todo_id=t.id) }}" class="todo-delete-form" data-vis="{{ V }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="text-link hint todo-delete-btn" title="Delete" data-vis="{{ V }}">&#10005;</button>
-          </form>
-        </div>
-      </li>
-      {% endfor %}
-    </ul>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('todo_delete', todo_id=item.id) }}" class="todo-delete-form" style="display:inline;" data-vis="{{ V }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          <button type="submit" class="text-link hint todo-delete-btn" title="Delete" data-vis="{{ V }}">&#10005;</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
     {% else %}
-      {{ empty_state("No tasks assigned to you.") }}
+      {{ empty_state("No items in this tab.") }}
     {% endif %}
   </article>
 </section>
-
-{# ── Assigned by Me ── #}
-{% if assigned_by_me %}
-<section class="inbox-tiles top-gap" data-vis="{{ V }}">
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("Created by Me", "Assigned by Me", hint=(assigned_by_me|length ~ " tasks")) }}
-    <ul class="todo-list" data-vis="{{ V }}">
-      {% for t in assigned_by_me %}
-      <li class="todo-row{% if t.status == 'completed' %} todo-row-done{% endif %}" data-vis="{{ V }}">
-        <div class="todo-row-left" data-vis="{{ V }}">
-          {% if t.status == 'completed' %}
-          <span class="todo-checkbox todo-checkbox-done" data-vis="{{ V }}">&#10003;</span>
-          {% else %}
-          <span class="todo-checkbox todo-checkbox-pending" data-vis="{{ V }}"></span>
-          {% endif %}
-          <div class="todo-content" data-vis="{{ V }}">
-            <span class="todo-title{% if t.status == 'completed' %} todo-title-done{% endif %}" data-vis="{{ V }}">{{ t.title }}</span>
-            <span class="todo-meta hint" data-vis="{{ V }}">
-              Assigned to {{ t.assignee_name or 'Unknown' }}
-              {% if t.due_date %} · Due {{ t.due_date }}{% endif %}
-              {% if t.status == 'completed' %} · Done {{ t.completed_at[:10] if t.completed_at else '' }}{% endif %}
-            </span>
-          </div>
-        </div>
-        <div class="todo-row-right" data-vis="{{ V }}">
-          <span class="badge todo-priority-{{ t.priority }}" data-vis="{{ V }}">{{ t.priority|upper }}</span>
-          <form method="post" action="{{ url_for('todo_delete', todo_id=t.id) }}" class="todo-delete-form" data-vis="{{ V }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="text-link hint todo-delete-btn" title="Delete" data-vis="{{ V }}">&#10005;</button>
-          </form>
-        </div>
-      </li>
-      {% endfor %}
-    </ul>
-  </article>
-</section>
-{% endif %}
 
 {% endblock %}

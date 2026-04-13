@@ -4770,6 +4770,21 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_salary_payments_period ON salary_payments(year, month);
         """)
 
+        # ── Multi-company structure (sister companies) ────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                short_name TEXT NOT NULL DEFAULT '',
+                gstin TEXT NOT NULL DEFAULT '',
+                pan TEXT NOT NULL DEFAULT '',
+                address TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                owner_note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+        """)
+
         # ── Vendor Payments module ─────────────────────────────────
         cur.executescript("""
             CREATE TABLE IF NOT EXISTS vendors (
@@ -4907,6 +4922,7 @@ def init_db() -> None:
     _seed_demo_grants()
     _seed_demo_vehicles()
     _seed_demo_vendors()
+    _seed_demo_companies()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -5136,6 +5152,130 @@ def _seed_demo_vendors() -> None:
                  finance_id if paid_at else None, paid_at,
                  "upi" if paid_at else "", "",
                  "", "", None, now, now))
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+def _seed_demo_companies() -> None:
+    """Seed the sister-company structure. Idempotent.
+
+    Four companies under single ownership:
+      1. Ravikiran Mess & Catering (the primary mess business)
+      2. Gopal Doodh Dairy
+      3. Raj Services
+      4. SuryaJyoti
+
+    All share: single owner (mom+dad), single CA, single head
+    accountant (Prashant Chavre). They can charge each other
+    (inter-company transactions).
+    """
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM companies").fetchone()["c"]
+        if existing > 0:
+            return
+        now = now_iso()
+        cur = db.cursor()
+
+        companies = [
+            ("Ravikiran Mess & Catering", "Ravikiran",
+             "Primary university mess and catering business. ~8 crore/year. Feeds 3000+ students daily.",),
+            ("Gopal Doodh Dairy", "Gopal",
+             "Dairy supply and distribution. Supplies milk, paneer, curd to Ravikiran and external clients.",),
+            ("Raj Services", "Raj",
+             "General services company. Staffing, housekeeping, maintenance contracts.",),
+            ("SuryaJyoti", "SuryaJyoti",
+             "Sister company. Shared admin and finance with the group.",),
+        ]
+        for name, short, note in companies:
+            cur.execute(
+                "INSERT INTO companies (name, short_name, owner_note, created_at) VALUES (?,?,?,?)",
+                (name, short, note, now))
+        db.commit()
+
+        # Add company_id columns to vendors and purchase_orders if missing
+        for table in ("vendors", "purchase_orders"):
+            cols = {c[1] for c in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+            if "company_id" not in cols:
+                try:
+                    cur.execute(f"ALTER TABLE {table} ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1")
+                except Exception:
+                    pass
+
+        # Add inter-company flag to purchase_orders
+        po_cols = {c[1] for c in cur.execute("PRAGMA table_info(purchase_orders)").fetchall()}
+        if "is_intercompany" not in po_cols:
+            try:
+                cur.execute("ALTER TABLE purchase_orders ADD COLUMN is_intercompany INTEGER NOT NULL DEFAULT 0")
+            except Exception:
+                pass
+        if "counterparty_company_id" not in po_cols:
+            try:
+                cur.execute("ALTER TABLE purchase_orders ADD COLUMN counterparty_company_id INTEGER")
+            except Exception:
+                pass
+
+        # Also add company_id to salary tables for multi-company payroll
+        for table in ("salary_config", "salary_payments"):
+            cols = {c[1] for c in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+            if "company_id" not in cols:
+                try:
+                    cur.execute(f"ALTER TABLE {table} ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1")
+                except Exception:
+                    pass
+
+        db.commit()
+
+        # Add key staff: Prashant (head accountant), Sonal, Rahul (finance),
+        # Balu Patil (driver) — these serve across all companies
+        demo_pw_hash = generate_password_hash("12345", method="pbkdf2:sha256")
+        staff = [
+            ("Prashant Chavre", "prashant@catalyst.local", "finance_admin",
+             "Head Accountant — manages finances across all 4 companies"),
+            ("Sonal Patil", "sonal@catalyst.local", "finance_admin",
+             "Finance staff — attendance & payroll, primarily Ravikiran"),
+            ("Rahul Misal", "rahul@catalyst.local", "finance_admin",
+             "Finance staff — vendor payments & compliance"),
+        ]
+        for name, email, role, note in staff:
+            existing_user = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if not existing_user:
+                cur.execute(
+                    "INSERT INTO users (name, email, password_hash, role, invite_status) VALUES (?,?,?,?,'active')",
+                    (name, email, demo_pw_hash, role))
+                uid = cur.lastrowid
+                cur.execute(
+                    "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
+                    (uid, role, now))
+        db.commit()
+
+        # Register the sister companies as vendors of each other
+        # (for inter-company charging)
+        ravikiran_id = db.execute("SELECT id FROM companies WHERE short_name='Ravikiran'").fetchone()["id"]
+        gopal_id = db.execute("SELECT id FROM companies WHERE short_name='Gopal'").fetchone()["id"]
+        raj_id = db.execute("SELECT id FROM companies WHERE short_name='Raj'").fetchone()["id"]
+        surya_id = db.execute("SELECT id FROM companies WHERE short_name='SuryaJyoti'").fetchone()["id"]
+
+        prashant = db.execute("SELECT id FROM users WHERE email='prashant@catalyst.local'").fetchone()
+        prashant_id = prashant["id"] if prashant else 1
+
+        interco_vendors = [
+            ("Gopal Doodh Dairy (Sister Co.)", "Prashant Chavre", "", "", "dairy", gopal_id),
+            ("Raj Services (Sister Co.)", "Prashant Chavre", "", "", "services", raj_id),
+            ("SuryaJyoti (Sister Co.)", "Prashant Chavre", "", "", "general", surya_id),
+        ]
+        for name, contact, phone, email, cat, co_id in interco_vendors:
+            existing_v = db.execute("SELECT id FROM vendors WHERE name = ?", (name,)).fetchone()
+            if not existing_v:
+                cur.execute(
+                    """INSERT INTO vendors (name, contact_person, phone, email, category,
+                       notes, created_by_user_id, created_at, company_id, is_active)
+                       VALUES (?,?,?,?,?,'Inter-company vendor',?,?,?,1)""",
+                    (name, contact, phone, email, cat, prashant_id, now, ravikiran_id))
         db.commit()
     except Exception:
         pass
@@ -16157,6 +16297,14 @@ def payroll_pay():
 
 # ── Vendor Payments module ──────────────────────────────────────
 
+def _get_companies():
+    """Return list of active companies."""
+    try:
+        return query_all("SELECT * FROM companies WHERE is_active = 1 ORDER BY id")
+    except Exception:
+        return []
+
+
 PO_STATUS_TRANSITIONS = {
     "draft":             {"pending_approval", "approved"},  # approved = auto-approve
     "pending_approval":  {"approved", "rejected"},
@@ -16581,7 +16729,7 @@ def vendor_payment_print(po_id):
     if not po:
         abort(404)
     filing_cat, _, fiscal_year = _po_filing_info(po)
-    return render_template("vendor_payment_print.html", po=po,
+    return render_template("_vendor_payment_print.html", po=po,
                            filing_cat=filing_cat, fiscal_year=fiscal_year)
 
 
@@ -16867,7 +17015,7 @@ def vendor_payment_print_batch():
     elif category:
         desc_parts.append(category)
     filter_label = " · ".join(desc_parts) if desc_parts else "All"
-    return render_template("vendor_payment_print_batch.html",
+    return render_template("_vendor_payment_print_batch.html",
                            orders=orders, grand_total=grand_total,
                            filter_label=filter_label,
                            filing_lookup=_CATEGORY_TO_FOLDER)

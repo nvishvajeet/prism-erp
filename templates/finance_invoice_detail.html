@@ -13,11 +13,11 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     {% if can_edit_finance and derived_status != 'void' and derived_status != 'paid' %}
-    <form method="post" action="{{ url_for('finance_invoice_void', invoice_id=inv.id) }}" style="display:inline;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('finance_invoice_void', invoice_id=inv.id) }}" class="inline-form inline-form-single inline-form-confirm" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="button" class="btn btn-danger confirm-gate" data-vis="{{ V }}"
-              onclick="this.style.display='none';this.nextElementSibling.style.display='inline';">Void Invoice</button>
-      <button type="submit" class="btn btn-danger" style="display:none;" data-vis="{{ V }}">Confirm void?</button>
+              onclick="this.hidden=true;this.nextElementSibling.hidden=false;">Void Invoice</button>
+      <button type="submit" class="btn btn-danger" hidden data-vis="{{ V }}">Confirm void?</button>
     </form>
     {% endif %}
   </div>
@@ -58,7 +58,7 @@
     {{ card_heading("GRANT BUDGET", inv.grant_code ~ " utilization") }}
     <div class="budget-util-container" data-vis="{{ V }}">
       <div class="budget-util-bar" data-vis="{{ V }}">
-        <div class="budget-util-fill{% if budget_util.pct >= 100 %} budget-util-over{% elif budget_util.pct >= 80 %} budget-util-warn{% endif %}" style="width: {{ [budget_util.pct, 100]|min }}%;" data-vis="{{ V }}"></div>
+        <div class="budget-util-fill util-fill{% if budget_util.pct >= 100 %} budget-util-over{% elif budget_util.pct >= 80 %} budget-util-warn{% endif %}" style="--util-pct: {{ [budget_util.pct, 100]|min }}%;" data-vis="{{ V }}"></div>
       </div>
       <div class="budget-util-labels" data-vis="{{ V }}">
         <span data-vis="{{ V }}">Spent: &#8377;{{ "{:,.0f}".format(budget_util.spent) }}</span>

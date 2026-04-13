@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | attendance-leave-calendar | 2026-04-13T10:45:00Z | CLAIMS.md, app.py, templates/attendance.html, templates/leave_calendar.html, templates/base.html | feat: add leave calendar |
+| codex | catalyst-rename | 2026-04-13T10:45:00Z | repo-wide branding and namespace sweep | feat: rename PRISM to CATALYST |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

@@ -271,6 +271,22 @@ minimum LLM token spend:
 The machines verify the PREVIOUS commit while the LLM works on the NEXT one.
 This pipeline means zero idle compute.
 
+### 5.1.1  Debug feedback log — TREAT AS CRITICAL
+
+**`logs/debug_feedback.md` is the user's live voice.** Every entry
+is a real person clicking the real app and telling you what's wrong.
+
+**Rules:**
+- Check the log at the START of every task (before anything else)
+- Every entry with a CSS/layout/UI complaint MUST be fixed immediately
+- Every entry with a feature request must be acknowledged and queued
+- Never dismiss an entry as "already addressed" unless you verified
+  the fix is live on the running server
+- After fixing, re-read the log to check for new entries added while
+  you were fixing — the user may be testing in real-time
+- Log entries are numbered. Track which ones are fixed in the commit
+  message (e.g., "Closes debug entries #27, #28, #30")
+
 **Resilience rules:**
 - Local tasks are fire-and-forget with `run_in_background`
 - LLM checks results after ~5 minutes via `TaskOutput` or reading output files

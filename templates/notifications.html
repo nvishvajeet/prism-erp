@@ -39,78 +39,35 @@
   {% endfor %}
 </nav>
 
-{% if is_owner_user or can_manage_members_user %}
-<section class="dashboard-tiles" data-vis="{{ V }}">
-  <article class="card tile" data-vis="{{ V }}">
-    <details class="form-section" data-vis="{{ V }}">
-      <summary data-vis="{{ V }}">Notification Control Panel</summary>
-      <form method="post" action="{{ url_for('admin_notices_new') }}" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Subject</label>
-          <input type="text" name="subject" required data-vis="{{ V }}">
-        </div>
-        <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Body</label>
-          <textarea name="body" rows="3" data-vis="{{ V }}"></textarea>
-        </div>
-        <div class="form-controls" data-vis="{{ V }}">
-          <div class="form-field" data-vis="{{ V }}">
-            <label data-vis="{{ V }}">Severity</label>
-            <select name="severity" data-vis="{{ V }}">
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
-          <div class="form-field" data-vis="{{ V }}">
-            <label data-vis="{{ V }}">Scope</label>
-            <select name="scope" data-vis="{{ V }}">
-              <option value="site">Site-wide</option>
-            </select>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Send Notice</button>
-      </form>
-    </details>
-  </article>
-</section>
-{% endif %}
-
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-inbox-list" data-vis="{{ V }}">
   {% if notices %}
   <ul class="inbox-list" data-vis="{{ V }}">
   {% for n in notices %}
-  <li class="inbox-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
-    <div class="notice-row-header" data-vis="{{ V }}">
-      <div class="notice-row-meta" data-vis="{{ V }}">
-        {% if not n.is_read %}<span class="notice-unread-dot" data-vis="{{ V }}"></span>{% endif %}
-        {# Category badge #}
-        <span class="badge notif-cat-label notif-cat-label-{{ n.category }}" data-vis="{{ V }}">{{ n.category|upper }}</span>
-        {% if n.kind == 'notice' %}
-        <span class="badge notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
-        {% endif %}
-        <code class="inline-code" data-vis="{{ V }}">{{ n.scope_label }}</code>
-        <span class="hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
-        {% if not n.is_read %}
-        <form method="post" action="{{ url_for('notification_mark_read') }}" class="notice-mark-read-form" data-vis="{{ V }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="notice_id" value="{% if n.kind == 'system' %}sys_{{ n.id }}{% else %}{{ n.id }}{% endif %}">
-          <button type="submit" class="text-link hint" data-vis="{{ V }}">mark read</button>
-        </form>
-        {% endif %}
+  <li class="inbox-row clickable-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
+    <a href="{{ n.href if n.href else url_for('notifications_page') }}" class="notif-row-link" data-vis="{{ V }}">
+      <div class="notice-row-header" data-vis="{{ V }}">
+        <div class="notice-row-meta" data-vis="{{ V }}">
+          {% if not n.is_read %}<span class="notice-unread-dot" data-vis="{{ V }}"></span>{% endif %}
+          <span class="badge notif-cat-label notif-cat-label-{{ n.category }}" data-vis="{{ V }}">{{ n.category|upper }}</span>
+          {% if n.kind == 'notice' %}
+          <span class="badge notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
+          {% endif %}
+          <code class="inline-code" data-vis="{{ V }}">{{ n.scope_label }}</code>
+          <span class="hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
+        </div>
       </div>
-    </div>
-    {% if n.href %}
-    <a href="{{ n.href }}" class="notif-row-link" data-vis="{{ V }}">
       <h3 data-vis="{{ V }}">{{ n.title }}</h3>
+      {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
+      {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
     </a>
-    {% else %}
-    <h3 data-vis="{{ V }}">{{ n.title }}</h3>
+    {% if not n.is_read %}
+    <form method="post" action="{{ url_for('notification_mark_read') }}" class="notice-mark-read-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="notice_id" value="{% if n.kind == 'system' %}sys_{{ n.id }}{% else %}{{ n.id }}{% endif %}">
+      <button type="submit" class="text-link hint" data-vis="{{ V }}">mark read</button>
+    </form>
     {% endif %}
-    {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
-    {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
   </li>
   {% endfor %}
   </ul>

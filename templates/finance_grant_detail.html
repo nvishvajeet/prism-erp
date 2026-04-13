@@ -74,15 +74,6 @@
         <input type="hidden" name="action" value="update_grant_metadata" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Name <input type="text" name="name" value="{{ grant.name }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Sponsor <input type="text" name="sponsor" value="{{ grant.sponsor }}" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Type
-          <select name="grant_type" data-vis="{{ V }}">
-            <option value="internal" {% if grant.grant_type == 'internal' %}selected{% endif %} data-vis="{{ V }}">Internal</option>
-            <option value="dst" {% if grant.grant_type == 'dst' %}selected{% endif %} data-vis="{{ V }}">DST</option>
-            <option value="external" {% if grant.grant_type == 'external' %}selected{% endif %} data-vis="{{ V }}">External</option>
-            <option value="industry" {% if grant.grant_type == 'industry' %}selected{% endif %} data-vis="{{ V }}">Industry</option>
-          </select>
-        </label>
-        <label data-vis="{{ V }}">Department <input type="text" name="department" value="{{ grant.department or '' }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Total Budget (₹) <input type="number" step="0.01" name="total_budget" value="{{ grant.total_budget }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Start <input type="date" name="start_date" value="{{ grant.start_date or '' }}" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">End <input type="date" name="end_date" value="{{ grant.end_date or '' }}" data-vis="{{ V }}"></label>
@@ -93,14 +84,13 @@
             <option value="exhausted" {% if grant.status == 'exhausted' %}selected{% endif %} data-vis="{{ V }}">Exhausted</option>
           </select>
         </label>
-        <label data-vis="{{ V }}">Notes <textarea name="notes" rows="2" data-vis="{{ V }}">{{ grant.notes }}</textarea></label>
         <button type="submit" class="small-button" data-vis="{{ V }}">Save</button>
       </form>
     </details>
     {% endif %}
   </article>
 
-  <article class="card tile tile-finance-outstanding" data-vis="{{ V }}">
+  <article class="card tile tile-full-width tile-finance-outstanding" data-vis="{{ V }}">
     {{ card_heading("CHARGED SAMPLES", charged|length|string ~ " charged") }}
     {% if charged %}
     <ul class="finance-invoice-list" data-vis="{{ V }}">
@@ -123,7 +113,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    {{ empty_state("No samples charged to this grant yet.") }}
+    <p class="hint" style="padding: 0.5rem 0;" data-vis="{{ V }}">No samples charged to this grant yet.</p>
     {% endif %}
   </article>
 

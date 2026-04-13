@@ -9676,3 +9676,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .inst-header-actions .btn { width: 100%; text-align: center; }
   body { font-size: 14px; }
 }
+
+/* Request detail activity: system events dimmed, comments prominent */
+.activity-feed .activity-entry[data-action*="submitted"],
+.activity-feed .activity-entry[data-action*="received"],
+.activity-feed .activity-entry[data-action*="approved"],
+.activity-feed .activity-entry[data-action*="scheduled"],
+.activity-feed .activity-entry[data-action*="seeded"] {
+  opacity: 0.5;
+}
+.activity-feed .activity-entry[data-action*="communication"],
+.activity-feed .activity-entry[data-action*="note"],
+.activity-feed .activity-entry[data-action*="message"],
+.activity-feed .activity-entry[data-action*="comment"] {
+  opacity: 1;
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+}

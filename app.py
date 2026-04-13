@@ -261,6 +261,18 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {"personnel_list", "personnel_detail", "payroll_view"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
+    "compute": {
+        "label": "Compute",
+        "icon": "\U0001f5a5",
+        "nav_order": 11,
+        "description": "HPC job scheduler — submit & track compute jobs",
+        "nav_endpoint": "compute_dashboard",
+        "nav_active_endpoints": {
+            "compute_dashboard", "compute_submit", "compute_job_detail",
+            "compute_software_list", "compute_admin",
+        },
+        "nav_access": lambda ap, is_owner: True,  # everyone can submit jobs
+    },
     "admin": {
         "label": "Admin",
         "icon": "\u2699\ufe0f",
@@ -4723,6 +4735,61 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_salary_payments_period ON salary_payments(year, month);
         """)
 
+        # ── Compute / HPC Job Scheduler module ───────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS compute_software (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                version TEXT NOT NULL DEFAULT '',
+                command_template TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT 'general',
+                max_runtime_minutes INTEGER NOT NULL DEFAULT 60,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS compute_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                software_id INTEGER,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                command TEXT NOT NULL DEFAULT '',
+                input_filename TEXT NOT NULL DEFAULT '',
+                output_filename TEXT NOT NULL DEFAULT '',
+                estimated_minutes INTEGER NOT NULL DEFAULT 10,
+                priority TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'queued',
+                queue_position INTEGER,
+                server_host TEXT NOT NULL DEFAULT '',
+                pid INTEGER,
+                started_at TEXT,
+                completed_at TEXT,
+                exit_code INTEGER,
+                stdout_log TEXT NOT NULL DEFAULT '',
+                stderr_log TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (software_id) REFERENCES compute_software(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_compute_jobs_user ON compute_jobs(user_id);
+            CREATE INDEX IF NOT EXISTS idx_compute_jobs_status ON compute_jobs(status);
+            CREATE INDEX IF NOT EXISTS idx_compute_jobs_priority ON compute_jobs(priority, created_at);
+
+            CREATE TABLE IF NOT EXISTS compute_quotas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                max_concurrent_jobs INTEGER NOT NULL DEFAULT 2,
+                max_daily_jobs INTEGER NOT NULL DEFAULT 10,
+                max_runtime_minutes INTEGER NOT NULL DEFAULT 120,
+                priority_tier TEXT NOT NULL DEFAULT 'normal',
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_compute_quotas_user ON compute_quotas(user_id);
+        """)
+
         # Additive column migrations for v1.1.0
         for col_sql in [
             "ALTER TABLE invoices ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ''",
@@ -5473,6 +5540,50 @@ def seed_data() -> None:
         "UPDATE users SET password_hash = ? WHERE email = ?",
         [(demo_pw_hash, e) for e in _persona_emails],
     )
+    db.commit()
+
+    # ── Compute software catalog (always upsert) ────────────────
+    compute_software = [
+        # (name, version, category, command_template, max_runtime_min, description)
+        ("Python 3",        "3.12",     "scripting",    "python3 {INPUT}",                          120,
+         "General-purpose scripting. Upload a .py script."),
+        ("MATLAB",          "R2024a",   "math",         "matlab -batch \"run('{INPUT}')\"",         240,
+         "University-wide license. Upload a .m script."),
+        ("GNU Octave",      "9.2",      "math",         "octave --no-gui {INPUT}",                  120,
+         "Open-source MATLAB alternative."),
+        ("R",               "4.4",      "analysis",     "Rscript {INPUT}",                          120,
+         "Statistical computing. Upload an .R script."),
+        ("Julia",           "1.11",     "analysis",     "julia {INPUT}",                            120,
+         "High-performance scientific computing."),
+        ("ANSYS Mechanical","2024 R1",  "simulation",   "ansys241 -b -i {INPUT} -o output.out",     480,
+         "Structural FEA. University license. Upload .inp file."),
+        ("ANSYS Fluent",    "2024 R1",  "cfd",          "fluent 3ddp -g -i {INPUT}",                480,
+         "CFD solver. University license. Upload journal file."),
+        ("COMSOL",          "6.2",      "simulation",   "comsol batch -inputfile {INPUT}",          480,
+         "Multi-physics simulation. Upload .mph file."),
+        ("Abaqus",          "2024",     "simulation",   "abaqus job={INPUT} interactive",           480,
+         "Advanced FEA. Upload .inp file."),
+        ("OpenFOAM",        "12",       "cfd",          "bash {INPUT}",                             360,
+         "Open-source CFD. Upload a run script."),
+        ("LAMMPS",          "2024.8",   "materials",    "lmp -in {INPUT}",                          360,
+         "Molecular dynamics. Upload input script."),
+        ("VASP",            "6.4",      "materials",    "mpirun -np 4 vasp_std",                    720,
+         "Ab-initio materials simulation. Upload INCAR/POSCAR set."),
+        ("Gaussian",        "16",       "materials",    "g16 {INPUT}",                              480,
+         "Quantum chemistry. Upload .gjf file."),
+        ("LaTeX",           "TeX Live", "typesetting",  "pdflatex -interaction=nonstopmode {INPUT}", 30,
+         "Document typesetting. Upload .tex file."),
+        ("Jupyter Notebook","7.x",      "scripting",    "jupyter nbconvert --to notebook --execute {INPUT}", 120,
+         "Execute a .ipynb notebook headlessly."),
+        ("ImageJ / Fiji",   "2.14",     "imaging",      "ImageJ-linux64 --headless --run {INPUT}",  60,
+         "Microscopy image analysis. Upload macro file."),
+        ("Custom Script",   "",         "general",      "",                                          120,
+         "Run any shell command. Specify the command manually."),
+    ]
+    for name, ver, cat, cmd, maxrt, desc in compute_software:
+        db.execute(
+            "INSERT OR IGNORE INTO compute_software (name, version, category, command_template, max_runtime_minutes, description, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
+            (name, ver, cat, cmd, maxrt, desc, now_iso()))
     db.commit()
 
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
@@ -15690,6 +15801,365 @@ def payroll_pay():
            source_type="salary_payment", source_id=uid)
     flash(f"₹{net_pay:,.0f} paid to {emp_name} for {month}/{year}.", "success")
     return redirect(url_for("payroll_view", year=year, month=int(month)))
+
+
+# ── Compute / HPC Job Scheduler module ─────────────────────────
+
+def _compute_scheduler_score(job):
+    """MLFQ scheduling score. Lower = runs first.
+    Algorithm:
+      - Priority tiers: high=0, normal=100, low=200
+      - Within tier: shortest estimated time first (SJF)
+      - Aging: subtract 5 points per minute waiting (so long-waiting
+        jobs eventually outrank short fresh ones)
+      - Fair share: penalize users with many running jobs (+50 per running)
+    """
+    tier_scores = {"high": 0, "normal": 100, "low": 200}
+    score = tier_scores.get(job["priority"], 100)
+    # SJF component
+    score += (job["estimated_minutes"] or 10) * 2
+    # Aging: reward waiting time
+    try:
+        wait_secs = (datetime.utcnow() - datetime.fromisoformat(job["created_at"])).total_seconds()
+        score -= (wait_secs / 60) * 5  # 5 points per minute waiting
+    except Exception:
+        pass
+    # Fair share penalty
+    running_count = query_one(
+        "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND status = 'running'",
+        (job["user_id"],))
+    score += (running_count["c"] if running_count else 0) * 50
+    return score
+
+
+def _compute_next_job():
+    """Pick the best queued job to run next, using MLFQ scoring."""
+    queued = query_all(
+        "SELECT * FROM compute_jobs WHERE status = 'queued' ORDER BY created_at ASC")
+    if not queued:
+        return None
+    # Check per-user concurrent limits
+    eligible = []
+    for job in queued:
+        quota = query_one(
+            "SELECT max_concurrent_jobs FROM compute_quotas WHERE user_id = ?",
+            (job["user_id"],))
+        max_conc = quota["max_concurrent_jobs"] if quota else 2
+        running = query_one(
+            "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND status = 'running'",
+            (job["user_id"],))
+        if (running["c"] if running else 0) < max_conc:
+            eligible.append(job)
+    if not eligible:
+        return None
+    # Score and pick best
+    eligible.sort(key=_compute_scheduler_score)
+    return eligible[0]
+
+
+def _compute_update_queue_positions():
+    """Recalculate queue_position for all queued jobs (display order)."""
+    queued = query_all(
+        "SELECT * FROM compute_jobs WHERE status = 'queued' ORDER BY created_at ASC")
+    if not queued:
+        return
+    queued.sort(key=_compute_scheduler_score)
+    for i, job in enumerate(queued, 1):
+        execute("UPDATE compute_jobs SET queue_position = ? WHERE id = ?",
+                (i, job["id"]))
+
+
+@app.route("/compute")
+@login_required
+def compute_dashboard():
+    """Job queue dashboard — shows running, queued, and recent jobs."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    # Running jobs
+    running = query_all("""
+        SELECT j.*, u.name AS user_name, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.user_id
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.status = 'running'
+         ORDER BY j.started_at ASC
+    """)
+    # Queued jobs (in scheduler order)
+    _compute_update_queue_positions()
+    queued = query_all("""
+        SELECT j.*, u.name AS user_name, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.user_id
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.status = 'queued'
+         ORDER BY j.queue_position ASC
+    """)
+    # Recent completed/failed (last 50)
+    recent = query_all("""
+        SELECT j.*, u.name AS user_name, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.user_id
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.status IN ('completed', 'failed', 'cancelled')
+         ORDER BY j.completed_at DESC
+         LIMIT 50
+    """)
+    # Stats
+    total_jobs = query_one("SELECT COUNT(*) AS c FROM compute_jobs")["c"]
+    my_running = sum(1 for j in running if j["user_id"] == user["id"])
+    my_queued = sum(1 for j in queued if j["user_id"] == user["id"])
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    software = query_all("SELECT * FROM compute_software WHERE is_active = 1 ORDER BY name")
+    return render_template("compute_dashboard.html",
+                           running=running, queued=queued, recent=recent,
+                           total_jobs=total_jobs, my_running=my_running,
+                           my_queued=my_queued, can_manage=can_manage,
+                           software=software)
+
+
+@app.route("/compute/submit", methods=["GET", "POST"])
+@login_required
+def compute_submit():
+    """Submit a new compute job."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    software_list = query_all(
+        "SELECT * FROM compute_software WHERE is_active = 1 ORDER BY category, name")
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        if not title:
+            flash("Job title is required.", "error")
+            return redirect(url_for("compute_submit"))
+        software_id = request.form.get("software_id", "").strip() or None
+        if software_id:
+            software_id = int(software_id)
+        description = request.form.get("description", "").strip()
+        command = request.form.get("command", "").strip()
+        estimated_minutes = int(request.form.get("estimated_minutes", "10") or "10")
+        priority = request.form.get("priority", "normal").strip()
+        if priority not in ("high", "normal", "low"):
+            priority = "normal"
+        # Check daily quota
+        quota = query_one(
+            "SELECT max_daily_jobs FROM compute_quotas WHERE user_id = ?",
+            (user["id"],))
+        max_daily = quota["max_daily_jobs"] if quota else 10
+        today_count = query_one(
+            "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND date(created_at) = date('now')",
+            (user["id"],))
+        if (today_count["c"] if today_count else 0) >= max_daily:
+            flash(f"Daily job limit reached ({max_daily}). Try again tomorrow.", "error")
+            return redirect(url_for("compute_dashboard"))
+        # Handle input file upload
+        input_filename = ""
+        uploaded = request.files.get("input_file")
+        if uploaded and uploaded.filename:
+            safe_name = secure_filename(uploaded.filename)
+            upload_dir = Path("data") / "compute_inputs"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            input_filename = f"job_{user['id']}_{ts}_{safe_name}"
+            uploaded.save(str(upload_dir / input_filename))
+        # If software selected, use its command template
+        if software_id and not command:
+            sw = query_one("SELECT command_template FROM compute_software WHERE id = ?",
+                           (software_id,))
+            if sw and sw["command_template"]:
+                command = sw["command_template"].replace("{INPUT}", input_filename)
+        job_id = execute(
+            """INSERT INTO compute_jobs
+               (user_id, software_id, title, description, command,
+                input_filename, estimated_minutes, priority, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)""",
+            (user["id"], software_id, title, description, command,
+             input_filename, estimated_minutes, priority, now_iso()))
+        log_action(user["id"], "compute", job_id, "job_submitted",
+                   {"title": title, "priority": priority})
+        _compute_update_queue_positions()
+        flash(f"Job #{job_id} submitted — position in queue: "
+              f"{query_one('SELECT queue_position FROM compute_jobs WHERE id = ?', (job_id,))['queue_position'] or '?'}",
+              "success")
+        return redirect(url_for("compute_dashboard"))
+    return render_template("compute_submit.html", software=software_list)
+
+
+@app.route("/compute/jobs/<int:job_id>")
+@login_required
+def compute_job_detail(job_id: int):
+    """View job details, logs, and output."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    job = query_one("""
+        SELECT j.*, u.name AS user_name, s.name AS software_name,
+               s.category AS software_category
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.user_id
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.id = ?
+    """, (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    is_mine = job["user_id"] == user["id"]
+    if not (is_mine or can_manage):
+        abort(403)
+    # Calculate wait time and run time
+    wait_time = None
+    run_time = None
+    if job["started_at"] and job["created_at"]:
+        try:
+            wait_time = (datetime.fromisoformat(job["started_at"]) -
+                         datetime.fromisoformat(job["created_at"])).total_seconds() / 60
+        except Exception:
+            pass
+    if job["completed_at"] and job["started_at"]:
+        try:
+            run_time = (datetime.fromisoformat(job["completed_at"]) -
+                        datetime.fromisoformat(job["started_at"])).total_seconds() / 60
+        except Exception:
+            pass
+    # Check for output file
+    output_path = Path("data") / "compute_outputs" / (job["output_filename"] or "")
+    has_output = output_path.is_file() if job["output_filename"] else False
+    return render_template("compute_job_detail.html", job=job,
+                           can_manage=can_manage, is_mine=is_mine,
+                           wait_time=wait_time, run_time=run_time,
+                           has_output=has_output)
+
+
+@app.route("/compute/jobs/<int:job_id>/cancel", methods=["POST"])
+@login_required
+def compute_job_cancel(job_id: int):
+    """Cancel a queued job."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["user_id"] != user["id"] and not can_manage:
+        abort(403)
+    if job["status"] not in ("queued",):
+        flash("Only queued jobs can be cancelled.", "error")
+        return redirect(url_for("compute_job_detail", job_id=job_id))
+    execute("UPDATE compute_jobs SET status = 'cancelled', completed_at = ? WHERE id = ?",
+            (now_iso(), job_id))
+    log_action(user["id"], "compute", job_id, "job_cancelled", {})
+    _compute_update_queue_positions()
+    flash(f"Job #{job_id} cancelled.", "success")
+    return redirect(url_for("compute_dashboard"))
+
+
+@app.route("/compute/jobs/<int:job_id>/output")
+@login_required
+def compute_job_output(job_id: int):
+    """Download job output file."""
+    user = current_user()
+    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["user_id"] != user["id"] and not can_manage:
+        abort(403)
+    if not job["output_filename"]:
+        abort(404)
+    output_dir = Path("data") / "compute_outputs"
+    return send_from_directory(str(output_dir), job["output_filename"],
+                               as_attachment=True)
+
+
+@app.route("/compute/software", methods=["GET", "POST"])
+@login_required
+def compute_software_list():
+    """Manage available software packages (admin only for POST)."""
+    user = current_user()
+    if not module_enabled("compute"):
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if request.method == "POST":
+        if not can_manage:
+            abort(403)
+        name = request.form.get("name", "").strip()
+        version = request.form.get("version", "").strip()
+        category = request.form.get("category", "general").strip()
+        description = request.form.get("description", "").strip()
+        command_template = request.form.get("command_template", "").strip()
+        max_runtime = int(request.form.get("max_runtime_minutes", "60") or "60")
+        if not name:
+            flash("Software name is required.", "error")
+            return redirect(url_for("compute_software_list"))
+        execute(
+            """INSERT INTO compute_software
+               (name, version, category, description, command_template,
+                max_runtime_minutes, is_active, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
+            (name, version, category, description, command_template,
+             max_runtime, now_iso()))
+        flash(f"{name} registered.", "success")
+        return redirect(url_for("compute_software_list"))
+    software = query_all("SELECT * FROM compute_software ORDER BY category, name")
+    return render_template("compute_software.html", software=software,
+                           can_manage=can_manage)
+
+
+@app.route("/compute/api/next-job")
+def compute_api_next_job():
+    """API endpoint for the worker daemon to fetch the next job to run.
+    Returns JSON with job details or empty 204 if nothing queued."""
+    # Simple auth via shared secret header
+    secret = os.environ.get("COMPUTE_WORKER_SECRET", "catalyst-compute-2026")
+    if request.headers.get("X-Worker-Secret") != secret:
+        abort(403)
+    job = _compute_next_job()
+    if not job:
+        return "", 204
+    # Mark as running
+    execute("UPDATE compute_jobs SET status = 'running', started_at = ?, server_host = ? WHERE id = ?",
+            (now_iso(), request.remote_addr or "worker", job["id"]))
+    _compute_update_queue_positions()
+    return jsonify({
+        "job_id": job["id"],
+        "command": job["command"],
+        "input_filename": job["input_filename"],
+        "estimated_minutes": job["estimated_minutes"],
+        "title": job["title"],
+    })
+
+
+@app.route("/compute/api/complete-job", methods=["POST"])
+def compute_api_complete_job():
+    """API endpoint for worker to report job completion."""
+    secret = os.environ.get("COMPUTE_WORKER_SECRET", "catalyst-compute-2026")
+    if request.headers.get("X-Worker-Secret") != secret:
+        abort(403)
+    data = request.get_json(force=True)
+    job_id = data.get("job_id")
+    exit_code = data.get("exit_code", -1)
+    stdout_log = data.get("stdout", "")[:50000]  # cap at 50k chars
+    stderr_log = data.get("stderr", "")[:50000]
+    output_filename = data.get("output_filename", "")
+    status = "completed" if exit_code == 0 else "failed"
+    execute("""UPDATE compute_jobs
+               SET status = ?, completed_at = ?, exit_code = ?,
+                   stdout_log = ?, stderr_log = ?, output_filename = ?
+               WHERE id = ?""",
+            (status, now_iso(), exit_code, stdout_log, stderr_log,
+             output_filename, job_id))
+    # Notify the user
+    job = query_one("SELECT user_id, title FROM compute_jobs WHERE id = ?", (job_id,))
+    if job:
+        icon = "completed" if status == "completed" else "failed"
+        notify(job["user_id"], "compute",
+               f"Job {icon}: {job['title']}",
+               f"Job #{job_id} finished with exit code {exit_code}.",
+               href=url_for("compute_job_detail", job_id=job_id),
+               source_type="compute_job", source_id=job_id)
+    _compute_update_queue_positions()
+    return jsonify({"status": "ok"})
 
 
 # ── Receipts ERP module ─────────────────────────────────────────

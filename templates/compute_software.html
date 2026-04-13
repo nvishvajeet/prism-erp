@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('compute_dashboard') }}" class="hover-back-btn" title="Back to Jobs">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_dashboard') }}" data-vis="{{ V }}">← Compute</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Software Catalog</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ software|length }} packages</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("INSTALLED SOFTWARE", "Available on the compute server") }}
+    {% if software %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">Version</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Max Runtime</th>
+          <th data-vis="{{ V }}">Command Template</th>
+          <th data-vis="{{ V }}">Description</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in software %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.name }}</strong></td>
+          <td data-vis="{{ V }}">{{ s.version or '—' }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ s.category|upper }}</span></td>
+          <td data-vis="{{ V }}">{{ s.max_runtime_minutes }} min</td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ s.command_template or '—' }}</code></td>
+          <td data-vis="{{ V }}">{{ s.description or '—' }}</td>
+          <td data-vis="{{ V }}"><span class="badge {% if s.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">{{ "Active" if s.is_active else "Disabled" }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No software registered yet.") }}
+    {% endif %}
+  </article>
+
+  {% if can_manage %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("REGISTER", "Add software to the catalog") }}
+    <details class="toggleable-form" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">+ Register Software</summary>
+      <form method="post" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Name <input type="text" name="name" required placeholder="e.g. ANSYS Mechanical" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Version <input type="text" name="version" placeholder="e.g. 2024 R1" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Category
+          <select name="category" data-vis="{{ V }}">
+            <option value="simulation" data-vis="{{ V }}">Simulation / FEA</option>
+            <option value="analysis" data-vis="{{ V }}">Data Analysis</option>
+            <option value="scripting" data-vis="{{ V }}">Scripting / Programming</option>
+            <option value="cfd" data-vis="{{ V }}">CFD</option>
+            <option value="materials" data-vis="{{ V }}">Materials Science</option>
+            <option value="math" data-vis="{{ V }}">Math / Statistics</option>
+            <option value="imaging" data-vis="{{ V }}">Imaging / Microscopy</option>
+            <option value="typesetting" data-vis="{{ V }}">Typesetting / Documents</option>
+            <option value="general" selected data-vis="{{ V }}">General</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Command Template
+          <input type="text" name="command_template" placeholder="e.g. matlab -batch &quot;run('{INPUT}')&quot;" data-vis="{{ V }}">
+          <span class="hint" data-vis="{{ V }}">Use {INPUT} for input file. Leave blank for custom commands.</span>
+        </label>
+        <label data-vis="{{ V }}">Max Runtime (minutes) <input type="number" name="max_runtime_minutes" value="60" min="1" max="1440" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Description <textarea name="description" rows="2" placeholder="What this software does, license info…" data-vis="{{ V }}"></textarea></label>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Register</button>
+      </form>
+    </details>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

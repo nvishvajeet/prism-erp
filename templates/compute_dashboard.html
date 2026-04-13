@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Compute Jobs</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">HPC Scheduler</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('compute_submit') }}" data-vis="{{ V }}">+ Submit Job</a>
+    {% if can_manage %}
+    <a class="btn" href="{{ url_for('compute_software_list') }}" data-vis="{{ V }}">Software Catalog</a>
+    {% endif %}
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": running|length|string,  "label": "Running",    "tone": "green"},
+      {"value": queued|length|string,   "label": "In Queue",   "tone": "amber"},
+      {"value": total_jobs|string,      "label": "Total Jobs"},
+      {"value": my_running|string,      "label": "My Running"},
+      {"value": my_queued|string,       "label": "My Queued"},
+    ]) }}
+  </article>
+
+  {# ── Running Jobs ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RUNNING", running|length|string ~ " active") }}
+    {% if running %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Job</th>
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Est. Time</th>
+          <th data-vis="{{ V }}">Started</th>
+          <th data-vis="{{ V }}">Server</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for j in running %}
+        <tr class="clickable-row" data-href="{{ url_for('compute_job_detail', job_id=j.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ j.id }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ j.title }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ j.software_name or 'custom' }}</span></td>
+          <td data-vis="{{ V }}">{{ j.user_name }}</td>
+          <td data-vis="{{ V }}">{{ j.estimated_minutes }} min</td>
+          <td data-vis="{{ V }}">{{ j.started_at[:16] if j.started_at else '—' }}</td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ j.server_host or '—' }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No jobs running. The server is idle.") }}
+    {% endif %}
+  </article>
+
+  {# ── Queue ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("QUEUE", queued|length|string ~ " waiting") }}
+    {% if queued %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Pos</th>
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Job</th>
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Priority</th>
+          <th data-vis="{{ V }}">Est. Time</th>
+          <th data-vis="{{ V }}">Submitted</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for j in queued %}
+        <tr class="clickable-row" data-href="{{ url_for('compute_job_detail', job_id=j.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ j.queue_position or loop.index }}</strong></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ j.id }}</code></td>
+          <td data-vis="{{ V }}">{{ j.title }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ j.software_name or 'custom' }}</span></td>
+          <td data-vis="{{ V }}">{{ j.user_name }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ j.priority }}" data-vis="{{ V }}">{{ j.priority|upper }}</span></td>
+          <td data-vis="{{ V }}">{{ j.estimated_minutes }} min</td>
+          <td data-vis="{{ V }}">{{ j.created_at[:16] if j.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("Queue is empty. Submit a job to get started.") }}
+    {% endif %}
+  </article>
+
+  {# ── Recent Completed/Failed ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT", recent|length|string ~ " finished") }}
+    {% if recent %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Job</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Exit</th>
+          <th data-vis="{{ V }}">Completed</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for j in recent %}
+        <tr class="clickable-row" data-href="{{ url_for('compute_job_detail', job_id=j.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ j.id }}</code></td>
+          <td data-vis="{{ V }}">{{ j.title }}</td>
+          <td data-vis="{{ V }}">{{ j.user_name }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if j.status == 'completed' %}status-active{% elif j.status == 'failed' %}status-archived{% else %}status-cancelled{% endif %}" data-vis="{{ V }}">
+              {{ j.status|upper }}
+            </span>
+          </td>
+          <td data-vis="{{ V }}">{{ j.exit_code if j.exit_code is not none else '—' }}</td>
+          <td data-vis="{{ V }}">{{ j.completed_at[:16] if j.completed_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No completed jobs yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+})();
+</script>
+{% endblock %}

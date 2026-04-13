@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('compute_dashboard') }}" class="hover-back-btn" title="Back to Jobs">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_dashboard') }}" data-vis="{{ V }}">← Compute</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Job #{{ job.id }} — {{ job.title }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">
+      <span class="badge {% if job.status == 'running' %}status-active{% elif job.status == 'completed' %}status-active{% elif job.status == 'failed' %}status-archived{% elif job.status == 'queued' %}status-queued{% else %}status-cancelled{% endif %}" data-vis="{{ V }}">
+        {{ job.status|upper }}
+      </span>
+    </span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Job Info ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("JOB INFO", "#" ~ job.id|string) }}
+    {{ metadata_grid([
+      ("Title", job.title),
+      ("Software", job.software_name or "Custom"),
+      ("Category", job.software_category or "—"),
+      ("Submitted by", job.user_name),
+      ("Priority", job.priority|upper),
+      ("Estimated", (job.estimated_minutes|string) ~ " minutes"),
+      ("Submitted", job.created_at[:16] if job.created_at else "—"),
+      ("Status", job.status|upper),
+    ]) }}
+    {% if job.description %}
+    <div class="dp-metadata-row" style="margin-top:0.5rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Description</span>
+      <span data-vis="{{ V }}">{{ job.description }}</span>
+    </div>
+    {% endif %}
+    {% if job.command %}
+    <div class="dp-metadata-row" style="margin-top:0.5rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Command</span>
+      <code class="inline-code" data-vis="{{ V }}">{{ job.command }}</code>
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Timing ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("TIMING", "Performance metrics") }}
+    {{ metadata_grid([
+      ("Submitted", job.created_at[:19] if job.created_at else "—"),
+      ("Started", job.started_at[:19] if job.started_at else "— waiting —"),
+      ("Completed", job.completed_at[:19] if job.completed_at else "— pending —"),
+      ("Wait Time", ("{:.1f} min".format(wait_time)) if wait_time is not none else "—"),
+      ("Run Time", ("{:.1f} min".format(run_time)) if run_time is not none else "—"),
+      ("Server", job.server_host or "—"),
+      ("PID", job.pid|string if job.pid else "—"),
+      ("Exit Code", job.exit_code|string if job.exit_code is not none else "—"),
+    ]) }}
+
+    {# Actions #}
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
+      {% if job.status == 'queued' and (is_mine or can_manage) %}
+      <form method="post" action="{{ url_for('compute_job_cancel', job_id=job.id) }}" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <button type="submit" class="btn danger" data-vis="{{ V }}">Cancel Job</button>
+      </form>
+      {% endif %}
+      {% if has_output %}
+      <a class="btn btn-primary" href="{{ url_for('compute_job_output', job_id=job.id) }}" data-vis="{{ V }}">Download Output</a>
+      {% endif %}
+      {% if job.input_filename %}
+      <span class="hint" style="align-self:center;" data-vis="{{ V }}">Input: {{ job.input_filename }}</span>
+      {% endif %}
+    </div>
+  </article>
+
+  {# ── stdout ── #}
+  {% if job.stdout_log %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("STDOUT", "Standard output") }}
+    <pre class="code-block" style="max-height:24rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;" data-vis="{{ V }}">{{ job.stdout_log }}</pre>
+  </article>
+  {% endif %}
+
+  {# ── stderr ── #}
+  {% if job.stderr_log %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("STDERR", "Error output") }}
+    <pre class="code-block" style="max-height:16rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;color:var(--accent-red, #f44);" data-vis="{{ V }}">{{ job.stderr_log }}</pre>
+  </article>
+  {% endif %}
+
+  {# ── Queue position (if still queued) ── #}
+  {% if job.status == 'queued' and job.queue_position %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("QUEUE", "Waiting to run") }}
+    <div style="text-align:center;padding:2rem;" data-vis="{{ V }}">
+      <div style="font-size:3rem;font-weight:700;" data-vis="{{ V }}">{{ job.queue_position }}</div>
+      <div class="hint" data-vis="{{ V }}">Position in queue</div>
+    </div>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

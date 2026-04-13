@@ -109,6 +109,7 @@
   {# ── TILE 2: Active instruments list ── #}
   <article class="card tile tile-inst-active" data-vis="{{ V }}">
     {{ card_heading("", "Active Instruments") }}
+    <input type="text" id="instSearch" class="table-search-input" placeholder="Search instruments…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% call paginated_pane('mainInstruments', page_size=100, max_height='none', css_class='instruments-table-shell') %}
     <table class="instruments-table sortable-table" data-vis="{{ V }}">
       <colgroup>
@@ -182,6 +183,29 @@
       window.location=r.dataset.href;
     });
   });
+  // Search filter
+  var searchInput=document.getElementById('instSearch');
+  if(searchInput){
+    var body=document.getElementById('mainInstrumentsBody');
+    var rows=body?body.querySelectorAll('tr:not(.category-header-row)'):[];
+    var catRows=body?body.querySelectorAll('.category-header-row'):[];
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
+      });
+      // Hide category headers if all their rows are hidden
+      catRows.forEach(function(cr){
+        var next=cr.nextElementSibling;
+        var anyVisible=false;
+        while(next&&!next.classList.contains('category-header-row')){
+          if(next.style.display!=='none')anyVisible=true;
+          next=next.nextElementSibling;
+        }
+        cr.style.display=anyVisible||!q?'':'none';
+      });
+    });
+  }
 })();
 </script>
 {% endblock %}

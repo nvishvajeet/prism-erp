@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, status_pills_row with context %}
+{% from "_page_macros.html" import card_heading, empty_state, status_pills_row, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
@@ -12,6 +13,17 @@
   </div>
 </header>
 
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": "₹" ~ "{:,.0f}".format(totals.total),    "label": "Total"},
+      {"value": "₹" ~ "{:,.0f}".format(totals.pending),  "label": "Pending",  "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(totals.approved), "label": "Approved", "tone": "green"},
+      {"value": counts.all|string,                        "label": "Receipts"},
+    ]) }}
+  </article>
+</section>
+
 {{ status_pills_row(
   pills=[('', 'All', counts.all), ('pending', 'Pending', counts.pending), ('approved', 'Approved', counts.approved), ('rejected', 'Rejected', counts.rejected)],
   active=status_filter,
@@ -21,6 +33,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Receipts") }}
+    <input type="text" id="receiptSearch" class="table-search-input" placeholder="Search receipts…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if receipts %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
@@ -71,6 +84,17 @@
       rows.forEach(function(r){r.hidden=active&&r.dataset.bucket!==active;});
     });
   });
+  // Search filter
+  var searchInput=document.getElementById('receiptSearch');
+  if(searchInput){
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        var text=r.textContent.toLowerCase();
+        r.style.display=(!q||text.indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
 })();
 </script>
 {% endblock %}

@@ -9025,6 +9025,12 @@ def todos_page():
 
     assignable_users = _assignable_users_for(user)
 
+    todo_counts = {
+        "open": sum(1 for i in items if i["status"] == "open"),
+        "in_progress": sum(1 for i in items if i["status"] == "in_progress"),
+        "done": sum(1 for i in items if i["status"] == "done"),
+        "total": len(items),
+    }
     return render_template(
         "todos.html",
         items=items,
@@ -9034,6 +9040,7 @@ def todos_page():
         by_me_count=by_me_count,
         assignable_users=assignable_users,
         categories=_TODO_CATEGORIES,
+        todo_counts=todo_counts,
     )
 
 
@@ -14142,7 +14149,10 @@ def admin_leave_queue():
          LIMIT 30
         """
     )
-    return render_template("admin_leave.html", pending=pending, recent=recent)
+    approved_count = sum(1 for r in recent if r["status"] == "approved")
+    rejected_count = sum(1 for r in recent if r["status"] == "rejected")
+    return render_template("admin_leave.html", pending=pending, recent=recent,
+                           approved_count=approved_count, rejected_count=rejected_count)
 
 
 @app.route("/admin/leave/<int:leave_id>/approve", methods=["POST"])
@@ -14907,10 +14917,15 @@ def receipts_list():
         rows = query_all("SELECT er.*, u.name AS submitter_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id ORDER BY er.created_at DESC")
     else:
         rows = query_all("SELECT er.*, u.name AS submitter_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id WHERE er.submitted_by_user_id = ? ORDER BY er.created_at DESC", (user["id"],))
+    counts = {"all": len(rows), "pending": sum(1 for r in rows if r["status"]=="pending"), "approved": sum(1 for r in rows if r["status"]=="approved"), "rejected": sum(1 for r in rows if r["status"]=="rejected")}
+    totals = {
+        "total": sum(r["amount"] for r in rows),
+        "pending": sum(r["amount"] for r in rows if r["status"] == "pending"),
+        "approved": sum(r["amount"] for r in rows if r["status"] == "approved"),
+    }
     if status_filter:
         rows = [r for r in rows if r["status"] == status_filter]
-    counts = {"all": len(rows), "pending": sum(1 for r in rows if r["status"]=="pending"), "approved": sum(1 for r in rows if r["status"]=="approved"), "rejected": sum(1 for r in rows if r["status"]=="rejected")}
-    return render_template("receipts.html", receipts=rows, status_filter=status_filter, can_review=can_review, counts=counts)
+    return render_template("receipts.html", receipts=rows, status_filter=status_filter, can_review=can_review, counts=counts, totals=totals)
 
 
 @app.route("/receipts/new", methods=["GET", "POST"])

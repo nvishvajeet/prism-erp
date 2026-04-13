@@ -27,6 +27,7 @@
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-inbox-list" data-vis="{{ V }}">
     {{ card_heading("MESSAGES", unread|string ~ " unread") }}
+    <input type="text" id="inboxSearch" class="table-search-input" placeholder="Search messages…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if messages %}
     <ul class="inbox-list" data-vis="{{ V }}">
       {% for m in messages %}
@@ -52,4 +53,19 @@
     {% endif %}
   </article>
 </section>
+
+<script>
+(function(){
+  var searchInput=document.getElementById('inboxSearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('.inbox-row');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
+})();
+</script>
 {% endblock %}

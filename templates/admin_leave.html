@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
 
@@ -12,6 +12,15 @@
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": pending|length|string,   "label": "Pending",  "tone": "amber"},
+      {"value": approved_count|string,    "label": "Approved", "tone": "green"},
+      {"value": rejected_count|string,    "label": "Rejected", "tone": ""},
+      {"value": (pending|length + recent|length)|string, "label": "Total Requests"},
+    ]) }}
+  </article>
 
   <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("PENDING APPROVAL", pending|length|string ~ " request" ~ ("s" if pending|length != 1 else "")) }}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
@@ -62,6 +62,18 @@
   </article>
 </section>
 
+{# ── KPI summary ── #}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": todo_counts.total|string,       "label": "Total"},
+      {"value": todo_counts.open|string,        "label": "Open",        "tone": "amber"},
+      {"value": todo_counts.in_progress|string, "label": "In Progress", "tone": ""},
+      {"value": todo_counts.done|string,        "label": "Done",        "tone": "green"},
+    ]) }}
+  </article>
+</section>
+
 {# ── Tabs: My Todos | Assigned to Me | Assigned by Me ── #}
 <nav class="inbox-folder-tabs" data-vis="{{ V }}">
   <a class="inbox-folder-tab{% if tab == 'my' %} inbox-folder-tab--active{% endif %}" href="{{ url_for('todos_page', tab='my') }}" data-vis="{{ V }}">
@@ -78,6 +90,7 @@
 {# ── Task list — inbox style ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <input type="text" id="todoSearch" class="table-search-input" placeholder="Search tasks…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if items %}
     {% for item in items %}
     <div class="inbox-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
@@ -136,4 +149,18 @@
   </article>
 </section>
 
+<script>
+(function(){
+  var searchInput=document.getElementById('todoSearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('.inbox-row');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
+})();
+</script>
 {% endblock %}

@@ -77,6 +77,26 @@ Stronger gates when routes or templates change:
 deploy_smoke and must be green end-to-end. `wave all` runs only at
 version-tag boundaries — do not run it on every commit.
 
+**Operator configuration check before any heavy run:**
+
+- verify current user / host / repo path
+- verify the Python env exists and is usable
+- verify SSH aliases work before remote crawler orchestration
+- if multiple developer MacBooks are active, treat them as extra
+  local verification capacity, not extra production hosts
+
+**Crawler supervision policy:**
+
+- every local crawler run must have an LLM agent supervising it
+- writable agents must claim files in `CLAIMS.md` before editing
+- if the writable scope changes, update the claim before editing
+  the extra files
+- remove the claim in the same commit that ships the work
+- read-only crawlers may scan broadly but must write findings to
+  temporary or report files, not tracked product files
+- git writes, rebases, and pushes stay with the supervising agent,
+  not the crawler subprocess itself
+
 ## 5. Hard vs soft attributes
 
 **Hard (locked except at major version bumps, and require a
@@ -205,6 +225,16 @@ git commit -m "<subject>"
 # locally but the push was refused — fix and retry.
 git push origin v1.3.0-stable-release
 ```
+
+**Machine-capacity default policy:**
+
+- one MacBook: max 2 local crawler processes + 1 local smoke run
+- two MacBooks: each keeps its own 2-crawler budget
+- Mac mini: preferred target for heavy crawlers and overflow waves
+- keep the editing machine responsive; do not saturate it just
+  because spare CPU exists
+- more local machines increase supervised verification capacity;
+  they do not authorize unsupervised crawler swarms
 
 **Two-tier safety net.** Tier 1 is the working-copy smoke test
 before commit. Tier 2 is the bare-side `crawlers wave sanity`

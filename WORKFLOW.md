@@ -75,6 +75,47 @@ The smoke test must stay green before any commit lands on
 gate when templates or routes have been touched. `wave all` runs
 only at release boundaries — do NOT run it on every commit.
 
+### 3.1.1  Operator configuration check — mandatory at session start
+
+Before firing any SSH or crawler workload, the agent must verify the
+current operator workstation is configured correctly:
+
+- confirm the active username and host (`whoami`, `hostname`)
+- confirm the repo path exists and is the expected working copy
+- confirm the Python env exists (`.venv` or `venv`)
+- confirm SSH aliases / user config work without prompts before using
+  remote execution
+- if a second operator workstation joins (for example Satyajeet on a
+  separate MacBook Pro), treat that machine as an additional **local
+  verifier**, not as an ad-hoc production host
+
+If any of those checks fail, stop and surface the misconfiguration to
+the user before burning time on crawler orchestration.
+
+### 3.1.2  LLM-supervised crawler policy
+
+Local crawlers are not free-roaming background jobs. Every crawler run
+must be supervised by an LLM agent that owns the task, records why the
+run exists, and captures the result for the operator.
+
+- every crawler run has a supervising agent and an explicit task id
+- writable agents must claim files in `CLAIMS.md` before editing and
+  remove the claim when shipping
+- if a task grows or files change, update the claim before widening the
+  write scope
+- when the work is done, update the claim state again by removing the
+  row in the same shipping commit
+- read-only crawlers may inspect the whole repo, but they must not edit
+  tracked files directly
+- read-only crawlers should write findings to temporary or report files
+  first, record where that output lives, and move on to the next check
+- no crawler should perform git writes, rebases, or pushes unless its
+  supervising agent explicitly owns that step
+
+The purpose is simple: every machine action must have human-auditable
+agent ownership, and no parallel process should be able to silently
+override another agent's work.
+
 ### 3.2  Hard vs soft attributes — read `docs/PHILOSOPHY.md` §2
 
 **Hard (locked except at major version bumps, CHANGELOG entry under
@@ -200,6 +241,8 @@ full spec. Minimum rules a fresh agent must obey:
 2. **Do not touch files outside your claim.** If you discover
    you need a file held by another claim, pause and surface the
    collision to the user instead of widening the claim silently.
+   If you need to widen your file set, update `CLAIMS.md` first,
+   commit/push the widened claim, then continue.
 3. **Pull --rebase before every push.** Absorb any concurrent
    commits immediately before you push, so the pre-receive
    hook sees a fast-forward. Never force-push, never
@@ -210,6 +253,11 @@ full spec. Minimum rules a fresh agent must obey:
 5. **Honour stale claims.** A row older than ~2 h with no
    matching `git log` activity is stale, but **do not silently
    clear it** — surface to the user first.
+
+Read-only crawler agents are allowed to scan broadly without a
+write claim, but they must keep their output in temp files,
+reports, or operator-facing notes until a writable agent claims
+the relevant tracked files and applies the fix.
 
 Tasks available for claiming live in `docs/NEXT_WAVES.md`
 §"Parallel task board".
@@ -271,6 +319,21 @@ minimum LLM token spend:
 The machines verify the PREVIOUS commit while the LLM works on the NEXT one.
 This pipeline means zero idle compute.
 
+### 5.1.2  Workstation discovery — local capacity is dynamic
+
+The "local machine" is no longer a single MacBook. It is the set of
+developer workstations currently participating in the session:
+
+- primary local editor machine: current MacBook Pro
+- production-serving verifier: Mac mini M4 24 GB via SSH
+- secondary local verifier: any additional joined workstation
+  (for example Satyajeet's MacBook Pro)
+
+Agents must use the strongest available local workstation pool for
+empirical work first, then offload the overflow to the mini. More
+MacBooks joining means more local crawlers, more smoke runs, and less
+LLM waiting.
+
 ### 5.1.1  Debug feedback log — TREAT AS CRITICAL
 
 **`logs/debug_feedback.md` is the user's live voice.** Every entry
@@ -323,6 +386,29 @@ wait
 code while machines verify the previous commit. This pipeline means
 the LLM never waits for test results — it ships the fix and the
 machines confirm asynchronously.
+
+### 5.2.1  Max local crawler budget
+
+To avoid making the editor workstation unresponsive, use this default
+budget unless the user explicitly asks for more:
+
+- max **2 local crawler processes** at once on a single MacBook
+- plus **1 local smoke/test process** (`scripts/smoke_test.py`) in parallel
+- heavy waves (`random_walk`, `dead_link`, `wave all`) prefer the mini
+- if two MacBooks are active, each keeps its own 2-crawler budget
+- each local crawler must still have an LLM supervisor; more machines
+  increase throughput, not autonomy
+
+Priority order:
+
+1. local `scripts/smoke_test.py`
+2. local `crawlers run smoke`
+3. local `crawlers wave sanity`
+4. mini heavy crawlers / overflow waves
+5. second MacBook local smoke / sanity when available
+
+Rule: keep the editing laptop responsive. The goal is maximum useful
+throughput, not pegging one machine for vanity parallelism.
 
 ### 5.3  Token economy
 

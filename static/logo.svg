@@ -1,13 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a3a5c"/>
-      <stop offset="100%" style="stop-color:#2d6a9f"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="80" fill="url(#cg)"/>
-  <!-- Catalyst symbol: hexagonal ring (like a chemical catalyst) -->
-  <polygon points="256,100 370,165 370,295 256,360 142,295 142,165" fill="none" stroke="#ffffff" stroke-width="20" stroke-linejoin="round" opacity="0.3"/>
-  <!-- C monogram -->
-  <text x="256" y="290" text-anchor="middle" font-family="ui-sans-serif,-apple-system,Helvetica" font-size="200" font-weight="800" fill="#ffffff">C</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>CATALYST Logo</title>
+  <desc>Minimal C monogram with a catalyst point.</desc>
+  <path
+    d="M351 151C325 124 288 108 247 108C166 108 108 171 108 256C108 341 166 404 247 404C289 404 325 388 351 361"
+    stroke="#111111"
+    stroke-width="34"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="372" cy="176" r="20" fill="#C91F1F" />
 </svg>

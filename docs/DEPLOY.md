@@ -193,6 +193,29 @@ GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
 
 `backend/setup_remote.command` handles this interactively.
 
+Before using SSH for remote crawlers or release verification,
+confirm the operator workstation is configured correctly:
+
+1. current user / host are the expected ones
+2. the working copy path exists on that machine
+3. the Python env exists (`.venv` or `venv`)
+4. the SSH alias connects without an interactive prompt
+5. the machine is a verifier/editor workstation, not a second
+   production host
+
+This matters more now that more than one MacBook may participate
+in the same release loop.
+
+When local crawlers are involved, keep the control plane explicit:
+
+- an LLM agent supervises each crawler run
+- writable work requires a `CLAIMS.md` entry before tracked files change
+- if the writable scope expands, update the claim first
+- read-only crawlers may inspect broadly, but they should write
+  findings to temp or report files before any tracked-file edit
+- git pull / rebase / push stays with the supervising agent so one
+  subprocess cannot override another operator's work
+
 ---
 
 ## 5. The access surface
@@ -213,7 +236,21 @@ GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
 
 The Mac mini hosts the **website and the database only.** It
 does not run any background model, scheduler, cron, or crawler.
-All of that work stays on the MacBook development machine. The
+All of that work stays on the MacBook development machine. If
+multiple MacBooks are active (for example another operator such as
+Satyajeet joining on a MacBook Pro), they expand the local
+verification pool; they do not change where production lives.
+
+Default local-machine budget:
+
+- max 2 crawler processes per MacBook
+- plus 1 local `scripts/smoke_test.py` run
+- heavy overflow waves can move to the mini when needed
+- every crawler process still needs an LLM supervisor and an
+  operator-visible output trail
+
+Keep the editing machine responsive. The goal is useful throughput,
+not saturating a laptop for its own sake. The
 mini's job is: serve CATALYST, 24×7, to whoever is on the network.
 
 ---

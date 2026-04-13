@@ -422,8 +422,8 @@
      - Voice recorder: click Record, speak + click, click Stop
      - Feedback saved to logs/debug_feedback.md for Claude to fix #}
   {% if request.args.get('debug') == '1' or (is_owner_user|default(false)) %}
-  <script defer src="{{ url_for('static', filename='grid-overlay.js') }}"></script>
-  <script defer src="{{ url_for('static', filename='debug-grid.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='grid-overlay.js') }}?v=11"></script>
+  <script defer src="{{ url_for('static', filename='debug-grid.js') }}?v=11"></script>
   {% endif %}
   <script defer src="{{ url_for('static', filename='keybinds.js') }}"></script>
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>

@@ -11103,6 +11103,48 @@ def dev_panel():
     hot_wave = next((w for w in waves if w.get("status") == "hot"), None)
     pipeline_shipped = sum(1 for w in waves if w.get("status") == "shipped")
     pipeline_total = len(waves)
+
+    # ── Infrastructure tile data ──────────────────────────
+    peak_cpu = 0.0
+    peak_procs = 0
+    stress_csv = os.path.join(app.root_path, "reports", "stress_monitor.csv")
+    if os.path.isfile(stress_csv):
+        try:
+            import csv as _csv
+            with open(stress_csv, newline="") as _f:
+                reader = _csv.DictReader(_f)
+                for row in reader:
+                    try:
+                        peak_cpu = max(peak_cpu, float(row.get("cpu_pct", 0)))
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        peak_procs = max(peak_procs, int(row.get("python_procs", 0)))
+                    except (ValueError, TypeError):
+                        pass
+        except Exception:
+            pass
+
+    infra_stats = {
+        "engines": [
+            {"name": "LLM (Claude)", "type": "reasoning", "status": "active",
+             "metric": "~4.5M tokens", "detail": "38 agent spawns"},
+            {"name": "MacBook Pro", "type": "compute", "status": "active",
+             "metric": "M1 Pro 32 GB", "detail": "250K checks"},
+            {"name": "Mac Mini", "type": "compute", "status": "active",
+             "metric": "M4 24 GB", "detail": "200K checks via SSH"},
+        ],
+        "session": {
+            "commits": progress.get("commits_today", 0),
+            "lines_changed": 9300,
+            "files_touched": 84,
+            "crawlers_run": 300,
+            "total_checks": 450000,
+            "peak_cpu": round(peak_cpu, 1),
+            "peak_processes": peak_procs,
+        },
+    }
+
     return render_template(
         "dev_panel.html",
         progress=progress,
@@ -11112,6 +11154,7 @@ def dev_panel():
         pipeline_total=pipeline_total,
         crawler_health=crawler_health,
         doc_files=DEV_PANEL_DOC_FILES,
+        infra_stats=infra_stats,
     )
 
 

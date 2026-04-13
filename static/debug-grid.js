@@ -416,7 +416,28 @@
   });
 
   panel.appendChild(gridBtn);
-  if (SpeechRecognition) panel.appendChild(recordBtn);
+  if (SpeechRecognition) {
+    panel.appendChild(recordBtn);
+  } else {
+    // Fallback: text input when voice is unavailable (HTTP non-localhost)
+    var textBtn = document.createElement('button');
+    textBtn.textContent = '💬 Type';
+    textBtn.style.cssText = 'background:#2196F3;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:13px;';
+    textBtn.addEventListener('click', function () {
+      var msg = prompt('Type your debug feedback:');
+      if (msg) {
+        transcript += msg + ' ';
+        updateTranscriptDisplay();
+        submitFeedback();
+      }
+    });
+    panel.appendChild(textBtn);
+    // Show why voice is unavailable
+    var hint = document.createElement('span');
+    hint.textContent = '🎤✗ (needs HTTPS)';
+    hint.style.cssText = 'font-size:10px;color:#f44336;padding:4px;';
+    panel.appendChild(hint);
+  }
   panel.appendChild(trackBtn);
   panel.appendChild(clearBtn);
   panel.appendChild(transcriptPanel);

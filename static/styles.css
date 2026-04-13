@@ -9652,3 +9652,15 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 :root[data-theme="dark"] .toggle input:focus-visible + .toggle-rail {
   box-shadow: 0 0 0 3px rgba(127,209,212,0.2);
 }
+
+/* ── Infrastructure tile ─────────────────────────────── */
+.mc-infra-engines { display: flex; gap: 1rem; flex-wrap: wrap; padding: 0 1rem; }
+.mc-infra-engine { display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 200px; padding: 0.6rem 0.8rem; border-radius: 10px; background: var(--surface, #f8f9fa); }
+.mc-infra-engine-body { flex: 1; }
+.mc-infra-engine-body strong { display: block; font-size: 0.85rem; }
+.mc-infra-engine-metric strong { display: block; font-size: 0.85rem; text-align: right; }
+
+.mc-infra-session { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; padding: 0.75rem 1rem; margin-top: 0.5rem; border-top: 1px solid var(--line); }
+.mc-infra-stat { text-align: center; }
+.mc-infra-stat strong { display: block; font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mc-infra-stat span { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }

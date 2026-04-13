@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | role-manual-onboarding | 2026-04-13 22:21 CEST | `app.py`, `templates/role_manual.html`, `CLAIMS.md` | `feat: add role manual onboarding flow` |
 
 ## Stale-claim recovery
 

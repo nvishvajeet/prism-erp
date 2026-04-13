@@ -9658,10 +9658,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .finance-tiles > .tile { grid-column: 1 / -1; }
   .instruments-tiles { grid-template-columns: 1fr; }
   .instruments-tiles > .tile { grid-column: 1 / -1; }
+  .request-tiles { grid-template-columns: 1fr; }
+  .request-tiles > .tile { grid-column: 1 / -1; }
+  .search-tiles { grid-template-columns: 1fr; }
+  .search-tiles > .tile { grid-column: 1 / -1; }
   .quick-intake-grid { grid-template-columns: 1fr; }
   .inst-header { flex-direction: column; gap: 0.5rem; }
   .inst-header-actions { width: 100%; }
   .inst-header-actions .btn { width: 100%; text-align: center; }
+  /* Tables: horizontal scroll on mobile */
+  .tile table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   body { font-size: 14px; }
 }
 
@@ -9891,4 +9897,39 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: 8px;
   margin-top: 0.4rem;
+}
+
+/* ── Floating feedback widget ────────────────────────────── */
+.feedback-widget { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
+.feedback-toggle {
+  width: 3rem; height: 3rem; border-radius: 50%; border: none;
+  background: var(--accent); color: white; font-size: 1.3rem;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  transition: transform 0.15s;
+}
+.feedback-toggle:hover { transform: scale(1.1); }
+.feedback-panel {
+  position: absolute; bottom: 4rem; right: 0; width: 300px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;
+}
+.feedback-header { display: flex; justify-content: space-between; align-items: center; }
+.feedback-close { background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--muted); }
+.feedback-form textarea {
+  width: 100%; padding: 0.5rem; border: 1px solid var(--line);
+  border-radius: 8px; font-size: 0.85rem; resize: none;
+  background: var(--surface); color: var(--text);
+  box-sizing: border-box;
+}
+.feedback-actions { display: flex; gap: 0.4rem; }
+.feedback-actions .btn { flex: 0; }
+.feedback-actions .btn-primary { flex: 1; }
+.feedback-hint { font-size: 0.7rem; margin: 0; }
+
+:root[data-theme="dark"] .feedback-panel { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+@media (max-width: 480px) {
+  .feedback-panel { width: calc(100vw - 2rem); right: -0.5rem; }
+  .feedback-toggle { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
 }

@@ -291,6 +291,27 @@ MODULE_REGISTRY = {
             or bool(ap.get("_role_set", frozenset()) & {"finance_admin", "site_admin", "super_admin", "ca_auditor"})
         ),
     },
+    "mess": {
+        "label": "Mess",
+        "icon": "\U0001f37d",
+        "nav_order": 12,
+        "description": "Student mess entry & meal tracking",
+        "nav_endpoint": "mess_dashboard",
+        "nav_active_endpoints": {
+            "mess_dashboard", "mess_scan", "mess_students_list",
+            "mess_student_detail", "mess_student_new", "mess_reports",
+            "mess_student_qr",
+        },
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+    },
+    "qr_attendance": {
+        "label": "QR Kiosk",
+        "icon": "\U0001f4f1",
+        "nav_order": 0,
+        "description": "QR attendance kiosk (accessible via /attendance/qr, hidden from main nav)",
+        "nav_endpoint": "qr_attendance_kiosk",
+        "nav_active_endpoints": {"qr_attendance_kiosk", "qr_attendance_scan", "qr_my_code"},
+    },
     "compute": {
         "label": "Compute",
         "icon": "\U0001f9e0",
@@ -4965,6 +4986,60 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_rs_status ON receipt_submissions(status);
             CREATE INDEX IF NOT EXISTS idx_rs_submitted_by ON receipt_submissions(submitted_by_user_id);
+        """)
+
+        # ── QR Attendance kiosk ────────────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS qr_scan_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                scan_type TEXT NOT NULL DEFAULT 'check_in',
+                scanned_at TEXT NOT NULL DEFAULT '',
+                device_info TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qr_scan_user ON qr_scan_log(user_id, scanned_at);
+        """)
+
+        # ── Student Mess Entry module ─────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS mess_students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                roll_number TEXT NOT NULL UNIQUE,
+                department TEXT NOT NULL DEFAULT '',
+                year_of_study INTEGER NOT NULL DEFAULT 1,
+                hostel TEXT NOT NULL DEFAULT '',
+                room_number TEXT NOT NULL DEFAULT '',
+                meal_plan TEXT NOT NULL DEFAULT 'full',
+                phone TEXT NOT NULL DEFAULT '',
+                photo_path TEXT NOT NULL DEFAULT '',
+                qr_token TEXT NOT NULL UNIQUE,
+                company_id INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (company_id) REFERENCES companies(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_mess_students_roll ON mess_students(roll_number);
+            CREATE INDEX IF NOT EXISTS idx_mess_students_qr ON mess_students(qr_token);
+
+            CREATE TABLE IF NOT EXISTS mess_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER NOT NULL,
+                meal_type TEXT NOT NULL DEFAULT 'lunch',
+                entry_date TEXT NOT NULL,
+                entry_time TEXT NOT NULL DEFAULT '',
+                scanned_by_user_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (student_id) REFERENCES mess_students(id) ON DELETE CASCADE,
+                FOREIGN KEY (scanned_by_user_id) REFERENCES users(id),
+                UNIQUE (student_id, meal_type, entry_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_mess_entries_date ON mess_entries(entry_date);
+            CREATE INDEX IF NOT EXISTS idx_mess_entries_student ON mess_entries(student_id, entry_date);
+            CREATE INDEX IF NOT EXISTS idx_mess_entries_meal ON mess_entries(meal_type, entry_date);
         """)
 
         # ── Compute / HPC Job Scheduler module ───────────────────

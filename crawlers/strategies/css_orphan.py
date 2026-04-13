@@ -64,6 +64,19 @@ ALLOWLIST_PREFIXES: tuple[str, ...] = (
     # dev_panel.html as `dev-now-reports-{{ age_tone }}` where age_tone
     # ∈ {fresh, ok, stale}. One class per freshness bucket (W1.4.3 c2).
     "dev-now-reports-",
+    # Dynamic families composed through Jinja / runtime state
+    "approval-chain-",
+    "finance-grant-",
+    "finance-kpi-",
+    "finance-remaining-",
+    "finance-status-",
+    "grant-bar-",
+    "grant-status-",
+    "notice-",
+    "notif-cat-",
+    "notif-sev-",
+    "payment-dot-",
+    "side-",
     # All -tiles grids used by the tile architecture (page-level layout)
     # are applied once per template; crawler treats any existing
     # `<thing>-tiles` class as used-by-convention.

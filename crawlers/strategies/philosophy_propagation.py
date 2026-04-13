@@ -40,6 +40,11 @@ EXEMPT_PREFIXES = ("_", "base.html", "error", "login.html",
                    "logout.html", "onboard", "accept_invite",
                    "password_reset", "calendar_card")
 
+STANDALONE_PRINT_OK = {
+    "ca_audit_print_signoff.html",
+    "filing_destroy_plan.html",
+}
+
 DEPRECATED_CLASSES = [
     "grid-two", "grid-auto-stats", "stream-pill", "stream-filter-strip",
     "warroom-header", "warroom-title", "warroom-filters", "warroom-pill",
@@ -90,15 +95,16 @@ class PhilosophyStrategy(CrawlerStrategy):
                 continue
             checked += 1
             text = tpl.read_text(encoding="utf-8", errors="ignore")
+            standalone_print = tpl.name in STANDALONE_PRINT_OK
 
             # Rule 1: extends base.html
-            if "{% extends" not in text:
+            if "{% extends" not in text and not standalone_print:
                 result.failed += 1
                 bump("missing_extends")
                 result.details.append(f"{tpl.name}: does not extend base.html")
 
             # Rule 2: has a *-tiles grid
-            if tpl.name not in NO_TILE_GRID_OK:
+            if tpl.name not in NO_TILE_GRID_OK and not standalone_print:
                 if not re.search(r'class="[^"]*-tiles[^"]*"', text):
                     result.warnings += 1
                     bump("missing_tile_grid")
@@ -136,7 +142,7 @@ class PhilosophyStrategy(CrawlerStrategy):
                     )
 
             # Rule 6: data-vis="{{ V }}" on the top-level section/card
-            if "data-vis=" not in text:
+            if "data-vis=" not in text and not standalone_print:
                 result.warnings += 1
                 bump("missing_data_vis")
                 result.details.append(f"{tpl.name}: no data-vis attribute")

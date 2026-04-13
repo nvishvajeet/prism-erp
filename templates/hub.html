@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>goje.local — Dev Hub</title>
+  <style>
+    :root {
+      --bg: #111116;
+      --card: #1a1a22;
+      --border: #2a2a35;
+      --text: #e0e0e6;
+      --muted: #888899;
+      --accent: #5b8af5;
+      --green: #3aa86b;
+      --amber: #d4a843;
+      --red: #c85a5a;
+      --mono: "SF Mono", "Menlo", "Consolas", monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 24px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+    h1 span { color: var(--accent); }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 40px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.15s, transform 0.15s;
+      display: block;
+    }
+    a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .card-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+    .card p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .badge-live { background: var(--green); }
+    .badge-local { background: var(--accent); }
+    .badge-mini { background: var(--amber); }
+
+    /* Infrastructure section */
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .infra-table {
+      width: 100%;
+      font-size: 13px;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+    .infra-table th {
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .infra-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+    }
+    .infra-table code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: rgba(91,138,245,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .rule-list {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 24px;
+    }
+    .rule-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .rule-list li:last-child { border-bottom: none; }
+    .rule-num {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    details { margin-bottom: 16px; }
+    details summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 8px 0;
+    }
+    details[open] summary { margin-bottom: 8px; }
+    details .inner {
+      background: rgba(91,138,245,0.05);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    details .inner code {
+      font-family: var(--mono);
+      font-size: 11px;
+      background: rgba(91,138,245,0.1);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    .topology-box {
+      background: rgba(91,138,245,0.05);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 24px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      color: var(--muted);
+    }
+    .topology-box strong { color: var(--text); }
+    .footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<h1><span>goje</span>.local</h1>
+<p class="subtitle">Development hub — MacBook Pro (M1 Pro, 32 GB) &nbsp;·&nbsp; {{ machine_time }}</p>
+
+<!-- ─── Project cards ─── -->
+<div class="section-title">Projects</div>
+<div class="grid">
+  <a class="card" href="/admin/portfolio">
+    <div class="card-kicker">Portfolio Plan <span class="badge badge-local">local only</span></div>
+    <h3>Portfolio Dashboard</h3>
+    <p>Daily mutual fund buy recommendations, Nifty horizon, peer rankings, macro conviction.</p>
+  </a>
+
+  <a class="card" href="/">
+    <div class="card-kicker">PRISM Lab Scheduler <span class="badge badge-live">live on mini</span></div>
+    <h3>Lab Scheduler</h3>
+    <p>Sample request workflow, queue management, instrument scheduling, SHA-256 audit chain.</p>
+  </a>
+
+  <a class="card" href="https://nvishvajeet.github.io" target="_blank">
+    <div class="card-kicker">Personal Website <span class="badge badge-mini">github pages</span></div>
+    <h3>nvishvajeet.github.io</h3>
+    <p>Personal site. Manual publish to GitHub Pages.</p>
+  </a>
+
+  <div class="card" style="border-style:dashed;opacity:0.6">
+    <div class="card-kicker">Parallel Greedy Matching <span class="badge badge-local">local only</span></div>
+    <h3>FOCS 2026 Paper</h3>
+    <p>Research project. No web interface.</p>
+  </div>
+</div>
+
+<!-- ─── Infrastructure for AI agents ─── -->
+<div class="section-title">Infrastructure — AI Agent Reference</div>
+
+<div class="topology-box"><strong>Two-level git topology</strong>
+
+<strong>Level 1 — LOCAL central git server (every project)</strong>
+  ~/Claude/&lt;project&gt;/                  working copy
+        ↓ git push origin
+  ~/.claude/git-server/&lt;project&gt;.git   LOCAL bare, canonical origin
+
+<strong>Level 2 — optional upstream (only where it has a real job)</strong>
+  lab-scheduler.git       → prism-mini:~/git/lab-scheduler.git  (auto-mirror hook)
+  nvishvajeet.github.io   → github.com (manual publish)
+  portfolio-plan, etc.    → no Level-2 upstream</div>
+
+<table class="infra-table">
+  <thead>
+    <tr>
+      <th>Project</th>
+      <th>Working copy</th>
+      <th>Branch</th>
+      <th>Level-2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>lab-scheduler</strong></td>
+      <td><code>~/Documents/Scheduler/Main/</code></td>
+      <td><code>v1.3.0-stable-release</code></td>
+      <td>mini (auto-mirror)</td>
+    </tr>
+    <tr>
+      <td><strong>portfolio-plan</strong></td>
+      <td><code>~/Claude/portfolio-plan/</code></td>
+      <td><code>main</code></td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td><strong>parallel-greedy-matching</strong></td>
+      <td><code>~/Claude/parallel-greedy-matching/</code></td>
+      <td><code>main</code></td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td><strong>nvishvajeet.github.io</strong></td>
+      <td><code>~/Claude/nvishvajeet.github.io/</code></td>
+      <td><code>main</code></td>
+      <td>github (manual)</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="infra-table">
+  <thead>
+    <tr>
+      <th>Machine</th>
+      <th>Specs</th>
+      <th>Access</th>
+      <th>Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>MacBook Pro</strong> (this)</td>
+      <td>M1 Pro, 32 GB</td>
+      <td>local</td>
+      <td>Development, Level-1 git server, AI agent host</td>
+    </tr>
+    <tr>
+      <td><strong>Mac mini</strong></td>
+      <td>M4, 24 GB</td>
+      <td><code>vishwajeet@100.115.176.118</code> (Tailscale)</td>
+      <td>Production deploy (PRISM), warm backup, parallel compute</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Three-engine model -->
+<details>
+  <summary>Three-Engine Development Model</summary>
+  <div class="inner">
+    <strong>Engine 1:</strong> LLM (Claude) — reads code, designs, writes patches, orchestrates both machines.<br>
+    <strong>Engine 2:</strong> MacBook Pro — local tests, crawlers, smoke_test.py.<br>
+    <strong>Engine 3:</strong> Mac Mini — SSH remote verification, production deploy, parallel compute.<br><br>
+    <strong>Pattern:</strong> Fire local + mini verification jobs in background <em>simultaneously</em>, then LLM works while machines grind. Zero idle compute. Every verification task that a machine can do saves ~3M tokens of LLM reasoning per session.<br><br>
+    <strong>SSH:</strong> Single unified ED25519 key at <code>~/.ssh/id_ed25519</code>. Alias: <code>prism-mini</code> in <code>~/.ssh/config</code>. Works for GitHub, Bitbucket, GitLab, and the mini.
+  </div>
+</details>
+
+<!-- Agent workflow -->
+<details>
+  <summary>AI Agent Workflow Rules (12 rules)</summary>
+  <div class="inner">
+    <ol style="padding-left:18px;margin:0">
+      <li><strong>Read what you need, not everything.</strong> <code>CLAUDE.md</code> auto-loads. Read <code>AGENT_POLICY.md</code> and <code>git-server/README.md</code> only when you need a specific recipe.</li>
+      <li><strong>Pull → work → test → commit → push.</strong> No local-only commits. Every push triggers the mirror hook.</li>
+      <li><strong>Run pre-commit gate before every commit.</strong> PRISM: <code>smoke_test.py</code> (~5s mandatory). Other projects: whatever their WORKFLOW.md specifies.</li>
+      <li><strong>Fix root causes, verify state before acting.</strong></li>
+      <li><strong>Commit frequently but not excessively.</strong> One commit per meaningful unit of work — a unit a future reader could reference, revert, or cherry-pick.</li>
+      <li><strong>Batch terminal permissions, front-load shell operations.</strong></li>
+      <li><strong>Full gates only at release boundaries.</strong> Mid-flight gate is smoke/sanity only.</li>
+      <li><strong>Read project's reusable abstractions before adding code.</strong></li>
+      <li><strong>Hard attributes locked.</strong> Changes to hard attributes require major version bump.</li>
+      <li><strong>Website stays up.</strong> Atomic deploys. Never interrupt live users, never force-push stable branch.</li>
+      <li><strong>Log rare, git-invisible actions with <code>ai-log</code>.</strong> Credential changes, infra changes outside git, cross-project actions.</li>
+      <li><strong>Cross-project auto-tasks — one check per local day, not per session.</strong></li>
+    </ol>
+  </div>
+</details>
+
+<!-- Git rules -->
+<details>
+  <summary>Git Hard Rules</summary>
+  <div class="inner">
+    <ul style="padding-left:18px;margin:0">
+      <li>NEVER open a bare repo in Sourcetree or any GUI client.</li>
+      <li>ONE bare per project, exactly one, under <code>~/.claude/git-server/</code>.</li>
+      <li>Clone from Level 1 LOCAL bare, never from Level 2 upstream.</li>
+      <li>Bares MUST NOT be in Dropbox, iCloud, or any synced folder.</li>
+      <li>Push to <code>origin</code> (Level 1) always. Level 2 push requires a concrete reason.</li>
+      <li>Never force-push or rewrite history on a release branch.</li>
+      <li>Imperative commit subject ≤ 70 chars, body explains <em>why</em> not <em>what</em>.</li>
+    </ul>
+  </div>
+</details>
+
+<!-- Onboarding -->
+<details>
+  <summary>Onboard a New Project</summary>
+  <div class="inner">
+    <strong>Requires explicit user approval.</strong> The registry is the gate.<br><br>
+    <code>~/.claude/git-server/bin/new-project.sh &lt;name&gt; [existing-working-copy]</code><br><br>
+    This creates the Level-1 bare, installs the post-receive hook, resets origin, and seeds a <code>WORKFLOW.md</code> stub. For Level-2 (mini mirror), add <code>--mirror-to-mini</code> flag.<br><br>
+    After onboarding, update the registry in both <code>AGENT_POLICY.md §1</code> and <code>git-server/README.md §3</code>.
+  </div>
+</details>
+
+<!-- Key files -->
+<details>
+  <summary>Key Files for AI Agents</summary>
+  <div class="inner">
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr><td style="padding:4px 0"><code>~/.claude/CLAUDE.md</code></td><td style="padding:4px 8px;color:var(--muted)">Auto-loaded every session. The 60-second orientation.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/AGENT_POLICY.md</code></td><td style="padding:4px 8px;color:var(--muted)">Full agent policy. Consult for onboarding, SSH, mini recipes.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/git-server/README.md</code></td><td style="padding:4px 8px;color:var(--muted)">Operator manual. Bare repo management, troubleshooting.</td></tr>
+      <tr><td style="padding:4px 0"><code>&lt;project&gt;/WORKFLOW.md</code></td><td style="padding:4px 8px;color:var(--muted)">Level-2 project-specific rules. Read on first session.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/bin/ai-log</code></td><td style="padding:4px 8px;color:var(--muted)">Audit logger for non-commit actions.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.ssh/id_ed25519</code></td><td style="padding:4px 8px;color:var(--muted)">Unified SSH key. Works for all remotes.</td></tr>
+    </table>
+  </div>
+</details>
+
+<div class="footer">
+  Served by Gunicorn + mkcert on 127.0.0.1:5055 &nbsp;·&nbsp; MacBook Pro &nbsp;·&nbsp; {{ machine_time }}
+</div>
+
+</body>
+</html>

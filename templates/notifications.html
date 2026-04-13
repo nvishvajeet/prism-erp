@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, paginated_pane with context %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
@@ -7,18 +7,16 @@
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Notifications</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">{{ notices|length }} active</span>
+    {% set unread = notices|selectattr('is_read', 'false')|list|length %}
+    <span class="inst-header-code" data-vis="{{ V }}">{{ unread }} unread · {{ notices|length }} total</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    {% set unread = notices|selectattr('is_read', 'false')|list|length %}
     {% if unread %}
     <form method="post" action="{{ url_for('notification_mark_read') }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="notice_id" value="all">
-      <button type="submit" class="btn" data-vis="{{ V }}">Mark all read ({{ unread }})</button>
+      <button type="submit" class="btn" data-vis="{{ V }}">Mark all read</button>
     </form>
-    {% else %}
-    <span class="hint" data-vis="{{ V }}">All read</span>
     {% endif %}
     {% if is_owner_user or can_manage_members_user %}
     <a class="btn btn-primary" href="{{ url_for('admin_notices') }}" data-vis="{{ V }}">Send Notice</a>
@@ -26,54 +24,52 @@
   </div>
 </header>
 
-{# ── Category filter tabs ── #}
-<nav class="notif-cat-tabs" data-vis="{{ V }}">
+{# ── Category filter pills — same visual as inbox folder tabs ── #}
+<nav class="inbox-folder-tabs" data-vis="{{ V }}">
   {% set tabs = [('all', 'All'), ('request', 'Requests'), ('finance', 'Finance'), ('instrument', 'Instruments'), ('admin', 'Admin')] %}
   {% for key, label in tabs %}
   <a href="{{ url_for('notifications_page', cat=key) }}"
-     class="notif-cat-tab{% if active_cat == key %} notif-cat-tab-active{% endif %}"
+     class="inbox-folder-tab{% if active_cat == key %} inbox-folder-tab--active{% endif %}"
      data-vis="{{ V }}">
     {{ label }}
-    {% if cat_counts.get(key, 0) %}<span class="notif-cat-badge" data-vis="{{ V }}">{{ cat_counts[key] }}</span>{% endif %}
+    {% if cat_counts.get(key, 0) %}<sup data-vis="{{ V }}">{{ cat_counts[key] }}</sup>{% endif %}
   </a>
   {% endfor %}
 </nav>
 
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-inbox-list" data-vis="{{ V }}">
-  {% if notices %}
-  <ul class="inbox-list" data-vis="{{ V }}">
-  {% for n in notices %}
-  <li class="inbox-row clickable-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
-    <a href="{{ n.href if n.href else url_for('notifications_page') }}" class="notif-row-link" data-vis="{{ V }}">
-      <div class="notice-row-header" data-vis="{{ V }}">
-        <div class="notice-row-meta" data-vis="{{ V }}">
-          {% if not n.is_read %}<span class="notice-unread-dot" data-vis="{{ V }}"></span>{% endif %}
-          <span class="badge notif-cat-label notif-cat-label-{{ n.category }}" data-vis="{{ V }}">{{ n.category|upper }}</span>
-          {% if n.kind == 'notice' %}
-          <span class="badge notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
-          {% endif %}
-          <code class="inline-code" data-vis="{{ V }}">{{ n.scope_label }}</code>
-          <span class="hint" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
-        </div>
-      </div>
-      <h3 data-vis="{{ V }}">{{ n.title }}</h3>
-      {% if n.body %}<p data-vis="{{ V }}">{{ n.body }}</p>{% endif %}
-      {% if n.author_name %}<p class="hint" data-vis="{{ V }}">— {{ n.author_name }}</p>{% endif %}
-    </a>
-    {% if not n.is_read %}
-    <form method="post" action="{{ url_for('notification_mark_read') }}" class="notice-mark-read-form" data-vis="{{ V }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="notice_id" value="{% if n.kind == 'system' %}sys_{{ n.id }}{% else %}{{ n.id }}{% endif %}">
-      <button type="submit" class="text-link hint" data-vis="{{ V }}">mark read</button>
-    </form>
+    {{ card_heading("NOTIFICATIONS", unread|string ~ " unread") }}
+    {% if notices %}
+    <ul class="inbox-list" data-vis="{{ V }}">
+      {% for n in notices %}
+      <li class="inbox-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
+        <a class="inbox-row-link" href="{{ n.href if n.href else '#' }}" data-vis="{{ V }}"{% if not n.href %} onclick="event.preventDefault()"{% endif %}>
+          <div class="inbox-row-head" data-vis="{{ V }}">
+            {% if not n.is_read %}<span class="inbox-unread-dot" aria-hidden="true" data-vis="{{ V }}"></span>{% endif %}
+            <strong class="inbox-subject" data-vis="{{ V }}">{{ n.title }}</strong>
+            <span class="hint inbox-sent" data-vis="{{ V }}">{{ n.created_at[:16]|replace('T', ' ') if n.created_at else '' }}</span>
+          </div>
+          <div class="inbox-row-meta" data-vis="{{ V }}">
+            <span class="inbox-from hint" data-vis="{{ V }}">{{ n.scope_label }}{% if n.author_name %} · {{ n.author_name }}{% endif %}</span>
+            {% if n.body %}
+            <span class="inbox-preview hint" data-vis="{{ V }}">· {{ n.body[:120] }}{% if n.body|length > 120 %}…{% endif %}</span>
+            {% endif %}
+          </div>
+        </a>
+        {% if not n.is_read %}
+        <form method="post" action="{{ url_for('notification_mark_read') }}" class="notice-mark-read-form" data-vis="{{ V }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="notice_id" value="{% if n.kind == 'system' %}sys_{{ n.id }}{% else %}{{ n.id }}{% endif %}">
+          <button type="submit" class="text-link hint" title="Mark read" data-vis="{{ V }}">mark read</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("All caught up.", "No notifications right now.") }}
     {% endif %}
-  </li>
-  {% endfor %}
-  </ul>
-  {% else %}
-    {{ empty_state("No active notifications. You're all caught up.") }}
-  {% endif %}
   </article>
 </section>
 {% endblock %}

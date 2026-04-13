@@ -32,20 +32,35 @@
     {{ metadata_grid([
       ("Amount", "₹" ~ "{:,.2f}".format(po.amount)),
       ("Vendor", po.vendor_name or '—'),
+      ("Company", po.company_name or '—'),
       ("Category", po.category|title),
       ("Priority", po.priority|title),
       ("Submitted by", po.submitted_by_name or '—'),
       ("Created", po.created_at[:16] if po.created_at else '—'),
       ("Due Date", po.due_date[:10] if po.due_date else 'Not set'),
     ]) }}
+    {% if po.is_intercompany and po.counterparty_name %}
+    <div style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
+      <span class="badge status-queued" data-vis="{{ V }}">Inter-company → {{ po.counterparty_name }}</span>
+    </div>
+    {% endif %}
     {% if po.description %}
     <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
       <p class="hint" data-vis="{{ V }}">{{ po.description }}</p>
     </div>
     {% endif %}
     {% if po.auto_approved %}
-    <div style="padding:0.25rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+    <div style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
       <span class="badge status-active" data-vis="{{ V }}">Auto-approved (≤ threshold)</span>
+    </div>
+    {% endif %}
+    {% if po.audit_status %}
+    <div style="padding:0.25rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+      {% if po.audit_status == 'audited' %}
+      <span class="badge status-active" data-vis="{{ V }}">Audited{% if po.audited_at %} — {{ po.audited_at[:10] }}{% endif %}</span>
+      {% elif po.audit_status == 'flagged' %}
+      <span class="badge status-archived" data-vis="{{ V }}">Flagged for review{% if po.audited_at %} — {{ po.audited_at[:10] }}{% endif %}</span>
+      {% endif %}
     </div>
     {% endif %}
   </article>

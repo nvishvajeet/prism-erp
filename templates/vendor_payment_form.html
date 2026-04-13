@@ -16,6 +16,35 @@
     <form method="post" enctype="multipart/form-data" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+      {% if companies and companies|length > 1 %}
+      <label data-vis="{{ V }}">Company
+        <select name="company_id" id="companySelect" data-vis="{{ V }}">
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">
+        <span style="display:flex;align-items:center;gap:0.5rem;" data-vis="{{ V }}">
+          <input type="checkbox" name="is_intercompany" id="icToggle" value="1" data-vis="{{ V }}">
+          Inter-company transaction
+        </span>
+        <span class="hint" data-vis="{{ V }}">Check if this purchase is between sister companies.</span>
+      </label>
+
+      <label id="counterpartyLabel" data-vis="{{ V }}" style="display:none;">Counterparty Company
+        <select name="counterparty_company_id" id="counterpartySelect" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Select counterparty…</option>
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% elif companies and companies|length == 1 %}
+      <input type="hidden" name="company_id" value="{{ companies[0].id }}">
+      {% endif %}
+
       <label data-vis="{{ V }}">Vendor
         <select name="vendor_id" required data-vis="{{ V }}">
           <option value="" data-vis="{{ V }}">Select vendor…</option>
@@ -74,14 +103,23 @@
 <script>
 (function(){
   var area=document.getElementById('uploadArea');
-  if(!area)return;
-  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
-  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
-  var inp=area.querySelector('input[type="file"]');
-  if(inp) inp.addEventListener('change',function(){
-    var lbl=area.querySelector('.file-upload-label');
-    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
-  });
+  if(area){
+    ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+    ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+    var inp=area.querySelector('input[type="file"]');
+    if(inp) inp.addEventListener('change',function(){
+      var lbl=area.querySelector('.file-upload-label');
+      if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+    });
+  }
+  // Inter-company toggle
+  var icToggle=document.getElementById('icToggle');
+  var cpLabel=document.getElementById('counterpartyLabel');
+  if(icToggle && cpLabel){
+    icToggle.addEventListener('change',function(){
+      cpLabel.style.display=icToggle.checked?'':'none';
+    });
+  }
 })();
 </script>
 {% endblock %}

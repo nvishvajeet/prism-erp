@@ -12,7 +12,16 @@
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">Vendors</a>
     <a class="btn" href="{{ url_for('vendor_payment_reports') }}" data-vis="{{ V }}">Reports</a>
+    <a class="btn" href="{{ url_for('ca_audit_dashboard') }}" data-vis="{{ V }}">Audit</a>
     <a class="btn" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">📁 Filing</a>
+    {% if companies and companies|length > 1 %}
+    <select id="companyFilter" class="btn" style="appearance:auto;padding-right:1.5rem;" data-vis="{{ V }}">
+      <option value="" data-vis="{{ V }}">All Companies</option>
+      {% for co in companies %}
+      <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
     <a class="btn btn-primary" href="{{ url_for('vendor_payment_new') }}" data-vis="{{ V }}">+ New PO</a>
   </div>
 </header>
@@ -57,6 +66,7 @@
           <th data-vis="{{ V }}">Vendor</th>
           <th class="col-amount" data-vis="{{ V }}">Amount</th>
           <th data-vis="{{ V }}">Category</th>
+          {% if companies and companies|length > 1 %}<th data-vis="{{ V }}">Company</th>{% endif %}
           <th data-vis="{{ V }}">Status</th>
           <th data-vis="{{ V }}">Submitted by</th>
         </tr>
@@ -73,6 +83,7 @@
           <td data-vis="{{ V }}">{{ o.vendor_name or '—' }}</td>
           <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(o.amount) }}</td>
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ o.category }}</span></td>
+          {% if companies and companies|length > 1 %}<td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ o.company_short or '—' }}</span></td>{% endif %}
           <td data-vis="{{ V }}">
             {% set tone = {
               'draft': '',
@@ -121,6 +132,16 @@
         var text=r.textContent.toLowerCase();
         r.style.display=(!q||text.indexOf(q)!==-1)?'':'none';
       });
+    });
+  }
+  // Company filter
+  var companyFilter=document.getElementById('companyFilter');
+  if(companyFilter){
+    companyFilter.addEventListener('change',function(){
+      var url=new URL(window.location);
+      if(companyFilter.value) url.searchParams.set('company',companyFilter.value);
+      else url.searchParams.delete('company');
+      window.location=url.toString();
     });
   }
 })();

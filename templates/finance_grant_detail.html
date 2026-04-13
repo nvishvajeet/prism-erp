@@ -154,7 +154,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="remove_grant_member">
             <input type="hidden" name="member_id" value="{{ m.id }}">
-            <button type="submit" class="text-link hint" title="Remove" data-vis="{{ V }}">&#10005;</button>
+            <button type="submit" class="text-link hint" title="Remove" data-vis="{{ V }}">✕</button>
           </form>
         </li>
         {% endfor %}
@@ -243,7 +243,7 @@
             <td class="num" data-vis="{{ V }}">
               ₹{{ "{:,.0f}".format(e.amount or 0) }}
               {% if e.original_currency and e.original_currency != 'INR' %}
-              <br><span class="hint">{{ e.original_currency }} {{ "{:,.2f}".format(e.original_amount) }} &#215; {{ e.exchange_rate }}</span>
+              <br><span class="hint">{{ e.original_currency }} {{ "{:,.2f}".format(e.original_amount) }} × {{ e.exchange_rate }}</span>
               {% endif %}
             </td>
             <td data-vis="{{ V }}">{{ e.receipt_number or '—' }}</td>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Audit Certificate — {{ signoff.period or 'All Periods' }} — {{ signoff.company_name or 'All Companies' }}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size:10pt; line-height:1.5; color:#1a1a1a; }
+  .cert-header { text-align:center; padding:1rem 0; border-bottom:2px solid #333; margin-bottom:1rem; }
+  .cert-header h1 { font-size:16pt; letter-spacing:0.5px; }
+  .cert-header p { font-size:9pt; color:#555; }
+  .cert-meta { display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem; }
+  .cert-meta-item { flex:1; min-width:8rem; }
+  .cert-meta-label { font-size:8pt; text-transform:uppercase; color:#777; }
+  .cert-meta-value { font-weight:600; font-size:11pt; }
+  .cert-summary { background:#f5f5f5; padding:0.75rem; border-radius:4px; margin-bottom:1.5rem; display:flex; gap:2rem; flex-wrap:wrap; }
+  .cert-stat { text-align:center; }
+  .cert-stat-value { font-size:18pt; font-weight:700; }
+  .cert-stat-label { font-size:8pt; text-transform:uppercase; color:#777; }
+  .cert-stat-green { color:#34a853; }
+  .cert-stat-red { color:#c44; }
+  table { width:100%; border-collapse:collapse; font-size:8pt; margin-bottom:1rem; }
+  th, td { border:1px solid #ddd; padding:4px 6px; text-align:left; }
+  th { background:#f0f0f0; font-weight:600; text-transform:uppercase; font-size:7pt; }
+  .col-amount { text-align:right; }
+  .badge-audited { background:#d4edda; color:#155724; padding:1px 6px; border-radius:3px; font-size:7pt; }
+  .badge-flagged { background:#f8d7da; color:#721c24; padding:1px 6px; border-radius:3px; font-size:7pt; }
+  .badge-pending { background:#fff3cd; color:#856404; padding:1px 6px; border-radius:3px; font-size:7pt; }
+  .signatures { display:flex; gap:3rem; margin-top:3rem; padding-top:1rem; }
+  .sig-block { flex:1; text-align:center; }
+  .sig-line { border-top:1px solid #333; margin-top:3rem; padding-top:0.25rem; font-size:9pt; }
+  .retention { text-align:center; font-size:8pt; color:#777; margin-top:2rem; padding:0.5rem; border:1px dashed #ccc; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cert-header">
+  <h1>AUDIT CERTIFICATE</h1>
+  <p>{{ signoff.company_name or 'All Companies' }}{% if signoff.company_short %} ({{ signoff.company_short }}){% endif %}</p>
+  {% if signoff.company_gstin %}<p>GSTIN: {{ signoff.company_gstin }}</p>{% endif %}
+</div>
+
+<div class="cert-meta">
+  <div class="cert-meta-item">
+    <div class="cert-meta-label">Certificate No.</div>
+    <div class="cert-meta-value">AUD-{{ signoff.id }}</div>
+  </div>
+  <div class="cert-meta-item">
+    <div class="cert-meta-label">Period</div>
+    <div class="cert-meta-value">{{ signoff.period or 'All Periods' }}</div>
+  </div>
+  <div class="cert-meta-item">
+    <div class="cert-meta-label">Signed By</div>
+    <div class="cert-meta-value">{{ signoff.signed_by_name or '—' }}</div>
+  </div>
+  <div class="cert-meta-item">
+    <div class="cert-meta-label">Date</div>
+    <div class="cert-meta-value">{{ signoff.signed_at[:10] if signoff.signed_at else '—' }}</div>
+  </div>
+</div>
+
+<div class="cert-summary">
+  <div class="cert-stat">
+    <div class="cert-stat-value">{{ signoff.total_transactions }}</div>
+    <div class="cert-stat-label">Total Transactions</div>
+  </div>
+  <div class="cert-stat">
+    <div class="cert-stat-value cert-stat-green">{{ signoff.total_audited }}</div>
+    <div class="cert-stat-label">Audited</div>
+  </div>
+  <div class="cert-stat">
+    <div class="cert-stat-value cert-stat-red">{{ signoff.total_flagged }}</div>
+    <div class="cert-stat-label">Flagged</div>
+  </div>
+  <div class="cert-stat">
+    <div class="cert-stat-value">{{ signoff.total_transactions - signoff.total_audited - signoff.total_flagged }}</div>
+    <div class="cert-stat-label">Unreviewed</div>
+  </div>
+</div>
+
+{% if signoff.note %}
+<p style="margin-bottom:1rem;"><strong>Note:</strong> {{ signoff.note }}</p>
+{% endif %}
+
+<h3 style="margin-bottom:0.5rem;">Transaction Register</h3>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Date</th>
+      <th>Title</th>
+      <th>Vendor</th>
+      <th class="col-amount">Amount</th>
+      <th>Co.</th>
+      <th>Status</th>
+      <th>Audit</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for po in transactions %}
+    <tr>
+      <td>{{ po.id }}</td>
+      <td>{{ po.created_at[:10] if po.created_at else '—' }}</td>
+      <td>{{ po.title }}</td>
+      <td>{{ po.vendor_name or '—' }}</td>
+      <td class="col-amount">₹{{ "{:,.0f}".format(po.amount) }}</td>
+      <td>{{ po.company_short or '—' }}</td>
+      <td>{{ po.status|replace('_',' ')|title }}</td>
+      <td>
+        {% if po.audit_status == 'audited' %}
+        <span class="badge-audited">Audited</span>
+        {% elif po.audit_status == 'flagged' %}
+        <span class="badge-flagged">Flagged</span>
+        {% else %}
+        <span class="badge-pending">Pending</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="4"><strong>Total ({{ transactions|length }} transactions)</strong></td>
+      <td class="col-amount"><strong>₹{{ "{:,.0f}".format(transactions|sum(attribute='amount')) }}</strong></td>
+      <td colspan="3"></td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="signatures">
+  <div class="sig-block">
+    <div class="sig-line">Auditor (CA)</div>
+  </div>
+  <div class="sig-block">
+    <div class="sig-line">Head Accountant</div>
+  </div>
+  <div class="sig-block">
+    <div class="sig-line">Owner / Director</div>
+  </div>
+</div>
+
+<div class="retention">
+  Retain for 7 years from date of audit. · Document generated by PRISM ERP.
+</div>
+
+<script>window.onload=function(){window.print();};</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('ca_audit_dashboard') }}" class="hover-back-btn" title="Back to Audit">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('ca_audit_dashboard') }}" data-vis="{{ V }}">← Audit</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Statement Review</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ statement.bank_name }} · {{ statement.statement_month or '—' }}{% if statement.company_short %} · {{ statement.company_short }}{% endif %}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BANK ENTRIES", statement.parsed_count|string ~ " entries · " ~ statement.matched_count|string ~ " matched") }}
+    <input type="text" id="entrySearch" class="table-search-input" placeholder="Search entries…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    {% if entries %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Description</th>
+          <th data-vis="{{ V }}">Reference</th>
+          <th class="col-amount" data-vis="{{ V }}">Debit</th>
+          <th class="col-amount" data-vis="{{ V }}">Credit</th>
+          <th class="col-amount" data-vis="{{ V }}">Balance</th>
+          <th data-vis="{{ V }}">Match</th>
+          <th data-vis="{{ V }}">Confidence</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for e in entries %}
+        <tr data-vis="{{ V }}"{% if e.match_status == 'unmatched' and (e.debit > 0 or e.credit > 0) %} style="background:var(--color-amber-bg, rgba(230,168,0,0.06));"{% endif %}>
+          <td data-vis="{{ V }}">{{ e.txn_date }}</td>
+          <td data-vis="{{ V }}">{{ e.description[:60] }}{{ '…' if e.description|length > 60 else '' }}</td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ e.reference[:20] if e.reference else '—' }}</code></td>
+          <td class="col-amount" data-vis="{{ V }}">{% if e.debit > 0 %}₹{{ "{:,.0f}".format(e.debit) }}{% endif %}</td>
+          <td class="col-amount" data-vis="{{ V }}">{% if e.credit > 0 %}₹{{ "{:,.0f}".format(e.credit) }}{% endif %}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(e.balance) }}</td>
+          <td data-vis="{{ V }}">
+            {% if e.match_status == 'matched' %}
+            <span class="badge status-active" data-vis="{{ V }}">
+              <a href="{{ url_for('vendor_payment_detail', po_id=e.matched_po_id) }}" class="text-link" data-vis="{{ V }}">
+                PO #{{ e.matched_po_id }} — {{ e.po_title or '' }}
+              </a>
+            </span>
+            {% elif e.match_status == 'suggested' %}
+            <span class="badge status-queued" data-vis="{{ V }}">
+              Suggested: PO #{{ e.matched_po_id }}
+            </span>
+            <form method="post" action="{{ url_for('ca_audit_match_entry', entry_id=e.id) }}" style="display:inline;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="po_id" value="{{ e.matched_po_id }}">
+              <button type="submit" class="btn" data-vis="{{ V }}" style="padding:0.15rem 0.4rem;font-size:0.75rem;">Confirm</button>
+            </form>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">Unmatched</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if e.match_confidence > 0 %}
+            <span class="badge {% if e.match_confidence >= 0.8 %}status-active{% elif e.match_confidence >= 0.5 %}status-queued{% else %}{% endif %}" data-vis="{{ V }}">
+              {{ "{:.0f}".format(e.match_confidence * 100) }}%
+            </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No entries in this statement.", "The CSV may have been empty or in an unrecognized format.") }}
+    {% endif %}
+  </article>
+</section>
+
+<script>
+(function(){
+  var searchInput=document.getElementById('entrySearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('tbody tr');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        var text=r.textContent.toLowerCase();
+        r.style.display=(!q||text.indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

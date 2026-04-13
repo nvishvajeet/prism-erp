@@ -276,11 +276,15 @@ MODULE_REGISTRY = {
             "vendor_payment_print", "vendor_payment_print_batch",
             "vendor_payment_filing", "vendor_list", "vendor_detail",
             "vendor_new", "vendor_payment_reports",
+            "ca_audit_dashboard", "ca_audit_batch", "ca_audit_single",
+            "ca_audit_upload_statement", "ca_audit_signoff",
+            "ca_audit_print_signoff", "ca_audit_statement_review",
+            "ca_audit_match_entry",
         },
         "nav_badge_key": "pending_approvals",
         "nav_access": lambda ap, is_owner: (
             ap.get("_is_operational_nav") or is_owner
-            or bool(ap.get("_role_set", frozenset()) & {"finance_admin", "site_admin", "super_admin"})
+            or bool(ap.get("_role_set", frozenset()) & {"finance_admin", "site_admin", "super_admin", "ca_auditor"})
         ),
     },
     "compute": {
@@ -4831,6 +4835,10 @@ def init_db() -> None:
                 receipt_path TEXT NOT NULL DEFAULT '',
                 invoice_path TEXT NOT NULL DEFAULT '',
                 due_date TEXT,
+                is_intercompany INTEGER NOT NULL DEFAULT 0,
+                counterparty_company_id INTEGER,
+                company_id INTEGER,
+                audit_status TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT '',
                 updated_at TEXT,
                 FOREIGN KEY (vendor_id) REFERENCES vendors(id),
@@ -4842,6 +4850,70 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status);
             CREATE INDEX IF NOT EXISTS idx_po_submitted_by ON purchase_orders(submitted_by_user_id);
             CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders(created_at);
+        """)
+
+        # ── CA Audit module ──────────────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS bank_statements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                bank_name TEXT NOT NULL DEFAULT '',
+                account_number TEXT NOT NULL DEFAULT '',
+                statement_month TEXT NOT NULL DEFAULT '',
+                uploaded_by_user_id INTEGER,
+                file_path TEXT NOT NULL DEFAULT '',
+                parsed_count INTEGER NOT NULL DEFAULT 0,
+                matched_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (company_id) REFERENCES companies(id),
+                FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS bank_statement_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                statement_id INTEGER NOT NULL,
+                txn_date TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                reference TEXT NOT NULL DEFAULT '',
+                debit REAL NOT NULL DEFAULT 0,
+                credit REAL NOT NULL DEFAULT 0,
+                balance REAL NOT NULL DEFAULT 0,
+                matched_po_id INTEGER,
+                match_status TEXT NOT NULL DEFAULT 'unmatched',
+                match_confidence REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (statement_id) REFERENCES bank_statements(id),
+                FOREIGN KEY (matched_po_id) REFERENCES purchase_orders(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_bse_statement ON bank_statement_entries(statement_id);
+            CREATE INDEX IF NOT EXISTS idx_bse_match_status ON bank_statement_entries(match_status);
+            CREATE TABLE IF NOT EXISTS audit_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                po_id INTEGER NOT NULL,
+                audited_by_user_id INTEGER NOT NULL,
+                audit_status TEXT NOT NULL DEFAULT 'audited',
+                match_type TEXT NOT NULL DEFAULT 'bank',
+                bank_entry_id INTEGER,
+                note TEXT NOT NULL DEFAULT '',
+                flagged INTEGER NOT NULL DEFAULT 0,
+                audited_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (po_id) REFERENCES purchase_orders(id),
+                FOREIGN KEY (audited_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (bank_entry_id) REFERENCES bank_statement_entries(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_po ON audit_records(po_id);
+            CREATE TABLE IF NOT EXISTS audit_signoffs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                period TEXT NOT NULL DEFAULT '',
+                signed_by_user_id INTEGER NOT NULL,
+                total_transactions INTEGER NOT NULL DEFAULT 0,
+                total_audited INTEGER NOT NULL DEFAULT 0,
+                total_flagged INTEGER NOT NULL DEFAULT 0,
+                note TEXT NOT NULL DEFAULT '',
+                signed_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (company_id) REFERENCES companies(id),
+                FOREIGN KEY (signed_by_user_id) REFERENCES users(id)
+            );
         """)
 
         # ── Compute / HPC Job Scheduler module ───────────────────
@@ -5228,6 +5300,19 @@ def _seed_demo_companies() -> None:
                 except Exception:
                     pass
 
+        # Audit columns on purchase_orders
+        for col, defn in [
+            ("audit_status", "TEXT NOT NULL DEFAULT ''"),
+            ("audited_by_user_id", "INTEGER"),
+            ("audited_at", "TEXT"),
+            ("bank_entry_id", "INTEGER"),
+        ]:
+            if col not in po_cols:
+                try:
+                    cur.execute(f"ALTER TABLE purchase_orders ADD COLUMN {col} {defn}")
+                except Exception:
+                    pass
+
         db.commit()
 
         # Add key staff: Prashant (head accountant), Sonal, Rahul (finance),
@@ -5251,6 +5336,29 @@ def _seed_demo_companies() -> None:
                 cur.execute(
                     "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
                     (uid, role, now))
+        # CA team accounts for audit access
+        ca_staff = [
+            ("CA Office", "ca@catalyst.local", "ca_auditor",
+             "CA team login — external auditor access for transaction verification"),
+            ("CA Assistant", "ca2@catalyst.local", "ca_auditor",
+             "CA team assistant — audit review and statement matching"),
+        ]
+        for name, email, role, note in ca_staff:
+            existing_user = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if not existing_user:
+                cur.execute(
+                    "INSERT INTO users (name, email, password_hash, role, invite_status) VALUES (?,?,?,?,'active')",
+                    (name, email, demo_pw_hash, role))
+                uid = cur.lastrowid
+                cur.execute(
+                    "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
+                    (uid, role, now))
+        # Also give Prashant audit access
+        prashant_u = db.execute("SELECT id FROM users WHERE email='prashant@catalyst.local'").fetchone()
+        if prashant_u:
+            cur.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
+                (prashant_u["id"], "ca_auditor", now))
         db.commit()
 
         # Register the sister companies as vendors of each other
@@ -16336,7 +16444,7 @@ def _user_can_manage_payments(user) -> bool:
         return False
     if is_owner(user):
         return True
-    return bool(user_role_set(user) & {"finance_admin", "super_admin", "site_admin"})
+    return bool(user_role_set(user) & {"finance_admin", "super_admin", "site_admin", "ca_auditor"})
 
 
 @app.route("/vendors")
@@ -16429,14 +16537,26 @@ def vendor_payments_list():
     if not _user_can_manage_payments(user):
         abort(403)
     status_filter = request.args.get("status", "")
+    company_filter = request.args.get("company", "")
+    companies = _get_companies()
     base_query = """
-        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name,
+               c.short_name AS company_short
           FROM purchase_orders po
           LEFT JOIN vendors v ON v.id = po.vendor_id
           LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
     """
+    conditions = []
+    params = []
     if status_filter:
-        rows = query_all(base_query + " WHERE po.status = ? ORDER BY po.created_at DESC", (status_filter,))
+        conditions.append("po.status = ?")
+        params.append(status_filter)
+    if company_filter:
+        conditions.append("po.company_id = ?")
+        params.append(int(company_filter))
+    if conditions:
+        rows = query_all(base_query + " WHERE " + " AND ".join(conditions) + " ORDER BY po.created_at DESC", tuple(params))
     else:
         rows = query_all(base_query + " ORDER BY po.created_at DESC LIMIT 200")
     # Stats
@@ -16445,16 +16565,22 @@ def vendor_payments_list():
     paid_total = sum(r["amount"] for r in rows if r["status"] in ("paid", "receipt_uploaded"))
     total_orders = len(rows)
     # Monthly spend
-    month_spend = query_one("""
+    ms_sql = """
         SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
         WHERE status IN ('paid','receipt_uploaded')
           AND paid_at >= date('now','start of month')
-    """)
+    """
+    ms_params = []
+    if company_filter:
+        ms_sql += " AND company_id = ?"
+        ms_params.append(int(company_filter))
+    month_spend = query_one(ms_sql, tuple(ms_params))
     return render_template("vendor_payments.html", orders=rows,
                            pending=pending, approved=approved,
                            paid_total=paid_total, total_orders=total_orders,
                            month_spend=month_spend["total"] if month_spend else 0,
-                           status_filter=status_filter, categories=PO_CATEGORIES)
+                           status_filter=status_filter, categories=PO_CATEGORIES,
+                           companies=companies, company_filter=company_filter)
 
 
 @app.route("/payments/new", methods=["GET", "POST"])
@@ -16467,6 +16593,7 @@ def vendor_payment_new():
     if not _user_can_manage_payments(user):
         abort(403)
     vendors = query_all("SELECT id, name, category FROM vendors WHERE is_active = 1 ORDER BY name")
+    companies = _get_companies()
     if request.method == "POST":
         vendor_id = int(request.form.get("vendor_id", "0"))
         title = request.form.get("title", "").strip()
@@ -16478,6 +16605,11 @@ def vendor_payment_new():
         category = request.form.get("category", "general").strip()
         priority = request.form.get("priority", "normal").strip()
         due_date = request.form.get("due_date", "").strip() or None
+        company_id = int(request.form.get("company_id", "0") or "0") or None
+        is_intercompany = 1 if request.form.get("is_intercompany") else 0
+        counterparty_company_id = int(request.form.get("counterparty_company_id", "0") or "0") or None
+        if is_intercompany and not counterparty_company_id:
+            is_intercompany = 0
         # Handle invoice upload
         invoice_path = ""
         uploaded = request.files.get("invoice")
@@ -16495,11 +16627,13 @@ def vendor_payment_new():
             """INSERT INTO purchase_orders
                (vendor_id, title, description, amount, category, priority,
                 status, auto_approved, submitted_by_user_id, invoice_path,
-                due_date, created_at, approved_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                due_date, created_at, approved_at,
+                company_id, is_intercompany, counterparty_company_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (vendor_id, title, description, amount, category, priority,
              status, 1 if auto else 0, user["id"], invoice_path,
-             due_date, now_iso(), now_iso() if auto else None))
+             due_date, now_iso(), now_iso() if auto else None,
+             company_id, is_intercompany, counterparty_company_id))
         vendor = query_one("SELECT name FROM vendors WHERE id = ?", (vendor_id,))
         vendor_name = vendor["name"] if vendor else "Unknown"
         log_action(user["id"], "purchase_order", po_id, "po_submitted",
@@ -16528,7 +16662,7 @@ def vendor_payment_new():
                     break
         return redirect(url_for("vendor_payments_list"))
     return render_template("vendor_payment_form.html", vendors=vendors,
-                           categories=PO_CATEGORIES)
+                           categories=PO_CATEGORIES, companies=companies)
 
 
 @app.route("/payments/<int:po_id>")
@@ -16546,12 +16680,16 @@ def vendor_payment_detail(po_id):
                v.bank_account AS vendor_bank_account, v.ifsc_code AS vendor_ifsc,
                u.name AS submitted_by_name,
                a.name AS approved_by_name,
-               p.name AS paid_by_name
+               p.name AS paid_by_name,
+               c.name AS company_name, c.short_name AS company_short,
+               cc.name AS counterparty_name, cc.short_name AS counterparty_short
           FROM purchase_orders po
           LEFT JOIN vendors v ON v.id = po.vendor_id
           LEFT JOIN users u ON u.id = po.submitted_by_user_id
           LEFT JOIN users a ON a.id = po.approved_by_user_id
           LEFT JOIN users p ON p.id = po.paid_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
+          LEFT JOIN companies cc ON cc.id = po.counterparty_company_id
          WHERE po.id = ?
     """, (po_id,))
     if not po:
@@ -16631,10 +16769,12 @@ def vendor_payment_approve_queue():
     detail_threshold = float(request.args.get("threshold",
                              str(VENDOR_AUTO_APPROVE_THRESHOLD)))
     pending = query_all("""
-        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name,
+               c.short_name AS company_short
           FROM purchase_orders po
           LEFT JOIN vendors v ON v.id = po.vendor_id
           LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
          WHERE po.status = 'pending_approval'
          ORDER BY po.amount DESC
     """)
@@ -16800,50 +16940,76 @@ def vendor_payment_reports():
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
+    companies = _get_companies()
+    company_filter = request.args.get("company", "")
+    cfilt = " AND po.company_id = ?" if company_filter else ""
+    cparams = (int(company_filter),) if company_filter else ()
     # Monthly spend
-    monthly = query_all("""
+    monthly = query_all(f"""
         SELECT strftime('%Y-%m', paid_at) AS month,
                SUM(amount) AS total, COUNT(*) AS count
-          FROM purchase_orders
-         WHERE status IN ('paid','receipt_uploaded') AND paid_at IS NOT NULL
+          FROM purchase_orders po
+         WHERE status IN ('paid','receipt_uploaded') AND paid_at IS NOT NULL{cfilt}
          GROUP BY strftime('%Y-%m', paid_at)
          ORDER BY month DESC LIMIT 12
-    """)
+    """, cparams)
     # By vendor
-    by_vendor = query_all("""
+    by_vendor = query_all(f"""
         SELECT v.name, SUM(po.amount) AS total, COUNT(*) AS count
           FROM purchase_orders po
           JOIN vendors v ON v.id = po.vendor_id
-         WHERE po.status IN ('paid','receipt_uploaded')
+         WHERE po.status IN ('paid','receipt_uploaded'){cfilt}
          GROUP BY po.vendor_id
          ORDER BY total DESC LIMIT 20
-    """)
+    """, cparams)
     # By category
-    by_category = query_all("""
+    by_category = query_all(f"""
         SELECT po.category, SUM(po.amount) AS total, COUNT(*) AS count
           FROM purchase_orders po
-         WHERE po.status IN ('paid','receipt_uploaded')
+         WHERE po.status IN ('paid','receipt_uploaded'){cfilt}
          GROUP BY po.category
+         ORDER BY total DESC
+    """, cparams)
+    # By company
+    by_company = query_all("""
+        SELECT c.short_name AS name, SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+          JOIN companies c ON c.id = po.company_id
+         WHERE po.status IN ('paid','receipt_uploaded')
+         GROUP BY po.company_id
+         ORDER BY total DESC
+    """)
+    # Inter-company totals
+    intercompany = query_all("""
+        SELECT c.short_name AS from_company, cc.short_name AS to_company,
+               SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+          JOIN companies c ON c.id = po.company_id
+          JOIN companies cc ON cc.id = po.counterparty_company_id
+         WHERE po.is_intercompany = 1 AND po.status IN ('paid','receipt_uploaded')
+         GROUP BY po.company_id, po.counterparty_company_id
          ORDER BY total DESC
     """)
     # Totals
     grand_total = sum(r["total"] for r in by_vendor)
-    this_month = query_one("""
-        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
+    this_month = query_one(f"""
+        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders po
         WHERE status IN ('paid','receipt_uploaded')
-          AND paid_at >= date('now','start of month')
-    """)
-    pending_amount = query_one("""
-        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders
-        WHERE status IN ('pending_approval','approved')
-    """)
+          AND paid_at >= date('now','start of month'){cfilt}
+    """, cparams)
+    pending_amount = query_one(f"""
+        SELECT COALESCE(SUM(amount), 0) AS total FROM purchase_orders po
+        WHERE status IN ('pending_approval','approved'){cfilt}
+    """, cparams)
     return render_template("vendor_payment_reports.html",
                            monthly=monthly, by_vendor=by_vendor,
-                           by_category=by_category,
+                           by_category=by_category, by_company=by_company,
+                           intercompany=intercompany,
                            grand_total=grand_total,
                            this_month=this_month["total"] if this_month else 0,
                            pending_amount=pending_amount["total"] if pending_amount else 0,
-                           categories=dict(PO_CATEGORIES))
+                           categories=dict(PO_CATEGORIES),
+                           companies=companies, company_filter=company_filter)
 
 
 # ── Filing cabinet structure ──
@@ -16956,9 +17122,10 @@ def vendor_payment_filing():
           FROM purchase_orders WHERE created_at IS NOT NULL
          ORDER BY month DESC LIMIT 12
     """)
+    companies = _get_companies()
     return render_template("vendor_payment_filing.html", folders=folders,
                            months=[m["month"] for m in months],
-                           categories=PO_CATEGORIES)
+                           categories=PO_CATEGORIES, companies=companies)
 
 
 @app.route("/payments/print-batch")
@@ -17019,6 +17186,501 @@ def vendor_payment_print_batch():
                            orders=orders, grand_total=grand_total,
                            filter_label=filter_label,
                            filing_lookup=_CATEGORY_TO_FOLDER)
+
+
+# ── CA Audit module ─────────────────────────────────────────────
+# External CA team logs in, reviews every transaction against bank
+# statement entries. Transactions < ₹10,000 flagged as potential
+# cash receipts for careful review. Bank statement upload and auto-
+# matching. Bulk audit approval. Audit sign-off with print.
+
+CA_CASH_THRESHOLD = 10000  # Below this, flag as possible cash receipt
+
+
+def _user_is_ca_auditor(user) -> bool:
+    """CA team or finance admin or owner can audit."""
+    if not user:
+        return False
+    if is_owner(user):
+        return True
+    roles = user_role_set(user)
+    if roles & {"finance_admin", "super_admin", "site_admin"}:
+        return True
+    # CA team identified by account_type or role containing 'ca_auditor'
+    if "ca_auditor" in roles:
+        return True
+    return False
+
+
+@app.route("/audit")
+@login_required
+def ca_audit_dashboard():
+    """CA audit dashboard — overview of audit status across all transactions."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    companies = _get_companies()
+    company_filter = request.args.get("company", "")
+    period_filter = request.args.get("period", "")
+
+    cfilt = " AND po.company_id = ?" if company_filter else ""
+    cparams = [int(company_filter)] if company_filter else []
+    pfilt = ""
+    if period_filter:
+        pfilt = " AND po.created_at LIKE ?"
+        cparams.append(f"{period_filter}%")
+
+    # Summary stats
+    total = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders po
+        WHERE po.status IN ('paid','receipt_uploaded','approved'){cfilt}{pfilt}
+    """, tuple(cparams))
+    audited = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders po
+        WHERE po.audit_status = 'audited'{cfilt}{pfilt}
+    """, tuple(cparams))
+    flagged = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders po
+        WHERE po.audit_status = 'flagged'{cfilt}{pfilt}
+    """, tuple(cparams))
+    cash_review = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders po
+        WHERE po.amount < ? AND po.audit_status = ''
+          AND po.status IN ('paid','receipt_uploaded'){cfilt}{pfilt}
+    """, tuple([CA_CASH_THRESHOLD] + cparams))
+    unaudited = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders po
+        WHERE (po.audit_status = '' OR po.audit_status IS NULL)
+          AND po.status IN ('paid','receipt_uploaded','approved'){cfilt}{pfilt}
+    """, tuple(cparams))
+
+    # Unaudited transactions — show first for action
+    unaudited_rows = query_all(f"""
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name,
+               c.short_name AS company_short
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
+         WHERE (po.audit_status = '' OR po.audit_status IS NULL)
+           AND po.status IN ('paid','receipt_uploaded','approved'){cfilt}{pfilt}
+         ORDER BY po.amount DESC
+         LIMIT 100
+    """, tuple(cparams))
+
+    # Flagged transactions
+    flagged_rows = query_all(f"""
+        SELECT po.*, v.name AS vendor_name, u.name AS submitted_by_name,
+               c.short_name AS company_short, ar.note AS audit_note
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
+          LEFT JOIN audit_records ar ON ar.po_id = po.id AND ar.audit_status = 'flagged'
+         WHERE po.audit_status = 'flagged'{cfilt}{pfilt}
+         ORDER BY po.amount DESC
+    """, tuple(cparams))
+
+    # Recently audited
+    recent_audited = query_all(f"""
+        SELECT po.*, v.name AS vendor_name, c.short_name AS company_short,
+               au.name AS audited_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+          LEFT JOIN users au ON au.id = po.audited_by_user_id
+         WHERE po.audit_status IN ('audited','flagged'){cfilt}{pfilt}
+         ORDER BY po.audited_at DESC LIMIT 30
+    """, tuple(cparams))
+
+    # Bank statements
+    statements = query_all("""
+        SELECT bs.*, c.short_name AS company_short,
+               u.name AS uploaded_by_name
+          FROM bank_statements bs
+          LEFT JOIN companies c ON c.id = bs.company_id
+          LEFT JOIN users u ON u.id = bs.uploaded_by_user_id
+         ORDER BY bs.created_at DESC LIMIT 20
+    """)
+
+    # Available periods for filter
+    periods = query_all("""
+        SELECT DISTINCT strftime('%Y-%m', created_at) AS period
+          FROM purchase_orders WHERE created_at IS NOT NULL
+         ORDER BY period DESC LIMIT 24
+    """)
+
+    # Audit sign-offs
+    signoffs = query_all("""
+        SELECT s.*, c.short_name AS company_short, u.name AS signed_by_name
+          FROM audit_signoffs s
+          LEFT JOIN companies c ON c.id = s.company_id
+          LEFT JOIN users u ON u.id = s.signed_by_user_id
+         ORDER BY s.signed_at DESC LIMIT 20
+    """)
+
+    return render_template("ca_audit_dashboard.html",
+                           total=total["c"] if total else 0,
+                           audited_count=audited["c"] if audited else 0,
+                           flagged_count=flagged["c"] if flagged else 0,
+                           cash_review_count=cash_review["c"] if cash_review else 0,
+                           unaudited_count=unaudited["c"] if unaudited else 0,
+                           unaudited_rows=unaudited_rows,
+                           flagged_rows=flagged_rows,
+                           recent_audited=recent_audited,
+                           statements=statements,
+                           signoffs=signoffs,
+                           companies=companies,
+                           company_filter=company_filter,
+                           period_filter=period_filter,
+                           periods=[p["period"] for p in periods],
+                           cash_threshold=CA_CASH_THRESHOLD)
+
+
+@app.route("/audit/batch", methods=["POST"])
+@login_required
+def ca_audit_batch():
+    """Batch audit multiple transactions. CA team approves in bulk."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    po_ids = request.form.getlist("po_ids")
+    action = request.form.get("action", "audit")  # audit or flag
+    note = request.form.get("note", "").strip()
+
+    audit_status = "flagged" if action == "flag" else "audited"
+    count = 0
+    for pid_str in po_ids:
+        try:
+            pid = int(pid_str)
+        except (ValueError, TypeError):
+            continue
+        execute("""
+            UPDATE purchase_orders
+            SET audit_status = ?, audited_by_user_id = ?, audited_at = ?
+            WHERE id = ? AND (audit_status = '' OR audit_status IS NULL OR audit_status = 'flagged')
+        """, (audit_status, user["id"], now_iso(), pid))
+        execute("""
+            INSERT INTO audit_records (po_id, audited_by_user_id, audit_status, note, audited_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (pid, user["id"], audit_status, note, now_iso()))
+        count += 1
+
+    if audit_status == "flagged":
+        flash(f"{count} transaction(s) flagged for review.", "warning")
+    else:
+        flash(f"{count} transaction(s) marked as audited.", "success")
+    return redirect(url_for("ca_audit_dashboard"))
+
+
+@app.route("/audit/single/<int:po_id>", methods=["POST"])
+@login_required
+def ca_audit_single(po_id):
+    """Audit or flag a single transaction."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    action = request.form.get("action", "audit")
+    note = request.form.get("note", "").strip()
+    match_type = request.form.get("match_type", "bank")
+    bank_entry_id = request.form.get("bank_entry_id", "")
+    bank_entry_id = int(bank_entry_id) if bank_entry_id else None
+
+    audit_status = "flagged" if action == "flag" else "audited"
+    execute("""
+        UPDATE purchase_orders
+        SET audit_status = ?, audited_by_user_id = ?, audited_at = ?,
+            bank_entry_id = ?
+        WHERE id = ?
+    """, (audit_status, user["id"], now_iso(), bank_entry_id, po_id))
+    execute("""
+        INSERT INTO audit_records
+        (po_id, audited_by_user_id, audit_status, match_type, bank_entry_id, note,
+         flagged, audited_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (po_id, user["id"], audit_status, match_type, bank_entry_id, note,
+          1 if audit_status == "flagged" else 0, now_iso()))
+
+    flash(f"PO #{po_id} {'flagged' if audit_status == 'flagged' else 'audited'}.", "success")
+    return redirect(url_for("ca_audit_dashboard"))
+
+
+@app.route("/audit/upload-statement", methods=["GET", "POST"])
+@login_required
+def ca_audit_upload_statement():
+    """Upload a bank statement (CSV) for auto-matching."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    companies = _get_companies()
+    if request.method == "POST":
+        company_id = int(request.form.get("company_id", "0") or "0") or None
+        bank_name = request.form.get("bank_name", "").strip()
+        account_number = request.form.get("account_number", "").strip()
+        statement_month = request.form.get("statement_month", "").strip()
+        uploaded = request.files.get("statement_file")
+        if not uploaded or not uploaded.filename:
+            flash("Please upload a CSV file.", "error")
+            return redirect(url_for("ca_audit_upload_statement"))
+
+        safe_name = secure_filename(uploaded.filename)
+        upload_dir = Path("data") / "bank_statements"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        file_path = f"stmt_{ts}_{safe_name}"
+        uploaded.save(str(upload_dir / file_path))
+
+        stmt_id = execute("""
+            INSERT INTO bank_statements
+            (company_id, bank_name, account_number, statement_month,
+             uploaded_by_user_id, file_path, created_at)
+            VALUES (?,?,?,?,?,?,?)
+        """, (company_id, bank_name, account_number, statement_month,
+              user["id"], file_path, now_iso()))
+
+        # Parse CSV and insert entries
+        import csv
+        parsed_count = 0
+        try:
+            with open(str(upload_dir / file_path), "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Flexible column matching — look for common bank statement headers
+                    txn_date = (row.get("Date") or row.get("date") or
+                                row.get("Txn Date") or row.get("Transaction Date") or
+                                row.get("Value Date") or "").strip()
+                    description = (row.get("Description") or row.get("Narration") or
+                                   row.get("Particulars") or row.get("description") or "").strip()
+                    reference = (row.get("Reference") or row.get("Ref No") or
+                                 row.get("Chq/Ref No") or row.get("UTR") or "").strip()
+                    debit = float((row.get("Debit") or row.get("Withdrawal") or
+                                   row.get("Dr") or "0").replace(",", "").strip() or "0")
+                    credit = float((row.get("Credit") or row.get("Deposit") or
+                                    row.get("Cr") or "0").replace(",", "").strip() or "0")
+                    balance = float((row.get("Balance") or row.get("Closing Balance") or
+                                     "0").replace(",", "").strip() or "0")
+                    if txn_date or description:
+                        execute("""
+                            INSERT INTO bank_statement_entries
+                            (statement_id, txn_date, description, reference,
+                             debit, credit, balance, created_at)
+                            VALUES (?,?,?,?,?,?,?,?)
+                        """, (stmt_id, txn_date, description, reference,
+                              debit, credit, balance, now_iso()))
+                        parsed_count += 1
+        except Exception as e:
+            flash(f"CSV parsing error: {e}", "error")
+            return redirect(url_for("ca_audit_dashboard"))
+
+        # Auto-match entries against purchase orders
+        matched_count = _auto_match_statement(stmt_id)
+        execute("UPDATE bank_statements SET parsed_count = ?, matched_count = ? WHERE id = ?",
+                (parsed_count, matched_count, stmt_id))
+        flash(f"Statement uploaded: {parsed_count} entries parsed, {matched_count} auto-matched.", "success")
+        return redirect(url_for("ca_audit_dashboard"))
+
+    return render_template("ca_audit_upload_statement.html", companies=companies)
+
+
+def _auto_match_statement(stmt_id: int) -> int:
+    """Try to match bank statement entries to purchase orders by amount and reference."""
+    entries = query_all("""
+        SELECT e.*, bs.company_id FROM bank_statement_entries e
+        JOIN bank_statements bs ON bs.id = e.statement_id
+        WHERE e.statement_id = ? AND e.match_status = 'unmatched'
+    """, (stmt_id,))
+    matched = 0
+    for entry in entries:
+        amt = entry["debit"] if entry["debit"] > 0 else entry["credit"]
+        if amt <= 0:
+            continue
+        # Try exact amount match for paid POs without audit
+        candidates = query_all("""
+            SELECT id, payment_reference, vendor_id, title FROM purchase_orders
+            WHERE amount = ? AND status IN ('paid','receipt_uploaded')
+              AND (audit_status = '' OR audit_status IS NULL)
+              AND (company_id = ? OR ? IS NULL)
+            ORDER BY paid_at DESC
+        """, (amt, entry["company_id"], entry["company_id"]))
+        best = None
+        best_conf = 0.0
+        for c in candidates:
+            conf = 0.5  # Base: amount matches
+            ref = entry["reference"].lower()
+            desc = entry["description"].lower()
+            if c["payment_reference"] and c["payment_reference"].lower() in ref:
+                conf = 0.95  # Reference match — very high confidence
+            elif c["payment_reference"] and c["payment_reference"].lower() in desc:
+                conf = 0.85
+            if conf > best_conf:
+                best = c
+                best_conf = conf
+        if best and best_conf >= 0.5:
+            execute("""
+                UPDATE bank_statement_entries
+                SET matched_po_id = ?, match_status = ?, match_confidence = ?
+                WHERE id = ?
+            """, (best["id"],
+                  "matched" if best_conf >= 0.8 else "suggested",
+                  best_conf, entry["id"]))
+            matched += 1
+    return matched
+
+
+@app.route("/audit/signoff", methods=["POST"])
+@login_required
+def ca_audit_signoff():
+    """CA signs off audit for a period/company. Creates printable record."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    company_id = int(request.form.get("company_id", "0") or "0") or None
+    period = request.form.get("period", "").strip()
+    note = request.form.get("note", "").strip()
+
+    cfilt = " AND company_id = ?" if company_id else ""
+    cparams = [company_id] if company_id else []
+    pfilt = ""
+    if period:
+        pfilt = " AND created_at LIKE ?"
+        cparams.append(f"{period}%")
+
+    total = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders
+        WHERE status IN ('paid','receipt_uploaded','approved'){cfilt}{pfilt}
+    """, tuple(cparams))
+    audited_ct = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders
+        WHERE audit_status = 'audited'{cfilt}{pfilt}
+    """, tuple(cparams))
+    flagged_ct = query_one(f"""
+        SELECT COUNT(*) AS c FROM purchase_orders
+        WHERE audit_status = 'flagged'{cfilt}{pfilt}
+    """, tuple(cparams))
+
+    sid = execute("""
+        INSERT INTO audit_signoffs
+        (company_id, period, signed_by_user_id,
+         total_transactions, total_audited, total_flagged,
+         note, signed_at)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (company_id, period, user["id"],
+          total["c"] if total else 0,
+          audited_ct["c"] if audited_ct else 0,
+          flagged_ct["c"] if flagged_ct else 0,
+          note, now_iso()))
+
+    log_action(user["id"], "audit", sid, "audit_signoff",
+               {"period": period, "total": total["c"] if total else 0})
+    flash(f"Audit signed off for {period or 'all periods'}. {audited_ct['c'] if audited_ct else 0} audited, {flagged_ct['c'] if flagged_ct else 0} flagged.", "success")
+    return redirect(url_for("ca_audit_dashboard"))
+
+
+@app.route("/audit/print/<int:signoff_id>")
+@login_required
+def ca_audit_print_signoff(signoff_id):
+    """Print audit sign-off certificate and transaction list."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    signoff = query_one("""
+        SELECT s.*, c.name AS company_name, c.short_name AS company_short,
+               c.gstin AS company_gstin, u.name AS signed_by_name
+          FROM audit_signoffs s
+          LEFT JOIN companies c ON c.id = s.company_id
+          LEFT JOIN users u ON u.id = s.signed_by_user_id
+         WHERE s.id = ?
+    """, (signoff_id,))
+    if not signoff:
+        abort(404)
+
+    cfilt = " AND po.company_id = ?" if signoff["company_id"] else ""
+    cparams = [signoff["company_id"]] if signoff["company_id"] else []
+    pfilt = ""
+    if signoff["period"]:
+        pfilt = " AND po.created_at LIKE ?"
+        cparams.append(f"{signoff['period']}%")
+
+    transactions = query_all(f"""
+        SELECT po.*, v.name AS vendor_name, c.short_name AS company_short
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+         WHERE po.status IN ('paid','receipt_uploaded','approved'){cfilt}{pfilt}
+         ORDER BY po.created_at
+    """, tuple(cparams))
+
+    return render_template("ca_audit_print_signoff.html",
+                           signoff=signoff, transactions=transactions)
+
+
+@app.route("/audit/statement/<int:stmt_id>/review")
+@login_required
+def ca_audit_statement_review(stmt_id):
+    """Review bank statement entries and their matches."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    statement = query_one("""
+        SELECT bs.*, c.short_name AS company_short
+          FROM bank_statements bs
+          LEFT JOIN companies c ON c.id = bs.company_id
+         WHERE bs.id = ?
+    """, (stmt_id,))
+    if not statement:
+        abort(404)
+    entries = query_all("""
+        SELECT e.*, po.title AS po_title, po.amount AS po_amount,
+               po.vendor_id, v.name AS vendor_name
+          FROM bank_statement_entries e
+          LEFT JOIN purchase_orders po ON po.id = e.matched_po_id
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+         WHERE e.statement_id = ?
+         ORDER BY e.id
+    """, (stmt_id,))
+    return render_template("ca_audit_statement_review.html",
+                           statement=statement, entries=entries)
+
+
+@app.route("/audit/match-entry/<int:entry_id>", methods=["POST"])
+@login_required
+def ca_audit_match_entry(entry_id):
+    """Manually match or unmatch a bank statement entry to a PO."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_is_ca_auditor(user):
+        abort(403)
+    po_id = request.form.get("po_id", "")
+    if po_id:
+        execute("""
+            UPDATE bank_statement_entries
+            SET matched_po_id = ?, match_status = 'matched', match_confidence = 1.0
+            WHERE id = ?
+        """, (int(po_id), entry_id))
+    else:
+        execute("""
+            UPDATE bank_statement_entries
+            SET matched_po_id = NULL, match_status = 'unmatched', match_confidence = 0
+            WHERE id = ?
+        """, (entry_id,))
+    entry = query_one("SELECT statement_id FROM bank_statement_entries WHERE id = ?", (entry_id,))
+    stmt_id = entry["statement_id"] if entry else 0
+    return redirect(url_for("ca_audit_statement_review", stmt_id=stmt_id))
 
 
 # ── Compute / AI Job Submission module ──────────────────────────

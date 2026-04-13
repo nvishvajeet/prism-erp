@@ -8,6 +8,16 @@
     <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Payment Reports</h2>
   </div>
+  {% if companies and companies|length > 1 %}
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <select id="companyFilter" class="btn" style="appearance:auto;padding-right:1.5rem;" data-vis="{{ V }}">
+      <option value="" data-vis="{{ V }}">All Companies</option>
+      {% for co in companies %}
+      <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
@@ -115,6 +125,60 @@
     {% endif %}
   </article>
 
+  {# ── By Company ── #}
+  {% if by_company %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SPEND BY COMPANY", "Breakdown across sister companies") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Company</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Paid</th>
+          <th data-vis="{{ V }}">Orders</th>
+          <th data-vis="{{ V }}">Share</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for c in by_company %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ c.name }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(c.total) }}</td>
+          <td data-vis="{{ V }}">{{ c.count }}</td>
+          <td data-vis="{{ V }}">{{ "{:.1f}".format(c.total / grand_total * 100 if grand_total else 0) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Inter-Company Transactions ── #}
+  {% if intercompany %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("INTER-COMPANY", "Transactions between sister companies") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">From</th>
+          <th data-vis="{{ V }}">To</th>
+          <th class="col-amount" data-vis="{{ V }}">Total</th>
+          <th data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for ic in intercompany %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ ic.from_company }}</strong></td>
+          <td data-vis="{{ V }}">{{ ic.to_company }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(ic.total) }}</td>
+          <td data-vis="{{ V }}">{{ ic.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
 </section>
 
 <script>
@@ -163,6 +227,17 @@
     }
   });
   {% endif %}
+
+  // Company filter
+  var companyFilter=document.getElementById('companyFilter');
+  if(companyFilter){
+    companyFilter.addEventListener('change',function(){
+      var url=new URL(window.location);
+      if(companyFilter.value) url.searchParams.set('company',companyFilter.value);
+      else url.searchParams.delete('company');
+      window.location=url.toString();
+    });
+  }
 
   {% if by_category %}
   new Chart(document.getElementById('categoryChart'), {

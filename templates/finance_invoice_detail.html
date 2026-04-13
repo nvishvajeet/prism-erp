@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, empty_state, metadata_grid with context %}
-{% block hover_back %}<a href="{{ url_for('finance_invoices_list') }}" class="hover-back-btn" title="Back to Invoices">&larr;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('finance_invoices_list') }}" class="hover-back-btn" title="Back to Invoices">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">&larr; Invoices</a>
+    <a class="text-link back-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">← Invoices</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">{{ inv.invoice_number or 'Invoice #' ~ inv.id }}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">
       <span class="finance-status-pill finance-status-{{ derived_status }}" data-vis="{{ V }}">{{ derived_status|upper }}</span>
@@ -41,11 +41,11 @@
       ("Invoice Number", inv.invoice_number or "N/A"),
       ("Request", inv.request_no or "N/A"),
       ("Description", inv.description or inv.request_title or "N/A"),
-      ("Amount Due", "\u20b9{:,.2f}".format(inv.amount_due)),
-      ("Amount Paid", "\u20b9{:,.2f}".format(total_paid)),
-      ("Remaining", "\u20b9{:,.2f}".format(remaining), _remaining_cls),
+      ("Amount Due", "₹{:,.2f}".format(inv.amount_due)),
+      ("Amount Paid", "₹{:,.2f}".format(total_paid)),
+      ("Remaining", "₹{:,.2f}".format(remaining), _remaining_cls),
       ("Status", derived_status|upper),
-      ("Grant", (inv.grant_code ~ " \u2014 " ~ inv.grant_name) if inv.grant_name else "None"),
+      ("Grant", (inv.grant_code ~ " — " ~ inv.grant_name) if inv.grant_name else "None"),
       ("Issued", inv.issued_at[:10] if inv.issued_at else "N/A"),
       ("Created by", inv.created_by_name or "N/A"),
       ("Notes", inv.notes or "None"),
@@ -61,9 +61,9 @@
         <div class="budget-util-fill util-fill{% if budget_util.pct >= 100 %} budget-util-over{% elif budget_util.pct >= 80 %} budget-util-warn{% endif %}" style="--util-pct: {{ [budget_util.pct, 100]|min }}%;" data-vis="{{ V }}"></div>
       </div>
       <div class="budget-util-labels" data-vis="{{ V }}">
-        <span data-vis="{{ V }}">Spent: &#8377;{{ "{:,.0f}".format(budget_util.spent) }}</span>
+        <span data-vis="{{ V }}">Spent: ₹{{ "{:,.0f}".format(budget_util.spent) }}</span>
         <span data-vis="{{ V }}">{{ "{:.1f}".format(budget_util.pct) }}%</span>
-        <span data-vis="{{ V }}">Budget: &#8377;{{ "{:,.0f}".format(budget_util.budget) }}</span>
+        <span data-vis="{{ V }}">Budget: ₹{{ "{:,.0f}".format(budget_util.budget) }}</span>
       </div>
     </div>
   </article>
@@ -79,7 +79,7 @@
         <div class="payment-timeline-dot payment-dot-paid" data-vis="{{ V }}"></div>
         <div class="payment-timeline-content" data-vis="{{ V }}">
           <div class="payment-timeline-head" data-vis="{{ V }}">
-            <strong data-vis="{{ V }}">&#8377;{{ "{:,.2f}".format(p.amount) }}</strong>
+            <strong data-vis="{{ V }}">₹{{ "{:,.2f}".format(p.amount) }}</strong>
             <span class="finance-method-badge" data-vis="{{ V }}">{{ p.method|replace('_', ' ')|title }}</span>
             <span class="hint" data-vis="{{ V }}">{{ p.paid_at[:16] if p.paid_at else '' }}</span>
           </div>

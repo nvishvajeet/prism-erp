@@ -38,19 +38,19 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="present">
-            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">&#10003;</button>
+            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">✓</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="absent">
-            <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">&#10007;</button>
+            <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">✗</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="half">
-            <button type="submit" class="qi-btn qi-btn-view" data-vis="{{ V }}">&#189;</button>
+            <button type="submit" class="qi-btn qi-btn-view" data-vis="{{ V }}">½</button>
           </form>
         </div>
       </div>

@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">CA Audit</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ unaudited_count }} pending</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('ca_audit_upload_statement') }}" data-vis="{{ V }}">Upload Statement</a>
+  </div>
+</header>
+
+{# ── Filters ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <form method="get" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
+      {% if companies and companies|length > 1 %}
+      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        Company
+        <select name="company" data-vis="{{ V }}" onchange="this.form.submit()">
+          <option value="" data-vis="{{ V }}">All Companies</option>
+          {% for co in companies %}
+          <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        Period
+        <select name="period" data-vis="{{ V }}" onchange="this.form.submit()">
+          <option value="" data-vis="{{ V }}">All Periods</option>
+          {% for p in periods %}
+          <option value="{{ p }}"{% if period_filter == p %} selected{% endif %} data-vis="{{ V }}">{{ p }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+  </article>
+</section>
+
+{# ── KPIs ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% set pct = "{:.0f}".format(audited_count / total * 100) if total > 0 else "0" %}
+    {{ kpi_grid([
+      {"value": total|string,                   "label": "Total Transactions"},
+      {"value": audited_count|string,            "label": "Audited",            "tone": "green"},
+      {"value": flagged_count|string,            "label": "Flagged",            "tone": "red"},
+      {"value": unaudited_count|string,          "label": "Pending Audit",      "tone": "amber"},
+      {"value": cash_review_count|string,        "label": "Cash (< ₹" ~ "{:,.0f}".format(cash_threshold) ~ ")", "tone": "amber"},
+      {"value": pct ~ "%",                       "label": "Audit Progress"},
+    ]) }}
+  </article>
+</section>
+
+{# ── Unaudited Transactions — Batch Audit ── #}
+{% if unaudited_rows %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-amber,#e6a800);">
+    {{ card_heading("PENDING AUDIT", unaudited_count|string ~ " transactions awaiting review") }}
+    <form method="post" action="{{ url_for('ca_audit_batch') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <table class="data-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}" style="width:2rem;">
+              <input type="checkbox" id="selectAll" checked data-vis="{{ V }}">
+            </th>
+            <th data-vis="{{ V }}">#</th>
+            <th data-vis="{{ V }}">Date</th>
+            <th data-vis="{{ V }}">Title</th>
+            <th data-vis="{{ V }}">Vendor</th>
+            <th class="col-amount" data-vis="{{ V }}">Amount</th>
+            <th data-vis="{{ V }}">Co.</th>
+            <th data-vis="{{ V }}">Method</th>
+            <th data-vis="{{ V }}">Type</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for po in unaudited_rows %}
+          <tr data-vis="{{ V }}"{% if po.amount < cash_threshold %} style="background:var(--color-amber-bg, rgba(230,168,0,0.08));"{% endif %}>
+            <td data-vis="{{ V }}">
+              <input type="checkbox" name="po_ids" value="{{ po.id }}" checked class="po-check" data-vis="{{ V }}">
+            </td>
+            <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ po.id }}</code></td>
+            <td data-vis="{{ V }}">{{ po.created_at[:10] if po.created_at else '—' }}</td>
+            <td data-vis="{{ V }}">
+              <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" data-vis="{{ V }}">{{ po.title }}</a>
+            </td>
+            <td data-vis="{{ V }}">{{ po.vendor_name or '—' }}</td>
+            <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</td>
+            <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ po.company_short or '—' }}</span></td>
+            <td data-vis="{{ V }}">{{ po.payment_method|replace('_',' ')|title if po.payment_method else '—' }}</td>
+            <td data-vis="{{ V }}">
+              {% if po.amount < cash_threshold %}
+              <span class="badge status-queued" data-vis="{{ V }}">Cash?</span>
+              {% else %}
+              <span class="badge" data-vis="{{ V }}">Bank</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Audit note (optional)" style="flex:1;min-width:10rem;" data-vis="{{ V }}">
+        <button type="submit" name="action" value="audit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:10rem;">
+          Audit Selected
+        </button>
+        <button type="submit" name="action" value="flag" class="btn" data-vis="{{ V }}" style="min-width:8rem;background:var(--danger);color:#fff;">
+          Flag Selected
+        </button>
+      </div>
+    </form>
+  </article>
+</section>
+{% endif %}
+
+{# ── Flagged Transactions ── #}
+{% if flagged_rows %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--danger,#c44);">
+    {{ card_heading("FLAGGED FOR REVIEW", flagged_count|string ~ " items need attention") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Title</th>
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Co.</th>
+          <th data-vis="{{ V }}">Note</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for po in flagged_rows %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ po.id }}</code></td>
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" data-vis="{{ V }}">{{ po.title }}</a>
+          </td>
+          <td data-vis="{{ V }}">{{ po.vendor_name or '—' }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ po.company_short or '—' }}</span></td>
+          <td data-vis="{{ V }}">{{ po.audit_note or '—' }}</td>
+          <td data-vis="{{ V }}">
+            <form method="post" action="{{ url_for('ca_audit_single', po_id=po.id) }}" style="display:inline;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="audit">
+              <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="padding:0.25rem 0.5rem;font-size:0.8rem;">Resolve</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Bank Statements ── #}
+{% if statements %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BANK STATEMENTS", "Uploaded statements for matching") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Month</th>
+          <th data-vis="{{ V }}">Bank</th>
+          <th data-vis="{{ V }}">Co.</th>
+          <th data-vis="{{ V }}">Entries</th>
+          <th data-vis="{{ V }}">Matched</th>
+          <th data-vis="{{ V }}">Uploaded</th>
+          <th data-vis="{{ V }}">Review</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in statements %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.statement_month or '—' }}</strong></td>
+          <td data-vis="{{ V }}">{{ s.bank_name or '—' }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ s.company_short or '—' }}</span></td>
+          <td data-vis="{{ V }}">{{ s.parsed_count }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if s.matched_count == s.parsed_count %}status-active{% elif s.matched_count > 0 %}status-queued{% endif %}" data-vis="{{ V }}">
+              {{ s.matched_count }}/{{ s.parsed_count }}
+            </span>
+          </td>
+          <td data-vis="{{ V }}">{{ s.created_at[:10] if s.created_at else '—' }}</td>
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('ca_audit_statement_review', stmt_id=s.id) }}" class="text-link" data-vis="{{ V }}">Review</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Sign Off Audit ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("AUDIT SIGN-OFF", "Certify audit completion for a period") }}
+    <form method="post" action="{{ url_for('ca_audit_signoff') }}" class="form-grid" style="padding:0.5rem 0.75rem 0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
+        {% if companies and companies|length > 1 %}
+        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Company
+          <select name="company_id" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">All Companies</option>
+            {% for co in companies %}
+            <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Period
+          <select name="period" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">All Periods</option>
+            {% for p in periods %}
+            <option value="{{ p }}" data-vis="{{ V }}">{{ p }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <label data-vis="{{ V }}">Note
+        <input type="text" name="note" placeholder="Audit certification note…" data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Sign Off Audit</button>
+    </form>
+  </article>
+
+  {# ── Previous Sign-offs ── #}
+  {% if signoffs %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PREVIOUS SIGN-OFFS", "") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Period</th>
+          <th data-vis="{{ V }}">Company</th>
+          <th data-vis="{{ V }}">Transactions</th>
+          <th data-vis="{{ V }}">Audited</th>
+          <th data-vis="{{ V }}">Flagged</th>
+          <th data-vis="{{ V }}">Signed By</th>
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Print</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in signoffs %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.period or 'All' }}</strong></td>
+          <td data-vis="{{ V }}">{{ s.company_short or 'All' }}</td>
+          <td data-vis="{{ V }}">{{ s.total_transactions }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">{{ s.total_audited }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if s.total_flagged > 0 %}
+            <span class="badge status-archived" data-vis="{{ V }}">{{ s.total_flagged }}</span>
+            {% else %}
+            <span class="badge status-active" data-vis="{{ V }}">0</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">{{ s.signed_by_name or '—' }}</td>
+          <td data-vis="{{ V }}">{{ s.signed_at[:10] if s.signed_at else '—' }}</td>
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('ca_audit_print_signoff', signoff_id=s.id) }}" class="text-link" data-vis="{{ V }}">🖨</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Recently Audited ── #}
+  {% if recent_audited %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT AUDITS", "Last 30 reviewed") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Title</th>
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Co.</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">By</th>
+          <th data-vis="{{ V }}">Date</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for po in recent_audited %}
+        <tr class="clickable-row" data-href="{{ url_for('vendor_payment_detail', po_id=po.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ po.id }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ po.title }}</strong></td>
+          <td data-vis="{{ V }}">{{ po.vendor_name or '—' }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ po.company_short or '—' }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if po.audit_status == 'audited' %}
+            <span class="badge status-active" data-vis="{{ V }}">Audited</span>
+            {% else %}
+            <span class="badge status-archived" data-vis="{{ V }}">Flagged</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">{{ po.audited_by_name or '—' }}</td>
+          <td data-vis="{{ V }}">{{ po.audited_at[:10] if po.audited_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  // Clickable rows
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+  // Select all checkbox
+  var selectAll = document.getElementById('selectAll');
+  var checks = document.querySelectorAll('.po-check');
+  if(selectAll){
+    selectAll.addEventListener('change', function(){
+      checks.forEach(function(c){ c.checked = selectAll.checked; });
+    });
+  }
+})();
+</script>
+{% endblock %}

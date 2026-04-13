@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('ca_audit_dashboard') }}" class="hover-back-btn" title="Back to Audit">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('ca_audit_dashboard') }}" data-vis="{{ V }}">← Audit</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Upload Bank Statement</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BANK STATEMENT", "Upload CSV for auto-matching") }}
+    <form method="post" enctype="multipart/form-data" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% if companies and companies|length > 1 %}
+      <label data-vis="{{ V }}">Company
+        <select name="company_id" data-vis="{{ V }}">
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% elif companies and companies|length == 1 %}
+      <input type="hidden" name="company_id" value="{{ companies[0].id }}">
+      {% endif %}
+
+      <label data-vis="{{ V }}">Bank Name
+        <input type="text" name="bank_name" placeholder="e.g. State Bank of India" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Account Number (last 4 digits)
+        <input type="text" name="account_number" placeholder="e.g. 1234" maxlength="20" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Statement Month
+        <input type="month" name="statement_month" data-vis="{{ V }}">
+      </label>
+
+      <div class="file-upload-area" id="uploadArea" data-vis="{{ V }}">
+        <input type="file" name="statement_file" accept=".csv" required data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Choose CSV file</strong> or drag here<br>Bank statement in CSV format</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Upload & Auto-Match</button>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CSV FORMAT", "Expected column headers") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">The system auto-detects common bank statement formats. Supported column names:</p>
+      <table class="data-table" data-vis="{{ V }}" style="margin-top:0.5rem;">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Field</th>
+            <th data-vis="{{ V }}">Accepted Headers</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Date</td><td data-vis="{{ V }}">Date, Txn Date, Transaction Date, Value Date</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Description</td><td data-vis="{{ V }}">Description, Narration, Particulars</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Reference</td><td data-vis="{{ V }}">Reference, Ref No, Chq/Ref No, UTR</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Debit</td><td data-vis="{{ V }}">Debit, Withdrawal, Dr</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Credit</td><td data-vis="{{ V }}">Credit, Deposit, Cr</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Balance</td><td data-vis="{{ V }}">Balance, Closing Balance</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+</section>
+
+<script>
+(function(){
+  var area=document.getElementById('uploadArea');
+  if(!area)return;
+  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+  var inp=area.querySelector('input[type="file"]');
+  if(inp) inp.addEventListener('change',function(){
+    var lbl=area.querySelector('.file-upload-label');
+    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+  });
+})();
+</script>
+{% endblock %}

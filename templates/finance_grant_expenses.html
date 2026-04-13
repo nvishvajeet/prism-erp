@@ -40,7 +40,7 @@
         </div>
         <div class="finance-invoice-meta hint" data-vis="{{ V }}">
           {% if exp.original_currency and exp.original_currency != 'INR' %}
-          {{ exp.original_currency }} {{ "{:,.2f}".format(exp.original_amount) }} &#215; {{ exp.exchange_rate }} ·
+          {{ exp.original_currency }} {{ "{:,.2f}".format(exp.original_amount) }} × {{ exp.exchange_rate }} ·
           {% endif %}
           {% if exp.expense_date %}{{ exp.expense_date }} · {% endif %}
           {% if exp.receipt_number %}receipt {{ exp.receipt_number }} · {% endif %}
@@ -66,9 +66,9 @@
         <select name="currency" id="expCurrency" onchange="document.getElementById('expFxRow').hidden=this.value==='INR'" data-vis="{{ V }}">
           <option value="INR">INR (₹)</option>
           <option value="USD">USD ($)</option>
-          <option value="EUR">EUR (&#8364;)</option>
-          <option value="GBP">GBP (&#163;)</option>
-          <option value="JPY">JPY (&#165;)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="JPY">JPY (¥)</option>
           <option value="CHF">CHF</option>
           <option value="AUD">AUD</option>
           <option value="CAD">CAD</option>
@@ -81,7 +81,7 @@
         <label data-vis="{{ V }}">Exchange Rate (1 foreign = ? INR)
           <input type="number" step="0.0001" name="exchange_rate" placeholder="e.g. 83.50 for USD→INR" data-vis="{{ V }}">
         </label>
-        <span class="hint" data-vis="{{ V }}">Enter the rate on the purchase date. INR amount = Amount &#215; Rate.</span>
+        <span class="hint" data-vis="{{ V }}">Enter the rate on the purchase date. INR amount = Amount × Rate.</span>
       </div>
       <label data-vis="{{ V }}">Type
         <select name="expense_type" data-vis="{{ V }}">

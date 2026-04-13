@@ -90,7 +90,7 @@
 {# ── Task list — inbox style ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <input type="text" id="todoSearch" class="table-search-input" placeholder="Search tasks…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" data-vis="{{ V }}">
     {% if items %}
     {% for item in items %}
     <div class="inbox-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
@@ -108,7 +108,7 @@
       </div>
 
       {# Body #}
-      <div class="inbox-row-body" style="flex:1; min-width:0;" data-vis="{{ V }}">
+      <div class="inbox-row-body inbox-row-body-main" data-vis="{{ V }}">
         <strong class="{% if item.status == 'done' %}todo-title-done{% endif %}" data-vis="{{ V }}">{{ item.title }}</strong>
         <span class="hint" data-vis="{{ V }}">
           {% if tab == 'assigned' and item.assigner_name %}from {{ item.assigner_name }}{% endif %}
@@ -123,7 +123,7 @@
       <div class="todo-row-right" data-vis="{{ V }}">
         <span class="badge todo-priority-{{ item.priority }}" data-vis="{{ V }}">{{ item.priority|upper }}</span>
         {% if item.status != 'done' %}
-        <form method="post" action="{{ url_for('todo_update', todo_id=item.id) }}" class="todo-status-form" style="display:inline;" data-vis="{{ V }}">
+        <form method="post" action="{{ url_for('todo_update', todo_id=item.id) }}" class="todo-status-form inline-form inline-form-single" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="tab" value="{{ tab }}">
           {% if item.status == 'open' %}
@@ -135,7 +135,7 @@
           {% endif %}
         </form>
         {% endif %}
-        <form method="post" action="{{ url_for('todo_delete', todo_id=item.id) }}" class="todo-delete-form" style="display:inline;" data-vis="{{ V }}">
+        <form method="post" action="{{ url_for('todo_delete', todo_id=item.id) }}" class="todo-delete-form inline-form inline-form-single" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="tab" value="{{ tab }}">
           <button type="submit" class="text-link hint todo-delete-btn" title="Delete" data-vis="{{ V }}">&#10005;</button>

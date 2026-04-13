@@ -1,0 +1,60 @@
+{# Partial: Order log + entry form — included by portfolio.html #}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("ORDERS", "Log an executed buy") }}
+  <form method="post" action="{{ url_for('portfolio_log_order') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label data-vis="{{ V }}">Fund
+      <select name="fund_tag" required data-vis="{{ V }}">
+        {% for row in pf.mtd_progress %}
+        <option value="{{ row.tag }}" data-vis="{{ V }}">{{ row.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label data-vis="{{ V }}">Amount ₹
+      <input type="number" name="amount_inr" min="1000" step="1000" placeholder="5000" required data-vis="{{ V }}">
+    </label>
+    <label data-vis="{{ V }}">NAV (optional)
+      <input type="number" name="nav" step="0.0001" placeholder="auto from market_snapshot" data-vis="{{ V }}">
+    </label>
+    <label data-vis="{{ V }}">Date
+      <input type="date" name="date" value="{{ pf.daily.generated_at_ist[:10] if pf.daily.generated_at_ist }}" data-vis="{{ V }}">
+    </label>
+    <label data-vis="{{ V }}">Note
+      <input type="text" name="note" placeholder="" data-vis="{{ V }}">
+    </label>
+    <button type="submit" class="link-button" data-vis="{{ V }}">+ Log order</button>
+  </form>
+
+  <p class="hint" data-vis="{{ V }}">{{ pf.orders_count }} order{{ '' if pf.orders_count == 1 else 's' }} logged.</p>
+
+  {% if pf.orders %}
+  <table data-vis="{{ V }}">
+    <thead data-vis="{{ V }}">
+      <tr data-vis="{{ V }}">
+        <th data-vis="{{ V }}">Date</th>
+        <th data-vis="{{ V }}">Fund</th>
+        <th data-vis="{{ V }}" style="text-align:right">Amount</th>
+        <th data-vis="{{ V }}" style="text-align:right">NAV</th>
+        <th data-vis="{{ V }}" style="text-align:right">Units</th>
+        <th data-vis="{{ V }}">Note</th>
+      </tr>
+    </thead>
+    <tbody data-vis="{{ V }}">
+      {% for o in pf.orders %}
+      <tr data-vis="{{ V }}">
+        <td data-vis="{{ V }}">{{ o.date }}</td>
+        <td data-vis="{{ V }}">{{ pf.fund_labels.get(o.fund_tag, o.fund_tag) }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(o.amount_inr) }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">{{ "%.4f"|format(o.nav) }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">{{ "%.4f"|format(o.units) }}</td>
+        <td data-vis="{{ V }}">{{ o.note or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  {{ empty_state("No orders yet.", "Log your first executed buy above.") }}
+  {% endif %}
+</section>

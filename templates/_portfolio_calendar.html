@@ -1,0 +1,39 @@
+{# Partial: Calendar view + FullCalendar JS — included by portfolio.html #}
+{% from "_page_macros.html" import card_heading with context %}
+
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("CALENDAR", "Redeem (amber) and buy (green) on the same calendar grid the scheduler uses") }}
+  <p class="hint" data-vis="{{ V }}">
+    Each day has up to two events: a <strong class="pf-side-sell">⬇ REDEEM</strong>
+    (place that morning, settles in 2 trading days) and a <strong class="pf-side-buy">⬆ BUY</strong>
+    (place that day, funded by a redemption from 2 trading days earlier).
+    Click <strong>↻ Recompute now</strong> in the header to refresh.
+  </p>
+  <div id="portfolioCalendar" style="min-height:520px" data-vis="{{ V }}"></div>
+</section>
+
+{# ─── FullCalendar (same library as the lab scheduler) ── #}
+<script src="{{ url_for('static', filename='vendor/fullcalendar/index.global.min.js') }}"></script>
+<script>
+(function () {
+  if (typeof FullCalendar === 'undefined') return;
+  var el = document.getElementById('portfolioCalendar');
+  if (!el) return;
+  var cal = new FullCalendar.Calendar(el, {
+    initialView: 'dayGridMonth',
+    firstDay: 1,
+    height: 'auto',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,listWeek' },
+    buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
+    events: '{{ url_for("portfolio_calendar_events") }}',
+    eventDidMount: function (info) {
+      var p = info.event.extendedProps || {};
+      var lines = [info.event.title];
+      if (p.kind === 'redeem' && p.funds_buy_on) lines.push('→ funds buy on ' + p.funds_buy_on);
+      if (p.kind === 'buy' && p.label) lines.push('signal: ' + p.label);
+      info.el.title = lines.join('\n');
+    }
+  });
+  cal.render();
+})();
+</script>

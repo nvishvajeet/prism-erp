@@ -1,0 +1,48 @@
+{# Partial: Pipeline forecast section — included by portfolio.html #}
+{% from "_page_macros.html" import card_heading with context %}
+
+<section class="card" data-vis="{{ V }}">
+  {{ card_heading("PIPELINE", "Next 14 trading days · redeem today → buy in T+2") }}
+  <p class="hint" data-vis="{{ V }}">
+    Each row is one trading day. <strong>Redeem today</strong> = the debt-MF
+    redemption to place that morning (drains the freeable corpus); it settles
+    in 2 trading days and funds the equity buy on <strong>Funds buy on</strong>.
+    <strong>Buy today</strong> = the equity slice to place that day, funded by
+    a redemption from 2 trading days earlier. Once corpus is exhausted, the
+    Phase column flips to <code>salary</code> and no further redemption is
+    needed. Hit <strong>↻ Recompute now</strong> in the header to re-run
+    <code>daily.py</code> and refresh the schedule.
+  </p>
+  <canvas id="pfForecastChart" height="120" data-vis="{{ V }}"></canvas>
+
+  <table style="margin-top:14px" data-vis="{{ V }}">
+    <thead data-vis="{{ V }}">
+      <tr data-vis="{{ V }}">
+        <th data-vis="{{ V }}">Date</th>
+        <th data-vis="{{ V }}">Wd</th>
+        <th data-vis="{{ V }}" style="text-align:right">z (proj)</th>
+        <th data-vis="{{ V }}">Signal</th>
+        <th data-vis="{{ V }}" style="text-align:right">Redeem today</th>
+        <th data-vis="{{ V }}">Funds buy on</th>
+        <th data-vis="{{ V }}" style="text-align:right">Buy today</th>
+        <th data-vis="{{ V }}">Phase</th>
+      </tr>
+    </thead>
+    <tbody data-vis="{{ V }}">
+      {% for f in pf.daily.forecast %}
+      <tr data-vis="{{ V }}">
+        <td data-vis="{{ V }}">{{ f.date }}</td>
+        <td data-vis="{{ V }}">{{ f.weekday }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">{{ "%+.2f"|format(f.z_proj or 0) }}</td>
+        <td data-vis="{{ V }}"><span class="badge portfolio-forecast-chip" style="--chip-bg: {{ f.color }}" data-vis="{{ V }}">{{ f.label }}</span></td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">
+          {% if (f.redeem_today or 0) > 0 %}<strong>₹{{ "{:,}".format(f.redeem_today) }}</strong>{% else %}<span class="hint">—</span>{% endif %}
+        </td>
+        <td data-vis="{{ V }}">{% if f.funds_buy_on and (f.redeem_today or 0) > 0 %}{{ f.funds_buy_on }}{% else %}<span class="hint">—</span>{% endif %}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(f.total) }}</strong></td>
+        <td data-vis="{{ V }}"><span class="hint">{{ f.phase or "—" }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>

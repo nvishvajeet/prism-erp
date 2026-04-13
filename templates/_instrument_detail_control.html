@@ -1,0 +1,83 @@
+{# Partial: Control Panel tile — included by instrument_detail.html #}
+{% from "_page_macros.html" import card_heading with context %}
+
+  {% if can_edit %}
+  <section class="card tile tile-full-width tile-control" data-vis="{{ V }}">
+    {{ card_heading("", "Control Panel") }}
+    <p class="tile-lead" data-vis="{{ V }}">
+      Tap a mode to change intake state. Moving to <strong>On Hold</strong> or
+      <strong>Maintenance</strong> needs a second tap within 3 seconds — safety
+      against accidental taps.
+    </p>
+    <div class="control-mode-row" role="radiogroup" aria-label="Intake mode"
+         id="instrumentIntakeToggle"
+         data-intake-post="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}"
+         data-intake-current="{{ intake_mode }}"
+         data-vis="{{ V }}">
+      <button type="button"
+              class="control-mode control-mode-accepting {% if intake_mode == 'accepting' %}is-active{% endif %}"
+              data-intake-mode="accepting"
+              data-intake-safe="1"
+              role="radio"
+              aria-checked="{% if intake_mode == 'accepting' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">Accepting</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Queue open</span>
+      </button>
+      <button type="button"
+              class="control-mode control-mode-hold {% if intake_mode == 'on_hold' %}is-active{% endif %}"
+              data-intake-mode="on_hold"
+              role="radio"
+              aria-checked="{% if intake_mode == 'on_hold' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">On Hold</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Review only</span>
+      </button>
+      <button type="button"
+              class="control-mode control-mode-maintenance {% if intake_mode == 'maintenance' %}is-active{% endif %}"
+              data-intake-mode="maintenance"
+              role="radio"
+              aria-checked="{% if intake_mode == 'maintenance' %}true{% else %}false{% endif %}"
+              data-vis="{{ V }}">
+        <span class="control-mode-dot" aria-hidden="true"></span>
+        <span class="control-mode-label" data-vis="{{ V }}">Maintenance</span>
+        <span class="control-mode-hint" data-vis="{{ V }}">Closed</span>
+      </button>
+    </div>
+    <p class="control-mode-status hint" id="intakeToggleStatus" aria-live="polite" data-vis="{{ V }}"></p>
+
+    {# Downtime — merged into Control Panel #}
+    <h3 class="section-kicker" style="margin-top: 0.75rem;" data-vis="{{ V }}">Downtime <a class="text-link" href="{{ url_for('calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a></h3>
+    {% if upcoming_downtime %}
+    <ul class="downtime-list" data-vis="{{ V }}">
+      {% for dt in upcoming_downtime %}
+      <li class="downtime-item" data-vis="{{ V }}">
+        <div class="downtime-dates" data-vis="{{ V }}">
+          <span data-vis="{{ V }}">{{ format_dt(dt['start_time']) }}</span>
+          <span class="hint" data-vis="{{ V }}">→</span>
+          <span data-vis="{{ V }}">{{ format_dt(dt['end_time']) }}</span>
+        </div>
+        {% if dt['reason'] %}<small class="hint" data-vis="{{ V }}">{{ dt['reason'] }}</small>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No scheduled downtime</p>
+    {% endif %}
+    {% if can_add_downtime_here %}
+    <details class="tile-inline-editor" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}">Add downtime</summary>
+      <form method="post" class="downtime-add-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_downtime">
+        <label data-vis="{{ V }}">Start<input type="datetime-local" name="start_time" required></label>
+        <label data-vis="{{ V }}">End<input type="datetime-local" name="end_time" required></label>
+        <label data-vis="{{ V }}">Reason<input type="text" name="reason" required></label>
+        <button type="submit" class="small-button" data-vis="{{ V }}">Add Block</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}

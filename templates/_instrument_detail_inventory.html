@@ -1,0 +1,66 @@
+{# Partial: Inventory tile — included by instrument_detail.html #}
+{% from "_page_macros.html" import card_heading with context %}
+
+  <section class="card tile tile-full-width tile-inventory" data-vis="{{ V }}">
+    {{ card_heading("", "Inventory") }}
+    {% if inventory_items %}
+    <div class="tile-scroll tile-scroll-md" data-vis="{{ V }}">
+      <table class="data-table compact" data-vis="{{ V }}">
+        <thead>
+          <tr>
+            <th>Item</th><th>Qty</th><th>Min</th><th>Unit Cost</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in inventory_items %}
+          <tr>
+            <td>{{ item["item_name"] }}<br><span class="hint">{{ item["category"] }} · {{ item["unit"] }}</span></td>
+            <td>{{ item["quantity"] }}</td>
+            <td>{{ item["minimum_quantity"] }}</td>
+            <td>{{ "%.2f"|format(item["unit_cost"]) }}</td>
+            <td>
+              {% if item["quantity"] == 0 %}
+                <span class="badge badge-red">Out of stock</span>
+              {% elif item["quantity"] <= item["minimum_quantity"] %}
+                <span class="badge badge-amber">Low stock</span>
+              {% else %}
+                <span class="badge badge-green">In stock</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No inventory items tracked yet.</p>
+    {% endif %}
+    {% if can_edit %}
+    <details class="form-toggle" data-vis="{{ V }}">
+      <summary class="btn btn-sm">Add Item</summary>
+      <form method="post" class="stack-sm" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_inventory_item">
+        <div class="form-row" data-vis="{{ V }}">
+          <label>Item Name <input type="text" name="item_name" required></label>
+          <label>Category
+            <select name="inv_category">
+              <option value="consumable">Consumable</option>
+              <option value="spare_part">Spare Part</option>
+              <option value="accessory">Accessory</option>
+              <option value="reagent">Reagent</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row" data-vis="{{ V }}">
+          <label>Quantity <input type="number" name="quantity" min="0" value="0"></label>
+          <label>Minimum Qty <input type="number" name="minimum_quantity" min="0" value="0"></label>
+          <label>Unit <input type="text" name="unit" value="units" placeholder="units"></label>
+          <label>Unit Cost <input type="number" name="unit_cost" min="0" step="0.01" value="0"></label>
+        </div>
+        <label>Notes <input type="text" name="inv_notes" placeholder="Optional notes"></label>
+        <button type="submit" class="btn btn-primary btn-sm">Add Item</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>

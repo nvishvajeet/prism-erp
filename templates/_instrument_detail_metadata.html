@@ -1,0 +1,72 @@
+{# Partial: Metadata Edit tile — included by instrument_detail.html #}
+{% from "_page_macros.html" import card_heading with context %}
+
+  {% if can_edit %}
+  <section class="card tile tile-full-width tile-edit" id="metaEditTile" data-vis="{{ V }}">
+    {% call card_heading("", "Metadata") %}
+      <button type="button" class="link-button" id="toggleMetaEdit" data-toggle-target="#metaEditForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
+    {% endcall %}
+    <p class="tile-lead" data-vis="{{ V }}">Edit instrument details, photo, and team assignments.</p>
+    <form method="post" enctype="multipart/form-data" class="meta-edit-form" id="metaEditForm" hidden data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_metadata">
+      <div class="meta-edit-grid" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Code<input type="text" name="code" value="{{ instrument['code'] }}" required></label>
+        <label data-vis="{{ V }}">Category<input type="text" name="category" value="{{ instrument['category'] or '' }}"></label>
+        <label data-vis="{{ V }}">Location<input type="text" name="location" value="{{ instrument['location'] }}" required></label>
+        <label data-vis="{{ V }}">Manufacturer<input type="text" name="manufacturer" value="{{ instrument['manufacturer'] or '' }}"></label>
+        <label data-vis="{{ V }}">Model<input type="text" name="model_number" value="{{ instrument['model_number'] or '' }}"></label>
+        <label data-vis="{{ V }}">Photo<input type="file" name="machine_photo_file" accept=".png,.jpg,.jpeg,image/png,image/jpeg"></label>
+      </div>
+      <label class="meta-edit-notes" data-vis="{{ V }}">Notes<textarea name="notes" rows="2">{{ instrument["notes"] or '' }}</textarea></label>
+      {% if can_edit_assignments %}
+      <div class="meta-edit-assignments" data-vis="{{ V }}">
+        <fieldset data-vis="{{ V }}">
+          <legend data-vis="{{ V }}">Operators</legend>
+          <div class="checkbox-grid" data-vis="{{ V }}">
+            {% for c in operator_candidates %}
+            <label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="operator_ids" value="{{ c['id'] }}" {% if c['id'] in selected_operator_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <fieldset data-vis="{{ V }}">
+          <legend data-vis="{{ V }}">Faculty In Charge</legend>
+          <div class="checkbox-grid" data-vis="{{ V }}">
+            {% for c in faculty_candidates %}
+            <label class="check-option" data-vis="{{ V }}"><input type="checkbox" name="faculty_admin_ids" value="{{ c['id'] }}" {% if c['id'] in selected_faculty_ids %}checked{% endif %}> <span data-vis="{{ V }}">{{ c["name"] }}</span></label>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+      {% endif %}
+      <div class="meta-edit-actions" data-vis="{{ V }}">
+        <button type="submit" data-vis="{{ V }}">Save Changes</button>
+      </div>
+    </form>
+
+    {# Danger Zone — inside metadata tile, not separate #}
+    {% if can_archive_instrument or can_restore_instrument %}
+    <details class="tile-inline-editor danger-section" style="margin-top: 1rem; border-top: 1px solid var(--line);" data-vis="{{ V }}">
+      <summary class="danger-toggle-btn" style="padding-top: 0.75rem; color: var(--danger);" data-vis="{{ V }}">Danger Zone</summary>
+      {% if can_archive_instrument and instrument["status"] != "archived" %}
+      <form method="post" class="danger-form top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="archive_instrument">
+        <p class="hint" data-vis="{{ V }}">Type the instrument code to archive permanently.</p>
+        <label data-vis="{{ V }}">
+          <input type="text" name="confirm_code" placeholder="{{ instrument['code'] }}" required>
+        </label>
+        <button type="submit" class="danger small-button" data-vis="{{ V }}">Archive Instrument</button>
+      </form>
+      {% endif %}
+      {% if can_restore_instrument and instrument["status"] == "archived" %}
+      <form method="post" class="top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="restore_instrument">
+        <button type="submit" class="small-button" data-vis="{{ V }}">Restore Instrument</button>
+      </form>
+      {% endif %}
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}

@@ -1,0 +1,95 @@
+{# Partial: Charts JS (value line, allocation doughnut, forecast bar) — included by portfolio.html #}
+
+<script>
+(function () {
+  if (typeof Chart === 'undefined') return;
+  var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  var grid = dark ? '#2c3340' : '#e6e8ec';
+  var ink  = dark ? '#cfd6e1' : '#444';
+
+  // ── Portfolio value over time ──
+  var valueData = {{ pf.value_series | tojson if pf.value_series else '[]' }};
+  var elValue = document.getElementById('pfValueChart');
+  if (elValue && valueData.length > 1) {
+    new Chart(elValue, {
+      type: 'line',
+      data: {
+        labels: valueData.map(function(p){ return p.date; }),
+        datasets: [{
+          label: 'Portfolio value (₹)',
+          data: valueData.map(function(p){ return p.value; }),
+          borderColor: '#3b6d99',
+          backgroundColor: 'rgba(59,109,153,0.12)',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { ticks: { color: ink, callback: function(v){ return '₹' + (v/1e5).toFixed(1) + 'L'; } }, grid: { color: grid } },
+          x: { ticks: { color: ink, maxTicksLimit: 8 }, grid: { display: false } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // ── Allocation doughnut (current vs target) ──
+  var alloc = {{ pf.allocation | tojson }};
+  var elAlloc = document.getElementById('pfAllocChart');
+  if (elAlloc && alloc.length) {
+    var palette = ['#3b6d99', '#5cd87a', '#f0a93b', '#a874e8', '#e86b6b', '#6bc7e8'];
+    new Chart(elAlloc, {
+      type: 'doughnut',
+      data: {
+        labels: alloc.map(function(a){ return a.label; }),
+        datasets: [{
+          data: alloc.map(function(a){ return a.current_inr; }),
+          backgroundColor: palette,
+          borderWidth: 2,
+          borderColor: dark ? '#1a2230' : '#fff',
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: ink, boxWidth: 10, font: { size: 11 } } },
+          tooltip: { callbacks: { label: function(ctx){
+            var a = alloc[ctx.dataIndex];
+            return a.label + ': ₹' + (a.current_inr/1e5).toFixed(2) + 'L  (cur ' + a.current_pct + '% / tgt ' + a.target_pct + '%)';
+          }}}
+        }
+      }
+    });
+  }
+
+  // ── 14-day forecast bar ──
+  var forecast = {{ pf.daily.forecast | tojson if pf.daily and pf.daily.forecast else '[]' }};
+  var elFc = document.getElementById('pfForecastChart');
+  if (elFc && forecast.length) {
+    new Chart(elFc, {
+      type: 'bar',
+      data: {
+        labels: forecast.map(function(f){ return f.date.slice(5) + ' ' + f.weekday; }),
+        datasets: [{
+          label: 'Total ₹ (rounded to 1k)',
+          data: forecast.map(function(f){ return f.total; }),
+          backgroundColor: forecast.map(function(f){ return f.color; }),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { ticks: { color: ink, callback: function(v){ return '₹' + (v/1000) + 'k'; } }, grid: { color: grid } },
+          x: { ticks: { color: ink, maxRotation: 0, autoSkip: false, font: { size: 10 } }, grid: { display: false } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+})();
+</script>

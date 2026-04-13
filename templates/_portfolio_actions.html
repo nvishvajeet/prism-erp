@@ -1,0 +1,118 @@
+{# Partial: Actions card — included by portfolio.html #}
+
+{% set r = (pf.daily.today.redeem if pf.daily and pf.daily.today else None) %}
+{% set sd = pf.daily.settlement_days or {"debt": 2, "equity": 3, "buy_equity": 1} %}
+{% set action_day = (pf.weekend_banner.next_trading_day if pf.weekend_banner else (r.sell_day_label if r else (pf.daily.generated_at_ist[:10] if pf.daily.generated_at_ist))) %}
+<section class="card pf-actions-card" data-vis="{{ V }}">
+  <div class="pf-actions-header" data-vis="{{ V }}">
+    <strong class="pf-actions-title" data-vis="{{ V }}">▶ ACTIONS · {{ action_day }}</strong>
+    <span class="pf-actions-cutoff" data-vis="{{ V }}">
+      Equity buy cutoff 13:30 IST · Debt redeem cutoff 12:30 IST
+    </span>
+  </div>
+
+  <div class="pf-actions-grid" data-vis="{{ V }}">
+
+    {# ── Column 1: PENDING (already placed) ── #}
+    <div class="pf-actions-col pf-actions-col-pending" data-vis="{{ V }}">
+      <div class="pf-actions-label" data-vis="{{ V }}">PENDING (already queued)</div>
+      {% if pf.daily.pending_orders %}
+        {% for po in pf.daily.pending_orders %}
+        <div class="pf-pending-row" data-vis="{{ V }}">
+          <div class="pf-actions-amt pf-actions-amt-pending" data-vis="{{ V }}">
+            {% if po.side == 'buy' %}⬆ BUY{% else %}⬇ SELL{% endif %}
+            ₹{{ "{:,}".format(po.total_inr or 0) }}
+          </div>
+          <div class="pf-actions-note" data-vis="{{ V }}">
+            executes <strong>{{ po.execute_on }}</strong> · {{ po.note or '' }}
+          </div>
+          {% if po.legs %}
+          <table class="pf-leg-table" data-vis="{{ V }}">
+            {% for tag, amt in po.legs.items() %}
+            <tr data-vis="{{ V }}">
+              <td data-vis="{{ V }}">{{ pf.fund_labels.get(tag, tag) }}</td>
+              <td class="amt" data-vis="{{ V }}">₹{{ "{:,}".format(amt) }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+      <p class="hint" data-vis="{{ V }}">No pending orders queued. Add to <code>pending_orders:</code> in <code>portfolio.yaml</code> after placing manually.</p>
+      {% endif %}
+    </div>
+
+    {# ── Column 2: SELL today ── #}
+    <div class="pf-actions-col pf-actions-col-sell" data-vis="{{ V }}">
+      <div class="pf-actions-label" data-vis="{{ V }}">SELL · place this</div>
+      {% if r and r.amount and r.amount > 0 %}
+      <div class="pf-actions-amt pf-actions-amt-sell" data-vis="{{ V }}">
+        ⬇ ₹{{ "{:,}".format(r.amount) }}
+      </div>
+      <div class="pf-actions-sub" data-vis="{{ V }}">
+        from <strong>{{ r.source_fund or '—' }}</strong>
+      </div>
+      <div class="pf-actions-note" data-vis="{{ V }}">
+        Funds the daily slice <strong>{{ r.target_buy_date }}</strong>
+        (T+{{ sd.debt }} settlement) — <em>not</em> today's lump, that's
+        already cash-covered. Corpus left after this round:
+        <strong>₹{{ "{:.2f} L".format((r.remaining_corpus or 0) / 1e5) }}</strong>
+        ({{ r.approx_trading_days_left or 0 }} more daily redemptions at this rate).
+      </div>
+      <div class="pf-actions-hint" data-vis="{{ V }}">
+        Place on Coin before <strong>12:30 IST</strong>. Tata Money Market Fund
+        (₹25 L debt floor) is never the source.
+      </div>
+      {% else %}
+      <p class="hint" data-vis="{{ V }}">No sell needed today.</p>
+      {% endif %}
+    </div>
+
+    {# ── Column 3: BUY today (daily SIP slice) ── #}
+    <div class="pf-actions-col pf-actions-col-buy" data-vis="{{ V }}">
+      <div class="pf-actions-label" data-vis="{{ V }}">BUY · daily slice</div>
+      {% if pf.daily.today.paused_reason %}
+      <div class="pf-actions-amt pf-actions-amt-paused" data-vis="{{ V }}">
+        ⏸ PAUSED
+      </div>
+      <div class="pf-actions-sub" data-vis="{{ V }}">
+        {{ pf.daily.today.paused_reason }}
+      </div>
+      <div class="pf-actions-hint" data-vis="{{ V }}">
+        The daily slice resumes the next trading day. Today's deployment is the
+        ₹{{ "{:,}".format(pf.daily.today.paused_lump_inr or 0) }} lump in the PENDING column.
+      </div>
+      {% else %}
+      <div class="pf-actions-amt pf-actions-amt-buy"{% if pf.daily.today.color %} style="color: {{ pf.daily.today.color }}"{% endif %} data-vis="{{ V }}">
+        ⬆ ₹{{ "{:,}".format(pf.daily.today.total or 0) }}
+      </div>
+      <div class="pf-actions-sub" data-vis="{{ V }}">
+        signal <strong>{{ pf.daily.today.label }}</strong>
+        ({{ pf.daily.today.multiplier }}× baseline)
+        · Nifty z(1y) {{ "%+.2f"|format(pf.daily.today.z or 0) }}
+      </div>
+      <table class="pf-leg-table" data-vis="{{ V }}">
+        {% for tag, amt in pf.daily.today.per_fund.items() %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ pf.fund_labels.get(tag, tag) }}</td>
+          <td class="amt" data-vis="{{ V }}">₹{{ "{:,}".format(amt) }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      <div class="pf-actions-hint" data-vis="{{ V }}">
+        Place on Coin before <strong>13:30 IST</strong>. Units credit T+{{ sd.buy_equity }}.
+        Use the editable table below to log each fund as bought.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="pf-actions-footer" data-vis="{{ V }}">
+    <strong>Settlement:</strong>
+    Debt sell <strong>T+{{ sd.debt }}</strong>
+    · Equity sell <strong>T+{{ sd.equity }}</strong>
+    · Equity buy units credited <strong>T+{{ sd.buy_equity }}</strong>.
+    The pipeline below already pairs each redeem on day N with the buy on day N+{{ sd.debt }}.
+  </div>
+</section>

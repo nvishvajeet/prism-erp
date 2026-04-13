@@ -1,0 +1,71 @@
+{# Partial: Queue tile — included by instrument_detail.html #}
+{% from "_page_macros.html" import card_heading, paginated_pane, status_pills_row, empty_state, queue_action_stack with context %}
+{% from "_request_macros.html" import request_identity with context %}
+
+  <section class="card tile tile-full-width tile-queue" data-vis="{{ V }}">
+    {% call card_heading("", "Queue") %}
+      <div class="inst-tile-head-links" data-vis="{{ V }}">
+        <a class="text-link" href="{{ url_for('instrument_calendar', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Calendar</a>
+        {% if can_view_history %}
+        <a class="text-link" href="{{ url_for('schedule', instrument_id=instrument['id'], bucket='completed') }}" data-vis="{{ V }}">History</a>
+        {% endif %}
+      </div>
+    {% endcall %}
+
+    {{ status_pills_row(
+      pills=[
+        ('', 'All'),
+        ('pending', 'Pending'),
+        ('approvals', 'Approvals'),
+        ('pending_receipt', 'Receipt'),
+        ('ready', 'Ready'),
+        ('active', 'Active'),
+        ('completed', 'Done'),
+      ],
+      active='',
+      row_id='instPills'
+    ) }}
+
+    {% call paginated_pane('instQueue', page_size=5, max_height='none') %}
+    <table id="instQueueTable" class="tile-queue-table" data-vis="{{ V }}">
+      <colgroup>
+        <col class="inst-queue-col-request"><col class="inst-queue-col-stage"><col class="inst-queue-col-time"><col class="inst-queue-col-action">
+      </colgroup>
+      <thead>
+        <tr data-vis="{{ V }}"><th data-vis="{{ V }}">Request</th><th data-vis="{{ V }}">Stage</th><th data-vis="{{ V }}">Time</th><th data-vis="{{ V }}">Action</th></tr>
+      </thead>
+      <tbody id="instQueueBody">
+        {% for row in queue_preview_rows %}
+        {% set row_bucket = 'all' %}
+        {% if row["status"] == "under_review" %}{% set row_bucket = 'approvals' %}{% endif %}
+        {% if row["status"] == "sample_submitted" %}{% set row_bucket = 'pending_receipt' %}{% endif %}
+        {% if row["status"] == "sample_received" %}{% set row_bucket = 'ready' %}{% endif %}
+        {% if row["status"] in ["scheduled", "in_progress"] %}{% set row_bucket = 'active' %}{% endif %}
+        {% if row["status"] == "completed" %}{% set row_bucket = 'completed' %}{% endif %}
+        {% if row["status"] == "rejected" %}{% set row_bucket = 'rejected' %}{% endif %}
+        {% set is_pending = row["status"] not in ["completed","rejected","submitted","awaiting_sample_submission"] %}
+        <tr data-bucket="{{ row_bucket }}" data-pending="{{ 'true' if is_pending else 'false' }}" data-status="{{ row['status'] }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ request_identity(row, compact=True) }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ row['status'] }}" data-vis="{{ V }}">{{ request_display_status(row["status"]) }}</span></td>
+          <td data-vis="{{ V }}"><small data-vis="{{ V }}">{{ format_dt(row["sample_received_at"] or row["sample_submitted_at"] or row["created_at"]) }}</small></td>
+          <td data-vis="{{ V }}">
+            {{ queue_action_stack(
+              row=row,
+              operators=operators,
+              post_action=url_for('schedule_actions'),
+              can_accept=(row['status'] == 'sample_submitted'),
+              can_assign=(row['status'] not in ['completed','rejected','submitted']),
+              hidden_inputs={
+                'instrument_id': instrument['id'],
+                'back': url_for('instrument_detail', instrument_id=instrument['id']),
+              }
+            ) }}
+          </td>
+        </tr>
+        {% else %}
+        <tr data-bucket="all" data-status="" data-vis="{{ V }}"><td colspan="4" data-vis="{{ V }}">{{ empty_state("No jobs in queue", "Create a request to get started.", "New Request", url_for('new_request', instrument_id=instrument['id'])) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+  </section>

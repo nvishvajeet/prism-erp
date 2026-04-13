@@ -4220,6 +4220,11 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE grants ADD COLUMN granted_to TEXT NOT NULL DEFAULT ''")
             except Exception:
                 pass
+        if "administered_by_user_id" not in grant_cols:
+            try:
+                cur.execute("ALTER TABLE grants ADD COLUMN administered_by_user_id INTEGER REFERENCES users(id)")
+            except Exception:
+                pass
 
         # Pricing & payment instructions per instrument (Form Control panel)
         inst_cols = {col[1] for col in cur.execute("PRAGMA table_info(instruments)").fetchall()}
@@ -7968,11 +7973,15 @@ def finance_grant_detail(grant_id: int):
         action = request.form.get("action", "")
         if action == "update_grant_metadata":
             db = get_db()
+            portfolio_manager_id = request.form.get("portfolio_manager_id", "").strip()
+            administered_by_user_id = request.form.get("administered_by_user_id", "").strip()
             db.execute(
                 """UPDATE grants SET
                     name = ?, sponsor = ?, grant_type = ?, department = ?,
                     total_budget = ?, start_date = ?, end_date = ?,
-                    notes = ?, status = ?
+                    notes = ?, status = ?,
+                    portfolio_manager_id = ?,
+                    administered_by_user_id = ?
                  WHERE id = ?""",
                 (
                     request.form.get("name", "").strip(),
@@ -7984,6 +7993,8 @@ def finance_grant_detail(grant_id: int):
                     request.form.get("end_date", "").strip(),
                     request.form.get("notes", "").strip(),
                     request.form.get("status", "active").strip(),
+                    int(portfolio_manager_id) if portfolio_manager_id else None,
+                    int(administered_by_user_id) if administered_by_user_id else None,
                     grant_id,
                 ),
             )
@@ -7994,16 +8005,22 @@ def finance_grant_detail(grant_id: int):
     grant = query_one(
         """
         SELECT g.*, pi.name AS pi_name, pi.email AS pi_email,
-               pm.name AS pm_name
+               pm.name AS portfolio_manager_name,
+               adm.name AS administrator_name
           FROM grants g
           LEFT JOIN users pi ON pi.id = g.pi_user_id
           LEFT JOIN users pm ON pm.id = g.portfolio_manager_id
+          LEFT JOIN users adm ON adm.id = g.administered_by_user_id
          WHERE g.id = ?
         """,
         (grant_id,),
     )
     if not grant:
         abort(404)
+    # Candidates for Portfolio Manager / Administered By dropdowns
+    admin_candidates = query_all(
+        "SELECT id, name FROM users WHERE role IN ('finance_admin','super_admin','site_admin','instrument_admin') ORDER BY name"
+    )
     charged = query_all(
         """
         SELECT
@@ -8047,6 +8064,7 @@ def finance_grant_detail(grant_id: int):
         remaining=remaining,
         percent_used=percent_used,
         can_edit_finance=_user_can_edit_finance(user),
+        admin_candidates=admin_candidates,
     )
 
 

@@ -5009,7 +5009,7 @@ def _drop_legacy_finance_columns() -> None:
 
 
 def _seed_demo_vehicles() -> None:
-    """Seed 2 demo vehicles + 3 drivers. Idempotent."""
+    """Seed 2 demo vehicles with drivers + sample log entries. Idempotent."""
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     try:
@@ -5018,28 +5018,42 @@ def _seed_demo_vehicles() -> None:
             return
         now = now_iso()
         cur = db.cursor()
+        # Look up driver users (Balaji drives Innova, Mangesh drives Camry)
+        balaji = db.execute("SELECT id FROM users WHERE name LIKE '%Balaji%'").fetchone()
+        mangesh = db.execute("SELECT id FROM users WHERE name LIKE '%Mangesh%'").fetchone()
+        balaji_id = balaji["id"] if balaji else None
+        mangesh_id = mangesh["id"] if mangesh else None
         # Vehicles
         cur.execute(
-            "INSERT INTO vehicles (name, code, registration_number, make, model, vehicle_type, fuel_type, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("Innova", "VEH-001", "MH 12 MB 0350", "Toyota", "Innova Crysta", "suv", "diesel", "White", "active", now),
+            "INSERT INTO vehicles (name, registration_no, vehicle_type, assigned_driver_user_id, status, purchase_date, purchase_cost, insurance_expiry, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Innova Crysta", "MH 12 MB 0350", "car", balaji_id, "active",
+             "2022-06-15", 1850000, "2026-06-14", "Toyota Innova Crysta 2.4 ZX — Diesel, White", now),
         )
         innova_id = cur.lastrowid
         cur.execute(
-            "INSERT INTO vehicles (name, code, registration_number, make, model, vehicle_type, fuel_type, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("Camry", "VEH-002", "MH 12 3339", "Toyota", "Camry", "sedan", "petrol", "Silver", "active", now),
+            "INSERT INTO vehicles (name, registration_no, vehicle_type, assigned_driver_user_id, status, purchase_date, purchase_cost, insurance_expiry, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Toyota Camry", "MH 12 3339", "car", mangesh_id, "active",
+             "2023-01-20", 4500000, "2027-01-19", "Toyota Camry Hybrid — Petrol, Silver", now),
         )
         camry_id = cur.lastrowid
-        # Drivers — look up by name first, fall back to standalone entries
-        driver_names = ["Balaji Phunde", "Balu Patil", "Mangesh Ghule"]
-        for i, dname in enumerate(driver_names):
-            user_row = db.execute("SELECT id FROM users WHERE name = ?", (dname,)).fetchone()
-            uid = user_row["id"] if user_row else None
-            # Assign first two drivers to Innova, third to Camry
-            vid = innova_id if i < 2 else camry_id
-            is_primary = 1 if i in (0, 2) else 0
+        # Sample log entries so the detail page isn't empty
+        owner_row = db.execute("SELECT id FROM users WHERE email IN ({})".format(
+            ",".join("?" for _ in OWNER_EMAILS)), tuple(OWNER_EMAILS)).fetchone()
+        uid = owner_row["id"] if owner_row else 1
+        sample_logs = [
+            (innova_id, "fuel", 4500, "Diesel — full tank", 45230, uid, "2026-04-10"),
+            (innova_id, "fuel", 4200, "Diesel — full tank", 44800, uid, "2026-04-03"),
+            (innova_id, "maintenance", 8500, "Oil change + air filter", 45000, uid, "2026-04-08"),
+            (innova_id, "toll", 350, "Pune-Mumbai expressway", None, uid, "2026-04-11"),
+            (camry_id, "fuel", 5100, "Petrol — full tank", 22100, uid, "2026-04-09"),
+            (camry_id, "fuel", 4800, "Petrol — full tank", 21700, uid, "2026-04-02"),
+            (camry_id, "maintenance", 12000, "Scheduled service — 20k km", 22000, uid, "2026-04-05"),
+            (camry_id, "insurance", 45000, "Annual comprehensive renewal", None, uid, "2026-01-15"),
+        ]
+        for vid, lt, amt, desc, odo, by, ld in sample_logs:
             cur.execute(
-                "INSERT INTO vehicle_drivers (vehicle_id, user_id, driver_name, is_primary, assigned_at) VALUES (?, ?, ?, ?, ?)",
-                (vid, uid, dname, is_primary, now),
+                "INSERT INTO vehicle_logs (vehicle_id, log_type, amount, description, odometer_km, logged_by_user_id, log_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (vid, lt, amt, desc, odo, by, ld, now),
             )
         db.commit()
     except Exception:

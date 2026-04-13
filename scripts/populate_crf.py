@@ -416,11 +416,6 @@ def run():
         created = (now - timedelta(days=len(SAMPLE_REQUESTS) - i, hours=i * 3)).isoformat(timespec="seconds")
         request_no = f"CRF-2026-{i+1:04d}"
 
-        # Pick a grant for some requests
-        gid = None
-        if i < 4:
-            gid = list(grant_ids.values())[i % len(grant_ids)]
-
         completed_at = None
         if status == "completed":
             completed_at = (now - timedelta(days=1, hours=i)).isoformat(timespec="seconds")
@@ -428,10 +423,10 @@ def run():
         c.execute(
             "INSERT INTO sample_requests "
             "(request_no, requester_id, created_by_user_id, instrument_id, title, sample_name, "
-            " sample_count, description, status, priority, created_at, updated_at, grant_id, completed_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', ?, ?, ?, ?)",
+            " sample_count, description, status, priority, created_at, updated_at, completed_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', ?, ?, ?)",
             (request_no, req_id_user, req_id_user, iid, title, sample, count, desc,
-             status, created, created, gid, completed_at),
+             status, created, created, completed_at),
         )
         req_count += 1
         print(f"  {request_no} [{status:16s}] {title[:50]}")

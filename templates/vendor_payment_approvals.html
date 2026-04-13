@@ -43,7 +43,7 @@
         <h2 data-vis="{{ V }}">{{ po.title }}</h2>
         <p class="hint" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(po.amount) }}</strong>
-          {% if po.priority == 'high' %} · <strong style="color:var(--color-red,#c44);" data-vis="{{ V }}">URGENT</strong>{% endif %}
+          {% if po.priority == 'high' %} · <strong style="color:var(--danger);" data-vis="{{ V }}">URGENT</strong>{% endif %}
           · by {{ po.submitted_by_name or '—' }}
           · {{ po.created_at[:10] if po.created_at else '' }}
         </p>

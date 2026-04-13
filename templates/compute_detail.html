@@ -70,7 +70,7 @@
   {% if job.status == 'failed' and job.error %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ERROR", "") }}
-    <pre class="code-block" style="max-height:16rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;color:var(--accent-red, #f44);" data-vis="{{ V }}">{{ job.error }}</pre>
+    <pre class="code-block" style="max-height:16rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--surface);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;color:var(--danger);" data-vis="{{ V }}">{{ job.error }}</pre>
   </article>
   {% endif %}
 

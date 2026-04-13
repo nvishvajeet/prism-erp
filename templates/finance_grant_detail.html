@@ -35,7 +35,7 @@
     ]) }}
     <div class="finance-grant-bar-row top-gap" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
-        <div class="finance-grant-bar-fill {{ budget_util_class }}" style="width:{{ [utilization_pct, 100]|min }}%" data-vis="{{ V }}"></div>
+        <div class="finance-grant-bar-fill {{ budget_util_class }} util-fill" style="--util-pct: {{ [utilization_pct, 100]|min }}%;" data-vis="{{ V }}"></div>
       </div>
     </div>
   </article>
@@ -168,7 +168,7 @@
     {{ card_heading("FINANCE", "Budget allocation") }}
     <div class="finance-grant-bar-row" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
-        <div class="finance-grant-bar-fill {{ budget_util_class }}" style="width:{{ [utilization_pct, 100]|min }}%" data-vis="{{ V }}"></div>
+        <div class="finance-grant-bar-fill {{ budget_util_class }} util-fill" style="--util-pct: {{ [utilization_pct, 100]|min }}%;" data-vis="{{ V }}"></div>
       </div>
       <span class="finance-grant-bar-text" data-vis="{{ V }}">{{ spent_fmt }} / {{ budget_fmt }} ({{ utilization_pct }}%)</span>
     </div>
@@ -266,7 +266,7 @@
         <label data-vis="{{ V }}">Description <input type="text" name="description" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Expense Date <input type="date" name="expense_date" value="{{ today }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Currency
-          <select name="currency" id="expCurrencyInline" onchange="document.getElementById('expFxRowInline').style.display=this.value==='INR'?'none':'flex'" data-vis="{{ V }}">
+          <select name="currency" id="expCurrencyInline" onchange="document.getElementById('expFxRowInline').hidden=this.value==='INR'" data-vis="{{ V }}">
             <option value="INR" data-vis="{{ V }}">INR (₹)</option>
             <option value="USD" data-vis="{{ V }}">USD ($)</option>
             <option value="EUR" data-vis="{{ V }}">EUR</option>
@@ -275,7 +275,7 @@
           </select>
         </label>
         <label data-vis="{{ V }}">Amount <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
-        <div id="expFxRowInline" style="display:none;flex-direction:column;gap:0.25rem;" data-vis="{{ V }}">
+        <div id="expFxRowInline" class="expense-fx-row" hidden data-vis="{{ V }}">
           <label data-vis="{{ V }}">Exchange Rate (1 foreign = ? INR)
             <input type="number" step="0.0001" name="exchange_rate" placeholder="e.g. 83.50" data-vis="{{ V }}">
           </label>

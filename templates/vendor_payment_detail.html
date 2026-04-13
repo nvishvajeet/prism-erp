@@ -122,7 +122,7 @@
       </label>
       <div style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
         <button type="submit" name="action" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve ₹{{ "{:,.0f}".format(po.amount) }}</button>
-        <button type="submit" name="action" value="reject" class="btn" style="background:var(--color-red,#c44);color:#fff;" data-vis="{{ V }}">Reject</button>
+        <button type="submit" name="action" value="reject" class="btn" style="background:var(--danger);color:#fff;" data-vis="{{ V }}">Reject</button>
       </div>
     </form>
   </article>

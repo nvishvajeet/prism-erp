@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">Select Portal</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">Choose which ERP system to enter</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:1.5rem;padding:1rem 0;" data-vis="{{ V }}">
+    {% for portal in portals %}
+    <a href="{{ url_for('portal_enter', slug=portal.slug) }}" class="card tile" style="text-decoration:none;color:inherit;cursor:pointer;transition:transform 0.15s, box-shadow 0.15s;padding:2rem;text-align:center;" data-vis="{{ V }}"
+       onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.3)'"
+       onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="font-size:3.5rem;margin-bottom:1rem;" data-vis="{{ V }}">{{ portal.icon }}</div>
+      <h3 style="font-size:1.4rem;font-weight:800;margin:0 0 0.5rem;" data-vis="{{ V }}">{{ portal.name }}</h3>
+      <p style="color:var(--muted);font-size:0.9rem;line-height:1.5;" data-vis="{{ V }}">{{ portal.tagline }}</p>
+      {% if portal.portal_role != 'member' %}
+      <span class="badge status-active" style="margin-top:0.75rem;" data-vis="{{ V }}">{{ portal.portal_role|title }}</span>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

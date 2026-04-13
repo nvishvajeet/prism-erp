@@ -6123,7 +6123,7 @@ def _dashboard_at_a_glance(user: sqlite3.Row) -> list[dict]:
 def hub():
     """Public landing page — project directory + AI agent infrastructure reference."""
     from datetime import datetime as _dt
-    return render_template("hub.html", machine_time=_dt.now().strftime("%Y-%m-%d %H:%M"))
+    return render_template("_hub.html", machine_time=_dt.now().strftime("%Y-%m-%d %H:%M"))
 
 
 @app.route("/")
@@ -9207,7 +9207,7 @@ def letter_print(letter_id: int):
     if letter["author_user_id"] != user["id"] and not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
         abort(403)
     author = query_one("SELECT name FROM users WHERE id = ?", (letter["author_user_id"],))
-    return render_template("letter_print.html", letter=letter, author_name=author["name"] if author else "Unknown")
+    return render_template("_letter_print.html", letter=letter, author_name=author["name"] if author else "Unknown")
 
 
 @app.route("/letters/<int:letter_id>/update", methods=["POST"])
@@ -14696,7 +14696,7 @@ def request_calendar_card(request_id: int):
         )
     next_slot_default = (datetime.utcnow() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M")
     return render_template(
-        "calendar_card.html",
+        "_calendar_card.html",
         sample_request=sample_request,
         can_manage=can_manage,
         can_operate=can_operate,

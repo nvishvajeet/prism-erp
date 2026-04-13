@@ -253,6 +253,21 @@ Three engines work in parallel:
 
 132,700+ automated checks. Zero server errors. 1-year simulation passed.
 
+## Parallel Agent Pattern
+
+CATALYST now supports a simple finish-later model for parallel agents:
+
+- read-only crawlers explore broadly and write findings to `reports/`
+  or `tmp/agent_handoffs/<task-id>/`
+- write agents claim tracked files in `CLAIMS.md` and finish bounded
+  edit lanes
+- sidecar handoff files should record the finding, likely file set, and
+  proof command so another agent can pick up the lane later without
+  restarting the crawl
+
+This keeps all agents productive at once: some discover, some verify,
+some ship.
+
 ## License
 
 MIT. Python 3 + Flask 3. No telemetry. No external services.

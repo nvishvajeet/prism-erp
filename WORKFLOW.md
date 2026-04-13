@@ -116,6 +116,37 @@ The purpose is simple: every machine action must have human-auditable
 agent ownership, and no parallel process should be able to silently
 override another agent's work.
 
+### 3.1.3  Sidecar crawler jobs and finish-later handoffs
+
+When a read-only crawler finds useful work that it cannot or should not
+finish immediately, it should leave a structured handoff for a later
+write agent instead of dropping the context on the floor.
+
+- create sidecar job files under `tmp/agent_handoffs/<task-id>/`
+- each sidecar job should be one small markdown file with:
+  - task id
+  - supervising agent id
+  - timestamp
+  - files or surfaces inspected
+  - exact findings
+  - recommended next edit set
+  - proof command to rerun after the fix
+  - whether the handoff is read-only analysis or ready-for-write
+- sidecar jobs are **not** claims and do not authorize tracked-file
+  edits by themselves
+- a later write agent must still claim the tracked files in
+  `CLAIMS.md` before applying the handoff
+- read-only crawlers may keep adding sidecar jobs in parallel as long as
+  they stay inside `reports/` or `tmp/agent_handoffs/`
+- if a sidecar job becomes obsolete, the finishing agent should either
+  delete it in the shipping commit or mark it `superseded` inside the
+  file
+
+Think of these as queued micro-lanes for future agents: crawlers keep
+discovering work, write agents keep shipping bounded chunks, and the
+system keeps moving even when one agent cannot carry a lane all the way
+to green in a single sitting.
+
 ### 3.2  Hard vs soft attributes — read `docs/PHILOSOPHY.md` §2
 
 **Hard (locked except at major version bumps, CHANGELOG entry under

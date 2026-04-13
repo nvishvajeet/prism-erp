@@ -192,6 +192,29 @@ changes are usually:
 4. add one crawler affordance or operator-facing command shortcut
 5. update the summary docs right after the code changes land
 
+## Sidecar jobs for future agents
+
+If you are exploring, crawling, or auditing and you discover good work
+that should be finished later, do not keep it only in chat memory.
+Leave a sidecar handoff.
+
+Use:
+
+1. `reports/` for crawler output and proof artifacts
+2. `tmp/agent_handoffs/<task-id>/` for structured finish-later jobs
+
+Each handoff file should say:
+
+- what was inspected
+- what seems wrong or incomplete
+- which tracked files are likely involved
+- what the smallest next write lane should be
+- which proof command should be rerun after the edit
+
+This makes the ERP easier to extend because discovery work and shipping
+work can happen in parallel without forcing every agent to restart the
+same analysis from zero.
+
 That combination keeps the code and the builder story aligned.
 
 ## How to make each ERP site better

@@ -271,6 +271,13 @@ minimum LLM token spend:
 The machines verify the PREVIOUS commit while the LLM works on the NEXT one.
 This pipeline means zero idle compute.
 
+**Resilience rules:**
+- Local tasks are fire-and-forget with `run_in_background`
+- LLM checks results after ~5 minutes via `TaskOutput` or reading output files
+- If LLM stops or errors, local tasks still complete independently
+- Local tasks must never depend on LLM mid-flight — they run to completion alone
+- Use `timeout` on all Bash commands (120s default, 300s for heavy crawlers)
+
 **Rule: anything that can be verified empirically runs on a machine,
 not in the LLM's reasoning budget.**
 

@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | css-hygiene-30min-burn | 2026-04-13 20:31 CEST | `static/styles.css`, `CLAIMS.md` | `fix: retire orphan css blocks` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

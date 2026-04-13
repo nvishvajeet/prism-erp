@@ -19835,7 +19835,7 @@ def mess_student_pass(student_id: int):
     month_pass = _generate_mess_pass(student["id"], student["roll_number"], current_month)
     sem_pass = _generate_mess_pass(student["id"], student["roll_number"], current_sem)
     return render_template(
-        "mess_student_pass.html",
+        "_mess_student_pass.html",
         student=student,
         month_pass=month_pass,
         sem_pass=sem_pass,
@@ -20188,6 +20188,78 @@ def mess_student_qr(student_id: int):
     if not student:
         abort(404)
     return render_template("mess_student_qr.html", student=student)
+
+
+@app.route("/mess/students/<int:student_id>/toggle", methods=["POST"])
+@login_required
+def mess_student_toggle(student_id: int):
+    """Activate/deactivate a student (graduation, withdrawal, etc)."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    student = query_one("SELECT id, name, is_active FROM mess_students WHERE id = ?", (student_id,))
+    if not student:
+        abort(404)
+    new_status = 0 if student["is_active"] else 1
+    execute("UPDATE mess_students SET is_active = ? WHERE id = ?", (new_status, student_id))
+    label = "activated" if new_status else "deactivated"
+    log_action(user["id"], "mess", student_id, f"student_{label}", {"name": student["name"]})
+    flash(f"{student['name']} {label}.", "success")
+    return redirect(url_for("mess_student_detail", student_id=student_id))
+
+
+@app.route("/mess/students/<int:student_id>/edit", methods=["POST"])
+@login_required
+def mess_student_edit(student_id: int):
+    """Update student details."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    student = query_one("SELECT id FROM mess_students WHERE id = ?", (student_id,))
+    if not student:
+        abort(404)
+    name = request.form.get("name", "").strip()
+    dept = request.form.get("department", "").strip()
+    year = int(request.form.get("year_of_study", 1) or 1)
+    hostel = request.form.get("hostel", "").strip()
+    room = request.form.get("room_number", "").strip()
+    meal_plan = request.form.get("meal_plan", "full").strip()
+    phone = request.form.get("phone", "").strip()
+    if name:
+        execute(
+            """
+            UPDATE mess_students SET name=?, department=?, year_of_study=?,
+                hostel=?, room_number=?, meal_plan=?, phone=?
+            WHERE id=?
+            """,
+            (name, dept, year, hostel, room, meal_plan, phone, student_id),
+        )
+        flash(f"Student {name} updated.", "success")
+    return redirect(url_for("mess_student_detail", student_id=student_id))
+
+
+@app.route("/mess/api/search-student")
+@login_required
+def mess_api_search_student():
+    """AJAX search for students — supports partial name, roll, department."""
+    user = current_user()
+    if not _mess_access(user):
+        return jsonify([])
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    like = f"%{q}%"
+    results = query_all(
+        """
+        SELECT id, name, roll_number, department, meal_plan, is_active
+        FROM mess_students
+        WHERE (name LIKE ? OR roll_number LIKE ? OR department LIKE ?)
+        AND is_active = 1
+        ORDER BY name LIMIT 10
+        """,
+        (like, like, like),
+    )
+    return jsonify([dict(r) for r in results])
 
 
 @app.route("/mess/students/import", methods=["POST"])

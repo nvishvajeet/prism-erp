@@ -52,6 +52,15 @@
   </article>
 
   {# ── Recent Entries ── #}
+  {# ── Name Search Fallback ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SEARCH BY NAME", "When QR/barcode isn't available") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="text" id="nameSearch" placeholder="Type student name or roll number…" autocomplete="off" data-vis="{{ V }}" style="width:100%;max-width:25rem;">
+      <div id="searchResults" style="margin-top:0.5rem;" data-vis="{{ V }}"></div>
+    </div>
+  </article>
+
   {% if recent_entries %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("LAST 15 ENTRIES", "Most recent first") }}
@@ -91,9 +100,29 @@
     });
     // Re-focus after page load for continuous scanning
     setTimeout(function(){ input.focus(); }, 300);
-    // Re-focus on any click outside the input (kiosk mode)
-    document.addEventListener('click', function(e){
-      if(!e.target.closest('input,select,button,a')) input.focus();
+  }
+  // Name search with AJAX
+  var nameSearch = document.getElementById('nameSearch');
+  var results = document.getElementById('searchResults');
+  if(nameSearch){
+    var debounce;
+    nameSearch.addEventListener('input', function(){
+      clearTimeout(debounce);
+      var q = this.value.trim();
+      if(q.length < 2){ results.innerHTML = ''; return; }
+      debounce = setTimeout(function(){
+        fetch('{{ url_for("mess_api_search_student") }}?q=' + encodeURIComponent(q))
+          .then(function(r){ return r.json(); })
+          .then(function(data){
+            if(!data.length){ results.innerHTML = '<p class="hint">No matches</p>'; return; }
+            results.innerHTML = data.map(function(s){
+              return '<div style="padding:0.4rem;border-bottom:1px solid var(--color-separator,#333);display:flex;justify-content:space-between;align-items:center;">' +
+                '<span><strong>' + s.name + '</strong> <code class="inline-code">' + s.roll_number + '</code> <span class="badge">' + s.department + '</span></span>' +
+                '<button onclick="document.getElementById(\'qrInput\').value=\'' + s.roll_number + '\';document.getElementById(\'scanForm\').submit();" class="btn btn-primary" style="font-size:0.75rem;padding:0.2rem 0.6rem;">Scan In</button>' +
+                '</div>';
+            }).join('');
+          });
+      }, 300);
     });
   }
 })();

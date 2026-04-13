@@ -10,6 +10,12 @@
     <span class="inst-header-code" data-vis="{{ V }}">{{ student.roll_number }}</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('mess_student_toggle', student_id=student.id) }}" style="display:inline;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn {% if student.is_active %}btn-danger{% else %}btn-primary{% endif %}" data-vis="{{ V }}">
+        {{ 'Deactivate' if student.is_active else 'Activate' }}
+      </button>
+    </form>
     <a href="{{ url_for('mess_student_qr', student_id=student.id) }}" class="btn" data-vis="{{ V }}">Print QR Card</a>
   </div>
 </header>
@@ -35,21 +41,21 @@
     <div style="padding:1rem;" data-vis="{{ V }}">
       <div class="control-flex-wrap" style="gap:1.5rem;" data-vis="{{ V }}">
         <div style="text-align:center;" data-vis="{{ V }}">
-          <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+          <div style="display:inline-block;background:var(--bg);padding:1rem;border-radius:8px;" data-vis="{{ V }}">
             <img src="{{ url_for('qr_code_svg', code=month_pass) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
           </div>
           <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">Month: {{ current_month }}</p>
           <p style="font-family:monospace;font-size:0.7rem;" data-vis="{{ V }}">{{ month_pass }}</p>
         </div>
         <div style="text-align:center;" data-vis="{{ V }}">
-          <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+          <div style="display:inline-block;background:var(--bg);padding:1rem;border-radius:8px;" data-vis="{{ V }}">
             <img src="{{ url_for('qr_code_svg', code=sem_pass) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
           </div>
           <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">Semester: {{ current_sem }}</p>
           <p style="font-family:monospace;font-size:0.7rem;" data-vis="{{ V }}">{{ sem_pass }}</p>
         </div>
       </div>
-      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--color-separator, #333);" data-vis="{{ V }}">
+      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--color-separator);" data-vis="{{ V }}">
         <p class="hint" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">Student pass link</strong> (share with student — they bookmark it on their phone):
         </p>
@@ -67,7 +73,7 @@
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("STATIC QR TOKEN", "For printed ID cards (does not rotate)") }}
     <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
-      <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+      <div style="display:inline-block;background:var(--bg);padding:1rem;border-radius:8px;" data-vis="{{ V }}">
         <img src="{{ url_for('qr_code_svg', code=student.qr_token) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
         <p style="font-family:monospace;font-weight:700;margin-top:0.5rem;letter-spacing:0.1em;font-size:0.8rem;" data-vis="{{ V }}">{{ student.qr_token }}</p>
       </div>
@@ -123,5 +129,45 @@
     </table>
   </article>
   {% endif %}
+
+  {# ── Edit Student ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("EDIT STUDENT", "Update details") }}
+    <form method="post" action="{{ url_for('mess_student_edit', student_id=student.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Name
+        <input type="text" name="name" value="{{ student.name }}" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Department
+        <input type="text" name="department" value="{{ student.department }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Year
+        <select name="year_of_study" data-vis="{{ V }}">
+          {% for y in [1,2,3,4,5] %}
+          <option value="{{ y }}"{% if student.year_of_study == y %} selected{% endif %} data-vis="{{ V }}">{{ y }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Hostel
+        <input type="text" name="hostel" value="{{ student.hostel }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Room
+        <input type="text" name="room_number" value="{{ student.room_number }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Meal Plan
+        <select name="meal_plan" data-vis="{{ V }}">
+          <option value="full"{% if student.meal_plan == 'full' %} selected{% endif %} data-vis="{{ V }}">Full</option>
+          <option value="no_breakfast"{% if student.meal_plan == 'no_breakfast' %} selected{% endif %} data-vis="{{ V }}">No Breakfast</option>
+          <option value="lunch_only"{% if student.meal_plan == 'lunch_only' %} selected{% endif %} data-vis="{{ V }}">Lunch Only</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Phone
+        <input type="tel" name="phone" value="{{ student.phone }}" data-vis="{{ V }}">
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}">Save Changes</button>
+      </div>
+    </form>
+  </article>
 </section>
 {% endblock %}

@@ -4850,6 +4850,27 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_compute_jobs_status ON compute_jobs(status);
         """)
 
+        # ── Quick Entry / Command Queue ──────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS command_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                raw_text TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'text',
+                status TEXT NOT NULL DEFAULT 'pending',
+                parsed_action TEXT NOT NULL DEFAULT '',
+                parsed_data TEXT NOT NULL DEFAULT '',
+                result_message TEXT NOT NULL DEFAULT '',
+                result_entity_type TEXT NOT NULL DEFAULT '',
+                result_entity_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                processed_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_command_queue_status ON command_queue(status);
+            CREATE INDEX IF NOT EXISTS idx_command_queue_user ON command_queue(user_id);
+        """)
+
         # Additive column migrations for v1.1.0
         for col_sql in [
             "ALTER TABLE invoices ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ''",
@@ -17212,6 +17233,223 @@ def audit_export():
         as_attachment=True,
         download_name="catalyst_audit_log.csv",
     )
+
+
+# ── Quick Entry — voice/text command queue ──────────────────────────────
+
+
+def _process_command_batch():
+    """Process up to 25 pending commands in ONE Claude API call."""
+    pending = query_all(
+        """SELECT cq.*, u.name AS user_name
+           FROM command_queue cq JOIN users u ON u.id = cq.user_id
+           WHERE cq.status = 'pending' ORDER BY cq.created_at LIMIT 25"""
+    )
+    if not pending:
+        return 0
+
+    ids = [p["id"] for p in pending]
+    for pid in ids:
+        execute("UPDATE command_queue SET status = 'processing' WHERE id = ?", (pid,))
+
+    batch_prompt = """You are an ERP command parser. Parse each user command into a structured action.
+
+Available actions:
+- receipt: {amount, category (fuel/travel/equipment/consumables/general), title, description}
+- attendance: {user_name, status (present/absent/half), date}
+- todo: {title, assign_to (name or "self"), priority (normal/high/urgent)}
+- vehicle_log: {vehicle_reg, log_type (fuel/maintenance), amount, description}
+- message: {to (name), subject, body}
+- salary_note: {user_name, note}
+
+For each command, return a JSON object with: {id, action, data, summary}
+If you can't parse it, set action to "unknown" and summary to a helpful message.
+
+Return a JSON array of all parsed commands.
+
+Commands to parse:
+"""
+    for p in pending:
+        batch_prompt += "\n%d. [User: %s] %s" % (p["id"], p["user_name"], p["raw_text"])
+
+    try:
+        import re as _re
+
+        payload = json.dumps({
+            "model": "claude-haiku-4-20250414",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": batch_prompt}],
+        }).encode()
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            for pid in ids:
+                execute(
+                    "UPDATE command_queue SET status='failed', result_message='No API key configured', processed_at=? WHERE id=?",
+                    (now_iso(), pid),
+                )
+            return 0
+
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=60)
+        resp_data = json.loads(resp.read())
+        response_text = resp_data.get("content", [{}])[0].get("text", "")
+
+        json_match = _re.search(r'\[.*\]', response_text, _re.DOTALL)
+        parsed_commands = json.loads(json_match.group()) if json_match else []
+
+        parsed_lookup = {p.get("id"): p for p in parsed_commands}
+        for p in pending:
+            parsed = parsed_lookup.get(p["id"], {})
+            action = parsed.get("action", "unknown")
+            data_json = json.dumps(parsed.get("data", {}))
+            summary = parsed.get("summary", "Could not parse")
+
+            result_entity_type = ""
+            result_entity_id = None
+
+            if action == "attendance" and parsed.get("data", {}).get("user_name"):
+                d = parsed["data"]
+                target = query_one("SELECT id FROM users WHERE name LIKE ?", ("%" + d.get("user_name", "") + "%",))
+                if target:
+                    today = d.get("date", date.today().isoformat())
+                    existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
+                    status_val = d.get("status", "present")
+                    if existing:
+                        execute("UPDATE attendance SET status = ? WHERE id = ?", (status_val, existing["id"]))
+                    else:
+                        execute(
+                            "INSERT INTO attendance (user_id, date, status, created_at) VALUES (?, ?, ?, ?)",
+                            (target["id"], today, status_val, now_iso()),
+                        )
+                    result_entity_type = "attendance"
+                    result_entity_id = target["id"]
+                    summary += " -- Done"
+
+            elif action == "receipt" and parsed.get("data", {}).get("amount"):
+                d = parsed["data"]
+                cur_id = execute(
+                    "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (p["user_id"], d.get("title", p["raw_text"][:50]), float(d.get("amount", 0)),
+                     d.get("category", "general"), d.get("description", ""), now_iso()),
+                )
+                result_entity_type = "receipt"
+                result_entity_id = cur_id
+                summary += " -- Receipt created"
+
+            elif action == "todo":
+                d = parsed["data"]
+                execute(
+                    "INSERT INTO user_todos (user_id, assigned_by_user_id, title, priority, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
+                    (p["user_id"], p["user_id"], d.get("title", p["raw_text"][:50]),
+                     d.get("priority", "normal"), now_iso()),
+                )
+                result_entity_type = "todo"
+                summary += " -- Task created"
+
+            execute(
+                """UPDATE command_queue
+                   SET status='completed', parsed_action=?, parsed_data=?,
+                       result_message=?, result_entity_type=?, result_entity_id=?,
+                       processed_at=?
+                   WHERE id=?""",
+                (action, data_json, summary, result_entity_type, result_entity_id, now_iso(), p["id"]),
+            )
+
+        return len(pending)
+
+    except Exception as exc:
+        for pid in ids:
+            execute(
+                "UPDATE command_queue SET status='failed', result_message=?, processed_at=? WHERE id=?",
+                (str(exc)[:200], now_iso(), pid),
+            )
+        return 0
+
+
+def check_command_queue():
+    """Process pending commands. Run 3x daily at 8am, 2pm, 10pm via cron.
+    Also triggers if 25+ commands are pending (regardless of time).
+
+    Cron setup on Mac Mini:
+      0 8,14,22 * * * cd ~/ravikiran-services && .venv/bin/python -c "import app; app.check_command_queue()"
+    """
+    with app.app_context():
+        pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
+        if not pending or pending["c"] == 0:
+            return 0
+        count = _process_command_batch()
+        return count
+
+
+def process_all_pending_commands():
+    """Force-process ALL pending commands right now. Admin use.
+    Usage: python -c "import app; app.process_all_pending_commands()"
+    """
+    with app.app_context():
+        total = 0
+        while True:
+            pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
+            if not pending or pending["c"] == 0:
+                break
+            total += _process_command_batch()
+        return total
+            pass
+
+
+@app.route("/quickentry", methods=["GET", "POST"])
+@login_required
+def quick_entry():
+    user = current_user()
+    if request.method == "POST":
+        raw_text = request.form.get("text", "").strip()
+        if not raw_text:
+            flash("Say something first!", "error")
+            return redirect(url_for("quick_entry"))
+        source = request.form.get("source", "text")
+        execute(
+            "INSERT INTO command_queue (user_id, raw_text, source, created_at) VALUES (?, ?, ?, ?)",
+            (user["id"], raw_text, source, now_iso()),
+        )
+        pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
+        if pending and pending["c"] >= 25:
+            import threading
+            threading.Thread(target=_process_command_batch, daemon=True).start()
+            flash("Request submitted. Processing now — check back in a few minutes.", "success")
+        else:
+            # Show next processing window: 8am, 2pm, 10pm
+            from datetime import datetime as _dt
+            now = _dt.now()
+            windows = [(8, "8:00 AM"), (14, "2:00 PM"), (22, "10:00 PM")]
+            next_window = "8:00 AM tomorrow"
+            for h, label in windows:
+                if now.hour < h:
+                    next_window = label
+                    break
+            flash("Request submitted and logged. AI processes at 8 AM, 2 PM, and 10 PM — check back by %s." % next_window, "success")
+        return redirect(url_for("quick_entry"))
+
+    # GET: show recent commands
+    if is_owner(user) or user["role"] in ("super_admin", "finance_admin"):
+        commands = query_all(
+            "SELECT cq.*, u.name AS user_name FROM command_queue cq JOIN users u ON u.id = cq.user_id ORDER BY cq.created_at DESC LIMIT 50"
+        )
+    else:
+        commands = query_all(
+            "SELECT cq.*, u.name AS user_name FROM command_queue cq JOIN users u ON u.id = cq.user_id WHERE cq.user_id = ? ORDER BY cq.created_at DESC LIMIT 20",
+            (user["id"],),
+        )
+    pending_count = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
+    return render_template("quick_entry.html", commands=commands, pending_count=pending_count["c"] if pending_count else 0)
 
 
 if __name__ == "__main__":

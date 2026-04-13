@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Quick Entry</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ pending_count }}/25 queued</span>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "What do you need?") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="source" value="text" id="entrySource">
+      <div style="display:flex;gap:0.5rem;align-items:flex-end;" data-vis="{{ V }}">
+        <textarea name="text" id="commandText" rows="2" required
+          placeholder="Type or speak: 'Car fuel 500 receipt' or 'Mark Ravi present' or 'Todo: order vegetables'"
+          style="flex:1;font-size:1rem;padding:0.75rem;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);resize:none;"
+          data-vis="{{ V }}"></textarea>
+        <button type="button" id="micBtn" class="btn" style="font-size:1.2rem;padding:0.6rem;" data-vis="{{ V }}">🎤</button>
+        <button type="submit" class="btn btn-primary" style="padding:0.6rem 1.2rem;" data-vis="{{ V }}">Send</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Recent Commands") }}
+    {% if commands %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Command</th>
+          <th data-vis="{{ V }}">Action</th>
+          <th data-vis="{{ V }}">Result</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Time</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for c in commands %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ c.raw_text[:60] }}{% if c.raw_text|length > 60 %}...{% endif %}</strong>
+            <br><small class="hint" data-vis="{{ V }}">{{ c.user_name }} &middot; {{ c.source }}</small>
+          </td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ c.parsed_action or '—' }}</span></td>
+          <td data-vis="{{ V }}">{{ c.result_message[:50] or '—' }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ c.status }}" data-vis="{{ V }}">{{ c.status }}</span></td>
+          <td data-vis="{{ V }}"><small data-vis="{{ V }}">{{ time_ago(c.created_at) }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No commands yet.", "Type or speak your first request above.") }}
+    {% endif %}
+  </article>
+</section>
+
+<script>
+(function(){
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+  var mic = document.getElementById('micBtn');
+  var text = document.getElementById('commandText');
+  var source = document.getElementById('entrySource');
+  var recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+  var listening = false;
+  mic.addEventListener('click', function(){
+    if (listening) { recognition.stop(); return; }
+    recognition.start();
+    listening = true;
+    mic.textContent = '\uD83D\uDD34';
+  });
+  recognition.onresult = function(e){
+    text.value = e.results[0][0].transcript;
+    source.value = 'voice';
+    mic.textContent = '\uD83C\uDFA4';
+    listening = false;
+  };
+  recognition.onend = function(){ mic.textContent = '\uD83C\uDFA4'; listening = false; };
+  recognition.onerror = function(){ mic.textContent = '\uD83C\uDFA4'; listening = false; };
+})();
+</script>
+{% endblock %}

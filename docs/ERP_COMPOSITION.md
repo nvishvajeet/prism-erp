@@ -106,8 +106,12 @@ If you are unsure where to begin, use one of these:
 | Service business ERP | `finance,personnel,attendance,receipts,notifications,admin` |
 | Ops-heavy field team | `personnel,vehicles,attendance,finance,notifications,admin` |
 | Admin office ERP | `personnel,letters,todos,finance,notifications,admin` |
+| Compute ERP | `compute,notifications,inbox,admin` |
 
 Add `inbox` when collaboration becomes heavy, not by default.
+
+Full demo presets:
+[`ERP_DEMO_VARIANTS.md`](ERP_DEMO_VARIANTS.md)
 
 ## Adding a New Module — Integration Checklist
 
@@ -217,6 +221,12 @@ Total time: 5 minutes. You have a working ERP.
 - Sample request workflow with 3-step approval
 - Grant management with budget enforcement
 - Modules: instruments, finance, queue, calendar, stats, attendance
+
+### Compute ERP
+- HPC scheduler and software catalog
+- queued, running, failed, and needs-attention job states
+- worker-backed execution contract
+- Modules: compute, notifications, inbox, admin
 
 ### Future: School Administration
 - Principal, teachers, office staff, parents

@@ -17,6 +17,19 @@ by reusing the same five layers:
 
 If a change does not fit one of these layers, it is probably too fancy.
 
+## The rules from site one
+
+These are the principles that made the first working site fast to build
+from scratch and still make later sites easier:
+
+1. start with one believable workflow, not a whole universe
+2. keep one design language across every page
+3. pick one data owner for each action
+4. make role visibility explicit early
+5. make the first demo path obvious
+6. get smoke green before polishing
+7. write the rule down once it proves useful
+
 ## The future-safe rule
 
 When adding a module, prefer these moves in order:
@@ -121,6 +134,7 @@ Use these standard shapes instead of inventing a new page model:
 | Finance-linked records | list tile + totals tile + detail tile |
 | People-linked records | registry tile + person chips + profile links |
 | Date-heavy records | list tile + calendar hook + reminders later |
+| Machine queue | queue dashboard + submit page + detail/log page |
 
 ## Examples
 
@@ -179,6 +193,18 @@ changes are usually:
 5. update the summary docs right after the code changes land
 
 That combination keeps the code and the builder story aligned.
+
+## How to make each ERP site better
+
+When improving an existing ERP site, ask:
+
+1. does the landing page explain the variant quickly?
+2. is there one obvious first action?
+3. do seeded rows make the module feel alive?
+4. does the page reuse the shared tile/macro grammar?
+5. is there one crawler or smoke path that proves the story?
+
+If a site fails one of those, fix that before adding more features.
 
 ## The fastest way to pick the next build
 

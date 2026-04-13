@@ -19,9 +19,10 @@ cd catalyst && ./catalyst init && ./catalyst start
 
 A single-file Flask ERP that runs research facilities, food service companies, and any operation that needs approvals, finance tracking, attendance, and team management. Built in one week with AI-assisted development across two machines (MacBook Pro + Mac Mini).
 
-**Two live deployments:**
+**Live ERP surfaces:**
 - **MIT-WPU CRF** — 21 instruments, 8 roles, sample request workflow
 - **Ravikiran Services** — food/hospitality at MIT ADT University, 16 staff, 3 business units
+- **Compute ERP** — HPC job queue, software catalog, worker-backed execution
 
 ## New Operator Start Here
 
@@ -110,6 +111,18 @@ Full walkthrough:
 
 Enable selectively: `CATALYST_MODULES=instruments,finance,personnel,vehicles`
 
+## Demo Variants
+
+CATALYST can be demoed as multiple ERP sites from the same codebase:
+
+- `Lab ERP` — instruments, finance, queue, calendar, stats
+- `Ravikiran Operations ERP` — personnel, vehicles, attendance, receipts, finance
+- `Compute ERP` — compute queue, software catalog, notifications, admin
+- `Full Product Demo` — all active modules together
+
+Preset bundles and demo guidance:
+[docs/ERP_DEMO_VARIANTS.md](docs/ERP_DEMO_VARIANTS.md)
+
 ## Cross-Module Integration
 
 Modules talk to each other automatically:
@@ -130,14 +143,14 @@ Full matrix: [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md)
 
 ```
 ┌──────────────────────────────────────────┐
-│  app.py (15,694 lines)                    │
-│  ├─ 129 routes                            │
-│  ├─ 14 modules (MODULE_REGISTRY)          │
-│  ├─ 8 roles (ROLE_ACCESS_PRESETS)         │
+│  app.py (16,587 lines)                    │
+│  ├─ 140 routes                            │
+│  ├─ 15 modules (MODULE_REGISTRY)          │
+│  ├─ 8+ product roles                      │
 │  ├─ 45+ database tables                   │
 │  └─ SHA-256 immutable audit chain         │
 ├──────────────────────────────────────────┤
-│  64 Jinja2 templates                      │
+│  68 Jinja2 templates                      │
 │  ├─ 6 UI primitives (tile/widget/badge)   │
 │  ├─ 10 reusable macros                    │
 │  └─ data-vis role-gating on every element │
@@ -148,7 +161,7 @@ Full matrix: [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md)
 │  ├─ 480px → 760px → 1200px responsive     │
 │  └─ iOS tile grid system                  │
 ├──────────────────────────────────────────┤
-│  26 automated crawlers                    │
+│  25 crawler strategies                    │
 │  ├─ Smoke, visibility, role behavior      │
 │  ├─ Dead links, random walk, performance  │
 │  ├─ WCAG contrast, CSS hygiene            │
@@ -200,6 +213,7 @@ Any AI agent (Claude, GPT, Gemini, Codex) can build new modules:
 - [AGENTS.md](AGENTS.md) — vendor-neutral onboarding
 - [docs/SATYAJEET_ONBOARDING.md](docs/SATYAJEET_ONBOARDING.md) — practical 20-minute operator walkthrough for a new Claude user, including terminal / SSH / Homebrew / HTTPS basics
 - [docs/ERP_FUTURE_BUILDER.md](docs/ERP_FUTURE_BUILDER.md) — shortest mental model for extending the ERP safely
+- [docs/ERP_DEMO_VARIANTS.md](docs/ERP_DEMO_VARIANTS.md) — ready-to-run demo bundles for each ERP surface
 - [docs/ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) — 15-minute module recipe
 - [docs/ARCHITECTURE_SUMMARY.md](docs/ARCHITECTURE_SUMMARY.md) — full UI/CSS/pattern reference
 - [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md) — cross-module wiring guide
@@ -222,6 +236,7 @@ into a maze of one-off subsystems.
 | File | Purpose |
 |------|---------|
 | [ERP_FUTURE_BUILDER.md](docs/ERP_FUTURE_BUILDER.md) | Fastest summary of how to extend the ERP safely |
+| [ERP_DEMO_VARIANTS.md](docs/ERP_DEMO_VARIANTS.md) | Demo-ready Lab, Ravikiran, Compute, and full-product presets |
 | [ARCHITECTURE_SUMMARY.md](docs/ARCHITECTURE_SUMMARY.md) | Complete UI/CSS/pattern reference |
 | [ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) | Build a module in 15 minutes |
 | [MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md) | Cross-module connection matrix |

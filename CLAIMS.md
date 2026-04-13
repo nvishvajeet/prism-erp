@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery
 

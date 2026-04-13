@@ -21,6 +21,10 @@ developers know what breaks when they change a table or route.
 | Notifications | Personnel | Alert employee on salary payment | `payroll_pay()` calls `notify()` for the paid employee |
 | Notifications | Receipts | Alert submitter on receipt approval/rejection | `receipt_review()` calls `notify()` for approve and reject actions |
 | Instruments | Finance | Default grant charging on new requests | `new_request()` links to `invoices.grant_id` for external billing |
+| Compute | Notifications | Job completion / failure / dependency alerts | `compute_api_complete_job()` calls `notify()` for user + admin attention flows |
+| Compute | Inbox | Operationally adjacent but not yet directly wired | candidate future integration: job discussion or admin follow-up thread |
+| Compute | Admin | Worker-backed queue managed by admin roles | `compute_dashboard()` / `compute_software_list()` gate admin actions by owner/super/site admin |
+| Demo variants | Module registry | Different ERP sites from one codebase | `CATALYST_MODULES` presets in `docs/ERP_COMPOSITION.md` and `docs/ERP_DEMO_VARIANTS.md` |
 
 ## Data flow diagram
 
@@ -49,6 +53,7 @@ Notifications (system_notifications)
   <-- vehicle_add_log (maintenance events)
   <-- payroll_pay (salary payments)
   <-- receipt_review (approval/rejection)
+  <-- compute_api_complete_job (job finished / needs attention)
 ```
 
 ## Adding a new module -- integration checklist
@@ -68,3 +73,6 @@ When building a new module, check each existing module:
    gated to operational roles (owner, admin).
 7. **Does it produce DOCUMENTS?** Link to Letters module for pre-filled
    correspondence.
+8. **Does it create machine work or asynchronous jobs?** Define the
+   worker contract, secret names, completion notifications, and admin
+   recovery flow up front.

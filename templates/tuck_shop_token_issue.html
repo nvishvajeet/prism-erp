@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tuck_shop_dashboard') }}" data-vis="{{ V }}">← Tuck Shop</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Payment Counter</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Issue Token Widget ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("ISSUE TOKEN", "Student pays → gets a token number") }}
+    <div style="padding:1rem;" data-vis="{{ V }}">
+      <div class="form-grid" style="gap:1rem;" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Meal
+          <select id="tokenMeal" data-vis="{{ V }}">
+            {% for m, rate in meal_rates.items() %}
+            <option value="{{ m }}" data-rate="{{ rate }}" {% if m == current_meal %}selected{% endif %} data-vis="{{ V }}">{{ m|title }} — ₹{{ rate }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Payment Method
+          <select id="tokenPayment" data-vis="{{ V }}">
+            <option value="cash" data-vis="{{ V }}">Cash</option>
+            <option value="qr" data-vis="{{ V }}">QR / UPI</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Amount (₹)
+          <input type="number" id="tokenAmount" min="0" data-vis="{{ V }}" style="font-size:1.25rem;font-weight:700;">
+        </label>
+        <label data-vis="{{ V }}">Student Roll No (optional)
+          <input type="text" id="tokenRoll" placeholder="e.g. MIT2024001" autocomplete="off" data-vis="{{ V }}">
+          <span id="tokenStudentName" class="hint" data-vis="{{ V }}"></span>
+        </label>
+        <div data-vis="{{ V }}">
+          <button id="issueBtn" class="btn btn-primary control-min-width-xl" style="font-size:1.25rem;padding:0.75rem 2rem;" data-vis="{{ V }}">
+            Issue Token #{{ "%03d"|format(next_num) }}
+          </button>
+        </div>
+      </div>
+      <div id="issueResult" style="margin-top:1rem;min-height:2rem;" data-vis="{{ V }}"></div>
+
+      {# ── Big Token Display ── #}
+      <div id="tokenDisplay" style="display:none;text-align:center;padding:2rem;margin-top:1rem;border-radius:12px;background:var(--color-green-bg, rgba(52,199,89,0.12));" data-vis="{{ V }}">
+        <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.2em;color:var(--muted);" data-vis="{{ V }}">Token Number</p>
+        <p id="tokenBig" style="font-size:5rem;font-weight:900;font-family:monospace;line-height:1;color:var(--tone-green);" data-vis="{{ V }}"></p>
+        <p id="tokenMealLabel" style="font-size:1rem;font-weight:600;margin-top:0.25rem;" data-vis="{{ V }}"></p>
+        <p id="tokenStudentLabel" class="hint" data-vis="{{ V }}"></p>
+      </div>
+    </div>
+  </article>
+
+  {# ── Pending Tokens ── #}
+  {% if pending %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PENDING TOKENS", "Issued but not yet redeemed") }}
+    <div class="quick-intake-grid" data-vis="{{ V }}">
+      {% for t in pending %}
+      <div class="quick-intake-card quick-intake-card-pending" data-vis="{{ V }}">
+        <div class="quick-intake-card-body" data-vis="{{ V }}">
+          <span style="font-size:2rem;font-weight:900;font-family:monospace;" data-vis="{{ V }}">#{{ "%03d"|format(t.token_number) }}</span>
+          <span class="badge" data-vis="{{ V }}">{{ t.meal_type|title }}</span>
+          <span data-vis="{{ V }}">{{ t.student_name or "Walk-in" }}</span>
+          <span class="badge {% if t.payment_method == 'qr' %}status-active{% endif %}" data-vis="{{ V }}">{{ t.payment_method|upper }}</span>
+          <span class="hint" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+
+</section>
+
+<script>
+(function(){
+  var mealSel = document.getElementById('tokenMeal');
+  var amountInput = document.getElementById('tokenAmount');
+  var paymentSel = document.getElementById('tokenPayment');
+  var rollInput = document.getElementById('tokenRoll');
+  var studentName = document.getElementById('tokenStudentName');
+  var issueBtn = document.getElementById('issueBtn');
+  var result = document.getElementById('issueResult');
+  var display = document.getElementById('tokenDisplay');
+  var tokenBig = document.getElementById('tokenBig');
+  var tokenMealLabel = document.getElementById('tokenMealLabel');
+  var tokenStudentLabel = document.getElementById('tokenStudentLabel');
+  var nextNum = {{ next_num }};
+
+  // Auto-fill amount from meal rate
+  function updateAmount(){
+    var opt = mealSel.options[mealSel.selectedIndex];
+    amountInput.value = opt.dataset.rate || 0;
+  }
+  mealSel.addEventListener('change', updateAmount);
+  updateAmount();
+
+  // Student lookup
+  var debounce;
+  rollInput.addEventListener('input', function(){
+    clearTimeout(debounce);
+    var q = rollInput.value.trim();
+    if(q.length < 3){ studentName.textContent = ''; return; }
+    debounce = setTimeout(function(){
+      fetch('{{ url_for("mess_api_search_student") }}?q=' + encodeURIComponent(q))
+        .then(function(r){return r.json();})
+        .then(function(data){
+          if(data.length){
+            studentName.textContent = data[0].name + ' (' + data[0].roll_number + ')';
+            rollInput.dataset.studentId = data[0].id;
+          } else {
+            studentName.textContent = 'Not found';
+            rollInput.dataset.studentId = '';
+          }
+        });
+    }, 300);
+  });
+
+  // Issue
+  issueBtn.addEventListener('click', function(){
+    var meal = mealSel.value;
+    var payment = paymentSel.value;
+    var amount = parseFloat(amountInput.value) || 0;
+    var studentId = rollInput.dataset.studentId ? parseInt(rollInput.dataset.studentId) : null;
+    result.innerHTML = '<span class="hint">Issuing…</span>';
+    fetch('{{ url_for("tuck_shop_api_issue_token") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({meal_type: meal, payment_method: payment, amount: amount, student_id: studentId})
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.ok){
+        var num = data.token_number;
+        var pad = ('000' + num).slice(-3);
+        result.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.1rem;">✓ Token #' + pad + ' issued — ' + data.meal_type + ' — ₹' + data.amount + '</span>';
+        // Show big display
+        display.style.display = '';
+        tokenBig.textContent = '#' + pad;
+        tokenMealLabel.textContent = data.meal_type.charAt(0).toUpperCase() + data.meal_type.slice(1) + ' — ₹' + data.amount + ' (' + data.payment.toUpperCase() + ')';
+        tokenStudentLabel.textContent = data.student_name || 'Walk-in';
+        // Update button
+        nextNum = num + 1;
+        issueBtn.textContent = 'Issue Token #' + ('000' + nextNum).slice(-3);
+        // Reset roll
+        rollInput.value = '';
+        rollInput.dataset.studentId = '';
+        studentName.textContent = '';
+      } else {
+        result.innerHTML = '<span style="color:var(--tone-red);">' + (data.error||'Error') + '</span>';
+      }
+    })
+    .catch(function(){
+      result.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+    });
+  });
+})();
+</script>
+{% endblock %}

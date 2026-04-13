@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tuck_shop_dashboard') }}" data-vis="{{ V }}">← Tuck Shop</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">POS Terminal</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Item Grid ── #}
+  <article class="card tile tile-two-thirds" data-vis="{{ V }}">
+    {{ card_heading("ITEMS", "Tap to add to cart") }}
+    {% if categories %}
+    <div style="padding:0.5rem 0.75rem;display:flex;gap:0.4rem;flex-wrap:wrap;" data-vis="{{ V }}">
+      <button class="btn btn-primary pos-cat-btn" data-cat="all" data-vis="{{ V }}">All</button>
+      {% for cat in categories %}
+      <button class="btn pos-cat-btn" data-cat="{{ cat }}" data-vis="{{ V }}">{{ cat|title }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if items %}
+    <div class="quick-intake-grid" style="padding:0.5rem;" data-vis="{{ V }}" id="posItemGrid">
+      {% for item in items %}
+      <button class="quick-intake-card quick-intake-card-scheduled pos-item-btn"
+              data-id="{{ item.id }}" data-name="{{ item.name }}"
+              data-price="{{ item.price }}" data-cat="{{ item.category }}"
+              style="cursor:pointer;border:none;text-align:center;padding:0.75rem;"
+              data-vis="{{ V }}">
+        <div style="font-size:1.1rem;font-weight:700;" data-vis="{{ V }}">{{ item.name }}</div>
+        <div style="font-size:1.25rem;font-weight:800;color:var(--tone-green);margin-top:0.25rem;" data-vis="{{ V }}">₹{{ "{:,.0f}".format(item.price) }}</div>
+        <div class="hint" data-vis="{{ V }}">{{ item.category|title }}</div>
+      </button>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No items in catalog.", hint="Add items from the Items page first.") }}
+    {% endif %}
+  </article>
+
+  {# ── Cart ── #}
+  <article class="card tile tile-third" style="position:sticky;top:1rem;" data-vis="{{ V }}">
+    {{ card_heading("CART", "Current order") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div id="cartItems" style="min-height:100px;" data-vis="{{ V }}">
+        <p class="hint" id="cartEmpty" data-vis="{{ V }}">Tap items to add…</p>
+      </div>
+      <hr style="border-color:var(--color-separator);" data-vis="{{ V }}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:0.5rem 0;" data-vis="{{ V }}">
+        <span style="font-size:1rem;font-weight:600;" data-vis="{{ V }}">Total</span>
+        <span id="cartTotal" style="font-size:1.5rem;font-weight:800;" data-vis="{{ V }}">₹0</span>
+      </div>
+      <div class="control-flex-wrap" style="margin-top:0.75rem;gap:0.4rem;" data-vis="{{ V }}">
+        <button id="payCash" class="btn btn-primary" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">💵 Cash</button>
+        <button id="payQR" class="btn" style="flex:1;font-size:1rem;padding:0.6rem;" data-vis="{{ V }}">📱 QR / UPI</button>
+      </div>
+      <button id="clearCart" class="btn" style="width:100%;margin-top:0.5rem;font-size:0.85rem;" data-vis="{{ V }}">Clear Cart</button>
+      <div id="saleResult" style="margin-top:0.5rem;min-height:1.5rem;" data-vis="{{ V }}"></div>
+    </div>
+  </article>
+
+</section>
+
+<script>
+(function(){
+  var cart = {};  // {itemId: {name, price, qty}}
+  var grid = document.getElementById('posItemGrid');
+  var cartEl = document.getElementById('cartItems');
+  var cartEmpty = document.getElementById('cartEmpty');
+  var cartTotal = document.getElementById('cartTotal');
+  var saleResult = document.getElementById('saleResult');
+
+  function renderCart(){
+    var keys = Object.keys(cart);
+    if(!keys.length){
+      cartEmpty.style.display = '';
+      cartEl.querySelectorAll('.cart-line').forEach(function(e){e.remove();});
+      cartTotal.textContent = '₹0';
+      return;
+    }
+    cartEmpty.style.display = 'none';
+    // Remove old lines
+    cartEl.querySelectorAll('.cart-line').forEach(function(e){e.remove();});
+    var total = 0;
+    keys.forEach(function(id){
+      var it = cart[id];
+      var line = document.createElement('div');
+      line.className = 'cart-line';
+      line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.06));';
+      line.innerHTML =
+        '<div style="flex:1;">' +
+          '<span style="font-weight:600;">' + it.name + '</span>' +
+          '<span class="hint" style="margin-left:0.5rem;">×' + it.qty + '</span>' +
+        '</div>' +
+        '<span style="font-weight:700;margin:0 0.5rem;">₹' + (it.price * it.qty) + '</span>' +
+        '<button style="background:none;border:none;color:var(--tone-red);cursor:pointer;font-size:1rem;padding:0.2rem 0.4rem;" data-remove="' + id + '">✗</button>';
+      cartEl.appendChild(line);
+      total += it.price * it.qty;
+    });
+    cartTotal.textContent = '₹' + total.toLocaleString('en-IN');
+  }
+
+  // Add to cart
+  if(grid) grid.addEventListener('click', function(e){
+    var btn = e.target.closest('.pos-item-btn');
+    if(!btn) return;
+    var id = btn.dataset.id;
+    if(cart[id]){
+      cart[id].qty++;
+    } else {
+      cart[id] = {name: btn.dataset.name, price: parseFloat(btn.dataset.price), qty: 1};
+    }
+    renderCart();
+  });
+
+  // Remove from cart
+  cartEl.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-remove]');
+    if(!btn) return;
+    delete cart[btn.dataset.remove];
+    renderCart();
+  });
+
+  // Clear
+  document.getElementById('clearCart').addEventListener('click', function(){
+    cart = {};
+    renderCart();
+    saleResult.innerHTML = '';
+  });
+
+  // Category filter
+  document.querySelectorAll('.pos-cat-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.pos-cat-btn').forEach(function(b){b.classList.remove('btn-primary');b.classList.add('btn');});
+      btn.classList.add('btn-primary');
+      var cat = btn.dataset.cat;
+      document.querySelectorAll('.pos-item-btn').forEach(function(item){
+        item.style.display = (cat === 'all' || item.dataset.cat === cat) ? '' : 'none';
+      });
+    });
+  });
+
+  function submitSale(method){
+    var keys = Object.keys(cart);
+    if(!keys.length) return;
+    var items = keys.map(function(id){ return {id: parseInt(id), qty: cart[id].qty}; });
+    saleResult.innerHTML = '<span class="hint">Recording…</span>';
+    fetch('{{ url_for("tuck_shop_api_record_sale") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({items: items, payment_method: method})
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.ok){
+        saleResult.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.1rem;">✓ Sale #' + data.sale_id + ' — ₹' + data.total + ' (' + data.payment.toUpperCase() + ')</span>';
+        cart = {};
+        renderCart();
+      } else {
+        saleResult.innerHTML = '<span style="color:var(--tone-red);">' + (data.error||'Error') + '</span>';
+      }
+    })
+    .catch(function(){
+      saleResult.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+    });
+  }
+
+  document.getElementById('payCash').addEventListener('click', function(){ submitSale('cash'); });
+  document.getElementById('payQR').addEventListener('click', function(){ submitSale('qr'); });
+})();
+</script>
+{% endblock %}

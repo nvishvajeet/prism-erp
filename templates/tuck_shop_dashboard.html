@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Tuck Shop</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('tuck_shop_terminal') }}" class="btn btn-primary" data-vis="{{ V }}">POS Terminal</a>
+    <a href="{{ url_for('tuck_shop_token_issue') }}" class="btn" data-vis="{{ V }}">Issue Token</a>
+    <a href="{{ url_for('tuck_shop_token_redeem') }}" class="btn" data-vis="{{ V }}">Redeem Token</a>
+    <a href="{{ url_for('tuck_shop_items_manage') }}" class="btn" data-vis="{{ V }}">Items</a>
+    <a href="{{ url_for('tuck_shop_daily_report') }}" class="btn" data-vis="{{ V }}">Report</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── KPI Row ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": "₹{:,.0f}".format(sales_summary.total_revenue or 0), "label": "Revenue Today",    "tone": "green"},
+      {"value": (sales_summary.sale_count or 0)|string,               "label": "Sales Today"},
+      {"value": "₹{:,.0f}".format(sales_summary.cash_total or 0),    "label": "Cash"},
+      {"value": "₹{:,.0f}".format(sales_summary.qr_total or 0),      "label": "QR / UPI"},
+      {"value": (token_stats.total_issued or 0)|string,               "label": "Tokens Issued"},
+      {"value": (token_stats.pending or 0)|string,                    "label": "Pending Tokens",    "tone": "amber"},
+      {"value": (token_stats.redeemed or 0)|string,                   "label": "Redeemed",          "tone": "green"},
+    ]) }}
+  </article>
+
+  {# ── Two-Counter Quick Links ── #}
+  <article class="card tile tile-half" data-vis="{{ V }}">
+    {{ card_heading("PAYMENT COUNTER", "Issue tokens to students who paid") }}
+    <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
+      <a href="{{ url_for('tuck_shop_token_issue') }}" class="btn btn-primary control-min-width-xl" style="font-size:1.25rem;padding:0.75rem 2rem;" data-vis="{{ V }}">
+        Open Payment Counter
+      </a>
+      <p class="hint" style="margin-top:0.75rem;" data-vis="{{ V }}">
+        Student pays (cash/QR) → gets a token number → takes it to the serving counter.
+      </p>
+    </div>
+  </article>
+
+  <article class="card tile tile-half" data-vis="{{ V }}">
+    {{ card_heading("SERVING COUNTER", "Redeem tokens before serving food") }}
+    <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
+      <a href="{{ url_for('tuck_shop_token_redeem') }}" class="btn btn-primary control-min-width-xl" style="font-size:1.25rem;padding:0.75rem 2rem;" data-vis="{{ V }}">
+        Open Serving Counter
+      </a>
+      <p class="hint" style="margin-top:0.75rem;" data-vis="{{ V }}">
+        Student shows token number → verify → serve food. No valid token = no food.
+      </p>
+    </div>
+  </article>
+
+  {# ── Recent Tokens ── #}
+  {% if recent_tokens %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TODAY'S TOKENS", "Latest 30") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th data-vis="{{ V }}">Student</th>
+          <th data-vis="{{ V }}">Payment</th>
+          <th class="num" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Issued By</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for t in recent_tokens %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong style="font-size:1.1rem;font-family:monospace;" data-vis="{{ V }}">#{{ "%03d"|format(t.token_number) }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ t.meal_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ t.student_name or "Walk-in" }}</td>
+          <td data-vis="{{ V }}"><span class="badge {% if t.payment_method == 'qr' %}status-active{% endif %}" data-vis="{{ V }}">{{ t.payment_method|upper }}</span></td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</td>
+          <td data-vis="{{ V }}">
+            {% if t.status == 'redeemed' %}
+            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Redeemed</span>
+            {% elif t.status == 'issued' %}
+            <span class="badge" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Pending</span>
+            {% else %}
+            <span class="badge" data-vis="{{ V }}">{{ t.status|title }}</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">{{ t.issued_by_name or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Recent Sales ── #}
+  {% if recent_sales %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT SALES", "Tuck shop POS") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Time</th>
+          <th data-vis="{{ V }}">Payment</th>
+          <th class="num" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Cashier</th>
+          <th data-vis="{{ V }}">Notes</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in recent_sales %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ s.sale_time[:5] if s.sale_time else "—" }}</td>
+          <td data-vis="{{ V }}"><span class="badge {% if s.payment_method == 'qr' %}status-active{% endif %}" data-vis="{{ V }}">{{ s.payment_method|upper }}</span></td>
+          <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(s.total_amount) }}</strong></td>
+          <td data-vis="{{ V }}">{{ s.cashier_name or "—" }}</td>
+          <td data-vis="{{ V }}">{{ s.notes[:40] if s.notes else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tuck_shop_dashboard') }}" data-vis="{{ V }}">← Tuck Shop</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Daily Report</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ report_date }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <form method="get" data-vis="{{ V }}">
+      <input type="date" name="date" value="{{ report_date }}" onchange="this.form.submit()" data-vis="{{ V }}">
+    </form>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Sales KPIs ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SALES", "Tuck shop POS") }}
+    {{ kpi_grid([
+      {"value": "₹{:,.0f}".format(sales_summary.total_revenue or 0), "label": "Total Revenue",    "tone": "green"},
+      {"value": (sales_summary.sale_count or 0)|string,               "label": "Transactions"},
+      {"value": "₹{:,.0f}".format(sales_summary.cash_total or 0),    "label": "Cash"},
+      {"value": "₹{:,.0f}".format(sales_summary.qr_total or 0),      "label": "QR / UPI"},
+    ]) }}
+  </article>
+
+  {# ── Token Reconciliation ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TOKEN RECONCILIATION", "Payment ↔ Serving counter") }}
+    {{ kpi_grid([
+      {"value": (token_summary.total_issued or 0)|string,   "label": "Tokens Issued"},
+      {"value": (token_summary.redeemed or 0)|string,       "label": "Redeemed",        "tone": "green"},
+      {"value": (token_summary.unredeemed or 0)|string,     "label": "Unredeemed",       "tone": "amber"},
+      {"value": (token_summary.voided or 0)|string,         "label": "Voided"},
+      {"value": "₹{:,.0f}".format(token_summary.total_collected or 0), "label": "Total Collected"},
+      {"value": "₹{:,.0f}".format(token_summary.token_cash or 0),      "label": "Token Cash"},
+      {"value": "₹{:,.0f}".format(token_summary.token_qr or 0),        "label": "Token QR"},
+    ]) }}
+    {% if token_summary.unredeemed and token_summary.unredeemed > 0 %}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p style="color:var(--tone-amber);font-weight:600;" data-vis="{{ V }}">
+        ⚠ {{ token_summary.unredeemed }} token{{ "s" if token_summary.unredeemed != 1 else "" }} paid but not served.
+        This means students paid but didn't eat — investigate if unexpected.
+      </p>
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Top Items ── #}
+  {% if top_items %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TOP SELLING ITEMS", "By revenue") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Item</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th class="num" data-vis="{{ V }}">Qty Sold</th>
+          <th class="num" data-vis="{{ V }}">Revenue</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for item in top_items %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ item.name }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ item.category|title }}</span></td>
+          <td class="num" data-vis="{{ V }}">{{ item.total_qty }}</td>
+          <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(item.total_revenue) }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

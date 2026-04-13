@@ -46,6 +46,15 @@ Domain: catalysterp.org. GitHub: nvishvajeet/catalyst-erp.
 - [ ] Google OAuth login
 - [ ] WhatsApp notifications
 
+### Mess Anti-Sneaking System (TODO)
+- [ ] Turnstile + QR scan at single controlled entrance
+- [ ] One-scan-per-meal enforcement (already in DB: UNIQUE constraint)
+- [ ] Aggregator marks paid students monthly → unpaid students get no valid QR token
+- [ ] Visual confirmation on scanner screen (photo + name + green/red)
+- [ ] Staff-monitored single entry point (no side doors)
+- [ ] Optional: RFID wristband / NFC tap at turnstile (Ashim Patil readers)
+- [ ] Optional: receipt printer at payment counter for physical token backup
+
 ## Medium-Term (V2.0)
 
 - [ ] Procurement module (POs, vendor quotes, GRN)

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tuck_shop_dashboard') }}" data-vis="{{ V }}">← Tuck Shop</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Item Catalog</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ items|length }} item{{ "s" if items|length != 1 else "" }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Add Item ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("ADD ITEM", "New tuck shop product") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Name
+        <input type="text" name="name" placeholder="e.g. Samosa" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Price (₹)
+        <input type="number" name="price" step="0.5" min="0" placeholder="e.g. 15" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          <option value="snack" data-vis="{{ V }}">Snack</option>
+          <option value="beverage" data-vis="{{ V }}">Beverage</option>
+          <option value="meal" data-vis="{{ V }}">Meal</option>
+          <option value="stationery" data-vis="{{ V }}">Stationery</option>
+          <option value="other" data-vis="{{ V }}">Other</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Sort Order
+        <input type="number" name="sort_order" value="0" min="0" data-vis="{{ V }}">
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}">Add Item</button>
+      </div>
+    </form>
+  </article>
+
+  {# ── Item List ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CATALOG", items|length|string ~ " items") }}
+    {% if items %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th class="num" data-vis="{{ V }}">Price</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for item in items %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ item.name }}</strong></td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(item.price) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ item.category|title }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if item.is_active %}
+            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Active</span>
+            {% else %}
+            <span class="badge" data-vis="{{ V }}">Inactive</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            <form method="post" action="{{ url_for('tuck_shop_item_toggle', item_id=item.id) }}" style="display:inline;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn" style="font-size:0.8rem;padding:0.25rem 0.5rem;" data-vis="{{ V }}">
+                {{ "Deactivate" if item.is_active else "Activate" }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No items yet.", hint="Add your first item above — snacks, beverages, stationery, etc.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

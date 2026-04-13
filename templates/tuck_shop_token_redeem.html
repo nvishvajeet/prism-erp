@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('tuck_shop_dashboard') }}" data-vis="{{ V }}">← Tuck Shop</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Serving Counter</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── KPI ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": pending|length|string,       "label": "Tokens Waiting",  "tone": "amber"},
+      {"value": redeemed_count|string,        "label": "Served Today",    "tone": "green"},
+    ]) }}
+  </article>
+
+  {# ── Redeem Widget ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("REDEEM TOKEN", "Type or say the token number → Enter") }}
+    <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
+      <input type="number" id="redeemInput" placeholder="Token #" autofocus
+             style="font-size:3rem;font-weight:900;text-align:center;max-width:12rem;font-family:monospace;letter-spacing:0.2em;"
+             min="1" data-vis="{{ V }}">
+      <div id="redeemResult" style="margin-top:1rem;min-height:3rem;" data-vis="{{ V }}"></div>
+
+      {# ── Big Status Display ── #}
+      <div id="redeemDisplay" style="display:none;padding:2rem;margin-top:1rem;border-radius:12px;" data-vis="{{ V }}">
+        <p id="redeemIcon" style="font-size:4rem;line-height:1;" data-vis="{{ V }}"></p>
+        <p id="redeemToken" style="font-size:2.5rem;font-weight:900;font-family:monospace;" data-vis="{{ V }}"></p>
+        <p id="redeemDetail" style="font-size:1.1rem;font-weight:600;margin-top:0.5rem;" data-vis="{{ V }}"></p>
+      </div>
+
+      <p class="hint" style="margin-top:1rem;" data-vis="{{ V }}">
+        Type the 3-digit token number and press Enter.<br>
+        Green = valid, serve food. Red = invalid or already used.
+      </p>
+    </div>
+  </article>
+
+  {# ── Pending Queue ── #}
+  {% if pending %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("WAITING QUEUE", pending|length|string ~ " tokens pending") }}
+    <div class="quick-intake-grid" data-vis="{{ V }}">
+      {% for t in pending %}
+      <div class="quick-intake-card quick-intake-card-pending redeem-card" data-token="{{ t.token_number }}" style="cursor:pointer;" data-vis="{{ V }}">
+        <div class="quick-intake-card-body" data-vis="{{ V }}">
+          <span style="font-size:2.5rem;font-weight:900;font-family:monospace;color:var(--tone-amber);" data-vis="{{ V }}">#{{ "%03d"|format(t.token_number) }}</span>
+          <span class="badge" data-vis="{{ V }}">{{ t.meal_type|title }}</span>
+          <span data-vis="{{ V }}">{{ t.student_name or "Walk-in" }}</span>
+          <span class="hint" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+  {% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ empty_state("No pending tokens.", hint="All tokens have been redeemed. New tokens appear when the payment counter issues them.") }}
+  </article>
+  {% endif %}
+
+</section>
+
+<script>
+(function(){
+  var input = document.getElementById('redeemInput');
+  var result = document.getElementById('redeemResult');
+  var display = document.getElementById('redeemDisplay');
+  var icon = document.getElementById('redeemIcon');
+  var tokenEl = document.getElementById('redeemToken');
+  var detail = document.getElementById('redeemDetail');
+
+  function redeem(num){
+    if(!num || num < 1) return;
+    result.innerHTML = '<span class="hint">Verifying…</span>';
+    display.style.display = 'none';
+    fetch('{{ url_for("tuck_shop_api_redeem_token") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({token_number: num})
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      display.style.display = '';
+      var pad = ('000' + num).slice(-3);
+      if(data.ok){
+        display.style.background = 'var(--color-green-bg, rgba(52,199,89,0.12))';
+        icon.textContent = '✓';
+        icon.style.color = 'var(--tone-green)';
+        tokenEl.textContent = '#' + pad;
+        tokenEl.style.color = 'var(--tone-green)';
+        detail.textContent = (data.student_name || 'Walk-in') + ' — ' + data.meal_type.charAt(0).toUpperCase() + data.meal_type.slice(1) + ' — ₹' + data.amount;
+        result.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.25rem;">SERVE FOOD</span>';
+        // Remove from pending queue visually
+        var card = document.querySelector('.redeem-card[data-token="' + num + '"]');
+        if(card) card.style.display = 'none';
+      } else {
+        display.style.background = 'var(--color-red-bg, rgba(255,59,48,0.12))';
+        icon.textContent = '✗';
+        icon.style.color = 'var(--tone-red)';
+        tokenEl.textContent = '#' + pad;
+        tokenEl.style.color = 'var(--tone-red)';
+        detail.textContent = data.error;
+        result.innerHTML = '<span style="color:var(--tone-red);font-weight:700;font-size:1.25rem;">DO NOT SERVE</span>';
+      }
+      input.value = '';
+      input.focus();
+    })
+    .catch(function(){
+      result.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+    });
+  }
+
+  input.addEventListener('keypress', function(e){
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    redeem(parseInt(input.value));
+  });
+
+  // Click on pending card to redeem
+  document.querySelectorAll('.redeem-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      redeem(parseInt(card.dataset.token));
+    });
+  });
+})();
+</script>
+{% endblock %}

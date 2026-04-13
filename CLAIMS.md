@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | demo-variants-and-build-rules | 2026-04-13 22:04 CEST | `README.md`, `docs/ERP_COMPOSITION.md`, `docs/MODULE_INTEGRATION.md`, `docs/ERP_FUTURE_BUILDER.md`, `docs/ERP_DEMO_VARIANTS.md`, `CLAIMS.md` | `docs: codify demo variants and site-building rules` |
 
 ## Stale-claim recovery
 

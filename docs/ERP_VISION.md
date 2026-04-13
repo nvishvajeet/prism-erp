@@ -1,4 +1,4 @@
-# PRISM → ERP — vision, portal template, notifications bus
+# CATALYST → ERP — vision, portal template, notifications bus
 
 _Anchored 2026-04-11 @ `5bc3142`. Strategic anchor doc for the v2.0.0
 "ERP multi-portal" release line. Not a build plan — a frame. The
@@ -8,7 +8,7 @@ debt._
 
 ## The frame shift
 
-**PRISM as it stands today is not "a lab scheduling app". It is
+**CATALYST as it stands today is not "a lab scheduling app". It is
 the first portal of an internal ERP.** The scheduling flow,
 approval chain, instrument matrix, role system, audit log, tile
 grammar, and crawler taxonomy we have already built are **domain-
@@ -26,7 +26,7 @@ microservice mesh. Not a BPM engine. A single Python process
 with a small set of hard-locked patterns and many soft, per-
 portal feature modules.
 
-The current "PRISM" product becomes the **Lab Operations portal**
+The current "CATALYST" product becomes the **Lab Operations portal**
 — one of ~8-12 portals in the finished ERP:
 
 ```
@@ -419,10 +419,10 @@ W1.4.1 polish wave plans for approvals/requests. Count is
 AND severity IN ('action','warn')`. Purely informational
 notifications don't drive the badge count.
 
-### Wiring into existing PRISM flow (the "retrofit" wave)
+### Wiring into existing CATALYST flow (the "retrofit" wave)
 
 The retrofit is small because `approval_steps` already knows who
-the next actor is. In each place PRISM advances an approval step
+the next actor is. In each place CATALYST advances an approval step
 today, add one call:
 
 ```python
@@ -559,7 +559,7 @@ CREATE TABLE attendance_leaves (
   category
 
 **Scale of new work:** ~800 lines of new code for the entire
-portal. Compared to the ~7900 lines of PRISM today, a second
+portal. Compared to the ~7900 lines of CATALYST today, a second
 portal is ~10% of the first portal's size because every
 spine primitive is reused.
 
@@ -648,7 +648,7 @@ Not now, soon:
    Finance once the contract is proven.
 4. **When do we rename the repo from `lab-scheduler` to
    something ERP-shaped?** The longer we wait, the worse the
-   repo URL mismatch feels. Candidates: `prism-erp`,
+   repo URL mismatch feels. Candidates: `catalyst-erp`,
    `org-erp`, `one-portal`. I have no strong opinion; name is
    your call. The central git topology in `~/.claude/git-server/`
    supports renaming via a single `git mv` on the bare + working

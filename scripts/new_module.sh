@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ───────────────────────────────────────────────────────────────
-# PRISM Module Scaffold — plug-and-play module generator
+# CATALYST Module Scaffold — plug-and-play module generator
 #
 # Usage:  scripts/new_module.sh <module_name> [label] [icon] [description]
 #
@@ -63,7 +63,7 @@ if grep -q "\"$MODULE\":" "$APP_PY"; then
     exit 1
 fi
 
-echo -e "${BOLD}PRISM Module Scaffold${RESET}"
+echo -e "${BOLD}CATALYST Module Scaffold${RESET}"
 echo "────────────────────────────────────────"
 echo -e "  Module:      ${GREEN}$MODULE${RESET}"
 echo -e "  Label:       $LABEL"
@@ -306,7 +306,7 @@ echo -e "    ${CYAN}migrations/${MODULE}_schema.sql${RESET}       — DB schema"
 echo ""
 echo "  Next steps:"
 echo -e "  1. Create the DB table:  ${CYAN}sqlite3 data/operational/lab_scheduler.db < migrations/${MODULE}_schema.sql${RESET}"
-echo -e "  2. Enable the module:    ${CYAN}PRISM_MODULES=...,${MODULE}${RESET}  (or leave PRISM_MODULES unset for all)"
+echo -e "  2. Enable the module:    ${CYAN}CATALYST_MODULES=...,${MODULE}${RESET}  (or leave CATALYST_MODULES unset for all)"
 echo -e "  3. Customise templates + routes to your domain"
 echo -e "  4. Run smoke test:       ${CYAN}.venv/bin/python -m crawlers wave sanity${RESET}"
 echo ""

@@ -34,7 +34,7 @@ class LifecycleStrategy(CrawlerStrategy):
         result = CrawlResult(name=self.name, aspect=self.aspect)
 
         # ---- Step 1: requester submits a request --------------------
-        with harness.logged_in("user1@prism.local"):
+        with harness.logged_in("user1@catalyst.local"):
             resp = harness.get("/requests/new")
             self._check(result, resp.status_code < 400, "open new request form",
                         f"/requests/new → {resp.status_code}")
@@ -74,7 +74,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending finance step on new request")
         else:
-            with harness.logged_in("meera@prism.local"):
+            with harness.logged_in("meera@catalyst.local"):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -91,7 +91,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending professor step after finance")
         else:
-            with harness.logged_in("approver@prism.local"):
+            with harness.logged_in("approver@catalyst.local"):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -112,7 +112,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending operator step after professor")
         else:
-            with harness.logged_in("anika@prism.local"):
+            with harness.logged_in("anika@catalyst.local"):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -141,7 +141,7 @@ class LifecycleStrategy(CrawlerStrategy):
         # Uses the real request_detail POST action. `mark_sample_submitted`
         # is the requester-initiated transition; it requires the
         # instrument to be accepting samples (demo seed default).
-        with harness.logged_in("user1@prism.local"):
+        with harness.logged_in("user1@catalyst.local"):
             resp = harness.post(
                 f"/requests/{request_id}",
                 data={"action": "mark_sample_submitted",
@@ -162,7 +162,7 @@ class LifecycleStrategy(CrawlerStrategy):
         # ---- Step 6: requester follow-up message --------------------
         # Requester can post_message at any time pre-completion; this
         # exercises the note-edit policy + the audit chain.
-        with harness.logged_in("user1@prism.local"):
+        with harness.logged_in("user1@catalyst.local"):
             resp = harness.post(
                 f"/requests/{request_id}",
                 data={"action": "post_message",
@@ -178,7 +178,7 @@ class LifecycleStrategy(CrawlerStrategy):
         # needs a planner_date + slot setup that's out of scope for
         # this in-process lifecycle crawler. A future
         # `lifecycle_operator_board` strategy will pick that up.
-        with harness.logged_in("owner@prism.local"):
+        with harness.logged_in("owner@catalyst.local"):
             for path in [f"/requests/{request_id}", "/schedule",
                          "/instruments/1/history", "/stats"]:
                 resp = harness.get(path, follow_redirects=True)
@@ -222,7 +222,7 @@ class LifecycleStrategy(CrawlerStrategy):
 
         The harness bootstrap may pre-seed demo data (so request id=1
         already exists before the crawler runs), which is why this
-        picks the **newest** row — the one user1@prism.local just posted
+        picks the **newest** row — the one user1@catalyst.local just posted
         — rather than ORDER BY id ASC.
         """
         import sqlite3

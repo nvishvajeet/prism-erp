@@ -28,10 +28,10 @@ SEED_PATHS = [
 ]
 
 ROLES_TO_CRAWL = [
-    "owner@prism.local",
-    "kondhalkar@prism.local",
-    "anika@prism.local",
-    "user1@prism.local",
+    "owner@catalyst.local",
+    "kondhalkar@catalyst.local",
+    "anika@catalyst.local",
+    "user1@catalyst.local",
 ]
 
 
@@ -45,7 +45,7 @@ def _is_internal(href: str) -> bool:
 
 def _normalise(href: str) -> str:
     href, _ = urldefrag(href)
-    # Strip query string for dedup — most PRISM 404s come from missing
+    # Strip query string for dedup — most CATALYST 404s come from missing
     # base paths, not query state.
     parsed = urlparse(href)
     return parsed.path or "/"

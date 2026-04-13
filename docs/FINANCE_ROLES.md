@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-PRISM's finance module currently has a single flat role (`finance_admin`).
+CATALYST's finance module currently has a single flat role (`finance_admin`).
 This document specifies a three-tier model that mirrors the instrument
 portal's access pattern: entity-level ownership (PI), operational
 processing (Officer), and full administrative control (Admin).

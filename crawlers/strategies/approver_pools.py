@@ -54,7 +54,7 @@ class ApproverPoolsStrategy(CrawlerStrategy):
         # operator assignment for these 4 requests is governed
         # entirely by the load-balance pick.
         submitted_ids: list[int] = []
-        with harness.logged_in("user1@prism.local"):
+        with harness.logged_in("user1@catalyst.local"):
             for i in range(self.REQUEST_COUNT):
                 form = {
                     "instrument_id": "1",

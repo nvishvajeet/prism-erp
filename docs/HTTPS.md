@@ -1,11 +1,11 @@
-# PRISM — HTTPS on the tailnet (W1.3.9 / W1.4.0)
+# CATALYST — HTTPS on the tailnet (W1.3.9 / W1.4.0)
 
 _Anchored 2026-04-11. Replaces the old stunnel self-signed recipe in
 `ops/certs/` and the self-signed Caddyfile in `ops/Caddyfile`._
 
 ## Goal
 
-PRISM on the Mac mini should be reachable from every device on the
+CATALYST on the Mac mini should be reachable from every device on the
 lab's Tailscale tailnet at a name like
 `https://vishwajeets-mac-mini.tail-XXXX.ts.net/` — with a real,
 browser-trusted Let's Encrypt certificate, and **only** devices on
@@ -49,7 +49,7 @@ port. Edit `~/Scheduler/Main/.env` on the mini:
 Then kickstart the launchd service:
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/local.prism
+launchctl kickstart -k gui/$(id -u)/local.catalyst
 ```
 
 ### Step 3. Bring the serve front up
@@ -94,7 +94,7 @@ Kickstart again so Flask picks them up. Flask will now set
 ### Step 5. Verify from the laptop
 
 ```bash
-PRISM_DEPLOY_URL=https://vishwajeets-mac-mini.tail-XXXX.ts.net \
+CATALYST_DEPLOY_URL=https://vishwajeets-mac-mini.tail-XXXX.ts.net \
   .venv/bin/python -m crawlers run deploy_smoke
 ```
 
@@ -132,7 +132,7 @@ app's login page stays exactly as-is.
 ## Plan B — mkcert fallback
 
 Only if Tailscale Serve cannot be enabled on the tailnet. Generates
-a locally-trusted cert for `prism-mini.local` (Bonjour name on the
+a locally-trusted cert for `catalyst-mini.local` (Bonjour name on the
 LAN) and wires it via Flask's `ssl_context=` parameter.
 
 _Not implemented yet. Stub here — expand only if Plan A is blocked
@@ -144,7 +144,7 @@ mkcert -install                          # installs a local CA
 mkdir -p ops/certs
 mkcert -cert-file ops/certs/cert.pem \
        -key-file  ops/certs/key.pem  \
-       prism-mini.local 100.115.176.118
+       catalyst-mini.local 100.115.176.118
 ```
 
 Then set in `.env`:

@@ -1,31 +1,31 @@
 /**
- * PRISM Grid Overlay + Crawler Testing Framework
+ * CATALYST Grid Overlay + Crawler Testing Framework
  * ================================================
  *
  * Interactive:  Ctrl+G toggle grid  |  Ctrl+F toggle feedback panel
- * Programmatic: window.prism.* API for automated crawlers
+ * Programmatic: window.catalyst.* API for automated crawlers
  *
  * Code scheme:  Letter = zone (H=header, N=nav, S=stat, C=card, T=table…)
  *               Number = position (1-based, left→right, top→bottom)
  *
  * Crawler API:
- *   prism.on()                    — activate grid
- *   prism.off()                   — deactivate grid
- *   prism.codes()                 — list all codes on current page
- *   prism.at(code)                — get { el, rect, desc } for a code
- *   prism.tap(code, note?)        — log a click on a code (no navigation)
- *   prism.path.start(name?)       — begin a named path
- *   prism.path.step(code, note?)  — add a step to current path
- *   prism.path.end()              — close current path
- *   prism.note(code, text)        — attach a note to a code
- *   prism.errors()                — return captured JS errors
- *   prism.log()                   — return full feed log
- *   prism.dump()                  — full JSON export (log + errors + paths + meta)
- *   prism.clear()                 — reset everything
- *   prism.find(code)              — scroll to element and highlight it
+ *   catalyst.on()                    — activate grid
+ *   catalyst.off()                   — deactivate grid
+ *   catalyst.codes()                 — list all codes on current page
+ *   catalyst.at(code)                — get { el, rect, desc } for a code
+ *   catalyst.tap(code, note?)        — log a click on a code (no navigation)
+ *   catalyst.path.start(name?)       — begin a named path
+ *   catalyst.path.step(code, note?)  — add a step to current path
+ *   catalyst.path.end()              — close current path
+ *   catalyst.note(code, text)        — attach a note to a code
+ *   catalyst.errors()                — return captured JS errors
+ *   catalyst.log()                   — return full feed log
+ *   catalyst.dump()                  — full JSON export (log + errors + paths + meta)
+ *   catalyst.clear()                 — reset everything
+ *   catalyst.find(code)              — scroll to element and highlight it
  *
  * Non-destructive guarantees:
- *   - All overlay DOM carries data-prism-ignore so page queries skip it
+ *   - All overlay DOM carries data-catalyst-ignore so page queries skip it
  *   - Click intercepts only fire when grid is active; form elements are never blocked
  *   - Errors are caught passively (listeners, not overrides)
  *   - No global prototype modifications
@@ -57,8 +57,8 @@
     { letter: "S", sel: ".stat, .compact-stats .stat, .stats .stat, .grid-auto-stats .stat" },
     { letter: "M", sel: ".grid-two > .card, .grid-two" },
     { letter: "F", sel: ".filter-bar > *, .stream-filters select, .stream-filters input, .stream-filters button, select[name], input[type=search], input[type=text], input[type=date]" },
-    { letter: "B", sel: "button:not([data-prism-ignore]), a.btn:not([data-prism-ignore]), a.link-button:not([data-prism-ignore]), .btn:not([data-prism-ignore])" },
-    { letter: "C", sel: "section.card, .card:not([data-prism-ignore])" },
+    { letter: "B", sel: "button:not([data-catalyst-ignore]), a.btn:not([data-catalyst-ignore]), a.link-button:not([data-catalyst-ignore]), .btn:not([data-catalyst-ignore])" },
+    { letter: "C", sel: "section.card, .card:not([data-catalyst-ignore])" },
     { letter: "E", sel: "table thead th" },
     { letter: "T", sel: "table" },
     { letter: "P", sel: ".paginated-pane" },
@@ -99,14 +99,14 @@
   function flushToServer() {
     try {
       var payload = JSON.stringify(buildDump());
-      navigator.sendBeacon("/prism/save", new Blob([payload], { type: "application/json" }));
+      navigator.sendBeacon("/catalyst/save", new Blob([payload], { type: "application/json" }));
     } catch (e) { /* silent — persistence is best-effort */ }
   }
   function nowShort() {
     return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
-  function isPrismEl(el) {
-    return el && (el.hasAttribute("data-prism-ignore") || el.closest("[data-prism-ignore]"));
+  function isCatalystEl(el) {
+    return el && (el.hasAttribute("data-catalyst-ignore") || el.closest("[data-catalyst-ignore]"));
   }
   function isFormEl(el) {
     var tag = (el.tagName || "").toLowerCase();
@@ -181,7 +181,7 @@
       try { els = document.querySelectorAll(zone.sel); } catch (e) { return; }
       var n = 0;
       els.forEach(function (el) {
-        if (seen.has(el) || !isVisible(el) || isPrismEl(el)) return;
+        if (seen.has(el) || !isVisible(el) || isCatalystEl(el)) return;
         seen.add(el);
         n++;
         var code = zone.letter + n;
@@ -200,10 +200,10 @@
   function paintBadge(el, code) {
     var r = el.getBoundingClientRect();
     var b = document.createElement("div");
-    b.className = "prism-grid-badge";
+    b.className = "catalyst-grid-badge";
     b.textContent = code;
     b.dataset.code = code;
-    b.setAttribute("data-prism-ignore", "");
+    b.setAttribute("data-catalyst-ignore", "");
     b.style.top  = (r.top  + window.scrollY) + "px";
     b.style.left = Math.max(0, r.left + window.scrollX) + "px";
     b.style.pointerEvents = "auto";
@@ -216,18 +216,18 @@
     document.body.appendChild(b);
     badges.push(b);
 
-    el.classList.add("prism-grid-outline");
-    el.dataset.prismCode = code;
+    el.classList.add("catalyst-grid-outline");
+    el.dataset.catalystCode = code;
     taggedEls.push(el);
 
     // Element click intercept — only when grid active, never on form elements
-    el._prismClick = function (e) {
+    el._catalystClick = function (e) {
       if (!gridActive || isFormEl(el)) return;
       e.preventDefault();
       e.stopPropagation();
       logClick(code);
     };
-    el.addEventListener("click", el._prismClick, true);
+    el.addEventListener("click", el._catalystClick, true);
   }
 
   /* ═══════════════════════════════════════════════════════
@@ -238,15 +238,15 @@
   function paintPaneBadges() {
     clearPaneBadges();
     document.querySelectorAll("[data-pane-id]").forEach(function (pane) {
-      if (isPrismEl(pane)) return;
+      if (isCatalystEl(pane)) return;
       var id = pane.dataset.paneId;
       var r = pane.getBoundingClientRect();
       if (r.width < 10 || r.height < 10) return;
       var badge = document.createElement("div");
-      badge.className = "prism-pane-id-badge";
+      badge.className = "catalyst-pane-id-badge";
       badge.textContent = id;
       badge.title = "Pane: " + id;
-      badge.setAttribute("data-prism-ignore", "");
+      badge.setAttribute("data-catalyst-ignore", "");
       badge.style.top  = (r.top + window.scrollY + 2) + "px";
       badge.style.left = (r.right + window.scrollX - badge.offsetWidth - 6) + "px";
       document.body.appendChild(badge);
@@ -265,11 +265,11 @@
     badges.forEach(function (b) { b.remove(); });
     badges = [];
     taggedEls.forEach(function (el) {
-      el.classList.remove("prism-grid-outline");
-      delete el.dataset.prismCode;
-      if (el._prismClick) {
-        el.removeEventListener("click", el._prismClick, true);
-        delete el._prismClick;
+      el.classList.remove("catalyst-grid-outline");
+      delete el.dataset.catalystCode;
+      if (el._catalystClick) {
+        el.removeEventListener("click", el._catalystClick, true);
+        delete el._catalystClick;
       }
     });
     taggedEls = [];
@@ -325,8 +325,8 @@
   function flashBadge(code) {
     badges.forEach(function (b) {
       if (b.dataset.code === code) {
-        b.classList.add("prism-badge-flash");
-        setTimeout(function () { b.classList.remove("prism-badge-flash"); }, 600);
+        b.classList.add("catalyst-badge-flash");
+        setTimeout(function () { b.classList.remove("catalyst-badge-flash"); }, 600);
       }
     });
   }
@@ -364,62 +364,62 @@
      Feedback Panel DOM
      ═══════════════════════════════════════════════════════ */
   var panel = document.createElement("div");
-  panel.className = "prism-fb-panel";
-  panel.setAttribute("data-prism-ignore", "");
+  panel.className = "catalyst-fb-panel";
+  panel.setAttribute("data-catalyst-ignore", "");
   panel.innerHTML =
-    '<div class="prism-fb-header">' +
+    '<div class="catalyst-fb-header">' +
       '<strong>Feedback Log</strong>' +
-      '<span class="prism-fb-count">0</span>' +
-      '<span class="prism-fb-err-count" title="JS errors caught">0 err</span>' +
-      '<div class="prism-fb-actions">' +
-        '<button class="prism-fb-btn prism-fb-path" title="Toggle path mode">Path</button>' +
-        '<button class="prism-fb-btn prism-fb-export" title="Copy full dump as JSON">JSON</button>' +
-        '<button class="prism-fb-btn prism-fb-copy-text" title="Copy as plain text">Copy</button>' +
-        '<button class="prism-fb-btn prism-fb-clear" title="Clear all">Clear</button>' +
-        '<button class="prism-fb-btn prism-fb-close">\u00d7</button>' +
+      '<span class="catalyst-fb-count">0</span>' +
+      '<span class="catalyst-fb-err-count" title="JS errors caught">0 err</span>' +
+      '<div class="catalyst-fb-actions">' +
+        '<button class="catalyst-fb-btn catalyst-fb-path" title="Toggle path mode">Path</button>' +
+        '<button class="catalyst-fb-btn catalyst-fb-export" title="Copy full dump as JSON">JSON</button>' +
+        '<button class="catalyst-fb-btn catalyst-fb-copy-text" title="Copy as plain text">Copy</button>' +
+        '<button class="catalyst-fb-btn catalyst-fb-clear" title="Clear all">Clear</button>' +
+        '<button class="catalyst-fb-btn catalyst-fb-close">\u00d7</button>' +
       '</div>' +
     '</div>' +
-    '<div class="prism-fb-body">' +
-      '<div class="prism-fb-entries"></div>' +
-      '<div class="prism-fb-form">' +
-        '<input class="prism-fb-code-input" placeholder="Code" maxlength="4" data-prism-ignore>' +
-        '<input class="prism-fb-note-input" placeholder="Feedback or error note\u2026" data-prism-ignore>' +
-        '<button class="prism-fb-btn prism-fb-add" data-prism-ignore>+</button>' +
+    '<div class="catalyst-fb-body">' +
+      '<div class="catalyst-fb-entries"></div>' +
+      '<div class="catalyst-fb-form">' +
+        '<input class="catalyst-fb-code-input" placeholder="Code" maxlength="4" data-catalyst-ignore>' +
+        '<input class="catalyst-fb-note-input" placeholder="Feedback or error note\u2026" data-catalyst-ignore>' +
+        '<button class="catalyst-fb-btn catalyst-fb-add" data-catalyst-ignore>+</button>' +
       '</div>' +
     '</div>';
 
   // Wire panel buttons
-  panel.querySelector(".prism-fb-close").addEventListener("click", togglePanel);
-  panel.querySelector(".prism-fb-clear").addEventListener("click", function () {
+  panel.querySelector(".catalyst-fb-close").addEventListener("click", togglePanel);
+  panel.querySelector(".catalyst-fb-clear").addEventListener("click", function () {
     feedLog = []; errorLog = []; paths = []; activePath = null;
     renderLog();
   });
-  panel.querySelector(".prism-fb-path").addEventListener("click", function () {
+  panel.querySelector(".catalyst-fb-path").addEventListener("click", function () {
     pathMode = !pathMode;
-    this.classList.toggle("prism-fb-btn-active", pathMode);
+    this.classList.toggle("catalyst-fb-btn-active", pathMode);
     if (pathMode) {
       pathAPI.start();
     } else if (activePath) {
       pathAPI.end();
     }
   });
-  panel.querySelector(".prism-fb-export").addEventListener("click", function () {
+  panel.querySelector(".catalyst-fb-export").addEventListener("click", function () {
     var json = JSON.stringify(buildDump(), null, 2);
     navigator.clipboard.writeText(json).then(function () {
-      var b = panel.querySelector(".prism-fb-export");
+      var b = panel.querySelector(".catalyst-fb-export");
       b.textContent = "Done!"; setTimeout(function () { b.textContent = "JSON"; }, 1200);
     });
   });
-  panel.querySelector(".prism-fb-copy-text").addEventListener("click", function () {
+  panel.querySelector(".catalyst-fb-copy-text").addEventListener("click", function () {
     navigator.clipboard.writeText(exportText()).then(function () {
-      var b = panel.querySelector(".prism-fb-copy-text");
+      var b = panel.querySelector(".catalyst-fb-copy-text");
       b.textContent = "Done!"; setTimeout(function () { b.textContent = "Copy"; }, 1200);
     });
   });
 
-  var codeInput = panel.querySelector(".prism-fb-code-input");
-  var noteInput = panel.querySelector(".prism-fb-note-input");
-  panel.querySelector(".prism-fb-add").addEventListener("click", addManual);
+  var codeInput = panel.querySelector(".catalyst-fb-code-input");
+  var noteInput = panel.querySelector(".catalyst-fb-note-input");
+  panel.querySelector(".catalyst-fb-add").addEventListener("click", addManual);
   noteInput.addEventListener("keydown", function (e) { if (e.key === "Enter") addManual(); });
   codeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") noteInput.focus(); });
 
@@ -440,46 +440,46 @@
      Render log entries
      ═══════════════════════════════════════════════════════ */
   function renderLog() {
-    var container = panel.querySelector(".prism-fb-entries");
+    var container = panel.querySelector(".catalyst-fb-entries");
     if (!container) return;
-    panel.querySelector(".prism-fb-count").textContent = feedLog.length;
-    panel.querySelector(".prism-fb-err-count").textContent = errorLog.length + " err";
-    panel.querySelector(".prism-fb-err-count").style.display = errorLog.length ? "" : "none";
+    panel.querySelector(".catalyst-fb-count").textContent = feedLog.length;
+    panel.querySelector(".catalyst-fb-err-count").textContent = errorLog.length + " err";
+    panel.querySelector(".catalyst-fb-err-count").style.display = errorLog.length ? "" : "none";
 
     container.innerHTML = "";
     feedLog.forEach(function (entry, i) {
       var row = document.createElement("div");
-      row.setAttribute("data-prism-ignore", "");
+      row.setAttribute("data-catalyst-ignore", "");
 
       if (entry.type === "separator") {
-        row.className = "prism-fb-entry prism-fb-separator";
-        row.innerHTML = '<span class="prism-fb-sep-line">\u2501\u2501 ' + esc(entry.desc) + ' \u2501\u2501</span>';
+        row.className = "catalyst-fb-entry catalyst-fb-separator";
+        row.innerHTML = '<span class="catalyst-fb-sep-line">\u2501\u2501 ' + esc(entry.desc) + ' \u2501\u2501</span>';
       } else if (entry.type === "error-note") {
-        row.className = "prism-fb-entry prism-fb-error-entry";
+        row.className = "catalyst-fb-entry catalyst-fb-error-entry";
         row.innerHTML =
-          '<span class="prism-fb-code prism-fb-err-code">ERR</span>' +
-          '<span class="prism-fb-desc">' + esc(entry.desc) + '</span>' +
-          '<input class="prism-fb-entry-note" value="' + escA(entry.note) + '" data-idx="' + i + '" data-prism-ignore>' +
-          '<button class="prism-fb-entry-del" data-idx="' + i + '" data-prism-ignore>\u00d7</button>';
+          '<span class="catalyst-fb-code catalyst-fb-err-code">ERR</span>' +
+          '<span class="catalyst-fb-desc">' + esc(entry.desc) + '</span>' +
+          '<input class="catalyst-fb-entry-note" value="' + escA(entry.note) + '" data-idx="' + i + '" data-catalyst-ignore>' +
+          '<button class="catalyst-fb-entry-del" data-idx="' + i + '" data-catalyst-ignore>\u00d7</button>';
       } else {
-        row.className = "prism-fb-entry";
+        row.className = "catalyst-fb-entry";
         row.innerHTML =
-          '<span class="prism-fb-code" title="' + esc(entry.desc) + '">' + esc(entry.code) + '</span>' +
-          '<span class="prism-fb-desc">' + esc((entry.desc || "").slice(0, 25)) + '</span>' +
-          '<input class="prism-fb-entry-note" placeholder="note\u2026" value="' + escA(entry.note) + '" data-idx="' + i + '" data-prism-ignore>' +
-          '<button class="prism-fb-entry-del" data-idx="' + i + '" data-prism-ignore>\u00d7</button>';
+          '<span class="catalyst-fb-code" title="' + esc(entry.desc) + '">' + esc(entry.code) + '</span>' +
+          '<span class="catalyst-fb-desc">' + esc((entry.desc || "").slice(0, 25)) + '</span>' +
+          '<input class="catalyst-fb-entry-note" placeholder="note\u2026" value="' + escA(entry.note) + '" data-idx="' + i + '" data-catalyst-ignore>' +
+          '<button class="catalyst-fb-entry-del" data-idx="' + i + '" data-catalyst-ignore>\u00d7</button>';
       }
       container.appendChild(row);
     });
 
     // Wire inline edits + deletes
-    container.querySelectorAll(".prism-fb-entry-note").forEach(function (inp) {
+    container.querySelectorAll(".catalyst-fb-entry-note").forEach(function (inp) {
       inp.addEventListener("input", function () {
         var idx = parseInt(this.dataset.idx);
         if (feedLog[idx]) { feedLog[idx].note = this.value; scheduleFlush(); }
       });
     });
-    container.querySelectorAll(".prism-fb-entry-del").forEach(function (btn) {
+    container.querySelectorAll(".catalyst-fb-entry-del").forEach(function (btn) {
       btn.addEventListener("click", function () {
         feedLog.splice(parseInt(this.dataset.idx), 1);
         renderLog();
@@ -495,7 +495,7 @@
      Export
      ═══════════════════════════════════════════════════════ */
   function exportText() {
-    var lines = ["PRISM Feedback — " + location.href + " — " + new Date().toLocaleString(), ""];
+    var lines = ["CATALYST Feedback — " + location.href + " — " + new Date().toLocaleString(), ""];
     feedLog.forEach(function (e) {
       if (e.type === "separator") { lines.push("--- " + e.desc + " ---"); return; }
       if (e.type === "error-note") { lines.push("[ERR] " + e.note + "  (" + e.page + " @ " + e.timeShort + ")"); return; }
@@ -537,15 +537,15 @@
      ═══════════════════════════════════════════════════════ */
   function togglePanel() {
     panelOpen = !panelOpen;
-    panel.classList.toggle("prism-fb-visible", panelOpen);
-    fbBtn.classList.toggle("prism-fb-btn-active", panelOpen);
+    panel.classList.toggle("catalyst-fb-visible", panelOpen);
+    fbBtn.classList.toggle("catalyst-fb-btn-active", panelOpen);
   }
 
   function activateGrid() {
     if (gridActive) return;
     gridActive = true;
     paintAll();
-    gridBtn.classList.add("prism-grid-btn-active");
+    gridBtn.classList.add("catalyst-grid-btn-active");
     gridBtn.title = "Hide grid (Ctrl+G)";
     fbBtn.style.display = "";
   }
@@ -554,7 +554,7 @@
     if (!gridActive) return;
     gridActive = false;
     clearBadges();
-    gridBtn.classList.remove("prism-grid-btn-active");
+    gridBtn.classList.remove("catalyst-grid-btn-active");
     gridBtn.title = "Show grid (Ctrl+G)";
   }
 
@@ -566,7 +566,7 @@
      Draggable panel
      ═══════════════════════════════════════════════════════ */
   (function () {
-    var hdr = panel.querySelector(".prism-fb-header");
+    var hdr = panel.querySelector(".catalyst-fb-header");
     var dragging = false, sx, sy, ox, oy;
     hdr.style.cursor = "grab";
     hdr.addEventListener("mousedown", function (e) {
@@ -591,19 +591,19 @@
      Floating buttons
      ═══════════════════════════════════════════════════════ */
   var gridBtn = document.createElement("button");
-  gridBtn.className = "prism-grid-btn";
+  gridBtn.className = "catalyst-grid-btn";
   gridBtn.innerHTML = "&#x25a6;";
   gridBtn.title = "Show grid (Ctrl+G)";
   gridBtn.setAttribute("aria-label", "Toggle grid overlay");
-  gridBtn.setAttribute("data-prism-ignore", "");
+  gridBtn.setAttribute("data-catalyst-ignore", "");
   gridBtn.addEventListener("click", toggleGrid);
 
   var fbBtn = document.createElement("button");
-  fbBtn.className = "prism-grid-btn prism-fb-toggle-btn";
+  fbBtn.className = "catalyst-grid-btn catalyst-fb-toggle-btn";
   fbBtn.innerHTML = "&#x270e;";
   fbBtn.title = "Feedback panel (Ctrl+F)";
   fbBtn.setAttribute("aria-label", "Toggle feedback panel");
-  fbBtn.setAttribute("data-prism-ignore", "");
+  fbBtn.setAttribute("data-catalyst-ignore", "");
   fbBtn.style.display = "none";
   fbBtn.addEventListener("click", togglePanel);
 
@@ -611,15 +611,15 @@
      Keyboard shortcuts
      ═══════════════════════════════════════════════════════ */
   document.addEventListener("keydown", function (e) {
-    if (isFormEl(e.target) && !isPrismEl(e.target)) return;  // don't intercept normal typing
+    if (isFormEl(e.target) && !isCatalystEl(e.target)) return;  // don't intercept normal typing
     if (e.ctrlKey && e.key.toLowerCase() === "g") { e.preventDefault(); toggleGrid(); }
     if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); if (gridActive) togglePanel(); }
   });
 
   /* ═══════════════════════════════════════════════════════
-     Public API — window.prism
+     Public API — window.catalyst
      ═══════════════════════════════════════════════════════ */
-  window.prism = {
+  window.catalyst = {
     // Grid control
     on:    activateGrid,
     off:   deactivateGrid,
@@ -662,7 +662,7 @@
     text: exportText,
     clear: function () {
       feedLog = []; errorLog = []; paths = []; activePath = null; renderLog();
-      try { navigator.sendBeacon("/prism/clear", new Blob(["{}"], { type: "application/json" })); } catch(e) {}
+      try { navigator.sendBeacon("/catalyst/clear", new Blob(["{}"], { type: "application/json" })); } catch(e) {}
     },
 
     // Persistence
@@ -675,7 +675,7 @@
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.style.outline = "3px solid red";
-        setTimeout(function () { el.style.outline = ""; el.classList.add("prism-grid-outline"); }, 2000);
+        setTimeout(function () { el.style.outline = ""; el.classList.add("catalyst-grid-outline"); }, 2000);
       }
       return el || null;
     }

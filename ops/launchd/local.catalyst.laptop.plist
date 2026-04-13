@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  PRISM / lab-scheduler — LaunchAgent for the LAPTOP deploy
+  CATALYST / lab-scheduler — LaunchAgent for the LAPTOP deploy
   (user vishvajeetn, working copy at ~/Documents/Scheduler/Main).
 
-  Hosts PRISM as a persistent local service on the dev laptop
+  Hosts CATALYST as a persistent local service on the dev laptop
   itself, independent of the Mac mini + Tailscale path. Listens
   only on 127.0.0.1:5055 by default (see .env) so nothing leaves
   the machine.
 
-  Sibling of ops/launchd/local.prism.plist, which targets the mini.
-  Same Label (`local.prism`) — only one of the two plists should
+  Sibling of ops/launchd/local.catalyst.plist, which targets the mini.
+  Same Label (`local.catalyst`) — only one of the two plists should
   ever be bootstrapped in a given gui/<uid> domain. The installer
   at scripts/install_launchd.sh picks the correct plist by probing
   $PWD, so a fresh clone onto either machine auto-routes.
@@ -19,8 +19,8 @@
     ./scripts/install_launchd.sh
 
   Uninstall:
-    launchctl bootout gui/$(id -u)/local.prism
-    rm ~/Library/LaunchAgents/local.prism.plist
+    launchctl bootout gui/$(id -u)/local.catalyst
+    rm ~/Library/LaunchAgents/local.catalyst.plist
 
   Tail logs:
     tail -f ~/Documents/Scheduler/Main/logs/server.log
@@ -28,7 +28,7 @@
   Notes:
     * KeepAlive=true restarts the process on any exit. ThrottleInterval
       caps crash loops at one restart per 10s.
-    * RunAtLoad=true starts the service at user login, so PRISM is
+    * RunAtLoad=true starts the service at user login, so CATALYST is
       already up the moment you unlock the laptop.
     * .env is sourced by start.sh (see that script) so SECRET_KEY +
       DEMO_MODE + CSRF flags survive restarts without leaking into
@@ -37,7 +37,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>local.prism</string>
+    <string>local.catalyst</string>
 
     <key>ProgramArguments</key>
     <array>

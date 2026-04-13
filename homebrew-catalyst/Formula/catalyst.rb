@@ -1,7 +1,7 @@
-class Prism < Formula
+class Catalyst < Formula
   desc "Open-source ERP for research facilities"
-  homepage "https://github.com/YOUR-ORG/prism-erp"
-  url "https://github.com/YOUR-ORG/prism-erp/archive/refs/tags/prism-v1.tar.gz"
+  homepage "https://github.com/YOUR-ORG/catalyst-erp"
+  url "https://github.com/YOUR-ORG/catalyst-erp/archive/refs/tags/catalyst-v1.tar.gz"
   version "1.0"
   license "MIT"
 
@@ -16,16 +16,16 @@ class Prism < Formula
     system libexec/"venv/bin/pip", "install", "-q", "-r", libexec/"requirements.txt"
 
     # Create wrapper scripts in bin/
-    (bin/"prism").write <<~EOS
+    (bin/"catalyst").write <<~EOS
       #!/bin/bash
-      export PRISM_HOME="#{libexec}"
+      export CATALYST_HOME="#{libexec}"
       cd "#{libexec}"
       exec ./venv/bin/python -c "import app; app.app.run(host='0.0.0.0', port=5055)" "$@"
     EOS
 
-    (bin/"prism-init").write <<~EOS
+    (bin/"catalyst-init").write <<~EOS
       #!/bin/bash
-      export PRISM_HOME="#{libexec}"
+      export CATALYST_HOME="#{libexec}"
       cd "#{libexec}"
       mkdir -p data/demo data/operational logs
       [ -f .env ] || cat > .env << ENV
@@ -35,10 +35,10 @@ LAB_SCHEDULER_CSRF=1
 OWNER_EMAILS=admin@lab.local
 ENV
       ./venv/bin/python -c "import app; app.init_db()"
-      echo "PRISM initialized. Run 'prism' to start."
+      echo "CATALYST initialized. Run 'catalyst' to start."
     EOS
 
-    (bin/"prism-test").write <<~EOS
+    (bin/"catalyst-test").write <<~EOS
       #!/bin/bash
       cd "#{libexec}"
       exec ./venv/bin/python scripts/smoke_test.py "$@"
@@ -46,30 +46,30 @@ ENV
   end
 
   def post_install
-    system bin/"prism-init"
+    system bin/"catalyst-init"
   end
 
   def caveats
     <<~EOS
-      PRISM ERP installed.
+      CATALYST ERP installed.
 
       First run:
-        prism-init      # Initialize database
-        prism           # Start server on http://localhost:5055
+        catalyst-init      # Initialize database
+        catalyst           # Start server on http://localhost:5055
 
       Login:
-        Email:    owner@prism.local
+        Email:    owner@catalyst.local
         Password: 12345
 
       Configure:
         #{libexec}/.env
 
       Test:
-        prism-test
+        catalyst-test
     EOS
   end
 
   test do
-    system bin/"prism-test"
+    system bin/"catalyst-test"
   end
 end

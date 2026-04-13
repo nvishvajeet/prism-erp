@@ -551,9 +551,9 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             log_action(db, actor_operator, request_id, "rejected", {"remarks": remarks}, now_iso(request_base + timedelta(hours=10)))
 
     seeded_originators = {
-        "REQ-1001": "owner@prism.local",
-        "REQ-1002": "kondhalkar@prism.local",
-        "REQ-1003": "owner@prism.local",
+        "REQ-1001": "owner@catalyst.local",
+        "REQ-1002": "kondhalkar@catalyst.local",
+        "REQ-1003": "owner@catalyst.local",
     }
     for request_no, originator_email in seeded_originators.items():
         _orig = db.execute("SELECT id FROM users WHERE email = ?", (originator_email,)).fetchone()

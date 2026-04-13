@@ -1,5 +1,5 @@
 ======================================================================
-PRISM ROLE VISIBILITY AUDIT REPORT
+CATALYST ROLE VISIBILITY AUDIT REPORT
 Generated: 2026-04-10T09:12:48.836913
 ======================================================================
 Total checks:   176

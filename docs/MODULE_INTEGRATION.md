@@ -1,6 +1,6 @@
 # Module Integration Map
 
-How PRISM ERP modules connect to each other. Every cross-module
+How CATALYST ERP modules connect to each other. Every cross-module
 query, template link, and notification is listed here so future
 developers know what breaks when they change a table or route.
 

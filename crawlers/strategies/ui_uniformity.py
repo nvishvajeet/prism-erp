@@ -42,7 +42,7 @@ class UIUniformityStrategy(CrawlerStrategy):
     def run(self, harness: Harness) -> CrawlResult:
         result = CrawlResult(name=self.name, aspect=self.aspect)
 
-        with harness.logged_in("owner@prism.local"):
+        with harness.logged_in("owner@catalyst.local"):
             for path in CANONICAL_PAGES:
                 resp = harness.get(path, note=f"ui_uniformity:{path}",
                                    follow_redirects=True)

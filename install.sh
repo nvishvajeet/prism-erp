@@ -1,6 +1,6 @@
 #!/bin/bash
-# PRISM ERP — One-line installer
-# curl -fsSL https://raw.githubusercontent.com/YOUR-ORG/prism-erp/main/install.sh | bash
+# CATALYST ERP — One-line installer
+# curl -fsSL https://raw.githubusercontent.com/YOUR-ORG/catalyst-erp/main/install.sh | bash
 set -e
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; BOLD='\033[1m'; NC='\033[0m'
@@ -8,7 +8,7 @@ say()  { echo -e "${GREEN}=>${NC} $1"; }
 fail() { echo -e "${RED}Error:${NC} $1"; exit 1; }
 
 echo ""
-echo -e "${BOLD}PRISM ERP Installer${NC}"
+echo -e "${BOLD}CATALYST ERP Installer${NC}"
 echo ""
 
 # ── Prerequisites ────────────────────────────────────────────
@@ -22,14 +22,14 @@ command -v git &>/dev/null || fail "git not found. Install from https://git-scm.
 say "git $(git --version | awk '{print $3}')"
 
 # ── Clone ────────────────────────────────────────────────────
-INSTALL_DIR="${PRISM_INSTALL_DIR:-./prism}"
+INSTALL_DIR="${CATALYST_INSTALL_DIR:-./catalyst}"
 
 if [ -f "$INSTALL_DIR/app.py" ]; then
   say "Existing install found at $INSTALL_DIR, updating..."
   cd "$INSTALL_DIR"
   git pull --rebase 2>&1 | tail -1
 else
-  REPO_URL="${PRISM_REPO_URL:-https://github.com/YOUR-ORG/prism-erp.git}"
+  REPO_URL="${CATALYST_REPO_URL:-https://github.com/YOUR-ORG/catalyst-erp.git}"
   say "Cloning into $INSTALL_DIR..."
   git clone "$REPO_URL" "$INSTALL_DIR" 2>&1 | tail -1
   cd "$INSTALL_DIR"
@@ -80,7 +80,7 @@ echo "  Email:     admin@lab.local"
 echo "  Password:  12345"
 echo "  Roles:     operator@ requester@ approver@ finance@ (same password)"
 echo ""
-echo "  Configure: edit .env (PRISM_MODULES=instruments,finance,inbox,...)"
+echo "  Configure: edit .env (CATALYST_MODULES=instruments,finance,inbox,...)"
 echo "  Update:    bash scripts/update.sh"
 echo ""
 
@@ -91,7 +91,7 @@ if [ -t 0 ]; then
   case "$start_choice" in
     [Nn]*) echo "Run ./scripts/start.sh when ready." ;;
     *)
-      say "Starting PRISM..."
+      say "Starting CATALYST..."
       exec ./scripts/start.sh
       ;;
   esac

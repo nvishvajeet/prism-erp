@@ -30,8 +30,8 @@ from ..harness import Harness
 
 # (persona_email, path, label)
 CASES: list[tuple[str, str, str]] = [
-    ("anika@prism.local", "/schedule",  "operator — queue empty"),
-    ("owner@prism.local", "/",          "owner dashboard — per-instrument queues empty"),
+    ("anika@catalyst.local", "/schedule",  "operator — queue empty"),
+    ("owner@catalyst.local", "/",          "owner dashboard — per-instrument queues empty"),
 ]
 
 

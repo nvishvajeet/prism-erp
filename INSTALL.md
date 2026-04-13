@@ -1,7 +1,7 @@
-# PRISM ERP — Installation & Updates
+# CATALYST ERP — Installation & Updates
 
 > **For humans and AI agents.** This file tells you how to deploy
-> PRISM on any machine (your laptop, a remote server via SSH, a
+> CATALYST on any machine (your laptop, a remote server via SSH, a
 > shared lab computer) and how to receive updates.
 
 ---
@@ -9,8 +9,8 @@
 ## Quick start — 4 commands
 
 ```bash
-git clone https://github.com/YOUR-ORG/prism-erp.git prism
-cd prism
+git clone https://github.com/YOUR-ORG/catalyst-erp.git catalyst
+cd catalyst
 bash scripts/setup.sh
 ./scripts/start.sh
 ```
@@ -34,13 +34,13 @@ Edit `.env` to enable only the modules you need:
 
 ```bash
 # Lab facility with billing
-PRISM_MODULES=instruments,finance,inbox
+CATALYST_MODULES=instruments,finance,inbox
 
 # HR / personnel department
-PRISM_MODULES=attendance,inbox,notifications
+CATALYST_MODULES=attendance,inbox,notifications
 
 # Everything (default)
-# PRISM_MODULES=
+# CATALYST_MODULES=
 ```
 
 Available modules: `instruments`, `finance`, `inbox`,
@@ -56,14 +56,14 @@ Available modules: `instruments`, `finance`, `inbox`,
 ssh user@server
 
 # On the server
-git clone https://github.com/YOUR-ORG/prism-erp.git prism
-cd prism
+git clone https://github.com/YOUR-ORG/catalyst-erp.git catalyst
+cd catalyst
 bash scripts/setup.sh
 
 # Edit modules + production config
 nano .env
 # Set: LAB_SCHEDULER_DEMO_MODE=0
-# Set: PRISM_MODULES=instruments,finance,inbox
+# Set: CATALYST_MODULES=instruments,finance,inbox
 # Set: OWNER_EMAILS=your-email@example.com
 
 # Start as a background service
@@ -78,7 +78,7 @@ disown
 
 ## Receiving updates — Apple-style
 
-PRISM separates **program files** (code, templates, CSS — updated
+CATALYST separates **program files** (code, templates, CSS — updated
 by us) from **data files** (your database, uploads, config —
 never touched by updates).
 
@@ -116,7 +116,7 @@ To check for updates daily:
 
 ```bash
 # Add to crontab (checks at 6 AM, logs result)
-echo "0 6 * * * cd /path/to/prism && bash scripts/update.sh >> logs/update.log 2>&1" | crontab -
+echo "0 6 * * * cd /path/to/catalyst && bash scripts/update.sh >> logs/update.log 2>&1" | crontab -
 ```
 
 Or for a macOS launchd scheduled check, see `ops/launchd/README.md`.
@@ -143,8 +143,8 @@ Continue, Aider, Copilot, Windsurf):
 
 ```bash
 # On the remote machine
-git clone https://github.com/YOUR-ORG/prism-erp.git prism
-cd prism
+git clone https://github.com/YOUR-ORG/catalyst-erp.git catalyst
+cd catalyst
 bash scripts/setup.sh
 
 # The agent can now:
@@ -159,7 +159,7 @@ bash scripts/setup.sh
 ## Architecture at a glance
 
 ```
-prism/
+catalyst/
 ├── app.py              ← THE product (single file, ~12K lines)
 ├── .env                ← YOUR config (modules, secret key, flags)
 ├── data/
@@ -181,6 +181,6 @@ prism/
 
 ## Support
 
-- Issues: https://github.com/YOUR-ORG/prism-erp/issues
+- Issues: https://github.com/YOUR-ORG/catalyst-erp/issues
 - Docs: `docs/` folder in this repo
 - AI agents: start with `AGENTS.md`

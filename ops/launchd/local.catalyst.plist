@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  PRISM / lab-scheduler — LaunchAgent for the Mac mini deploy.
+  CATALYST / lab-scheduler — LaunchAgent for the Mac mini deploy.
 
   Install:
-    cp ops/launchd/local.prism.plist ~/Library/LaunchAgents/local.prism.plist
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.prism.plist
-    launchctl kickstart -k gui/$(id -u)/local.prism
+    cp ops/launchd/local.catalyst.plist ~/Library/LaunchAgents/local.catalyst.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.catalyst.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst
 
   Uninstall:
-    launchctl bootout gui/$(id -u)/local.prism
-    rm ~/Library/LaunchAgents/local.prism.plist
+    launchctl bootout gui/$(id -u)/local.catalyst
+    rm ~/Library/LaunchAgents/local.catalyst.plist
 
   Tail logs:
     tail -f ~/Scheduler/Main/logs/server.log
@@ -29,7 +29,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>local.prism</string>
+    <string>local.catalyst</string>
 
     <key>ProgramArguments</key>
     <array>

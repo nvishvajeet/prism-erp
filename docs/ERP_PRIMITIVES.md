@@ -1,6 +1,6 @@
 # ERP Primitives — Abstract Pattern Map
 
-> Maps every reusable pattern in the PRISM instrument portal to an
+> Maps every reusable pattern in the CATALYST instrument portal to an
 > abstract ERP primitive. Use this when building a new portal
 > (finance, attendance, notifications, inventory, etc.).
 

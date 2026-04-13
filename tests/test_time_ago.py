@@ -34,9 +34,9 @@ os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
 os.environ.setdefault("LAB_SCHEDULER_CSRF", "0")
 os.environ.setdefault("OWNER_EMAILS", "admin@lab.local")
 
-import app as prism_app  # noqa: E402
+import app as catalyst_app  # noqa: E402
 
-time_ago = prism_app.time_ago
+time_ago = catalyst_app.time_ago
 
 
 def build_cases() -> list[tuple[str, object, str]]:

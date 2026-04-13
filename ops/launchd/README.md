@@ -1,14 +1,14 @@
-# PRISM launchd agents
+# CATALYST launchd agents
 
-Two plists live here. Same `Label` (`local.prism`), different
+Two plists live here. Same `Label` (`local.catalyst`), different
 absolute paths. `scripts/install_launchd.sh` picks the right one
 by probing `$PWD`, so a fresh clone onto either machine bootstraps
 automatically.
 
 | File | Host | Working copy |
 |---|---|---|
-| `local.prism.plist`         | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
-| `local.prism.laptop.plist`  | Dev laptop (`your-user`) | `~/Documents/Scheduler/Main` |
+| `local.catalyst.plist`         | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
+| `local.catalyst.laptop.plist`  | Dev laptop (`your-user`) | `~/Documents/Scheduler/Main` |
 
 ## macOS TCC gotcha — Documents folder access
 
@@ -37,14 +37,14 @@ Three fixes, pick one:
    `~/Scheduler/Main` or `~/Claude/lab-scheduler/Main`. TCC does
    not gate home-root subdirectories, so launchd can read them
    without any grant. If you do this, also update the plist's
-   path block and `PRISM_WORKTREE` in the pre-receive hook.
+   path block and `CATALYST_WORKTREE` in the pre-receive hook.
 
 3. **Skip launchd, use `nohup`.** `nohup bash scripts/start.sh
    --service > logs/server.log 2>&1 &` gives you a persistent-
    until-reboot local deploy without any TCC dance. Not
    resilient across logout/reboot, but zero ceremony.
 
-The Mac mini plist (`local.prism.plist`) does not hit this
+The Mac mini plist (`local.catalyst.plist`) does not hit this
 issue — `~/Scheduler/Main` is outside the TCC-protected set, so
 a clean bootstrap works with no grant.
 
@@ -55,22 +55,22 @@ a clean bootstrap works with no grant.
 ```
 
 Idempotent. Re-run after editing the plist. The installer bootsout
-any existing `local.prism` service first, copies the chosen plist
+any existing `local.catalyst` service first, copies the chosen plist
 to `~/Library/LaunchAgents/`, bootstraps into `gui/$(id -u)`, and
 kickstarts immediately.
 
 ## Uninstall
 
 ```bash
-launchctl bootout gui/$(id -u)/local.prism
-rm ~/Library/LaunchAgents/local.prism.plist
+launchctl bootout gui/$(id -u)/local.catalyst
+rm ~/Library/LaunchAgents/local.catalyst.plist
 ```
 
 ## Verify
 
 ```bash
 # should show 'state = running' + a live pid
-launchctl print gui/$(id -u)/local.prism | head -20
+launchctl print gui/$(id -u)/local.catalyst | head -20
 
 # smoke the URL
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5055/login

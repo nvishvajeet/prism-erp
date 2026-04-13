@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Populate PRISM with MIT-WPU Central Research Facility data.
+"""Populate CATALYST with MIT-WPU Central Research Facility data.
 
 Wipes ALL existing data and seeds:
   - 21 instruments from the CRF brochure (12 major + 9 NABL)
@@ -21,7 +21,7 @@ os.chdir(os.path.join(os.path.dirname(__file__), ".."))
 import app
 from werkzeug.security import generate_password_hash
 
-DEFAULT_PW = "prism2026"
+DEFAULT_PW = "catalyst2026"
 PW_HASH = generate_password_hash(DEFAULT_PW, method="pbkdf2:sha256")
 
 # ── Users ────────────────────────────────────────────────
@@ -270,7 +270,7 @@ def run():
     db.row_factory = sqlite3.Row
     c = db.cursor()
 
-    print("=== PRISM CRF Population Script ===")
+    print("=== CATALYST CRF Population Script ===")
     print(f"Database: {db_path}")
     print()
 
@@ -440,7 +440,7 @@ def run():
 
     # ── Summary ──
     print("=" * 55)
-    print("  PRISM CRF populated successfully!")
+    print("  CATALYST CRF populated successfully!")
     print(f"  Users:       {len(user_ids)}")
     print(f"  Instruments: {len(inst_ids)}")
     print(f"  Grants:      {len(grant_ids)}")

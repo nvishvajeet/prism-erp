@@ -1,11 +1,11 @@
-# PRISM — Deployment
+# CATALYST — Deployment
 
-PRISM ships on two machines.
+CATALYST ships on two machines.
 
 - **Development:** the MacBook Pro (working tree). Claude works
   here. `master` is the source of truth.
 - **Production host:** the Mac mini in India, reachable via
-  Tailscale at `vishwajeet@100.115.176.118`. It serves the PRISM
+  Tailscale at `vishwajeet@100.115.176.118`. It serves the CATALYST
   website to anyone on the network.
 
 Git is the only sync layer between them. There is no live shared
@@ -56,7 +56,7 @@ The old `backend/launchd` / `backend/start_server.sh` paths in earlier
 revisions of this doc never existed in git — they were aspirational.
 These are the actual files:
 
-* `ops/launchd/local.prism.plist` — LaunchAgent definition
+* `ops/launchd/local.catalyst.plist` — LaunchAgent definition
 * `scripts/start.sh --service` — foreground runner (venv python,
   sources `.env`, `exec`s `app.py`, no reloader, no Chrome)
 * `scripts/install_launchd.sh` — one-shot installer (bootstrap +
@@ -69,11 +69,11 @@ cd ~/Scheduler/Main
 
 That script:
 
-1. Copies `ops/launchd/local.prism.plist` to
-   `~/Library/LaunchAgents/local.prism.plist`.
+1. Copies `ops/launchd/local.catalyst.plist` to
+   `~/Library/LaunchAgents/local.catalyst.plist`.
 2. `launchctl bootout` any previously-loaded copy (silent if absent).
 3. `launchctl bootstrap gui/$(id -u) …` to load the service.
-4. `launchctl kickstart -k gui/$(id -u)/local.prism` to start it
+4. `launchctl kickstart -k gui/$(id -u)/local.catalyst` to start it
    immediately so a reboot isn't required.
 5. `launchctl print` + the first 15 lines of `logs/server.log` as
    a local smoke check.
@@ -81,7 +81,7 @@ That script:
 Verify from the laptop that the service is actually serving:
 
 ```bash
-PRISM_DEPLOY_URL=http://127.0.0.1:5055 \
+CATALYST_DEPLOY_URL=http://127.0.0.1:5055 \
   .venv/bin/python -m crawlers run deploy_smoke
 # → PASS 3  FAIL 0  WARN 0 when everything is green
 ```
@@ -95,8 +95,8 @@ tail -f ~/Scheduler/Main/logs/server.log
 Stop and uninstall:
 
 ```bash
-launchctl bootout gui/$(id -u)/local.prism
-rm ~/Library/LaunchAgents/local.prism.plist
+launchctl bootout gui/$(id -u)/local.catalyst
+rm ~/Library/LaunchAgents/local.catalyst.plist
 ```
 
 **Known gotcha — launchd env is empty.** Launchd does NOT inherit
@@ -109,18 +109,18 @@ fix is always in `.env` + a kickstart, never in the plist.
 plists point both `StandardOutPath` and `StandardErrorPath` at a
 single `logs/server.log`, which otherwise grows forever on a
 long-running deploy. The rotation policy lives at
-`ops/launchd/newsyslog.prism.conf` and is picked up by macOS's
+`ops/launchd/newsyslog.catalyst.conf` and is picked up by macOS's
 built-in hourly `com.apple.newsyslog` job — no cron, no extra
 daemon. Install it once:
 
 ```bash
-sudo cp ops/launchd/newsyslog.prism.conf /etc/newsyslog.d/prism.conf
-sudo chown root:wheel /etc/newsyslog.d/prism.conf
-sudo chmod 644 /etc/newsyslog.d/prism.conf
+sudo cp ops/launchd/newsyslog.catalyst.conf /etc/newsyslog.d/catalyst.conf
+sudo chown root:wheel /etc/newsyslog.d/catalyst.conf
+sudo chmod 644 /etc/newsyslog.d/catalyst.conf
 ```
 
 `./scripts/install_launchd.sh` prints these exact commands at the
-end of its run — it never executes them itself, because PRISM
+end of its run — it never executes them itself, because CATALYST
 installs are manual and never silently `sudo`. Policy: rotate
 when `logs/server.log` crosses 10 MB, keep 7 gzipped archives
 (`server.log.0.gz` … `server.log.6.gz`), drop older ones. Not
@@ -135,7 +135,7 @@ expected filename until the service is bounced. Fix on the mini
 (or laptop service) with:
 
 ```bash
-launchctl kickstart -k gui/$(id -u)/local.prism
+launchctl kickstart -k gui/$(id -u)/local.catalyst
 ```
 
 In practice the service restarts often enough during development
@@ -146,7 +146,7 @@ quarterly kickstart (or a natural reboot) is sufficient.
 is not allowed to fall over between releases. Crawler proof of
 that rule is the `deploy_smoke` strategy added to the `sanity`
 wave — every push to `v1.3.0-stable-release` (with
-`PRISM_DEPLOY_URL` set) re-verifies the mini is answering.
+`CATALYST_DEPLOY_URL` set) re-verifies the mini is answering.
 
 ---
 
@@ -166,7 +166,7 @@ ssh mini 'cd ~/Scheduler/Main && \
   git pull --rebase && \
   .venv/bin/pip install -r requirements.txt && \
   .venv/bin/python scripts/smoke_test.py && \
-  launchctl kickstart -k gui/$(id -u)/local.prism'
+  launchctl kickstart -k gui/$(id -u)/local.catalyst'
 ```
 
 The deploy is gated by `scripts/smoke_test.py`. If smoke fails the
@@ -198,7 +198,7 @@ GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
 ## 5. The access surface
 
 - **Tailscale network:** every user on the lab's Tailscale tailnet
-  reaches PRISM at `http://100.115.176.118:5055/` (plain HTTP
+  reaches CATALYST at `http://100.115.176.118:5055/` (plain HTTP
   until Serve is enabled).
 - **Tailscale Serve (HTTPS):** see `docs/HTTPS.md` for the Plan-A
   recipe that puts a real Let's Encrypt cert in front of Flask on
@@ -214,7 +214,7 @@ GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
 The Mac mini hosts the **website and the database only.** It
 does not run any background model, scheduler, cron, or crawler.
 All of that work stays on the MacBook development machine. The
-mini's job is: serve PRISM, 24×7, to whoever is on the network.
+mini's job is: serve CATALYST, 24×7, to whoever is on the network.
 
 ---
 
@@ -222,8 +222,8 @@ mini's job is: serve PRISM, 24×7, to whoever is on the network.
 
 If the mini is unreachable:
 
-1. `ssh vishwajeet@100.115.176.118 'launchctl list | grep prism'`
-2. If the service is dead: `launchctl kickstart -k gui/$(id -u)/local.prism`
+1. `ssh vishwajeet@100.115.176.118 'launchctl list | grep catalyst'`
+2. If the service is dead: `launchctl kickstart -k gui/$(id -u)/local.catalyst`
 3. If SSH is dead: power-cycle the mini (physical access).
 4. If the database is corrupted: restore from the latest nightly
    backup under `backups/lab_YYYYMMDD.db` (the cron on the mini

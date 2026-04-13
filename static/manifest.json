@@ -1,6 +1,6 @@
 {
-  "name": "PRISM Lab Scheduler",
-  "short_name": "PRISM",
+  "name": "CATALYST Lab Scheduler",
+  "short_name": "CATALYST",
   "description": "Sample request and operator workflow for shared instrument facilities.",
   "start_url": "/",
   "display": "standalone",

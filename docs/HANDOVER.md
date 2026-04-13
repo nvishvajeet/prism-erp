@@ -124,7 +124,7 @@ grep -q '^LAB_SCHEDULER_DEMO_MODE=' .env || echo 'LAB_SCHEDULER_DEMO_MODE=0' >> 
 # smoke test runs in demo mode by default, so skip it here OR run it
 # against a throwaway DB copy. In production we trust the pre-push
 # smoke from the MacBook.
-launchctl kickstart -k gui/$(id -u)/local.prism   # HTTPS via tailscale serve — see docs/HTTPS.md
+launchctl kickstart -k gui/$(id -u)/local.catalyst   # HTTPS via tailscale serve — see docs/HTTPS.md
 ```
 
 ### 2.2 One-liner (runs from your MacBook terminal)
@@ -138,7 +138,7 @@ ssh vishwajeet@100.115.176.118 '
   git pull --ff-only &&
   mkdir -p data/operational/uploads data/operational/exports &&
   grep -q "^LAB_SCHEDULER_DEMO_MODE=" .env || echo "LAB_SCHEDULER_DEMO_MODE=0" >> .env &&
-  launchctl kickstart -k gui/$(id -u)/local.prism &&
+  launchctl kickstart -k gui/$(id -u)/local.catalyst &&
   echo "deploy OK" &&
   sleep 2 &&
   curl -sSo /dev/null -w "health=%{http_code}\n" https://100.115.176.118:5055/login
@@ -148,7 +148,7 @@ ssh vishwajeet@100.115.176.118 '
 ### 2.3 First-time operational DB bootstrap
 
 **Only if `data/operational/lab_scheduler.db` does not exist yet**
-(i.e. this is a cold production start). PRISM's `init_db()` creates
+(i.e. this is a cold production start). CATALYST's `init_db()` creates
 the schema; the demo seeder is skipped automatically when
 `LAB_SCHEDULER_DEMO_MODE=0`, so you have to create the first real
 super_admin by hand:
@@ -224,7 +224,7 @@ git push -u origin v1.3.0-stable-release
 
 Once merged to `master`, from the Mac mini (or via one-liner in §2.2):
 ```bash
-cd ~/lab-scheduler && git pull --ff-only && launchctl kickstart -k gui/$(id -u)/local.prism
+cd ~/lab-scheduler && git pull --ff-only && launchctl kickstart -k gui/$(id -u)/local.catalyst
 ```
 
 Everything else in this file is context and fallbacks.

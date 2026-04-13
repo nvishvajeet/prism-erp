@@ -1,4 +1,4 @@
-PRISM — Active Plan
+CATALYST — Active Plan
 ====================
 
 Forward-looking only. The current release is **v1.3.0** — the
@@ -173,7 +173,7 @@ soft and may evolve.
   - demo/lab_demo.db, demo/populate_demo.py, demo/README.md
   - backend/start.sh, backend/start_server.sh,
     backend/deploy_macmini.sh, backend/Caddyfile,
-    backend/launchd/local.prism.plist
+    backend/launchd/local.catalyst.plist
 
 Files: reorganisation only, no behaviour change.
 
@@ -239,7 +239,7 @@ user asks.
   - **Audit log viewer** — compliance checkbox. Build when audited.
   - **OAuth2 / SAML SSO** — couple to the actual your institution IdP, not a
     generic one. Wait for the production deployment.
-  - **Multi-tenant** — only if PRISM is sold beyond your institution.
+  - **Multi-tenant** — only if CATALYST is sold beyond your institution.
 
 ----------------------------------------------------------------------
 NOT DOING (architectural decisions)

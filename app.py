@@ -46,8 +46,8 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
-ORG_NAME = os.environ.get("PRISM_ORG_NAME", "Catalyst ERP")
-ORG_TAGLINE = os.environ.get("PRISM_ORG_TAGLINE", "Open-source ERP for Research & Operations")
+ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "Catalyst ERP")
+ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -75,14 +75,14 @@ OWNER_EMAILS = {
     if email.strip()
 }
 DEMO_ROLE_SWITCHES = {
-    "owner": {"label": "Owner", "email": "owner@prism.local"},
-    "super_admin": {"label": "Super Admin", "email": "dean@prism.local"},
-    "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@prism.local"},
-    "site_admin": {"label": "Site Admin", "email": "siteadmin@prism.local"},
-    "operator": {"label": "Operator", "email": "anika@prism.local"},
-    "member": {"label": "Member", "email": "user1@prism.local"},
-    "finance": {"label": "Finance", "email": "meera@prism.local"},
-    "professor": {"label": "Approver", "email": "approver@prism.local"},
+    "owner": {"label": "Owner", "email": "owner@catalyst.local"},
+    "super_admin": {"label": "Super Admin", "email": "dean@catalyst.local"},
+    "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@catalyst.local"},
+    "site_admin": {"label": "Site Admin", "email": "siteadmin@catalyst.local"},
+    "operator": {"label": "Operator", "email": "anika@catalyst.local"},
+    "member": {"label": "Member", "email": "user1@catalyst.local"},
+    "finance": {"label": "Finance", "email": "meera@catalyst.local"},
+    "professor": {"label": "Approver", "email": "approver@catalyst.local"},
 }
 
 app = Flask(__name__)
@@ -118,9 +118,9 @@ DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "tru
 #   3. Create the template(s)
 #   4. (optional) run  scripts/new_module.sh <name>  to scaffold
 #
-# Set PRISM_MODULES in .env as a comma-separated list to restrict
+# Set CATALYST_MODULES in .env as a comma-separated list to restrict
 # which modules are active.  Default: all modules enabled.
-# Example: PRISM_MODULES=instruments,finance,inbox
+# Example: CATALYST_MODULES=instruments,finance,inbox
 #
 # Each entry carries everything the nav bar and tooling need:
 #   label       — human-readable nav text
@@ -274,7 +274,7 @@ MODULE_REGISTRY = {
 
 ALL_MODULES = set(MODULE_REGISTRY.keys())
 
-_modules_env = os.environ.get("PRISM_MODULES", "").strip()
+_modules_env = os.environ.get("CATALYST_MODULES", "").strip()
 ENABLED_MODULES: set[str] = (
     {m.strip().lower() for m in _modules_env.split(",") if m.strip()}
     if _modules_env
@@ -343,7 +343,7 @@ if _AUTHLIB_AVAILABLE and GOOGLE_CLIENT_ID:
 
 # ── SendGrid / External Email ──────────────────────────────────
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
-SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "noreply@prism.local")
+SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "noreply@catalyst.local")
 SENDGRID_DAILY_LIMIT = int(os.environ.get("SENDGRID_DAILY_LIMIT", "100"))
 
 
@@ -918,10 +918,12 @@ def request_timeline_entries(
             payload = json.loads(log["payload_json"] or "{}")
         except Exception:
             payload = {}
-        detail = ""
+        # Skip communication_note_saved — these are already shown as
+        # message bubbles from the request_messages table.
         if log["action"] == "communication_note_saved":
-            detail = f"{note_kind_label(payload.get('note_kind', 'note'))}: {payload.get('message_preview', '')}"
-        elif log["action"] == "issue_flagged":
+            continue
+        detail = ""
+        if log["action"] == "issue_flagged":
             detail = payload.get("issue_preview", "")
         elif log["action"] == "issue_response_saved":
             detail = payload.get("response_preview", "")
@@ -3652,7 +3654,7 @@ def can_access_calendar(user: sqlite3.Row | None) -> bool:
 
 def init_db() -> None:
     db = sqlite3.connect(DB_PATH)
-    # Pin WAL mode at schema-creation time so every DB PRISM ever
+    # Pin WAL mode at schema-creation time so every DB CATALYST ever
     # bootstraps is born in WAL. Also kick foreign_keys on for the
     # init path itself (get_db() handles runtime connections).
     db.execute("PRAGMA journal_mode = WAL")
@@ -4781,7 +4783,7 @@ def _purge_stale_logs(retention_days: int = 7) -> None:
         mid-run produces a null gap between existing and new writes.
 
     Purged (file-based only):
-      - prism_log.json                — debug overlay dump
+      - catalyst_log.json                — debug overlay dump
       - logs/wave-*.log               — old wave-run captures
       - reports/*_log.json            — stale crawler report files
                                         (each wave run overwrites the
@@ -4797,7 +4799,7 @@ def _purge_stale_logs(retention_days: int = 7) -> None:
     cutoff = time.time() - retention_days * 86400
     base = Path(__file__).resolve().parent
 
-    singletons = [base / "prism_log.json"]
+    singletons = [base / "catalyst_log.json"]
     globs = [
         base.glob("logs/wave-*.log"),
         base.glob("reports/*_log.json"),
@@ -5324,7 +5326,7 @@ def _seed_demo_messages() -> None:
             # (sender, recipient, subject, body, sent_offset_minutes, read)
             (admin, operator,
              "Welcome aboard",
-             "Hi — welcome to the PRISM live demo. This is a direct message from the facility admin. You'll see sitewide and role-scoped announcements in the NOTICEBOARD tile on your home page, but this channel is for one-to-one back-and-forth. Ping me anytime.",
+             "Hi — welcome to the CATALYST live demo. This is a direct message from the facility admin. You'll see sitewide and role-scoped announcements in the NOTICEBOARD tile on your home page, but this channel is for one-to-one back-and-forth. Ping me anytime.",
              120, False),
             (operator, admin,
              "Re: FESEM maintenance window",
@@ -5383,7 +5385,7 @@ def _seed_demo_notices() -> None:
             (
                 "site", None, "info",
                 "New grant application deadline: April 30",
-                "DST-SERB grant applications for the next funding cycle close April 30. PIs should submit instrument usage projections to the finance office by April 25. Contact finance@prism.local for the budget template.",
+                "DST-SERB grant applications for the next funding cycle close April 30. PIs should submit instrument usage projections to the finance office by April 25. Contact finance@catalyst.local for the budget template.",
                 admin_id,
             ),
             (
@@ -5637,44 +5639,44 @@ def seed_data() -> None:
 
     assignments = [
         # ── Kondhalkar is admin on most instruments ───────────────
-        ("kondhalkar@prism.local", "INST-001", "admin"),
-        ("kondhalkar@prism.local", "INST-002", "admin"),
-        ("kondhalkar@prism.local", "INST-003", "admin"),
-        ("kondhalkar@prism.local", "INST-004", "admin"),
-        ("kondhalkar@prism.local", "INST-005", "admin"),
-        ("kondhalkar@prism.local", "INST-006", "admin"),
-        ("kondhalkar@prism.local", "INST-007", "admin"),
-        ("kondhalkar@prism.local", "INST-008", "admin"),
-        ("kondhalkar@prism.local", "INST-009", "admin"),
-        ("kondhalkar@prism.local", "INST-010", "admin"),
-        ("kondhalkar@prism.local", "INST-011", "admin"),
-        ("kondhalkar@prism.local", "INST-012", "admin"),
-        ("kondhalkar@prism.local", "INST-013", "admin"),
+        ("kondhalkar@catalyst.local", "INST-001", "admin"),
+        ("kondhalkar@catalyst.local", "INST-002", "admin"),
+        ("kondhalkar@catalyst.local", "INST-003", "admin"),
+        ("kondhalkar@catalyst.local", "INST-004", "admin"),
+        ("kondhalkar@catalyst.local", "INST-005", "admin"),
+        ("kondhalkar@catalyst.local", "INST-006", "admin"),
+        ("kondhalkar@catalyst.local", "INST-007", "admin"),
+        ("kondhalkar@catalyst.local", "INST-008", "admin"),
+        ("kondhalkar@catalyst.local", "INST-009", "admin"),
+        ("kondhalkar@catalyst.local", "INST-010", "admin"),
+        ("kondhalkar@catalyst.local", "INST-011", "admin"),
+        ("kondhalkar@catalyst.local", "INST-012", "admin"),
+        ("kondhalkar@catalyst.local", "INST-013", "admin"),
 
         # ── Approver as faculty on imaging + spectroscopy ─────────
-        ("approver@prism.local",  "INST-001", "faculty"),
-        ("approver@prism.local",  "INST-002", "faculty"),
-        ("approver@prism.local",  "INST-003", "faculty"),
-        ("approver@prism.local",  "INST-004", "faculty"),
-        ("approver@prism.local",  "INST-005", "faculty"),
+        ("approver@catalyst.local",  "INST-001", "faculty"),
+        ("approver@catalyst.local",  "INST-002", "faculty"),
+        ("approver@catalyst.local",  "INST-003", "faculty"),
+        ("approver@catalyst.local",  "INST-004", "faculty"),
+        ("approver@catalyst.local",  "INST-005", "faculty"),
 
         # ── Operators spread across instruments ───────────────────
         # Anika: imaging cluster
-        ("anika@prism.local",     "INST-001", "operator"),
-        ("anika@prism.local",     "INST-009", "operator"),
+        ("anika@catalyst.local",     "INST-001", "operator"),
+        ("anika@catalyst.local",     "INST-009", "operator"),
         # Ravi: spectroscopy cluster
-        ("ravi@prism.local",      "INST-002", "operator"),
-        ("ravi@prism.local",      "INST-003", "operator"),
-        ("ravi@prism.local",      "INST-004", "operator"),
-        ("ravi@prism.local",      "INST-011", "operator"),
+        ("ravi@catalyst.local",      "INST-002", "operator"),
+        ("ravi@catalyst.local",      "INST-003", "operator"),
+        ("ravi@catalyst.local",      "INST-004", "operator"),
+        ("ravi@catalyst.local",      "INST-011", "operator"),
         # Chetan: surface + mechanical + battery
-        ("chetan@prism.local",    "INST-005", "operator"),
-        ("chetan@prism.local",    "INST-006", "operator"),
-        ("chetan@prism.local",    "INST-007", "operator"),
-        ("chetan@prism.local",    "INST-008", "operator"),
-        ("chetan@prism.local",    "INST-010", "operator"),
-        ("chetan@prism.local",    "INST-012", "operator"),
-        ("chetan@prism.local",    "INST-013", "operator"),
+        ("chetan@catalyst.local",    "INST-005", "operator"),
+        ("chetan@catalyst.local",    "INST-006", "operator"),
+        ("chetan@catalyst.local",    "INST-007", "operator"),
+        ("chetan@catalyst.local",    "INST-008", "operator"),
+        ("chetan@catalyst.local",    "INST-010", "operator"),
+        ("chetan@catalyst.local",    "INST-012", "operator"),
+        ("chetan@catalyst.local",    "INST-013", "operator"),
     ]
     for email, code, kind in assignments:
         _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
@@ -8717,7 +8719,7 @@ def sitemap():
         {"label": "Logged in as", "type": "text", "value": user["name"]},
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         {"label": "Role", "type": "badge", "value": user["role"].replace("_", " ").title(), "status": "submitted"},
-        {"label": "Email", "type": "text", "value": user["email"]},
+        {"label": "Username", "type": "text", "value": user["email"]},
     ]
     sections.append({
         "key": "core",
@@ -9056,7 +9058,7 @@ def auth_google_callback():
 
     user = query_one("SELECT * FROM users WHERE email = ? AND active = 1", (email,))
     if not user:
-        flash("No PRISM account found for this email. Contact your departmental secretary to get access.", "error")
+        flash("No CATALYST account found for this email. Contact your departmental secretary to get access.", "error")
         return redirect(url_for("login"))
 
     # Link google_id if not yet linked
@@ -11571,7 +11573,7 @@ def _dev_panel_progress() -> dict:
     """Compute current project progress from git + the docs."""
     branch = _dev_panel_git("symbolic-ref", "--short", "HEAD") or "DETACHED"
     # Compare against the upstream of the current branch, not a hardcoded
-    # "origin/main" — PRISM lives on `v1.3.0-stable-release`, and the
+    # "origin/main" — CATALYST lives on `v1.3.0-stable-release`, and the
     # hardcode was stale from the pre-stable-release era. If the branch
     # has no tracked upstream (detached HEAD, fresh local branch), both
     # counts stay at 0 rather than returning nonsense.
@@ -11702,7 +11704,7 @@ def _dev_panel_progress() -> dict:
 
     # Current release: the latest semver tag wins. Falls back to
     # CHANGELOG.md only if no semver tags exist at all (greenfield
-    # repo safety, never hit on PRISM trunk in practice).
+    # repo safety, never hit on CATALYST trunk in practice).
     current_release = "unknown"
     latest_tag_info: dict = {}
     if semver_tags:
@@ -13527,14 +13529,14 @@ def download_reset_password_eml(user_id: int):
     from email.message import EmailMessage
     msg = EmailMessage()
     msg["To"] = target_user["email"]
-    msg["Subject"] = "Your PRISM Account — Temporary Password"
-    msg["From"] = "PRISM Admin <noreply@prism.local>"
+    msg["Subject"] = "Your CATALYST Account — Temporary Password"
+    msg["From"] = "CATALYST Admin <noreply@catalyst.local>"
     msg.set_content(
         f"Hello {target_user['name']},\n\n"
-        f"Your PRISM account password has been reset by an administrator.\n\n"
+        f"Your CATALYST account password has been reset by an administrator.\n\n"
         f"Your temporary password is:  {temp_pw}\n\n"
         f"Please log in and change your password immediately.\n\n"
-        f"— PRISM System"
+        f"— CATALYST System"
     )
     buf = io.BytesIO(msg.as_bytes())
     buf.seek(0)
@@ -13792,8 +13794,8 @@ def instrument_calendar(instrument_id: int, instrument):
 @login_required
 def calendar_ics():
     """v2.2.1 — iCalendar subscription feed. Users add this URL to
-    Google Calendar / Apple Calendar / Outlook and get PRISM events
-    as a live-updating calendar. PRISM never talks to any API.
+    Google Calendar / Apple Calendar / Outlook and get CATALYST events
+    as a live-updating calendar. CATALYST never talks to any API.
 
     Events included:
       - Scheduled sample requests (scheduled_for date)
@@ -13811,10 +13813,10 @@ def calendar_ics():
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//PRISM Lab Scheduler//EN",
+        "PRODID:-//CATALYST Lab Scheduler//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
-        f"X-WR-CALNAME:PRISM — {user['name']}",
+        f"X-WR-CALNAME:CATALYST — {user['name']}",
     ]
 
     def ical_dt(dt_str):
@@ -13868,7 +13870,7 @@ def calendar_ics():
             f"SUMMARY:[{r['inst_code']}] {r['title']}",
             f"DESCRIPTION:Sample: {r['sample_name']} | Request: {r['request_no']}",
             f"LOCATION:{r['inst_name']}",
-            f"UID:prism-req-{r['request_no']}@prism.local",
+            f"UID:catalyst-req-{r['request_no']}@catalyst.local",
             "END:VEVENT",
         ])
 
@@ -13900,7 +13902,7 @@ def calendar_ics():
         lines.extend([
             f"SUMMARY:[DOWNTIME] {d['inst_code']} — {d['reason'] or 'Scheduled maintenance'}",
             f"LOCATION:{d['inst_name']}",
-            f"UID:prism-dt-{d['inst_code']}-{start}@prism.local",
+            f"UID:catalyst-dt-{d['inst_code']}-{start}@catalyst.local",
             "END:VEVENT",
         ])
 
@@ -13933,7 +13935,7 @@ def calendar_ics():
                 f"SUMMARY:[CALIBRATION DUE] {cal['inst_code']} — {cal['title']}",
                 f"DESCRIPTION:Certificate: {cal['certificate_number'] or 'pending'}",
                 f"LOCATION:{cal['inst_name']}",
-                f"UID:prism-cal-{cal['inst_code']}-{dt}@prism.local",
+                f"UID:catalyst-cal-{cal['inst_code']}-{dt}@catalyst.local",
                 "END:VEVENT",
             ])
     except Exception:
@@ -13944,7 +13946,7 @@ def calendar_ics():
     return app.response_class(
         ics_content,
         mimetype="text/calendar",
-        headers={"Content-Disposition": "inline; filename=prism-calendar.ics"},
+        headers={"Content-Disposition": "inline; filename=catalyst-calendar.ics"},
     )
 
 
@@ -15053,38 +15055,38 @@ def activate():
     return render_template("activate.html")
 
 
-# ── PRISM feedback log persistence ──────────────────────────
-PRISM_LOG = Path(__file__).resolve().parent / "prism_log.json"
+# ── CATALYST feedback log persistence ──────────────────────────
+CATALYST_LOG = Path(__file__).resolve().parent / "catalyst_log.json"
 
-@app.route("/prism/save", methods=["POST"])
+@app.route("/catalyst/save", methods=["POST"])
 @login_required
-def prism_save():
-    """Persist the full prism dump to disk. Called by overlay JS on every entry.
+def catalyst_save():
+    """Persist the full catalyst dump to disk. Called by overlay JS on every entry.
 
     v2.0.1 — Gated to authenticated users. Previously unauthenticated,
-    which let any bot overwrite prism_log.json. File is still writable
+    which let any bot overwrite catalyst_log.json. File is still writable
     by every logged-in user since the overlay ships with the app.
     """
     data = request.get_json(silent=True)
     if not data:
         return jsonify(ok=False, error="no data"), 400
-    PRISM_LOG.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    CATALYST_LOG.write_text(json.dumps(data, indent=2, ensure_ascii=False))
     return jsonify(ok=True)
 
-@app.route("/prism/log", methods=["GET"])
+@app.route("/catalyst/log", methods=["GET"])
 @login_required
-def prism_log():
-    """Return the current persisted prism log. v2.0.1 — auth-gated."""
-    if PRISM_LOG.exists():
-        return app.response_class(PRISM_LOG.read_text(), mimetype="application/json")
+def catalyst_log():
+    """Return the current persisted catalyst log. v2.0.1 — auth-gated."""
+    if CATALYST_LOG.exists():
+        return app.response_class(CATALYST_LOG.read_text(), mimetype="application/json")
     return jsonify(feedLog=[], errorLog=[], paths=[])
 
-@app.route("/prism/clear", methods=["POST"])
+@app.route("/catalyst/clear", methods=["POST"])
 @login_required
-def prism_clear():
-    """Clear the persisted prism log. v2.0.1 — auth-gated."""
-    if PRISM_LOG.exists():
-        PRISM_LOG.write_text("{}")
+def catalyst_clear():
+    """Clear the persisted catalyst log. v2.0.1 — auth-gated."""
+    if CATALYST_LOG.exists():
+        CATALYST_LOG.write_text("{}")
     return jsonify(ok=True)
 
 
@@ -15720,7 +15722,7 @@ def audit_export():
         _io.BytesIO(output.getvalue().encode("utf-8")),
         mimetype="text/csv",
         as_attachment=True,
-        download_name="prism_audit_log.csv",
+        download_name="catalyst_audit_log.csv",
     )
 
 

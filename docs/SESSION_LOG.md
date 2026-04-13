@@ -1,4 +1,4 @@
-# PRISM X Development Session Log
+# CATALYST X Development Session Log
 
 > Tracks LLM usage, local machine compute, and remote machine compute
 > per development session. Shows the three-engine architecture in action.
@@ -84,9 +84,9 @@ seconds what would have taken ~45 minutes of LLM reasoning.
 ### Commit Timeline
 | Time | Commit | What |
 |------|--------|------|
-| 19:00 | `bd5aa1c` | PRISM X v1.1 — OAuth, finance, notifications, todos |
+| 19:00 | `bd5aa1c` | CATALYST X v1.1 — OAuth, finance, notifications, todos |
 | 19:15 | `94786bf` | Fix smoke test for new user roster |
-| 19:20 | `fc1894a` | Migrate crawler emails to @prism.local |
+| 19:20 | `fc1894a` | Migrate crawler emails to @catalyst.local |
 | 19:30 | `9b03861` | Quality: all modules to instrument-portal standard |
 | 19:40 | `8f1f9fe` | Finance KPIs + table rows clickable |
 | 19:45 | `2f06c2e` | Full sanity wave 11/11 green (266 checks) |

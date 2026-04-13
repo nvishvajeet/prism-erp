@@ -18,7 +18,7 @@
     {{ card_heading("PROFILE", employee.name) }}
     {{ metadata_grid([
       ("Name", employee.name),
-      ("Email", employee.email or "—"),
+      ("Username", employee.email or "—"),
       ("Role", employee.role or "—"),
       ("Designation", salary_cfg.designation if salary_cfg else "—"),
       ("Department", salary_cfg.department if salary_cfg else "—"),

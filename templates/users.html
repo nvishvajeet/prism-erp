@@ -58,8 +58,8 @@
       <label data-vis="{{ V }}">Name
         <input type="text" name="name" required data-vis="{{ V }}">
       </label>
-      <label data-vis="{{ V }}">Email
-        <input type="email" name="email" required data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Username
+        <input type="text" name="email" required autocomplete="off" data-vis="{{ V }}">
       </label>
       <label data-vis="{{ V }}">Role
         <select name="role" data-vis="{{ V }}">
@@ -90,7 +90,7 @@
     {{ card_heading("", "Members") }}
     {% call paginated_pane('usersMembers', max_height='none', page_size=15) %}
     <table class="inst-list-table sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Email</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Invite Status</th><th data-vis="{{ V }}">Active</th><th data-vis="{{ V }}">Action</th></tr></thead>
+      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Username</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Invite Status</th><th data-vis="{{ V }}">Active</th><th data-vis="{{ V }}">Action</th></tr></thead>
       <tbody id="usersMembersBody" data-vis="{{ V }}">
       {% for user in members %}{{ user_row(user, show_actions=True) }}{% endfor %}
       </tbody>
@@ -103,7 +103,7 @@
     {{ card_heading("", "Admins and Staff Roles") }}
     {% call paginated_pane('usersAdmins', max_height='none', page_size=15) %}
     <table class="inst-list-table sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Email</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Invite Status</th><th data-vis="{{ V }}">Active</th></tr></thead>
+      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Username</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Invite Status</th><th data-vis="{{ V }}">Active</th></tr></thead>
       <tbody id="usersAdminsBody" data-vis="{{ V }}">
       {% for user in admins %}{{ user_row(user, show_actions=False) }}{% endfor %}
       </tbody>
@@ -115,7 +115,7 @@
   <article class="card tile tile-users-owners" data-vis="{{ V }}">
     {{ card_heading("", "Owners") }}
     <table class="inst-list-table sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Email</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Active</th></tr></thead>
+      <thead data-vis="{{ V }}"><tr data-vis="{{ V }}"><th data-vis="{{ V }}">Name</th><th data-vis="{{ V }}">Username</th><th data-vis="{{ V }}">Code</th><th data-vis="{{ V }}">Role</th><th data-vis="{{ V }}">Active</th></tr></thead>
       <tbody data-vis="{{ V }}">
         {% for user in owners %}
         <tr data-vis="{{ V }}">

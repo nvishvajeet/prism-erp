@@ -53,7 +53,7 @@ class PerformanceStrategy(CrawlerStrategy):
         result = CrawlResult(name=self.name, aspect=self.aspect)
         timings: dict[str, list[float]] = defaultdict(list)
 
-        with harness.logged_in("owner@prism.local"):
+        with harness.logged_in("owner@catalyst.local"):
             for path in HOT_ROUTES:
                 for _ in range(SAMPLES_PER_ROUTE):
                     try:

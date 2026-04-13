@@ -27,9 +27,9 @@ CRITICAL_PATHS = [
 ]
 
 SMOKE_ROLES = [
-    ("owner@prism.local", "super_admin"),
-    ("anika@prism.local", "operator"),
-    ("user1@prism.local", "requester"),
+    ("owner@catalyst.local", "super_admin"),
+    ("anika@catalyst.local", "operator"),
+    ("user1@catalyst.local", "requester"),
 ]
 
 # Paths that are expected to return 403 for specific roles (by design).

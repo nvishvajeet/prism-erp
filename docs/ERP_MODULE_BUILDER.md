@@ -1,22 +1,22 @@
-# PRISM ERP Module Builder
+# CATALYST ERP Module Builder
 
-> Build a complete ERP module in 15 minutes using PRISM's component library.
+> Build a complete ERP module in 15 minutes using CATALYST's component library.
 
 ## Architecture Overview
 
-PRISM is a single-file Flask ERP (`app.py`, ~7 000 lines) with:
+CATALYST is a single-file Flask ERP (`app.py`, ~7 000 lines) with:
 
 - **SQLite database** — schema defined in `init_db()` (~line 3433). WAL mode, foreign keys enforced.
 - **Jinja2 templates** — every page extends `templates/base.html` and imports macros from `templates/_page_macros.html`.
 - **CSS** — single file `static/styles.css` using CSS custom properties (`--ink`, `--muted`, `--accent`, `--panel`, etc.) with automatic dark-mode support via `[data-theme="dark"]`.
 - **Role-based access** — `user_access_profile(user)` returns a dict of boolean capabilities; routes check these before rendering.
-- **Module toggle** — `PRISM_MODULES` env var controls which modules are enabled. `module_enabled(name)` gate in templates and routes.
+- **Module toggle** — `CATALYST_MODULES` env var controls which modules are enabled. `module_enabled(name)` gate in templates and routes.
 
 ## The 6 Primitives
 
-Every PRISM page is built from 6 primitives:
+Every CATALYST page is built from 6 primitives:
 
-1. **App** — A module (instruments, finance, attendance, etc.). Registered in `ALL_MODULES` at the top of `app.py` and toggled via `PRISM_MODULES`.
+1. **App** — A module (instruments, finance, attendance, etc.). Registered in `ALL_MODULES` at the top of `app.py` and toggled via `CATALYST_MODULES`.
 2. **Tile** — A card container (`.card.tile`). Self-contained section with a heading and body. Pages are grids of tiles.
 3. **Widget** — A data display inside a tile (`stat_blob`, `metadata_grid`, `kpi_grid`, `paginated_pane`, `activity_feed`).
 4. **Button** — Action triggers (`.btn`, `.btn-primary`, `.text-link`, `.link-button`).
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 );
 ```
 
-For columns added after initial release, use `ALTER TABLE` with a try/except pattern (search `app.py` for `ALTER TABLE` examples — PRISM uses this for backward-compatible schema migration inside `init_db()`).
+For columns added after initial release, use `ALTER TABLE` with a try/except pattern (search `app.py` for `ALTER TABLE` examples — CATALYST uses this for backward-compatible schema migration inside `init_db()`).
 
 ### Step 2: Routes (in `app.py`)
 
@@ -187,7 +187,7 @@ ALL_MODULES = {
 }
 ```
 
-2. The module is enabled by default (when `PRISM_MODULES` env var is unset). To disable, set `PRISM_MODULES` to a list that excludes it.
+2. The module is enabled by default (when `CATALYST_MODULES` env var is unset). To disable, set `CATALYST_MODULES` to a list that excludes it.
 
 3. Add a comment to the module registry block:
 

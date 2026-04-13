@@ -1,6 +1,6 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  PRISM ERP — Mac Mini Setup / Reconnect Script              ║
+# ║  CATALYST ERP — Mac Mini Setup / Reconnect Script              ║
 # ║                                                              ║
 # ║  Run this from your LAPTOP whenever:                         ║
 # ║    - Setting up a fresh mini                                 ║
@@ -15,7 +15,7 @@
 #   2. Tests SSH connectivity
 #   3. Copies your SSH key if needed
 #   4. Updates ~/.ssh/config with the new connection
-#   5. Installs PRISM on the mini (clones repo, venv, deps)
+#   5. Installs CATALYST on the mini (clones repo, venv, deps)
 #   6. Restores backup data from your laptop if available
 #   7. Generates HTTPS certs + starts the server
 #   8. Verifies everything works
@@ -35,7 +35,7 @@ ask()  { echo -en "${CYAN}?${NC} $1"; }
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║    PRISM — Mac Mini Setup / Reconnect        ║${NC}"
+echo -e "${BOLD}║    CATALYST — Mac Mini Setup / Reconnect        ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -46,9 +46,9 @@ echo ""
 # Load previous config if exists
 PREV_HOST=""
 PREV_USER=""
-if grep -q "Host prism-mini" ~/.ssh/config 2>/dev/null; then
-  PREV_HOST=$(grep -A3 "Host prism-mini" ~/.ssh/config | grep HostName | awk '{print $2}')
-  PREV_USER=$(grep -A3 "Host prism-mini" ~/.ssh/config | grep "User " | awk '{print $2}')
+if grep -q "Host catalyst-mini" ~/.ssh/config 2>/dev/null; then
+  PREV_HOST=$(grep -A3 "Host catalyst-mini" ~/.ssh/config | grep HostName | awk '{print $2}')
+  PREV_USER=$(grep -A3 "Host catalyst-mini" ~/.ssh/config | grep "User " | awk '{print $2}')
   say "Previous config found: ${PREV_USER}@${PREV_HOST}"
 fi
 
@@ -65,7 +65,7 @@ ask "SSH port [22]: "
 read -r MINI_PORT
 MINI_PORT="${MINI_PORT:-22}"
 
-ask "PRISM install path on mini [~/Scheduler/Main]: "
+ask "CATALYST install path on mini [~/Scheduler/Main]: "
 read -r MINI_PATH
 MINI_PATH="${MINI_PATH:-~/Scheduler/Main}"
 
@@ -79,7 +79,7 @@ echo -e "${BOLD}Step 2: SSH key${NC}"
 KEY_FILE="$HOME/.ssh/id_ed25519"
 if [ ! -f "$KEY_FILE" ]; then
   say "Generating SSH key..."
-  ssh-keygen -t ed25519 -f "$KEY_FILE" -N "" -C "prism-owner@$(hostname)"
+  ssh-keygen -t ed25519 -f "$KEY_FILE" -N "" -C "catalyst-owner@$(hostname)"
 fi
 say "Key: $KEY_FILE ✓"
 
@@ -113,18 +113,18 @@ fi
 echo ""
 echo -e "${BOLD}Step 4: Updating SSH config${NC}"
 
-# Remove old prism-mini entry if exists
-if grep -q "Host prism-mini" ~/.ssh/config 2>/dev/null; then
-  # Remove the old block (Host prism-mini + next 4 lines)
-  sed -i.bak '/^Host prism-mini$/,/^$/d' ~/.ssh/config
+# Remove old catalyst-mini entry if exists
+if grep -q "Host catalyst-mini" ~/.ssh/config 2>/dev/null; then
+  # Remove the old block (Host catalyst-mini + next 4 lines)
+  sed -i.bak '/^Host catalyst-mini$/,/^$/d' ~/.ssh/config
   rm -f ~/.ssh/config.bak
-  say "Removed old prism-mini config"
+  say "Removed old catalyst-mini config"
 fi
 
 cat >> ~/.ssh/config << SSHEOF
 
-# PRISM Mac mini — auto-configured by setup_mini.sh on $(date +%Y-%m-%d)
-Host prism-mini
+# CATALYST Mac mini — auto-configured by setup_mini.sh on $(date +%Y-%m-%d)
+Host catalyst-mini
     HostName ${MINI_IP}
     User ${MINI_USER}
     Port ${MINI_PORT}
@@ -135,13 +135,13 @@ Host prism-mini
 SSHEOF
 
 say "~/.ssh/config updated ✓"
-say "You can now use: ssh prism-mini"
+say "You can now use: ssh catalyst-mini"
 
-# ── 5. Install PRISM on mini ────────────────────────────────
+# ── 5. Install CATALYST on mini ────────────────────────────────
 echo ""
-echo -e "${BOLD}Step 5: Installing PRISM on mini${NC}"
+echo -e "${BOLD}Step 5: Installing CATALYST on mini${NC}"
 
-REPO_URL="${PRISM_REPO_URL:-https://github.com/YOUR-ORG/prism-erp.git}"
+REPO_URL="${CATALYST_REPO_URL:-https://github.com/YOUR-ORG/catalyst-erp.git}"
 
 ssh -p "$MINI_PORT" "${MINI_USER}@${MINI_IP}" bash -s -- "$MINI_PATH" "$REPO_URL" << 'REMOTE_INSTALL'
   MINI_PATH="$1"
@@ -149,7 +149,7 @@ ssh -p "$MINI_PORT" "${MINI_USER}@${MINI_IP}" bash -s -- "$MINI_PATH" "$REPO_URL
 
   echo "  Checking for existing installation..."
   if [ -f "$MINI_PATH/app.py" ]; then
-    echo "  Found existing PRISM at $MINI_PATH"
+    echo "  Found existing CATALYST at $MINI_PATH"
     cd "$MINI_PATH"
     echo "  Pulling latest..."
     git pull origin v1.3.0-stable-release 2>&1 | tail -3
@@ -170,10 +170,10 @@ ssh -p "$MINI_PORT" "${MINI_USER}@${MINI_IP}" bash -s -- "$MINI_PATH" "$REPO_URL
   echo "  Creating directories..."
   mkdir -p data/demo data/operational logs
 
-  echo "  ✓ PRISM installed at $MINI_PATH"
+  echo "  ✓ CATALYST installed at $MINI_PATH"
 REMOTE_INSTALL
 
-say "PRISM installed on mini ✓"
+say "CATALYST installed on mini ✓"
 
 # ── 6. Restore backup data ──────────────────────────────────
 echo ""
@@ -240,7 +240,7 @@ ssh -p "$MINI_PORT" "${MINI_USER}@${MINI_IP}" bash -s -- "$MINI_PATH" << 'REMOTE
   if [ ! -f cert.pem ]; then
     echo "  Generating HTTPS cert..."
     openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
-      -days 365 -nodes -subj "/CN=prism-mini" 2>/dev/null
+      -days 365 -nodes -subj "/CN=catalyst-mini" 2>/dev/null
     echo "  Self-signed cert generated ✓"
   else
     echo "  Cert exists ✓"
@@ -286,16 +286,16 @@ SSH_CODE="OK"
 
 echo ""
 echo -e "${BOLD}${GREEN}══════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN}  PRISM Mini Setup Complete${NC}"
+echo -e "${BOLD}${GREEN}  CATALYST Mini Setup Complete${NC}"
 echo -e "${BOLD}${GREEN}══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  ${BOLD}SSH:${NC}     ssh prism-mini"
+echo -e "  ${BOLD}SSH:${NC}     ssh catalyst-mini"
 echo -e "  ${BOLD}HTTPS:${NC}   https://${MINI_IP}:${PORT} (status: ${HTTPS_CODE})"
 echo -e "  ${BOLD}LAN:${NC}     https://${MINI_IP}:${PORT} (same — accessible from any device on the network)"
 echo ""
 echo -e "  ${BOLD}Backup:${NC}  bash scripts/backup_from_mini.sh"
-echo -e "  ${BOLD}Update:${NC}  ssh prism-mini 'cd ${MINI_PATH} && bash scripts/update.sh --restart'"
-echo -e "  ${BOLD}Logs:${NC}    ssh prism-mini 'tail -f ${MINI_PATH}/logs/server.log'"
+echo -e "  ${BOLD}Update:${NC}  ssh catalyst-mini 'cd ${MINI_PATH} && bash scripts/update.sh --restart'"
+echo -e "  ${BOLD}Logs:${NC}    ssh catalyst-mini 'tail -f ${MINI_PATH}/logs/server.log'"
 echo ""
 
 if [ "$HTTPS_CODE" != "200" ]; then

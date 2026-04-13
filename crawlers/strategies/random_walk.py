@@ -4,7 +4,7 @@ Aspect: coverage
 Improves: exercises combinations of (role, route, prior-state) that
           no hand-written test would think to try. By the coupon
           collector's argument, visiting k states with probability
-          ≥ 1−δ needs O(k · ln(k/δ)) steps. For PRISM's ~55 routes
+          ≥ 1−δ needs O(k · ln(k/δ)) steps. For CATALYST's ~55 routes
           × 8 roles ≈ 440 cells, 2000 steps gives ~95% coverage.
 
 Ported from `test_mcmc_crawl.py`, slimmed for routine use. Every

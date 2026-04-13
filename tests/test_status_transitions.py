@@ -35,7 +35,7 @@ import os
 import sys
 from pathlib import Path
 
-# Make the parent dir importable so `import app as prism_app` works
+# Make the parent dir importable so `import app as catalyst_app` works
 # whether the test is run from the repo root or from `tests/`.
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -47,11 +47,11 @@ os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
 os.environ.setdefault("LAB_SCHEDULER_CSRF", "0")
 os.environ.setdefault("OWNER_EMAILS", "admin@lab.local")
 
-import app as prism_app  # noqa: E402
+import app as catalyst_app  # noqa: E402
 
-REQUEST_STATUS_TRANSITIONS = prism_app.REQUEST_STATUS_TRANSITIONS
-assert_status_transition = prism_app.assert_status_transition
-InvalidStatusTransition = prism_app.InvalidStatusTransition
+REQUEST_STATUS_TRANSITIONS = catalyst_app.REQUEST_STATUS_TRANSITIONS
+assert_status_transition = catalyst_app.assert_status_transition
+InvalidStatusTransition = catalyst_app.InvalidStatusTransition
 
 
 # A small set of statuses that should NEVER appear in the dict.

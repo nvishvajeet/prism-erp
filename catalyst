@@ -1,6 +1,6 @@
 #!/bin/bash
-# PRISM CLI — unified command interface
-# Usage: ./prism [command]
+# CATALYST CLI — unified command interface
+# Usage: ./catalyst [command]
 #   start       Start the server (default)
 #   init        Initialize database + .env
 #   test        Run smoke test
@@ -11,8 +11,8 @@
 #   status      Show system status
 set -e
 
-PRISM_HOME="${PRISM_HOME:-$(cd "$(dirname "$0")" && pwd)}"
-cd "$PRISM_HOME"
+CATALYST_HOME="${CATALYST_HOME:-$(cd "$(dirname "$0")" && pwd)}"
+cd "$CATALYST_HOME"
 
 # Find Python
 if [ -x ".venv/bin/python" ]; then PY=".venv/bin/python"
@@ -23,7 +23,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m
 
 case "${1:-start}" in
   start)
-    echo -e "${BOLD}PRISM${NC} starting on ${GREEN}https://localhost:5055${NC}"
+    echo -e "${BOLD}CATALYST${NC} starting on ${GREEN}https://localhost:5055${NC}"
     if [ -f cert.pem ]; then
       exec $PY -c "import app; app.app.run(host='0.0.0.0', port=5055, ssl_context=('cert.pem', 'key.pem'))"
     else
@@ -31,7 +31,7 @@ case "${1:-start}" in
     fi
     ;;
   init)
-    echo -e "${BOLD}PRISM${NC} initializing..."
+    echo -e "${BOLD}CATALYST${NC} initializing..."
     mkdir -p data/demo data/operational logs
     if [ ! -f ".env" ]; then
       SECRET=$($PY -c "import secrets; print(secrets.token_hex(32))")
@@ -39,20 +39,20 @@ case "${1:-start}" in
 LAB_SCHEDULER_SECRET_KEY=$SECRET
 LAB_SCHEDULER_DEMO_MODE=1
 LAB_SCHEDULER_CSRF=1
-OWNER_EMAILS=owner@prism.local
-PRISM_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin,receipts,todos
+OWNER_EMAILS=owner@catalyst.local
+CATALYST_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin,receipts,todos
 EOF
       echo -e "  ${GREEN}✓${NC} .env created"
     fi
     $PY -c "import app; app.init_db(); print('  ✓ Database ready')"
-    echo -e "\n${GREEN}Done.${NC} Run ${BOLD}./prism start${NC} to launch."
+    echo -e "\n${GREEN}Done.${NC} Run ${BOLD}./catalyst start${NC} to launch."
     ;;
   test)
-    echo -e "${BOLD}PRISM${NC} smoke test"
+    echo -e "${BOLD}CATALYST${NC} smoke test"
     exec $PY scripts/smoke_test.py
     ;;
   crawl)
-    echo -e "${BOLD}PRISM${NC} sanity wave"
+    echo -e "${BOLD}CATALYST${NC} sanity wave"
     exec $PY -m crawlers wave sanity
     ;;
   module)
@@ -76,8 +76,8 @@ with app.app.app_context():
 " "$@"
     ;;
   status)
-    echo -e "${BOLD}PRISM${NC} Status"
-    echo -e "  Home:     $PRISM_HOME"
+    echo -e "${BOLD}CATALYST${NC} Status"
+    echo -e "  Home:     $CATALYST_HOME"
     echo -e "  Python:   $($PY --version 2>&1)"
     echo -e "  DB:       $(ls -lh data/demo/lab_scheduler.db 2>/dev/null | awk '{print $5}' || echo 'not found')"
     $PY -c "
@@ -94,6 +94,6 @@ with app.app.app_context():
 " 2>/dev/null
     ;;
   *)
-    echo "Usage: ./prism [start|init|test|crawl|module|update|search|status]"
+    echo "Usage: ./catalyst [start|init|test|crawl|module|update|search|status]"
     ;;
 esac

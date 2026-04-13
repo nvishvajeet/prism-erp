@@ -42,7 +42,7 @@ os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
 os.environ.setdefault("LAB_SCHEDULER_CSRF", "0")
 os.environ.setdefault("OWNER_EMAILS", "admin@lab.local")
 
-import app as prism_app  # noqa: E402
+import app as catalyst_app  # noqa: E402
 
 
 REQUIRED_KEYS = ("wave", "track", "est", "blocks", "tag", "status")
@@ -50,7 +50,7 @@ VALID_STATUSES = {"shipped", "hot", "pending"}
 
 
 def main() -> int:
-    rows = prism_app._dev_panel_waves()
+    rows = catalyst_app._dev_panel_waves()
     failures: list[str] = []
 
     # 1. At least six rows — the plan has been at or above this number
@@ -119,7 +119,7 @@ def main() -> int:
         and r["wave"].startswith("W")
         and r["wave"][-1].isalpha()
     ]
-    plan_text = (prism_app.BASE_DIR / "docs" / "NEXT_WAVES.md").read_text(
+    plan_text = (catalyst_app.BASE_DIR / "docs" / "NEXT_WAVES.md").read_text(
         errors="ignore"
     )
     plan_has_suffixed = any(

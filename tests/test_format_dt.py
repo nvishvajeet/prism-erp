@@ -1,7 +1,7 @@
 """Regression test for format_dt() and format_date() helpers.
 
 Both are exposed via inject_globals and render every timestamp
-in the PRISM UI. Silent drift in their output would ripple
+in the CATALYST UI. Silent drift in their output would ripple
 across every tile — lock the behavior once so a change is
 obvious in CI.
 
@@ -28,10 +28,10 @@ os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
 os.environ.setdefault("LAB_SCHEDULER_CSRF", "0")
 os.environ.setdefault("OWNER_EMAILS", "admin@lab.local")
 
-import app as prism_app  # noqa: E402
+import app as catalyst_app  # noqa: E402
 
-format_dt = prism_app.format_dt
-format_date = prism_app.format_date
+format_dt = catalyst_app.format_dt
+format_date = catalyst_app.format_date
 
 
 def _check(failures: list[str], label: str, got: str, expected: str) -> None:

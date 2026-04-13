@@ -1,4 +1,4 @@
-/* PRISM Debug Grid + Voice Feedback Recorder
+/* CATALYST Debug Grid + Voice Feedback Recorder
    Loaded when ?debug=1 is in the URL.
 
    Features:

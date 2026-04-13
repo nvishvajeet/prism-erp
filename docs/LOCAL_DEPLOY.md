@@ -1,8 +1,8 @@
-# PRISM — Local deploy (laptop hosting)
+# CATALYST — Local deploy (laptop hosting)
 
 The pragmatic counterpart to `docs/DEPLOY.md` (Mac mini
 production) and `docs/HTTPS.md` (Tailscale Serve / Let's Encrypt).
-This doc answers one question: **how do I host PRISM on my laptop
+This doc answers one question: **how do I host CATALYST on my laptop
 right now?**
 
 Three options, ranked by effort and reliability. Pick the lowest
@@ -15,8 +15,8 @@ tier that meets the survival window you need.
 | Tier | How | Lives through | Use when |
 |---|---|---|---|
 | **Ephemeral** | `./scripts/start.sh` | closing the terminal kills it | active development — reloader on, Chrome auto-opens, debug tracebacks visible |
-| **Session-persistent** | `nohup bash scripts/start.sh --service > logs/server.log 2>&1 & disown` | terminal close, but **not** logout or reboot | "I just need PRISM up for the afternoon demo" — this is the current operational state on the laptop |
-| **Boot-persistent** | `./scripts/install_launchd.sh` | logout, reboot, lid-close | you want PRISM up the same way the Mac mini has it up — always-on, launchd `KeepAlive`, survives everything |
+| **Session-persistent** | `nohup bash scripts/start.sh --service > logs/server.log 2>&1 & disown` | terminal close, but **not** logout or reboot | "I just need CATALYST up for the afternoon demo" — this is the current operational state on the laptop |
+| **Boot-persistent** | `./scripts/install_launchd.sh` | logout, reboot, lid-close | you want CATALYST up the same way the Mac mini has it up — always-on, launchd `KeepAlive`, survives everything |
 
 ### Ephemeral — `./scripts/start.sh`
 
@@ -50,7 +50,7 @@ cd ~/Documents/Scheduler/Main
 ./scripts/install_launchd.sh
 ```
 
-Installs `ops/launchd/local.prism.laptop.plist` as a LaunchAgent
+Installs `ops/launchd/local.catalyst.laptop.plist` as a LaunchAgent
 under `gui/$(id -u)` with `KeepAlive` and `RunAtLoad`. Survives
 logouts, reboots, and crashes (launchd respawns within seconds).
 
@@ -86,7 +86,7 @@ the default). Every seeded account shares `SimplePass123` — see
 
 ## 3. Environment flags that matter for local
 
-PRISM does **not** auto-load `.env`. Either `source .env` before
+CATALYST does **not** auto-load `.env`. Either `source .env` before
 running, or let `scripts/start.sh` do it (it runs `set -a; . ./.env`
 on boot). These are the flags that actually affect local hosting:
 
@@ -111,7 +111,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5055/login
 ```
 
 ```bash
-PRISM_DEPLOY_URL=http://127.0.0.1:5055 \
+CATALYST_DEPLOY_URL=http://127.0.0.1:5055 \
   .venv/bin/python -m crawlers run deploy_smoke
 # expect: PASS 3  FAIL 0  WARN 0
 ```
@@ -121,7 +121,7 @@ tail -f logs/server.log
 ```
 
 The `deploy_smoke` crawler is the same one the Mac mini runs after
-every release — if it passes locally, the laptop is serving PRISM
+every release — if it passes locally, the laptop is serving CATALYST
 the same way production does.
 
 ---

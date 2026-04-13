@@ -21,12 +21,12 @@ import populate_live_demo  # noqa: E402
 def login(client, email: str, password: str = "12345") -> None:
     response = client.post("/login", data={"email": email, "password": password}, follow_redirects=True)
     assert response.status_code == 200
-    # Sanity: post-login response should be a logged-in PRISM page (not the
+    # Sanity: post-login response should be a logged-in CATALYST page (not the
     # login form). Match against the universal `<title>` and a nav fragment
     # from base.html so the assertion survives template-level rewrites of
     # individual page bodies.
-    assert b"PRISM" in response.data or b"Lab Scheduler" in response.data, (
-        f"login({email!r}): post-login response did not contain PRISM/Lab Scheduler title"
+    assert b"CATALYST" in response.data or b"Lab Scheduler" in response.data, (
+        f"login({email!r}): post-login response did not contain CATALYST/Lab Scheduler title"
     )
     assert b'name="email"' not in response.data, (
         f"login({email!r}): still on login form after submit — credentials wrong?"
@@ -48,7 +48,7 @@ def main() -> None:
     issue_message = "The vial label is smudged and may need verification."
 
     # Use owner account — has access to all requests
-    login(client, "owner@prism.local")
+    login(client, "owner@catalyst.local")
     response = client.post(
         "/requests/1",
         data={
@@ -205,7 +205,7 @@ def main() -> None:
         assert (app.BASE_DIR / slip_attachment["relative_path"]).exists()
 
     client.get("/logout")
-    login(client, "owner@prism.local")
+    login(client, "owner@catalyst.local")
     response = client.post(
         "/requests/new",
         data={
@@ -232,7 +232,7 @@ def main() -> None:
         ).fetchone()
         assert admin_created is not None
         assert admin_created["requester_id"] == 11
-        admin_user = app.get_db().execute("SELECT id FROM users WHERE email = 'owner@prism.local'").fetchone()
+        admin_user = app.get_db().execute("SELECT id FROM users WHERE email = 'owner@catalyst.local'").fetchone()
         assert admin_user is not None
         assert admin_created["created_by_user_id"] == admin_user["id"]
         assert "reassessment" in (admin_created["originator_note"] or "")
@@ -277,7 +277,7 @@ def main() -> None:
             "SELECT id FROM approval_steps WHERE sample_request_id = 1 AND approver_role = 'finance' ORDER BY id LIMIT 1"
         ).fetchone()
     if finance_step:
-        # Assign to finance admin (user 8 = meera@prism.local)
+        # Assign to finance admin (user 8 = meera@catalyst.local)
         response = client.post(
             "/requests/1",
             data={"action": "assign_approver", "step_id": str(finance_step["id"]), "approver_user_id": "8"},
@@ -329,16 +329,16 @@ def main() -> None:
         data={
             "action": "create_user",
             "name": "Member Temp",
-            "email": "member.temp@prism.local",
+            "email": "member.temp@catalyst.local",
             "role": "requester",
         },
         follow_redirects=True,
     )
-    assert response.status_code == 200 or b"member.temp@prism.local" in response.data or b"Member Temp" in response.data
+    assert response.status_code == 200 or b"member.temp@catalyst.local" in response.data or b"Member Temp" in response.data
     from werkzeug.security import generate_password_hash as _gph
     with app.app.app_context():
         db = app.get_db()
-        temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@prism.local'").fetchone()
+        temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@catalyst.local'").fetchone()
         assert temp_member is not None
         temp_member_id = temp_member["id"]
         db.execute(
@@ -349,7 +349,7 @@ def main() -> None:
         db.commit()
 
     client.get("/logout")
-    login(client, "member.temp@prism.local")
+    login(client, "member.temp@catalyst.local")
     response = client.get(f"/attachments/{attachment['id']}/download")
     assert response.status_code == 403
     assert client.get("/schedule").status_code == 403
@@ -361,7 +361,7 @@ def main() -> None:
     # The 403 checks above are the real guard. The home page may still
     # include nav shells; visibility is enforced server-side.
     assert response.status_code == 200
-    login(client, "owner@prism.local")
+    login(client, "owner@catalyst.local")
 
     response = client.post(
         "/calendar?instrument_id=1&date=2026-04-06&view=week",
@@ -483,7 +483,7 @@ def main() -> None:
     assert b"Upload too large" in response.data
 
     client.get("/logout")
-    login(client, "meera@prism.local")
+    login(client, "meera@catalyst.local")
     response = client.get("/my/history", follow_redirects=True)
     assert response.status_code == 200
     # Visibility matrix (v1.2.x+): finance can browse instruments,
@@ -502,7 +502,7 @@ def main() -> None:
     assert b"Records" not in response.data
 
     client.get("/logout")
-    login(client, "dean@prism.local")
+    login(client, "dean@catalyst.local")
     assert client.get("/admin/users").status_code == 200
     response = client.post(
         f"/users/{temp_member_id}",
@@ -512,7 +512,7 @@ def main() -> None:
     assert b"Access removed" in response.data
 
     client.get("/logout")
-    login(client, "kondhalkar@prism.local")
+    login(client, "kondhalkar@catalyst.local")
     response = client.get("/my/history", follow_redirects=True)
     assert response.status_code == 200
     response = client.get("/instruments")
@@ -552,7 +552,7 @@ def main() -> None:
         assert (app.STATIC_DIR / instrument["machine_photo_url"]).exists()
 
     client.get("/logout")
-    login(client, "user1@prism.local")
+    login(client, "user1@catalyst.local")
     response = client.post(
         "/requests/new",
         data={
@@ -583,7 +583,7 @@ def main() -> None:
         assert queued_row["status"] == "submitted"
 
     client.get("/logout")
-    login(client, "kondhalkar@prism.local")
+    login(client, "kondhalkar@catalyst.local")
     response = client.post(
         "/instruments/1",
         data={"action": "update_operation", "intake_mode": "accepting"},
@@ -600,7 +600,7 @@ def main() -> None:
         assert "released into review" in (released_row["remarks"] or "").lower()
 
     client.get("/logout")
-    response = client.post("/login", data={"email": "member.temp@prism.local", "password": "12345"}, follow_redirects=True)
+    response = client.post("/login", data={"email": "member.temp@catalyst.local", "password": "12345"}, follow_redirects=True)
     assert b"Invalid login" in response.data
 
     print("smoke test passed")

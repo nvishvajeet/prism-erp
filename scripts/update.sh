@@ -1,5 +1,5 @@
 #!/bin/bash
-# PRISM ERP — Apple-style update system.
+# CATALYST ERP — Apple-style update system.
 #
 # Pulls the latest code from the upstream git remote without
 # touching your data. Program files (app.py, templates/, static/,
@@ -24,7 +24,7 @@ cd "$(dirname "$0")/.."
 BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "v1.3.0-stable-release")
 
 echo "══════════════════════════════════════════════"
-echo "  PRISM ERP — Checking for updates"
+echo "  CATALYST ERP — Checking for updates"
 echo "══════════════════════════════════════════════"
 echo "  Branch: $BRANCH"
 echo "  Current: $(git log --oneline -1)"
@@ -35,7 +35,7 @@ echo ""
 STASHED=0
 if ! git diff --quiet HEAD 2>/dev/null; then
   echo "  Stashing local changes..."
-  git stash push -q -m "prism-update-$(date +%s)"
+  git stash push -q -m "catalyst-update-$(date +%s)"
   STASHED=1
 fi
 

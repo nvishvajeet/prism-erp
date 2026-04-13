@@ -2,17 +2,17 @@
 
 > Open-source modular ERP. One file. Any organization. 14 modules. 15,000 lines. Zero dependencies beyond Flask + SQLite.
 
-**Live domain:** [catalysterp.org](https://catalysterp.org) · **GitHub:** [nvishvajeet/prism-erp](https://github.com/nvishvajeet/prism-erp)
+**Live domain:** [catalysterp.org](https://catalysterp.org) · **GitHub:** [nvishvajeet/catalyst-erp](https://github.com/nvishvajeet/catalyst-erp)
 
 ## Install
 
 ```bash
 # One-liner
-curl -fsSL https://raw.githubusercontent.com/nvishvajeet/prism-erp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nvishvajeet/catalyst-erp/main/install.sh | bash
 
 # Or manual
-git clone https://github.com/nvishvajeet/prism-erp.git catalyst
-cd catalyst && ./prism init && ./prism start
+git clone https://github.com/nvishvajeet/catalyst-erp.git catalyst
+cd catalyst && ./catalyst init && ./catalyst start
 ```
 
 ## What is Catalyst ERP?
@@ -42,7 +42,7 @@ A single-file Flask ERP that runs research facilities, food service companies, a
 | **Queue** | 8 | Sample request workflow, approval pipeline |
 | **Admin** | 14 | User management, dev panel, infrastructure monitoring |
 
-Enable selectively: `PRISM_MODULES=instruments,finance,personnel,vehicles`
+Enable selectively: `CATALYST_MODULES=instruments,finance,personnel,vehicles`
 
 ## Cross-Module Integration
 
@@ -117,14 +117,14 @@ Full matrix: [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md)
 ## CLI
 
 ```bash
-./prism start     # Start server
-./prism init      # Initialize database
-./prism test      # Run smoke test
-./prism crawl     # Run sanity wave (26 crawlers)
-./prism module    # Create new module
-./prism update    # Zero-downtime update
-./prism search    # Search from terminal
-./prism status    # Show system stats
+./catalyst start     # Start server
+./catalyst init      # Initialize database
+./catalyst test      # Run smoke test
+./catalyst crawl     # Run sanity wave (26 crawlers)
+./catalyst module    # Create new module
+./catalyst update    # Zero-downtime update
+./catalyst search    # Search from terminal
+./catalyst status    # Show system stats
 ```
 
 ## For AI Agents

@@ -1,4 +1,4 @@
-# AGENTS.md — PRISM / Lab Scheduler
+# AGENTS.md — CATALYST / Lab Scheduler
 
 > **Vendor-neutral entry point for AI coding agents.**
 > Any agent — Claude, ChatGPT / Codex, Gemini, Cursor, Copilot,
@@ -11,9 +11,9 @@
 
 ---
 
-## 1. What PRISM is
+## 1. What CATALYST is
 
-PRISM is a LAN-first Flask sample-request and instrument workflow
+CATALYST is a LAN-first Flask sample-request and instrument workflow
 system for shared lab facilities. Sequential approvals
 (finance → professor → operator), queue management, per-request
 attachments, SHA-256 audit chain. Single binary, SQLite, no build
@@ -32,7 +32,7 @@ Primary entry point: `app.py` (~7,000 lines). This *is* the product.
 | Default branch | `v1.3.0-stable-release` |
 | Canonical origin | `origin` remote (a local bare on the dev machine) |
 | Production host | Mac mini on Tailscale, mirrored from origin via post-receive hook |
-| Public mirrors | **none** — PRISM is private |
+| Public mirrors | **none** — CATALYST is private |
 
 **Push to `origin` only.** Never force-push `v1.3.0-stable-release`.
 Never rewrite history on any branch the production host has pulled.

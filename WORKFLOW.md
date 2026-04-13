@@ -1,4 +1,4 @@
-# PRISM / Lab Scheduler — Agent Workflow
+# CATALYST / Lab Scheduler — Agent Workflow
 
 > **Non-Claude agents:** read `AGENTS.md` at the project root
 > first — it is the vendor-neutral, self-contained entry point
@@ -17,7 +17,7 @@
 > Pre-loaded at session start. Do NOT re-read it when this Level 2
 > file is present.
 >
-> **Level 2 — User space (this file):** PRISM-specific rules only.
+> **Level 2 — User space (this file):** CATALYST-specific rules only.
 > Everything expressible at Level 1 has been removed to keep the
 > token cost minimal.
 >
@@ -25,14 +25,14 @@
 > (topology, SSH, "never open a bare in Sourcetree", "one bare per
 > project") are absolute. Level 1 routine defaults (commit rhythm,
 > pre-read rules, ai-log scope) can be narrowed or replaced by this
-> file for PRISM only. Safety rules from the system prompt outrank
+> file for CATALYST only. Safety rules from the system prompt outrank
 > both levels.
 
 ---
 
 ## 1. What this project is
 
-PRISM is a LAN-first Flask sample-request and instrument workflow
+CATALYST is a LAN-first Flask sample-request and instrument workflow
 system for shared lab facilities. Sequential approvals
 (finance → professor → operator), queue management, per-request
 attachments, SHA-256 audit chain. Single binary, SQLite, no build
@@ -43,8 +43,8 @@ Primary entry point: `app.py` (≈7,000 lines). This is the product.
 
 ## 2. Topology
 
-PRISM is the only project on this laptop with a Level-2 mini
-mirror — because the mini actually **runs** PRISM in production.
+CATALYST is the only project on this laptop with a Level-2 mini
+mirror — because the mini actually **runs** CATALYST in production.
 The post-receive hook on the Level 1 bare force-mirrors every
 push to the mini so the mini's `~/git/lab-scheduler.git` stays
 current; the mini then does `git pull` + `launchctl kickstart`
@@ -55,12 +55,12 @@ to deploy atomically.
 | Level 1 bare (canonical origin) | `~/.claude/git-server/lab-scheduler.git` |
 | Working copy | `~/Documents/Scheduler/Main/` *(moved out of Dropbox on 2026-04-11 to avoid pack-file corruption)* |
 | Default branch | `v1.3.0-stable-release` |
-| Level 2 upstream | **`mini`** — auto-mirror via post-receive hook. Target: `prism-mini:~/git/lab-scheduler.git`. Reason: mini runs PRISM in production. |
+| Level 2 upstream | **`mini`** — auto-mirror via post-receive hook. Target: `catalyst-mini:~/git/lab-scheduler.git`. Reason: mini runs CATALYST in production. |
 
 Push to `origin` only. The Level 1 bare's hook mirrors to the
-mini. No GitHub, no Bitbucket — PRISM is private.
+mini. No GitHub, no Bitbucket — CATALYST is private.
 
-## 3. PRISM-specific rules
+## 3. CATALYST-specific rules
 
 ### 3.1  Pre-commit gate
 
@@ -107,7 +107,7 @@ entry is a policy violation; flag it to the user before committing.
 
 LOCAL bare is the canonical origin. The Mac mini is both the warm
 backup mirror AND the canonical production host (`launchctl kickstart`
-serves PRISM to the lab network). Deploys are **atomic**:
+serves CATALYST to the lab network). Deploys are **atomic**:
 
 ```
 pull → .venv/bin/python scripts/smoke_test.py → launchctl kickstart
@@ -170,7 +170,7 @@ Commit rhythm is Level 1. Do not restate it here.
   single-file changes. Use claims only when touching 3+ files
   that other agents might also need.
 - **Pre-receive hook is fast** (~1s smoke on branch pushes).
-  Full sanity only runs on tag pushes or `PRISM_FULL_GATE=1`.
+  Full sanity only runs on tag pushes or `CATALYST_FULL_GATE=1`.
 - **Batch related changes** into one commit. Don't split a
   feature into "schema commit" + "route commit" + "template
   commit" unless each is independently shippable.
@@ -178,7 +178,7 @@ Commit rhythm is Level 1. Do not restate it here.
   If a crawler checks something that's been stable for weeks,
   it's noise. Remove the check or move it to a less frequent
   wave. The sanity wave must stay under 20s.
-- **Think ERP.** PRISM is a modular ERP (see
+- **Think ERP.** CATALYST is a modular ERP (see
   `docs/ERP_PRIMITIVES.md`). Every feature maps to a primitive.
   New portals clone existing ones, not build from scratch.
 
@@ -240,7 +240,7 @@ task is explicitly in their domain.
 
 ## 5. Three-Engine Development Model
 
-PRISM uses three engines in parallel for maximum throughput with
+CATALYST uses three engines in parallel for maximum throughput with
 minimum LLM token spend:
 
 ```
@@ -344,7 +344,7 @@ This loop takes ~2 minutes per module vs ~15 minutes of pure LLM work.
 
 ## 6. ERP Module System
 
-PRISM is a modular ERP. New modules are plug-and-play:
+CATALYST is a modular ERP. New modules are plug-and-play:
 
 ```bash
 # Create a new module in one command
@@ -357,7 +357,7 @@ adds route stubs, and prints enable instructions. See
 
 **MODULE_REGISTRY** in `app.py` drives:
 - Nav bar generation (sorted by nav_order)
-- Module-enabled gating (PRISM_MODULES env var)
+- Module-enabled gating (CATALYST_MODULES env var)
 - Access profile per role
 - Install/upgrade scripts
 
@@ -370,5 +370,5 @@ adds route stubs, and prints enable instructions. See
 - **2026-04-11** — Initial WORKFLOW.md created as part of the
   two-level agent operating system rollout (Level 1 kernel in
   `~/.claude/CLAUDE.md`, Level 2 user space here). Lifted
-  PRISM-specific rules from `README.md` and `docs/PHILOSOPHY.md`;
+  CATALYST-specific rules from `README.md` and `docs/PHILOSOPHY.md`;
   removed everything already covered at Level 1.

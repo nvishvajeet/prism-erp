@@ -1,4 +1,4 @@
-# PRISM — Architecture Specification
+# CATALYST — Architecture Specification
 
 **Version 1.2.0**
 
@@ -319,7 +319,7 @@ so users can re-download recent reports.
 | `POST /exports/generate`                    | —                         | login        | Trigger Excel generation                      |
 | `GET /api/health-check`                     | JSON                      | public       | Liveness probe                                |
 | `GET /demo/switch/<role>`                   | redirect                  | login + DEMO | Role impersonation (gated by `DEMO_MODE`)     |
-| `GET/POST /prism/save`, `/prism/log`, `/prism/clear` | JSON             | login        | Crawler agent endpoints                       |
+| `GET/POST /catalyst/save`, `/catalyst/log`, `/catalyst/clear` | JSON             | login        | Crawler agent endpoints                       |
 
 42 routes total. Auth column: **login** = `@login_required`,
 **view/manage/operate** = `@instrument_access_required(level)`,
@@ -338,7 +338,7 @@ Main/
 ├── PROJECT.md                   This file — architecture spec
 ├── CHANGELOG.md                 Version history (semver)
 ├── TODO_AI.txt                  Forward plan (next versions only)
-├── .env.example                 Every environment flag PRISM reads
+├── .env.example                 Every environment flag CATALYST reads
 ├── SECURITY_TODO.md             Hardening checklist + HTTPS migration
 ├── CRAWL_PLAN.md                Test strategy reference
 ├── ROLE_VISIBILITY_MATRIX.md    Visibility audit reference
@@ -372,7 +372,7 @@ Main/
 │       ├── cleanup.py           Dead Python / template / file hunter
 │       ├── approver_pools.py    Round-robin approver assignment integrity
 │       ├── smoke.py             Pre-push regression (critical paths × 3 roles)
-│       └── deploy_smoke.py      Probe PRISM_DEPLOY_URL for /login + /sitemap
+│       └── deploy_smoke.py      Probe CATALYST_DEPLOY_URL for /login + /sitemap
 │
 ├── reports/                     Crawler output (JSON + plain-text)
 ├── logs/                        Server logs (start.sh writes here)
@@ -739,13 +739,13 @@ HTTPS on the tailnet is delegated to `tailscale serve`; see
 
 ## 15. Versioning
 
-PRISM uses [Semantic Versioning](https://semver.org). The version
+CATALYST uses [Semantic Versioning](https://semver.org). The version
 in this file's header is the **architecture spec version** — bump
 the minor when an architectural decision in §1–§14 changes, bump
 the patch when a section is reworded without changing meaning.
 
 The version of the codebase itself is recorded in `CHANGELOG.md`
-and stamped into the running app via `app.config["PRISM_VERSION"]`
+and stamped into the running app via `app.config["CATALYST_VERSION"]`
 (planned for v1.3.0).
 
 | Bump  | When                                                       |
@@ -773,7 +773,7 @@ See `DEPLOY.md` for the full deployment specification. The summary:
   testing, all crawler work runs here. `master` is the source of
   truth.
 - **Mac mini** (`vishwajeet@100.115.176.118`, reachable via
-  Tailscale) is the **production host**. It runs PRISM 24×7 and
+  Tailscale) is the **production host**. It runs CATALYST 24×7 and
   serves the website to every machine on the lab's Tailscale
   network. It does not run background jobs, cron, or any compute
   offload — it only hosts.

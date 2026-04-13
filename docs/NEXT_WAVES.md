@@ -1,4 +1,4 @@
-# PRISM dev plan — optimized build plan from 02cb7ce
+# CATALYST dev plan — optimized build plan from 02cb7ce
 
 _Last re-anchored 2026-04-11 (third pass) after the grid-overlay_
 _unhook. Replaces the backlog section of `ROADMAP.md`. Each wave is_
@@ -117,17 +117,17 @@ W1.5.1  instrument groups       ← schema, depends on W1.5.0
 
 *The verification tool that every later infra wave lands against.*
 
-* New `crawlers/strategies/deploy_smoke.py`. Reads `PRISM_DEPLOY_URL`
+* New `crawlers/strategies/deploy_smoke.py`. Reads `CATALYST_DEPLOY_URL`
   env var; if unset, strategy reports *skipped* (exit 0). If set,
   hits `/login`, `/`, `/sitemap`, asserts HTTP 200 and that each
-  response body contains a sentinel string (`<title>PRISM`).
+  response body contains a sentinel string (`<title>CATALYST`).
 * Uses `urllib.request` with an `SSLContext` that verifies the
   cert chain when the URL is `https://`. A warning — not a fail —
   when the cert is self-signed, so both Plan A (Tailscale LE) and
   Plan B (mkcert) can pass.
 * Registered in the `sanity` wave as an opt-in final step. Laptop
   runs without the env var → noop → sanity stays fast.
-* Commit proof: run `PRISM_DEPLOY_URL=http://127.0.0.1:5055
+* Commit proof: run `CATALYST_DEPLOY_URL=http://127.0.0.1:5055
   .venv/bin/python -m crawlers run deploy_smoke` against the
   laptop server → expect 3/0/0 green.
 
@@ -137,7 +137,7 @@ Exit tag: no tag, one commit.
 
 *Turns the `nohup` dance into a real service that survives reboots.*
 
-* `ops/launchd/local.prism.plist` — `KeepAlive` true,
+* `ops/launchd/local.catalyst.plist` — `KeepAlive` true,
   `RunAtLoad` true, stdout/stderr to `logs/server.log`,
   `EnvironmentVariables` sourced from a one-line wrapper.
 * `scripts/start_server.sh` — exports `.env`, execs
@@ -150,7 +150,7 @@ Exit tag: no tag, one commit.
   canonical recipe. Plan-B (manual `python app.py`) stays as a
   debugging fallback only.
 * Acceptance: reboot the mini, wait 30s, run `deploy_smoke` from
-  the laptop with `PRISM_DEPLOY_URL=http://100.115.176.118:5055`.
+  the laptop with `CATALYST_DEPLOY_URL=http://100.115.176.118:5055`.
   Must be green without any manual start command.
 
 Blocking item: the Application Firewall still drops inbound
@@ -186,7 +186,7 @@ That script does steps 2-6 of the old recipe in one shot:
    `LAB_SCHEDULER_HOST=0.0.0.0`, appends `LAB_SCHEDULER_HTTPS=true`
    and `LAB_SCHEDULER_COOKIE_SECURE=true` if absent. Re-running
    is a no-op — safe to try multiple times.
-3. `launchctl kickstart -k gui/$(id -u)/local.prism` so Flask
+3. `launchctl kickstart -k gui/$(id -u)/local.catalyst` so Flask
    picks up the new env.
 4. Prints the MagicDNS HTTPS URL + the laptop-side `deploy_smoke`
    verification command.
@@ -228,13 +228,13 @@ https://login.tailscale.com/f/serve :**
 2. Flip `.env`: `LAB_SCHEDULER_HTTPS=true` +
    `LAB_SCHEDULER_COOKIE_SECURE=true`. Flask's cookie hardening
    switches on.
-3. `launchctl kickstart -k gui/$(id -u)/local.prism` — atomic
+3. `launchctl kickstart -k gui/$(id -u)/local.catalyst` — atomic
    restart of the launchd service with the new env.
 4. From the laptop:
-   `PRISM_DEPLOY_URL=https://prism-mini.tail-xxxx.ts.net \
+   `CATALYST_DEPLOY_URL=https://catalyst-mini.tail-xxxx.ts.net \
     .venv/bin/python -m crawlers run deploy_smoke` → expect 3/0/0
    green with a valid cert chain.
-5. Bookmark `https://prism-mini.tail-xxxx.ts.net/` on every
+5. Bookmark `https://catalyst-mini.tail-xxxx.ts.net/` on every
    device on the tailnet.
 
 **Plan B (fallback):** if the admin console blocks Tailscale
@@ -416,10 +416,10 @@ _path._
   (H/N/S/M/F/B/C/E/T/P/R/K/L/D), paints badges, intercepts
   clicks for logging, captures JS errors passively, records
   named "paths" of click sequences, exports JSON/plain-text
-  dumps, and auto-flushes to `/prism/save` via `sendBeacon`.
-  Public surface: `window.prism.{on,off,codes,at,tap,path.*,dump,clear,find}`.
-* Flask endpoints in `app.py` (≈L8193): `/prism/save`,
-  `/prism/log`, `/prism/clear`, persisting to `prism_log.json`.
+  dumps, and auto-flushes to `/catalyst/save` via `sendBeacon`.
+  Public surface: `window.catalyst.{on,off,codes,at,tap,path.*,dump,clear,find}`.
+* Flask endpoints in `app.py` (≈L8193): `/catalyst/save`,
+  `/catalyst/log`, `/catalyst/clear`, persisting to `catalyst_log.json`.
 * `templates/dev_panel.html` — separate "Development Console"
   page (wave/commit dashboard). Unrelated to the overlay and
   stays live for super-admin/owner.
@@ -437,7 +437,7 @@ from `base.html` on 2026-04-11; file and routes preserved.
 1. **Gate the script load** in `base.html` behind a single
    context flag `debug_mode_active`, set by an `inject_globals`
    context processor to `True` **iff** all three hold:
-   * env var `PRISM_DEBUG_OVERLAY=1` (laptop only; mini leaves
+   * env var `CATALYST_DEBUG_OVERLAY=1` (laptop only; mini leaves
      it unset → dead in prod)
    * `session.get("debug_mode") is True`
    * `current_user.role in ("super_admin", "owner")` — reuses
@@ -448,8 +448,8 @@ from `base.html` on 2026-04-11; file and routes preserved.
    flips `session["debug_mode"]`. Add the toggle button to the
    existing `/dev_panel` page as a new tile.
 3. **Ship the missing CSS.** The overlay references
-   `.prism-grid-btn`, `.prism-grid-badge`, `.prism-grid-outline`,
-   `.prism-pane-id-badge`, `.prism-fb-*` — zero rules exist in
+   `.catalyst-grid-btn`, `.catalyst-grid-badge`, `.catalyst-grid-outline`,
+   `.catalyst-pane-id-badge`, `.catalyst-fb-*` — zero rules exist in
    `static/styles.css`. Add a self-contained `dev-overlay.css`
    loaded in the same `{% if debug_mode_active %}` block so it
    never pollutes the main site's CSS surface.
@@ -469,12 +469,12 @@ from `base.html` on 2026-04-11; file and routes preserved.
 
 ### Acceptance criteria
 
-* With `PRISM_DEBUG_OVERLAY` unset, the overlay is unreachable
+* With `CATALYST_DEBUG_OVERLAY` unset, the overlay is unreachable
   for every role on every page — `view-source:` must not
   contain the `<script src="grid-overlay.js">` tag.
-* With `PRISM_DEBUG_OVERLAY=1` and `session["debug_mode"]=False`,
+* With `CATALYST_DEBUG_OVERLAY=1` and `session["debug_mode"]=False`,
   still unreachable.
-* With both flipped on and role = super_admin/owner, `window.prism`
+* With both flipped on and role = super_admin/owner, `window.catalyst`
   is defined and the button renders.
 * Sanity wave stays green end-to-end in all three states.
 
@@ -496,7 +496,7 @@ for v1.4.x. They ship after v1.4.2 is in the wild for a week.
 
 | new strategy       | wave(s)               | budget | gates on                        |
 |--------------------|-----------------------|--------|---------------------------------|
-| `deploy_smoke`     | `sanity` (opt-in)     | 3s     | `PRISM_DEPLOY_URL` → 200 + cert ✅ |
+| `deploy_smoke`     | `sanity` (opt-in)     | 3s     | `CATALYST_DEPLOY_URL` → 200 + cert ✅ |
 | `multi_role`       | `behavioral`, `all`   | 5s     | both role paths work per user   |
 | `group_visibility` | `behavioral`, `all`   | 5s     | grant/revoke propagate cleanly  |
 
@@ -562,7 +562,7 @@ concrete W-number and a target tag.
 
 ### Tech bet — HTTPS for the public internet
 
-**Goal:** PRISM reachable at `https://prism-mini.<tail>.ts.net/`
+**Goal:** CATALYST reachable at `https://catalyst-mini.<tail>.ts.net/`
 (or a custom domain) with a valid Let's Encrypt cert, so the
 portfolio site at `the project portfolio site` can link to a live
 demo URL that works in any browser without cert warnings.
@@ -574,7 +574,7 @@ demo URL that works in any browser without cert warnings.
   Caddy alternatives retired — Tailscale Serve is the only path).
 - `LOCAL_DEPLOY.md` documents the mini's launchd recipe.
 - The `deploy_smoke` sanity crawler is wired and ready to probe
-  `PRISM_DEPLOY_URL` the moment the mini is reachable over HTTPS.
+  `CATALYST_DEPLOY_URL` the moment the mini is reachable over HTTPS.
 
 **What's blocking:**
 - One operator click at https://login.tailscale.com/f/serve to
@@ -585,7 +585,7 @@ demo URL that works in any browser without cert warnings.
   `tailscale cert`, `tailscale serve --bg --https=443 …`, the
   `.env` flip (`LAB_SCHEDULER_HTTPS=true`,
   `LAB_SCHEDULER_COOKIE_SECURE=true`), and the `launchctl
-  kickstart -k gui/$(id -u)/local.prism` atomic restart.
+  kickstart -k gui/$(id -u)/local.catalyst` atomic restart.
 
 **Why it's a tech bet and not a task:** there is no amount of
 local work that unblocks this — the click is a policy decision
@@ -600,7 +600,7 @@ makes the strategic nature explicit: HTTPS is a goal, not a todo.
 - **Tag `v1.4.X` on the commit that goes live** — mark the
   first publicly-reachable release in the iOS-cadence patch
   stream (see `docs/PHILOSOPHY.md` §3.1).
-- **`deploy_smoke` on `PRISM_DEPLOY_URL`** moves from skip to 3
+- **`deploy_smoke` on `CATALYST_DEPLOY_URL`** moves from skip to 3
   passing checks in the sanity wave.
 
 ### Multi-role users — ✅ SHIPPED in `v1.5.0`
@@ -641,14 +641,14 @@ major-version decision.
 ### Tech bet — ERP v2.0 transition
 
 **Goal:** the long-horizon evolution documented in
-`docs/ERP_VISION.md`. PRISM becomes the first portal of an
+`docs/ERP_VISION.md`. CATALYST becomes the first portal of an
 internal ERP, integrating finance / inventory / HR / academic
 administration. All the hard attributes of `v1.x` are candidates
 for reshaping inside `v2.0`.
 
 **ERP-readiness proof point — `v1.7.0`.** The finance portal
 (`/finance`) and grants/budgets (`/finance/grants`) shipped in
-`v1.7.0` demonstrate that PRISM can absorb a new ERP domain as
+`v1.7.0` demonstrate that CATALYST can absorb a new ERP domain as
 an additive capability on top of `sample_requests` — no schema
 rebuild, no role taxonomy change, no v2.0 required. That
 reframes the v2.0 question: it is no longer "can we become an

@@ -1,5 +1,5 @@
 #!/bin/bash
-# PRISM — Tailscale Serve helper.
+# CATALYST — Tailscale Serve helper.
 #
 # Run this ON THE MINI. Wraps `tailscale serve` so the team doesn't
 # have to remember the exact flags. See docs/HTTPS.md for the full

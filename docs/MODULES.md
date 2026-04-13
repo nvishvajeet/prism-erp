@@ -1,6 +1,6 @@
-# PRISM — Engine & Module Map
+# CATALYST — Engine & Module Map
 
-> **Purpose.** PRISM is a single-file Flask app (`app.py`, ~8350 lines).
+> **Purpose.** CATALYST is a single-file Flask app (`app.py`, ~8350 lines).
 > This map labels the **engines** (major subsystems) and their
 > **subparts** (routes, tables, helpers, templates, crawlers) so that
 > tomorrow you can pick two engines and compose a new feature out of

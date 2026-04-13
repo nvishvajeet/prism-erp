@@ -1,7 +1,7 @@
-"""PRISM Crawler Suite.
+"""CATALYST Crawler Suite.
 
 A unified, reconstructible collection of crawlers used to test and
-improve the PRISM Lab Scheduler. Each crawler is a focused "strategy"
+improve the CATALYST Lab Scheduler. Each crawler is a focused "strategy"
 that targets one aspect of the site (visibility, lifecycle, performance,
 accessibility, CSS hygiene, dead links, etc.) and produces a machine-
 readable report plus a human summary.

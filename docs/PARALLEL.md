@@ -1,4 +1,4 @@
-# PRISM — parallel agent work protocol
+# CATALYST — parallel agent work protocol
 
 _Anchored 2026-04-11. This doc is the canonical description of_
 _how multiple Claude agents run concurrently against this_
@@ -9,7 +9,7 @@ _should follow on session start._
 
 ## Why parallelism at all
 
-PRISM is a 7000-line Flask single-binary with a crawler suite,
+CATALYST is a 7000-line Flask single-binary with a crawler suite,
 a doc library, and active ops/UX/test work all in flight at
 once. Serializing every task behind one agent wastes wall-clock
 time. With three safety nets in place — the advisory lock
@@ -56,7 +56,7 @@ Their output is their chat report — their effect on the tracked
 repo is zero.
 
 **Writing to private/gitignored output is fine.** `reports/`
-and `logs/` are `.gitignore`d in PRISM, and crawler runs
+and `logs/` are `.gitignore`d in CATALYST, and crawler runs
 legitimately write JSON + text logs into `reports/*_log.json`
 every invocation. That's still a read agent: the writes are
 private per-run scratch output, nothing another agent will
@@ -356,14 +356,14 @@ every agent, every task, every session:
 A fresh agent starting a new chat session on this project
 follows this loop. Every step is mandatory. Skip nothing.
 
-1. **Sync.** `cd /path/to/prism &&
+1. **Sync.** `cd /path/to/catalyst &&
    git pull --rebase origin v1.3.0-stable-release`.
 2. **Clean-tree check.** `git status --short`. Must be empty.
    If not, surface to operator before touching anything else.
 3. **Read the kernel + user-space context.**
    `~/.claude/CLAUDE.md` (Level 1) auto-loads at session
    start. Read `WORKFLOW.md` at the project root for the
-   PRISM-specific Level-2 rules, especially §3.7. Do **not**
+   CATALYST-specific Level-2 rules, especially §3.7. Do **not**
    pre-read the full `docs/` folder — `WORKFLOW.md` §4
    manifest points at what to read for the task at hand.
 4. **Check the lock board.** `cat CLAIMS.md`. Note every file

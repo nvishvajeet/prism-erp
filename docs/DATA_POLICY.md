@@ -1,8 +1,8 @@
-# PRISM — Data Management Policy
+# CATALYST — Data Management Policy
 
 > **One source of truth. Held in one place. Shown in many.**
 >
-> This document is the contract that keeps PRISM from drifting into the
+> This document is the contract that keeps CATALYST from drifting into the
 > state where "the instrument name on page A doesn't match the one on
 > page B." If you ever find yourself tempted to cache, duplicate, or
 > mirror a piece of canonical data, read this doc first.
@@ -12,7 +12,7 @@
 ## The six rules
 
 ### Rule 1 — Every fact has exactly one home
-Every piece of data in PRISM has exactly one **owning table and
+Every piece of data in CATALYST has exactly one **owning table and
 column**. All other places that show that fact are **views**, not
 copies. If you need the fact, you `JOIN` to the owning table — you do
 not re-store it.

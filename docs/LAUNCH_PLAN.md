@@ -1,4 +1,4 @@
-# PRISM X v1.0 — Launch Plan
+# CATALYST X v1.0 — Launch Plan
 
 ## Go-live configuration
 
@@ -20,10 +20,10 @@
 
 ### Environment:
 ```bash
-PRISM_ORG_NAME=Central Research Facility
-PRISM_ORG_TAGLINE=Your Institution Shared Instrument Facility
+CATALYST_ORG_NAME=Central Research Facility
+CATALYST_ORG_TAGLINE=Your Institution Shared Instrument Facility
 LAB_SCHEDULER_DEMO_MODE=0
-PRISM_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin
+CATALYST_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin
 ```
 
 ## Future features (v1.1+):

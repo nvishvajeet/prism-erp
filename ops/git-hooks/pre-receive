@@ -1,10 +1,10 @@
 #!/bin/bash
-# PRISM central-bare pre-receive gate — FAST MODE.
+# CATALYST central-bare pre-receive gate — FAST MODE.
 #
 # Two speeds:
 #   FAST (default): runs `smoke` only (~1s). Used on every branch push.
 #   FULL:           runs full `sanity` wave (~20s). Used on tag pushes
-#                   and when PRISM_FULL_GATE=1 is set.
+#                   and when CATALYST_FULL_GATE=1 is set.
 #
 # Fast mode cuts push latency from ~20s to ~2s while keeping the
 # critical-path regression check (smoke hits 33 routes × 3 roles).
@@ -12,7 +12,7 @@
 
 set -u
 
-WORKTREE="${PRISM_WORKTREE:-$HOME/Documents/Scheduler/Main}"
+WORKTREE="${CATALYST_WORKTREE:-$HOME/Documents/Scheduler/Main}"
 VENV_PY="$WORKTREE/.venv/bin/python"
 
 # Read refs from stdin to detect tag pushes.
@@ -27,7 +27,7 @@ if [ ! -x "$VENV_PY" ]; then
 fi
 
 # Pick the wave: full sanity on tags or when forced, smoke otherwise.
-if [ "$IS_TAG" -eq 1 ] || [ "${PRISM_FULL_GATE:-0}" = "1" ]; then
+if [ "$IS_TAG" -eq 1 ] || [ "${CATALYST_FULL_GATE:-0}" = "1" ]; then
   WAVE="sanity"
   echo "[pre-receive] FULL sanity gate (tag push)…"
 else
@@ -35,7 +35,7 @@ else
   echo "[pre-receive] fast gate (smoke only, ~1s)…"
 fi
 
-LOG="$(mktemp -t prism_gate.XXXXXX)"
+LOG="$(mktemp -t catalyst_gate.XXXXXX)"
 trap 'rm -f "$LOG"' EXIT
 
 if [ "$WAVE" = "sanity" ]; then

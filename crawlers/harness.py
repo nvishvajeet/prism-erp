@@ -1,4 +1,4 @@
-"""Shared test harness for PRISM crawlers.
+"""Shared test harness for CATALYST crawlers.
 
 Every crawler strategy shares the same pattern:
 
@@ -8,7 +8,7 @@ Every crawler strategy shares the same pattern:
   4. Log every HTTP call + exception to a structured report
 
 `Harness` centralises steps 1-4 so each strategy only has to express
-"what to crawl" — not "how to boot PRISM".
+"what to crawl" — not "how to boot CATALYST".
 
 A harness instance is cheap to construct but expensive to
 `bootstrap()`. Call bootstrap once per run.
@@ -46,20 +46,20 @@ ROLE_PERSONAS: list[tuple[str, str, str]] = [
     # stable. The new role-named demo emails (admin@, operator@,
     # requester@, etc.) are seeded separately by app.py init_db
     # for the public demo card on the portfolio site.
-    ("Admin Owner",      "owner@prism.local",   "super_admin"),
-    ("Site Admin",       "siteadmin@prism.local",   "site_admin"),
-    ("FESEM Admin",      "kondhalkar@prism.local",  "instrument_admin"),
-    ("Dr. Sen",          "approver@prism.local",    "professor_approver"),
-    ("Anika Operator",   "anika@prism.local",       "operator"),
+    ("Admin Owner",      "owner@catalyst.local",   "super_admin"),
+    ("Site Admin",       "siteadmin@catalyst.local",   "site_admin"),
+    ("FESEM Admin",      "kondhalkar@catalyst.local",  "instrument_admin"),
+    ("Dr. Sen",          "approver@catalyst.local",    "professor_approver"),
+    ("Anika Operator",   "anika@catalyst.local",       "operator"),
     # Second operator on purpose — the load-balance-pick logic in
     # app.py:_default_user_for_approval_role needs a real pool to
     # round-robin across. Crawlers that care about approver fairness
     # (see `approver_pools` strategy) assert that sequential requests
     # on instrument 1 alternate between anika@ and bala@.
-    ("Bala Operator",    "chetan@prism.local",      "operator"),
-    ("Prof. Approver",   "approver@prism.local",    "professor_approver"),
-    ("Finance Officer",  "meera@prism.local",       "finance_admin"),
-    ("Aarav Shah",       "user1@prism.local",       "requester"),
+    ("Bala Operator",    "chetan@catalyst.local",      "operator"),
+    ("Prof. Approver",   "approver@catalyst.local",    "professor_approver"),
+    ("Finance Officer",  "meera@catalyst.local",       "finance_admin"),
+    ("Aarav Shah",       "user1@catalyst.local",       "requester"),
 ]
 
 # Minimal instrument roster — enough variety for per-instrument crawls
@@ -127,7 +127,7 @@ class HarnessLog:
 
 # ── The harness itself ──────────────────────────────────────────────
 class Harness:
-    """Boots PRISM on a temp DB and provides a logged Flask test client.
+    """Boots CATALYST on a temp DB and provides a logged Flask test client.
 
     Typical use inside a strategy::
 
@@ -135,7 +135,7 @@ class Harness:
         harness.bootstrap()
         harness.seed_users_and_instruments()
 
-        with harness.logged_in("owner@prism.local"):
+        with harness.logged_in("owner@catalyst.local"):
             resp = harness.get("/")
             assert resp.status_code == 200
 
@@ -161,7 +161,7 @@ class Harness:
         can no longer be called" guard after the first request.
         """
         # Owner emails must be set BEFORE app is imported the first time
-        os.environ.setdefault("OWNER_EMAILS", "owner@prism.local")
+        os.environ.setdefault("OWNER_EMAILS", "owner@catalyst.local")
         # Demo mode must be on so seed_data()/login routes behave like dev
         os.environ.setdefault("LAB_SCHEDULER_DEMO_MODE", "1")
         # CSRF enforcement OFF for the test client — W6.6 gates it on
@@ -175,16 +175,16 @@ class Harness:
         if str(repo_root) not in sys.path:
             sys.path.insert(0, str(repo_root))
 
-        import app as prism_app  # type: ignore
+        import app as catalyst_app  # type: ignore
 
-        prism_app.DB_PATH = self.temp_db_path
-        self.app = prism_app
+        catalyst_app.DB_PATH = self.temp_db_path
+        self.app = catalyst_app
 
-        flask_app = prism_app.app
+        flask_app = catalyst_app.app
         flask_app.config["TESTING"] = True
         flask_app.config["WTF_CSRF_ENABLED"] = False
 
-        prism_app.init_db()
+        catalyst_app.init_db()
         self.flask_app = flask_app
         self.client = flask_app.test_client()
         self.log.started_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -264,11 +264,11 @@ class Harness:
 
         # Assign the FESEM admin + operator to instrument 1 so
         # can_manage_instrument / can_operate_instrument resolve True.
-        if instrument_ids and "kondhalkar@prism.local" in user_ids:
+        if instrument_ids and "kondhalkar@catalyst.local" in user_ids:
             cur.execute(
                 "INSERT OR IGNORE INTO instrument_admins (instrument_id, user_id) "
                 "VALUES (?, ?)",
-                (instrument_ids[0], user_ids["kondhalkar@prism.local"]),
+                (instrument_ids[0], user_ids["kondhalkar@catalyst.local"]),
             )
         # Build a POOL of operators on every instrument anika is
         # already linked to (the demo seed usually puts anika on
@@ -278,10 +278,10 @@ class Harness:
         # pool to round-robin across, and crawlers conventionally use
         # `instrument_id=1`. Anika stays the primary; bala joins her
         # everywhere.
-        if "anika@prism.local" in user_ids:
+        if "anika@catalyst.local" in user_ids:
             anika_rows = cur.execute(
                 "SELECT instrument_id FROM instrument_operators WHERE user_id = ?",
-                (user_ids["anika@prism.local"],),
+                (user_ids["anika@catalyst.local"],),
             ).fetchall()
             anika_instruments = {r[0] for r in anika_rows}
             # Also cover the instruments THIS harness just inserted, so
@@ -291,13 +291,13 @@ class Harness:
                 cur.execute(
                     "INSERT OR IGNORE INTO instrument_operators (instrument_id, user_id) "
                     "VALUES (?, ?)",
-                    (inst_id, user_ids["anika@prism.local"]),
+                    (inst_id, user_ids["anika@catalyst.local"]),
                 )
-                if "chetan@prism.local" in user_ids:
+                if "chetan@catalyst.local" in user_ids:
                     cur.execute(
                         "INSERT OR IGNORE INTO instrument_operators (instrument_id, user_id) "
                         "VALUES (?, ?)",
-                        (inst_id, user_ids["chetan@prism.local"]),
+                        (inst_id, user_ids["chetan@catalyst.local"]),
                     )
 
         conn.commit()

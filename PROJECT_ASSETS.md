@@ -1,4 +1,4 @@
-# PRISM Lab Scheduler — Reusable Assets for New Projects
+# CATALYST Lab Scheduler — Reusable Assets for New Projects
 
 > **Purpose:** Any AI agent building a new project on this machine
 > can read this file to know what patterns, components, and code
@@ -127,7 +127,7 @@ format_date(v) -> "Apr 13, 2026"
 
 ### Module System
 
-9 toggleable modules via `PRISM_MODULES` env var. Each module has:
+9 toggleable modules via `CATALYST_MODULES` env var. Each module has:
 - Routes, templates, nav badge counts
 - `module_enabled(name)` check in templates and routes
 

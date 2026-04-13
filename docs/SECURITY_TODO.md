@@ -1,10 +1,10 @@
-# PRISM — Security Hardening & HTTPS Migration Tracker
+# CATALYST — Security Hardening & HTTPS Migration Tracker
 
 Last updated: 2026-04-10 (after Phase 6 W6.1-W6.9)
 
 This file is the **deployment-time security checklist**. The
 `PROJECT.md` § 10 Security section is the architecture reference;
-this file is the operational checklist for taking PRISM from
+this file is the operational checklist for taking CATALYST from
 development to a production LAN deployment.
 
 ---

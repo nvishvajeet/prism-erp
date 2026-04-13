@@ -1,4 +1,4 @@
-# PRISM — Component Library
+# CATALYST — Component Library
 
 > **Tomorrow's prompt:** "Make a finance portal."
 >

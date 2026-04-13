@@ -1,4 +1,4 @@
-# PRISM Crawler Test Plan
+# CATALYST Crawler Test Plan
 
 ## Roles Under Test
 
@@ -39,7 +39,7 @@ For EACH role:
 7. Navigate to `/admin/users` — verify access or redirect
 8. Navigate to `/sitemap` — verify all role-appropriate links
 9. Check `data-vis` attribute filtering — are elements correctly shown/hidden?
-10. Log all findings to prism_log.json
+10. Log all findings to catalyst_log.json
 
 ### Expected Visibility Matrix
 

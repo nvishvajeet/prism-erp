@@ -1,4 +1,4 @@
-# PRISM Architecture Summary
+# CATALYST Architecture Summary
 
 > Complete reference for the UI/UX system, CSS architecture, and
 > ERP module patterns. Read this before building anything.
@@ -18,7 +18,7 @@
 
 ## The 6 UI Primitives
 
-Every PRISM page is built from exactly 6 primitives:
+Every CATALYST page is built from exactly 6 primitives:
 
 ### 1. App (Module)
 A self-contained ERP feature area registered in `MODULE_REGISTRY`.

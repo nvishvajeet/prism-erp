@@ -1,5 +1,5 @@
 #!/bin/bash
-# PRISM ERP — Pull all user + system data from Mac mini to laptop.
+# CATALYST ERP — Pull all user + system data from Mac mini to laptop.
 #
 # Transfers the entire data/ directory (databases, uploads, exports)
 # and logs/ from the mini to a timestamped backup folder on the
@@ -24,9 +24,9 @@
 
 set -e
 
-MINI_HOST="${PRISM_MINI_HOST:-vishwajeet@100.115.176.118}"
-MINI_DIR="${PRISM_MINI_DIR:-~/Scheduler/Main}"
-BACKUP_ROOT="${PRISM_BACKUP_ROOT:-$HOME/Documents/Scheduler/backups}"
+MINI_HOST="${CATALYST_MINI_HOST:-vishwajeet@100.115.176.118}"
+MINI_DIR="${CATALYST_MINI_DIR:-~/Scheduler/Main}"
+BACKUP_ROOT="${CATALYST_BACKUP_ROOT:-$HOME/Documents/Scheduler/backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="$BACKUP_ROOT/$TIMESTAMP"
 QUIET=0
@@ -35,7 +35,7 @@ QUIET=0
 log() { [ "$QUIET" -eq 0 ] && echo "$1"; }
 
 log "══════════════════════════════════════════════"
-log "  PRISM — Backup from Mac mini"
+log "  CATALYST — Backup from Mac mini"
 log "══════════════════════════════════════════════"
 log "  Mini:   $MINI_HOST:$MINI_DIR"
 log "  Target: $BACKUP_DIR"

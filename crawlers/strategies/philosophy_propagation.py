@@ -1,4 +1,4 @@
-"""Philosophy propagation crawler — enforces the PRISM design creed.
+"""Philosophy propagation crawler — enforces the CATALYST design creed.
 
 Aspect: css_hygiene (overlaps with regression)
 Improves: detects pages that have drifted away from the Apple / Ive
@@ -63,7 +63,7 @@ NO_TILE_GRID_OK = {
 
 
 class PhilosophyStrategy(CrawlerStrategy):
-    """Lint templates against the PRISM design creed."""
+    """Lint templates against the CATALYST design creed."""
 
     name = "philosophy"
     aspect = "css_hygiene"

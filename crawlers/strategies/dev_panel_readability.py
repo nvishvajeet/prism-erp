@@ -14,7 +14,7 @@ from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
 
-OWNER_EMAIL = "owner@prism.local"
+OWNER_EMAIL = "owner@catalyst.local"
 DEV_PANEL_PATH = "/admin/dev_panel"
 
 # Sentinels that must appear in the rendered HTML.

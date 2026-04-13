@@ -137,7 +137,7 @@ def cmd_wave(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m crawlers",
-        description="PRISM crawler suite — pluggable site testing strategies.",
+        description="CATALYST crawler suite — pluggable site testing strategies.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

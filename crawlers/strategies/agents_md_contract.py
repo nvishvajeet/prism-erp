@@ -1,7 +1,7 @@
 """Lock AGENTS.md as a load-bearing file.
 
 AGENTS.md is the vendor-neutral onboarding contract for any AI
-coding agent working on PRISM. A silent drift (file deleted,
+coding agent working on CATALYST. A silent drift (file deleted,
 section renamed, structure inverted) would quietly break the
 onboarding story for every non-Claude agent. This crawler
 asserts the file exists and carries the minimum-set of headings
@@ -20,7 +20,7 @@ from ..base import CrawlerStrategy, CrawlResult
 # but removing a whole section fails. Phrases are drawn from the
 # top-level `## N.` headings currently in AGENTS.md.
 REQUIRED_HEADINGS = [
-    "what prism is",
+    "what catalyst is",
     "topology",
     "commit",            # matches 'the commit / push rhythm'
     "pre-commit gate",

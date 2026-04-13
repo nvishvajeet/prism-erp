@@ -1,6 +1,6 @@
-# Active agent claims — PRISM live task board
+# Active agent claims — CATALYST live task board
 
-> **This file is the lock board for parallel agent work on PRISM.**
+> **This file is the lock board for parallel agent work on CATALYST.**
 > If you are about to start anything non-trivial, append your row
 > here first, commit+push this file alone as your claim, then do
 > the work. Remove your row in the same commit that ships the
@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | catalyst-rename | 2026-04-13T10:45:00Z | repo-wide branding and namespace sweep | feat: rename PRISM to CATALYST |
+| codex | catalyst-rename | 2026-04-13T10:45:00Z | repo-wide branding and namespace sweep | feat: rename CATALYST to CATALYST |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

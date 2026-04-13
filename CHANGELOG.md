@@ -1,8 +1,8 @@
-# PRISM Changelog
+# CATALYST Changelog
 
 All notable changes to this project are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/),
-and PRISM uses [Semantic Versioning](https://semver.org).
+and CATALYST uses [Semantic Versioning](https://semver.org).
 
 The full commit-level history is in `git log`. This file
 collapses each release into the rationale and the user-visible
@@ -18,7 +18,7 @@ see the per-tag sections below for what shipped.
 ## [1.7.0] — 2026-04-11
 
 **Finance portal + grants & budgets — the ERP-ready proof point.**
-PRISM is still a scheduler, not an ERP. But when the user asked
+CATALYST is still a scheduler, not an ERP. But when the user asked
 "can you pick pieces and put a finance portal in under 30 minutes",
 the answer had to be yes. This tag is that answer, twice: external
 billing in one pass, grants/budgets with charge-tracking in a
@@ -71,7 +71,7 @@ aggregations over its existing `amount_due` / `amount_paid` /
 ### Why this tag is v1.7.0, not v2.0
 
 v2.0 is a paradigm-shift marker per `docs/PHILOSOPHY.md` §3.1 —
-it would mean PRISM is no longer "just a scheduler" but a new
+it would mean CATALYST is no longer "just a scheduler" but a new
 class of system. Finance portal + grants is a *new capability*,
 not a *new paradigm*. It earned a minor bump (v1.6.x → v1.7.x)
 legitimately, but the core model — `sample_requests` as the
@@ -659,7 +659,7 @@ operator click at the Tailscale admin console.
 
 ### Added
 
-- **`ops/launchd/local.prism.plist`** — `KeepAlive` + `RunAtLoad`,
+- **`ops/launchd/local.catalyst.plist`** — `KeepAlive` + `RunAtLoad`,
   stdout/stderr to `logs/server.log`, env vars sourced from a
   one-line wrapper.
 - **`scripts/start_server.sh`** — exports `.env`, execs
@@ -735,7 +735,7 @@ Three new tables, zero breaking changes.
 
 - **SQLite WAL pinned** (`f81e55d`) — `PRAGMA journal_mode = WAL`
   and `synchronous = NORMAL` in both `init_db()` and `get_db()`
-  so every PRISM connection is born in WAL. Concurrent reads
+  so every CATALYST connection is born in WAL. Concurrent reads
   during writes, same durability envelope.
 - **`crawlers/strategies/slow_queries.py`** — monkey-patches
   `query_all` / `query_one` / `execute`, records per-fingerprint
@@ -916,7 +916,7 @@ From this point forward every release on `master` is stable.
 ## [1.2.0] — 2026-04-10
 
 Foundation hardening. No user-facing feature changes; the existing
-features become unbreakable. PRISM is now production-usable on a
+features become unbreakable. CATALYST is now production-usable on a
 LAN.
 
 ### Added
@@ -956,7 +956,7 @@ LAN.
   (light + dark), apple-touch-icon, skip-nav link to
   `id="main-content"`, ARIA polish on the instrument dropdown
   (`aria-haspopup`, `aria-expanded` synced via JS, Escape-to-close).
-- **`.env.example`** — every environment flag PRISM reads with safe
+- **`.env.example`** — every environment flag CATALYST reads with safe
   defaults and a one-line rationale per flag.
 - **Crawler suite** under `crawlers/` — 13 registered strategies
   organised into 8 wave pipelines. Plugin architecture: drop a

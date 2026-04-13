@@ -52,7 +52,7 @@ case "$1" in
       .venv/bin/pip install -q gunicorn
     fi
 
-    WORKERS="${PRISM_WORKERS:-4}"
+    WORKERS="${CATALYST_WORKERS:-4}"
     echo "    server:  gunicorn ($WORKERS workers)"
     echo "    bind:    $BIND_ADDR"
 

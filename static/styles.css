@@ -196,8 +196,6 @@ body {
   color: var(--ink);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
   z-index: 50;
   box-shadow: var(--shadow-soft);
   isolation: isolate;
@@ -1087,8 +1085,6 @@ a:hover {
   align-items: center;
   gap: 0.35rem;
   border-bottom: 1px solid rgba(200, 210, 220, 0.12);
-  position: sticky;
-  top: 0;
   z-index: 38;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
@@ -5854,6 +5850,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .users-tiles > .tile-users-members { grid-column: span 4; }
 .users-tiles > .tile-users-admins { grid-column: span 3; }
 .users-tiles > .tile-users-owners { grid-column: span 3; }
+.users-tiles table { table-layout: auto; }
 
 @media (max-width: 1200px) {
   .users-tiles { grid-template-columns: repeat(4, 1fr); }
@@ -6690,7 +6687,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 /* v1.5.2 — Mission Control drill-down pages shared layout
    (templates/dev_panel_commit.html + dev_panel_tag.html). Uses
    the same 6-column tile grid as .inst-tiles so header/hover_back
-   integration stays uniform with the rest of PRISM. */
+   integration stays uniform with the rest of CATALYST. */
 .mc-drill-tiles {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -7170,7 +7167,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 
 /* v1.6.2 — User-to-user messaging (inbox, detail, compose).
-   Same tile architecture as the rest of PRISM. Ferrari-ish
+   Same tile architecture as the rest of CATALYST. Ferrari-ish
    earthy accent on unread rows, monospaced sent-at timestamps. */
 .inbox-tiles, .message-tiles {
   display: grid;
@@ -9504,7 +9501,7 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
   box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2);
 }
 
-/* PRISM wordmark above the form */
+/* CATALYST wordmark above the form */
 .login-brand {
   text-align: center;
   margin-bottom: 0.25rem;
@@ -9642,10 +9639,11 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .tile-dash-noticeboard .notice-meta { display: block; font-size: 0.72rem; margin-top: 0.15rem; }
 
 /* Instruments table: uniform row heights */
-.instruments-table tbody tr { height: 2.8rem; }
+.instruments-table tbody tr { min-height: 2.8rem; }
 .instruments-table tbody td { vertical-align: middle; padding: 0.4rem 0.6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.instruments-table tbody td:first-child,
+.instruments-table tbody td.location-stacked { white-space: normal; overflow: visible; text-overflow: clip; }
 .instruments-table .people-list { max-height: 2.2rem; overflow: hidden; }
-.instruments-table .location-stacked { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .instruments-table .category-header-row td { padding: 0.5rem 0.6rem; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
 /* Larger + button on instruments page */

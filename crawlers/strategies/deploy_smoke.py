@@ -1,4 +1,4 @@
-"""Deploy smoke — verifies a running PRISM server responds over the network.
+"""Deploy smoke — verifies a running CATALYST server responds over the network.
 
 Aspect: regression
 Category: testing
@@ -9,13 +9,13 @@ Improves: catches "the launchd plist started the wrong python" / "the
 Unlike every other strategy in this suite, `deploy_smoke` does NOT go
 through the Flask test client. It hits a real URL over the network
 using `urllib.request` and asserts HTTP 200 + a sentinel string in the
-body. The URL comes from the `PRISM_DEPLOY_URL` environment variable;
+body. The URL comes from the `CATALYST_DEPLOY_URL` environment variable;
 if unset, the strategy reports "skipped" (exit 0) so laptop sanity
 runs stay offline and fast.
 
 Intended usage in a Track A deploy verification:
 
-    PRISM_DEPLOY_URL=https://prism-mini.tail-xxxx.ts.net \\
+    CATALYST_DEPLOY_URL=https://catalyst-mini.tail-xxxx.ts.net \\
       .venv/bin/python -m crawlers run deploy_smoke
 
 Cert handling: `https://` URLs verify the full chain via the system
@@ -56,7 +56,7 @@ def _fetch(url: str, *, verify: bool = True) -> tuple[int, str, str | None]:
     if url.startswith("https://"):
         ctx = ssl.create_default_context()
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "prism-deploy-smoke/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "catalyst-deploy-smoke/1.0"})
         with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS, context=ctx) as resp:
             body = resp.read(2048).decode("utf-8", errors="replace")
             return (resp.status, body, None)
@@ -77,18 +77,18 @@ def _fetch(url: str, *, verify: bool = True) -> tuple[int, str, str | None]:
 
 
 class DeploySmokeStrategy(CrawlerStrategy):
-    """Verify a remote PRISM deployment is alive and serving the right app."""
+    """Verify a remote CATALYST deployment is alive and serving the right app."""
 
     name = "deploy_smoke"
     aspect = "regression"
-    description = "Deploy smoke — probe PRISM_DEPLOY_URL for /login + /sitemap"
+    description = "Deploy smoke — probe CATALYST_DEPLOY_URL for /login + /sitemap"
 
     # We don't need a seeded DB — we're hitting a remote server.
     needs_seed = False
 
     def run(self, harness: Harness) -> CrawlResult:
         result = CrawlResult(name=self.name, aspect=self.aspect)
-        base = os.environ.get("PRISM_DEPLOY_URL", "").rstrip("/")
+        base = os.environ.get("CATALYST_DEPLOY_URL", "").rstrip("/")
         if not base:
             # Truly neutral skip — no WARN so `wave sanity` with
             # `stop_on_fail=True` does not halt on laptops that don't
@@ -96,7 +96,7 @@ class DeploySmokeStrategy(CrawlerStrategy):
             # still written so operators know the strategy was a noop.
             result.metrics["skipped"] = True
             result.details.append(
-                "PRISM_DEPLOY_URL not set — skipped (set it to the "
+                "CATALYST_DEPLOY_URL not set — skipped (set it to the "
                 "Tailscale HTTPS URL on the mini to enable)"
             )
             return result

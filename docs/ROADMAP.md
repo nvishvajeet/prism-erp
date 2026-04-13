@@ -4,7 +4,7 @@
 
 14 modules, 129 routes, 15,694 lines, 64 templates.
 Two deployments: MIT-WPU CRF + Ravikiran Services.
-Domain: catalysterp.org. GitHub: nvishvajeet/prism-erp.
+Domain: catalysterp.org. GitHub: nvishvajeet/catalyst-erp.
 
 ## Immediate (V1.1)
 

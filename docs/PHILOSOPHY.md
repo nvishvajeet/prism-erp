@@ -1,4 +1,4 @@
-# PRISM — The Philosophy
+# CATALYST — The Philosophy
 
 > "Simplicity is the ultimate sophistication. Every element must
 > earn its place. If it doesn't serve the user, it has to go."
@@ -6,7 +6,7 @@
 > — Jony Ive, on Apple's Ferrari-grade design rigour
 > (reference: <https://www.youtube.com/watch?v=6Wv1btxCjVE>)
 
-This is **THE PHILOSOPHY** of PRISM. It governs every UI, every
+This is **THE PHILOSOPHY** of CATALYST. It governs every UI, every
 data model, every deployment, every decision. It is load-bearing.
 Read it before you touch the codebase. Reject any change that
 violates it.
@@ -36,7 +36,7 @@ stop.**
 
 ## 2. Hard attributes vs. soft attributes
 
-From v1.3.0 onwards PRISM separates its attribute surface into
+From v1.3.0 onwards CATALYST separates its attribute surface into
 two tiers. This is not a style guideline — it is a stability
 contract.
 
@@ -104,7 +104,7 @@ Future agents can change them freely during normal wave work.
 
 ## 3. Stable releases only, from v1.3.0 onwards
 
-PRISM v1.3.0 is the first **stable release**. From this point:
+CATALYST v1.3.0 is the first **stable release**. From this point:
 
 1. **Every release on `master` is stable.** No WIP on master.
    Experimental work lives on short-lived branches and only
@@ -129,7 +129,7 @@ ship. Period.
 
 ### 3.1  Release numbering and the iOS-style patch cadence
 
-PRISM tags follow a three-segment scheme: `vMAJOR.MINOR.PATCH`.
+CATALYST tags follow a three-segment scheme: `vMAJOR.MINOR.PATCH`.
 The semantics are borrowed from iOS more than strict semver — the
 **patch segment is bumped often**, not hoarded.
 
@@ -141,7 +141,7 @@ The semantics are borrowed from iOS more than strict semver — the
   finance portal + grants/budgets as new capabilities on top of
   the existing `sample_requests` single source of truth, showing
   that "become an ERP" is a capability gradient, not a rebuild.
-  The v2.0 line stays reserved for the moment when PRISM stops
+  The v2.0 line stays reserved for the moment when CATALYST stops
   being "a scheduler that also tracks money" and becomes a new
   class of system.
 - **MINOR (`1.X.y`, e.g. `v1.3.*` → `v1.4.*`)** — significant new

@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | finish-request-detail | 2026-04-13 17:51 CEST | `templates/request_detail.html`, `static/styles.css`, `CLAIMS.md` | `feat: polish request detail workflow surface` |
 
 ## Stale-claim recovery
 

@@ -59,7 +59,7 @@
           </td>
           <td data-vis="{{ V }}">{{ r.designation or "—" }}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.monthly_salary) }}</td>
-          <td class="num" data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }} / {{ r.days_in_month }}</td>
+          <td class="num" data-vis="{{ V }}"><a href="{{ url_for('attendance_page', user_id=r.user_id, year=year, month=month_num) }}" class="text-link" title="View attendance">{{ "{:.1f}".format(r.days_worked) }}</a> / {{ r.days_in_month }}</td>
           <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.calculated_pay) }}</strong></td>
           <td data-vis="{{ V }}">
             {% if r.payment and r.payment.status == 'paid' %}

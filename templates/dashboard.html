@@ -109,6 +109,29 @@
   </article>
   {% endif %}
 
+  {# ── TILE: Fleet Status — active vehicles, fuel, insurance ── #}
+  {% if dash_fleet_status %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("", "Fleet Status") }}
+    {{ kpi_grid([
+      {"value": dash_fleet_status.active_vehicles, "label": "Active Vehicles", "href": url_for('vehicles_list'), "tone": "active"},
+      {"value": "₹" ~ "{:,.0f}".format(dash_fleet_status.fuel_this_month), "label": "Fuel This Month", "href": url_for('vehicles_list'), "tone": "samples"},
+      {"value": dash_fleet_status.insurance_expiring, "label": "Insurance Expiring (30d)", "href": url_for('vehicles_list'), "tone": "wait" if dash_fleet_status.insurance_expiring > 0 else "completed"},
+    ], variant='dense') }}
+  </article>
+  {% endif %}
+
+  {# ── TILE: Payroll Due — unpaid staff, pending amount ── #}
+  {% if dash_payroll_due %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("", "Payroll Due") }}
+    {{ kpi_grid([
+      {"value": dash_payroll_due.unpaid_count, "label": "Unpaid Staff", "href": url_for('payroll_view'), "tone": "wait" if dash_payroll_due.unpaid_count > 0 else "completed"},
+      {"value": "₹" ~ "{:,.0f}".format(dash_payroll_due.pending_amount), "label": "Pending Amount", "href": url_for('payroll_view'), "tone": "amber"},
+    ], variant='dense') }}
+  </article>
+  {% endif %}
+
   {# ── TILE: Requester pulse — "state of my samples right now" ── #}
   {% if req_pulse %}
   <article class="card tile tile-span-3 tile-req-pulse" data-vis="{{ V }}">

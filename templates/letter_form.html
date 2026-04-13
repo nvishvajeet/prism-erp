@@ -19,7 +19,7 @@
       </div>
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Recipient</label>
-        <input type="text" name="recipient" value="{{ letter.recipient if letter else '' }}" placeholder="Name, department, or address" data-vis="{{ V }}">
+        <input type="text" name="recipient" value="{{ letter.recipient if letter else (prefill_recipient or '') }}" placeholder="Name, department, or address" data-vis="{{ V }}">
       </div>
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Letterhead</label>

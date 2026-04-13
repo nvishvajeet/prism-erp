@@ -26,6 +26,16 @@
     ]) }}
   </article>
 
+  {# ── Quick Actions ── #}
+  {% if module_enabled('letters') %}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("ACTIONS", "") }}
+    <div style="padding:0.5rem;" data-vis="{{ V }}">
+      <a class="btn" href="{{ url_for('letter_new', recipient=employee.name) }}" data-vis="{{ V }}">Write Letter to {{ employee.name }}</a>
+    </div>
+  </article>
+  {% endif %}
+
   {# ── Salary Config Tile ── #}
   <article class="card tile" data-vis="{{ V }}">
     {{ card_heading("SALARY CONFIG", "Compensation details") }}

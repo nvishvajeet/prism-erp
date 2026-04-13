@@ -29,6 +29,12 @@
       {{ stat_blob(kpis.total_owed_fmt, "Total Billed", url_for('finance_invoices_list'), tone='active') }}
       {{ stat_blob(kpis.total_paid_fmt, "Collected", url_for('finance_invoices_list', status='paid'), tone='completed') }}
       {{ stat_blob(collection_rate ~ "%", "Collection Rate", url_for('finance_spend'), tone='samples') }}
+      {% if vehicle_spend %}
+      {{ stat_blob("₹" ~ "{:,.0f}".format(vehicle_spend.total), "Fleet Costs", url_for('vehicles_list'), tone='wait') }}
+      {% endif %}
+      {% if salary_outflow %}
+      {{ stat_blob("₹" ~ "{:,.0f}".format(salary_outflow.total), "Salaries Paid", url_for('payroll_view'), tone='active') }}
+      {% endif %}
     </div>
   </article>
 

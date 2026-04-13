@@ -67,10 +67,10 @@ COMMUNICATION_NOTE_TYPES = [
 OWNER_EMAILS = {
     email.strip().lower()
     # Override at deploy time with `OWNER_EMAILS=you@example.com` env var.
-    # Default: owner@prism.local (the demo seed super_admin).
+    # Default: vishva (the demo seed super_admin).
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "owner@prism.local",
+        "vishva",
     ).split(",")
     if email.strip()
 }
@@ -5451,12 +5451,12 @@ def seed_data() -> None:
     # Rebind every seeded persona's password on every boot so existing
     # demo DBs catch up without a re-seed.
     _persona_emails = (
-        "owner@prism.local", "dean@prism.local", "kondhalkar@prism.local",
-        "siteadmin@prism.local", "anika@prism.local", "ravi@prism.local",
-        "chetan@prism.local", "meera@prism.local", "suresh@prism.local",
-        "approver@prism.local",
-        "user1@prism.local", "user2@prism.local", "user3@prism.local",
-        "user4@prism.local", "user5@prism.local",
+        "vishva", "dean", "kondhalkar",
+        "admin", "anika", "ravi",
+        "chetan", "meera", "suresh",
+        "approver",
+        "user1", "user2", "user3",
+        "user4", "user5",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -5474,28 +5474,28 @@ def seed_data() -> None:
     # Password for ALL demo accounts: "12345"
     core_users = [
         # Owner (god-view via OWNER_EMAILS env var)
-        ("Facility Owner", "owner@prism.local",  "super_admin"),
+        ("Facility Owner", "vishva",      "super_admin"),
         # Dean — super admin
-        ("Dean Rao",             "dean@prism.local",        "super_admin"),
+        ("Dean Rao",             "dean",          "super_admin"),
         # Kondhalkar — admin across many instruments
-        ("Prof. Kondhalkar",     "kondhalkar@prism.local",  "instrument_admin"),
+        ("Prof. Kondhalkar",     "kondhalkar",    "instrument_admin"),
         # Site admin
-        ("Site Admin",           "siteadmin@prism.local",   "site_admin"),
+        ("Site Admin",           "admin",         "site_admin"),
         # Operators
-        ("Operator Anika",       "anika@prism.local",       "operator"),
-        ("Operator Ravi",        "ravi@prism.local",        "operator"),
-        ("Operator Chetan",      "chetan@prism.local",      "operator"),
+        ("Operator Anika",       "anika",         "operator"),
+        ("Operator Ravi",        "ravi",          "operator"),
+        ("Operator Chetan",      "chetan",        "operator"),
         # Finance operators
-        ("Finance Meera",        "meera@prism.local",       "finance_admin"),
-        ("Finance Suresh",       "suresh@prism.local",      "finance_admin"),
+        ("Finance Meera",        "meera",         "finance_admin"),
+        ("Finance Suresh",       "suresh",        "finance_admin"),
         # Approver
-        ("Prof. Approver",       "approver@prism.local",    "professor_approver"),
+        ("Prof. Approver",       "approver",      "professor_approver"),
         # Generic user accounts (User 1–5)
-        ("User One",             "user1@prism.local",       "requester"),
-        ("User Two",             "user2@prism.local",       "requester"),
-        ("User Three",           "user3@prism.local",       "requester"),
-        ("User Four",            "user4@prism.local",       "requester"),
-        ("User Five",            "user5@prism.local",       "requester"),
+        ("User One",             "user1",         "requester"),
+        ("User Two",             "user2",         "requester"),
+        ("User Three",           "user3",         "requester"),
+        ("User Four",            "user4",         "requester"),
+        ("User Five",            "user5",         "requester"),
     ]
     for name, email, role in core_users:
         db.execute(
@@ -5677,8 +5677,12 @@ def seed_data() -> None:
         ("chetan@prism.local",    "INST-013", "operator"),
     ]
     for email, code, kind in assignments:
-        user_id = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()[0]
-        inst_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()[0]
+        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        _i = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()
+        if not _u or not _i:
+            continue
+        user_id = _u[0]
+        inst_id = _i[0]
         if kind == "admin":
             table = "instrument_admins"
         elif kind == "operator":
@@ -6435,7 +6439,7 @@ def index():
                 (user["id"],),
             ).fetchall()
             if streak_rows:
-                from datetime import date as _date, timedelta
+                from datetime import date as _date
                 today = _date.today()
                 for i, r in enumerate(streak_rows):
                     expected = (today - timedelta(days=i)).isoformat()
@@ -6445,6 +6449,33 @@ def index():
                         break
         except Exception:
             attendance_streak = 0
+
+    # ── Cross-module dashboard tiles: Fleet Status + Payroll Due ──
+    dash_fleet_status = None
+    dash_payroll_due = None
+    if is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"}):
+        if module_enabled("vehicles"):
+            _today_iso = date.today().isoformat()
+            _30d = (date.today() + timedelta(days=30)).isoformat()
+            _month_start = date.today().replace(day=1).isoformat()
+            dash_fleet_status = {
+                "active_vehicles": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE status = 'active'") or {"c": 0})["c"],
+                "fuel_this_month": (query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs WHERE log_type = 'fuel' AND log_date >= ?", (_month_start,)) or {"total": 0})["total"],
+                "insurance_expiring": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE insurance_expiry IS NOT NULL AND insurance_expiry <= ? AND insurance_expiry >= ?", (_30d, _today_iso)) or {"c": 0})["c"],
+            }
+        if module_enabled("personnel"):
+            _today = date.today()
+            _cur_year = _today.year
+            _cur_month = f"{_today.month:02d}"
+            dash_payroll_due = {
+                "unpaid_count": (query_one(
+                    "SELECT COUNT(*) AS c FROM salary_config sc WHERE sc.user_id NOT IN "
+                    "(SELECT sp.user_id FROM salary_payments sp WHERE sp.year = ? AND sp.month = ? AND sp.status = 'paid')",
+                    (_cur_year, _cur_month)) or {"c": 0})["c"],
+                "pending_amount": (query_one(
+                    "SELECT COALESCE(SUM(net_pay), 0) AS total FROM salary_payments WHERE year = ? AND month = ? AND status = 'pending'",
+                    (_cur_year, _cur_month)) or {"total": 0})["total"],
+            }
 
     return render_template(
         "dashboard.html",
@@ -6469,6 +6500,8 @@ def index():
         dash_action_items=_dashboard_action_items(user),
         dash_at_a_glance=_dashboard_at_a_glance(user),
         attendance_streak=attendance_streak,
+        dash_fleet_status=dash_fleet_status,
+        dash_payroll_due=dash_payroll_due,
     )
 
 
@@ -7603,6 +7636,10 @@ def finance_portal():
     }
     grant_kpis["active_budget_fmt"] = _fmt(grant_kpis["active_budget"])
 
+    # ── Cross-module KPIs: Fleet costs + Salary outflow ──
+    vehicle_spend = query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs") or {"total": 0}
+    salary_outflow = query_one("SELECT COALESCE(SUM(net_pay), 0) AS total FROM salary_payments WHERE status = 'paid'") or {"total": 0}
+
     return render_template(
         "finance.html",
         kpis=kpis,
@@ -7612,6 +7649,8 @@ def finance_portal():
         recently_paid=recently_paid_fmt,
         grant_kpis=grant_kpis,
         can_edit_finance=_user_can_edit_finance(user),
+        vehicle_spend=vehicle_spend,
+        salary_outflow=salary_outflow,
     )
 
 
@@ -8154,8 +8193,23 @@ def finance_spend():
         tuple(params_expenses),
     )
 
+    # Approved expense receipts
+    receipt_rows = query_all(
+        """SELECT er.id, 'receipt' AS entry_type, er.title AS request_no,
+              er.amount, er.category AS method, '' AS receipt_number,
+              er.created_at AS event_date, '' AS notes,
+              NULL AS invoice_id, '' AS invoice_number, NULL AS grant_id,
+              '' AS grant_name, '' AS grant_code,
+              u.name AS recorded_by_name
+            FROM expense_receipts er
+            JOIN users u ON u.id = er.submitted_by_user_id
+            WHERE er.status = 'approved'
+            ORDER BY er.created_at DESC
+            LIMIT 300"""
+    )
+
     # Merge and sort by date descending
-    all_entries = list(payment_rows) + list(expense_rows)
+    all_entries = list(payment_rows) + list(expense_rows) + list(receipt_rows)
     all_entries.sort(key=lambda r: r["event_date"] or "", reverse=True)
 
     grants_list = query_all("SELECT id, code, name FROM grants ORDER BY name")
@@ -9321,7 +9375,8 @@ def letter_new():
         )
         flash("Letter created.", "success")
         return redirect(url_for("letter_detail", letter_id=lid))
-    return render_template("letter_form.html", title="New Letter", letter=None)
+    prefill_recipient = request.args.get("recipient", "")
+    return render_template("letter_form.html", title="New Letter", letter=None, prefill_recipient=prefill_recipient)
 
 
 @app.route("/letters/<int:letter_id>", methods=["GET"])
@@ -15174,6 +15229,15 @@ def vehicle_add_log(vehicle_id: int):
     )
     log_action(user["id"], "vehicle", vehicle_id, "vehicle_log_added",
                {"log_type": log_type, "amount": amount})
+    # Notify owners on maintenance logs
+    if log_type == "maintenance":
+        v_info = query_one("SELECT name FROM vehicles WHERE id = ?", (vehicle_id,))
+        v_name = v_info["name"] if v_info else f"Vehicle #{vehicle_id}"
+        for owner_row in query_all("SELECT id FROM users WHERE email IN ({})".format(",".join("?" for _ in OWNER_EMAILS)), tuple(OWNER_EMAILS)):
+            notify(owner_row["id"], "vehicle", f"Maintenance logged: {v_name}",
+                   f"₹{amount:,.0f} — {description[:100]}" if description else f"₹{amount:,.0f}",
+                   href=url_for("vehicle_detail", vehicle_id=vehicle_id),
+                   source_type="vehicle", source_id=vehicle_id)
     flash(f"{log_type.title()} log ₹{amount:,.0f} recorded.", "success")
     return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
 
@@ -15408,6 +15472,11 @@ def payroll_pay():
     emp_name = emp["name"] if emp else f"User #{uid}"
     log_action(user["id"], "personnel", uid, "salary_paid",
                {"year": year, "month": month, "net_pay": net_pay})
+    # Notify the employee about salary payment
+    notify(uid, "personnel", f"Salary paid: ₹{net_pay:,.0f}",
+           f"Payment for {month}/{year} has been processed.",
+           href=url_for("personnel_detail", user_id=uid),
+           source_type="salary_payment", source_id=uid)
     flash(f"₹{net_pay:,.0f} paid to {emp_name} for {month}/{year}.", "success")
     return redirect(url_for("payroll_view", year=year, month=int(month)))
 
@@ -15508,10 +15577,18 @@ def receipt_review(receipt_id):
     if action == "approve":
         execute("UPDATE expense_receipts SET status='approved', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
         log_action(user["id"], "receipt", receipt_id, "receipt_approved", {"note": note[:200]})
+        notify(receipt["submitted_by_user_id"], "receipt", f"Receipt approved: {receipt['title']}",
+               f"Your receipt for ₹{receipt['amount']:,.0f} has been approved.",
+               href=url_for("receipt_detail", receipt_id=receipt_id),
+               source_type="receipt", source_id=receipt_id)
         flash("Receipt approved.", "success")
     elif action == "reject":
         execute("UPDATE expense_receipts SET status='rejected', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
         log_action(user["id"], "receipt", receipt_id, "receipt_rejected", {"note": note[:200]})
+        notify(receipt["submitted_by_user_id"], "receipt", f"Receipt rejected: {receipt['title']}",
+               f"Your receipt for ₹{receipt['amount']:,.0f} was rejected." + (f" Note: {note[:100]}" if note else ""),
+               href=url_for("receipt_detail", receipt_id=receipt_id),
+               source_type="receipt", source_id=receipt_id)
         flash("Receipt rejected.", "error")
     return redirect(url_for("receipt_detail", receipt_id=receipt_id))
 

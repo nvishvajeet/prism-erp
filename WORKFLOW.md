@@ -238,8 +238,102 @@ Other docs under `docs/` (`COMPONENT_LIBRARY.md`,
 `SECURITY_TODO.md`) are specialist reference — read only if the
 task is explicitly in their domain.
 
-## 5. Change log (of this workflow file)
+## 5. Three-Engine Development Model
 
+PRISM uses three engines in parallel for maximum throughput with
+minimum LLM token spend:
+
+```
+┌───────────────────────────────────────────────┐
+│ Engine 1: LLM (Claude / any AI agent)         │
+│ → Reads code, designs changes, writes patches │
+│ → Spawns parallel sub-agents                  │
+│ → Orchestrates both machines via SSH          │
+└──────────┬──────────────────┬─────────────────┘
+           │                  │
+     ┌─────▼─────┐    ┌──────▼──────┐
+     │ Engine 2   │    │ Engine 3    │
+     │ MacBook Pro│    │ Mac Mini    │
+     │ M1 Pro 32G│    │ M4 24GB     │
+     │ (local)    │    │ (SSH)       │
+     └────────────┘    └─────────────┘
+```
+
+### 5.1  Task partitioning
+
+**Rule: anything that can be verified empirically runs on a machine,
+not in the LLM's reasoning budget.**
+
+| Task type | Engine | Why |
+|-----------|--------|-----|
+| Code edits, design decisions | LLM | Needs reasoning |
+| Smoke tests, crawlers | Local MacBook | Fast, no tokens |
+| Heavy crawlers (random_walk, dead_link) | Mini via SSH | Offloads from local |
+| Sanity wave (11 crawlers) | Mini via SSH | Parallel with local work |
+| Route health (301 checks) | Local MacBook | Empirical, not reasoning |
+| Template compilation | Local MacBook | Instant verification |
+| Database stress | Local MacBook | No tokens needed |
+| Full smoke_test.py | Local MacBook | Pre-commit gate |
+| Security audit (XSS, SQLI) | LLM + Local grep | LLM designs, machine verifies |
+
+### 5.2  Parallel execution pattern
+
+```bash
+# Fire local + mini simultaneously
+ssh mini "cd ~/Scheduler/Main && .venv/bin/python -m crawlers wave sanity" &
+./venv/bin/python -m crawlers run smoke &
+./venv/bin/python scripts/smoke_test.py &
+wait
+```
+
+**Always** fire both machines for verification tasks. The LLM edits
+code while machines verify the previous commit. This pipeline means
+the LLM never waits for test results — it ships the fix and the
+machines confirm asynchronously.
+
+### 5.3  Token economy
+
+Local machines save ~3M tokens per session by running empirical
+checks instead of LLM reasoning. See `docs/SESSION_LOG.md` for
+detailed accounting.
+
+### 5.4  Module development with machines
+
+When building a new ERP module:
+1. LLM writes schema + routes + templates
+2. Local runs `smoke_test.py` immediately
+3. Mini runs `crawlers wave sanity` in parallel
+4. LLM reads results, fixes any failures
+5. Both machines re-verify
+6. Commit + push (pre-receive gate runs on the bare)
+
+This loop takes ~2 minutes per module vs ~15 minutes of pure LLM work.
+
+## 6. ERP Module System
+
+PRISM is a modular ERP. New modules are plug-and-play:
+
+```bash
+# Create a new module in one command
+scripts/new_module.sh vehicle "Vehicle Fleet" "🚗" "Fleet management"
+```
+
+This auto-registers in MODULE_REGISTRY, creates template stubs,
+adds route stubs, and prints enable instructions. See
+`docs/ERP_MODULE_BUILDER.md` for the full recipe.
+
+**MODULE_REGISTRY** in `app.py` drives:
+- Nav bar generation (sorted by nav_order)
+- Module-enabled gating (PRISM_MODULES env var)
+- Access profile per role
+- Install/upgrade scripts
+
+## 7. Change log (of this workflow file)
+
+- **2026-04-13** — Added three-engine development model (§5),
+  ERP module system (§6), token economy documentation. Updated
+  for v1.1 architecture (MODULE_REGISTRY, dynamic nav, Homebrew
+  installer).
 - **2026-04-11** — Initial WORKFLOW.md created as part of the
   two-level agent operating system rollout (Level 1 kernel in
   `~/.claude/CLAUDE.md`, Level 2 user space here). Lifted

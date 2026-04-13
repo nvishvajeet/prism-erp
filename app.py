@@ -6760,17 +6760,18 @@ def notifications_page():
     except sqlite3.OperationalError:
         sys_rows = []
     for s in sys_rows:
+        row = dict(s)
         unified.append({
-            "id": s["id"],
+            "id": row["id"],
             "kind": "system",
-            "category": s.get("category", "request"),
-            "title": s["title"],
-            "body": s.get("body", ""),
-            "href": s.get("href", ""),
+            "category": row.get("category", "request"),
+            "title": row.get("title", ""),
+            "body": row.get("body", ""),
+            "href": row.get("href", ""),
             "severity": "info",
-            "scope_label": s.get("category", "system"),
-            "is_read": bool(s.get("is_read", 0)),
-            "created_at": s.get("created_at", ""),
+            "scope_label": row.get("category", "system"),
+            "is_read": bool(row.get("is_read", 0)),
+            "created_at": row.get("created_at", ""),
             "author_name": "",
         })
     # Sort unified by created_at DESC
@@ -6784,7 +6785,7 @@ def notifications_page():
     for n in admin_notices:
         cat_counts["admin"] = cat_counts.get("admin", 0) + 1
     for s in sys_rows:
-        c = s.get("category", "request")
+        c = dict(s).get("category", "request")
         cat_counts[c] = cat_counts.get(c, 0) + 1
     return render_template(
         "notifications.html",

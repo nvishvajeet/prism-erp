@@ -33,12 +33,27 @@
       <span class="mc-light-label" data-vis="{{ V }}">SESSION</span>
       <span class="mc-light-value" id="sessionTimer" data-vis="{{ V }}">0m</span>
     </div>
+    <div class="mc-light mc-light-info" data-vis="{{ V }}">
+      <span class="mc-light-dot" aria-hidden="true"></span>
+      <span class="mc-light-label" data-vis="{{ V }}">TIME</span>
+      <span class="mc-light-value" id="devPanelClock" data-now="{{ server_now_iso }}" data-vis="{{ V }}">--:--:--</span>
+    </div>
   </div>
 </header>
 <script>
 (function () {
   var start = Date.now();
   var el = document.getElementById('sessionTimer');
+  var clock = document.getElementById('devPanelClock');
+  if (clock) {
+    var seed = clock.dataset.now ? new Date(clock.dataset.now) : new Date();
+    var renderClock = function () {
+      var current = new Date(seed.getTime() + (Date.now() - start));
+      clock.textContent = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+    renderClock();
+    setInterval(renderClock, 1000);
+  }
   if (!el) return;
   setInterval(function () {
     var mins = Math.floor((Date.now() - start) / 60000);

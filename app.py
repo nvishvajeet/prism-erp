@@ -11991,6 +11991,7 @@ def dev_panel():
         crawler_health=crawler_health,
         doc_files=DEV_PANEL_DOC_FILES,
         infra_stats=infra_stats,
+        server_now_iso=datetime.now().astimezone().isoformat(timespec="seconds"),
     )
 
 

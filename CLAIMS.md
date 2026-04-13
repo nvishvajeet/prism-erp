@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | crawl-cli-and-builder-gap-summary | 2026-04-13 21:28 CEST | `crawlers/__main__.py`, `crawlers/__init__.py`, `docs/ARCHITECTURE_SUMMARY.md`, `docs/ERP_FUTURE_BUILDER.md`, `CLAIMS.md` | `docs: summarize build debt and deep crawl flow` |
 
 ## Stale-claim recovery
 

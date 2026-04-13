@@ -200,6 +200,7 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {
             "attendance_page", "leave_request_new",
             "admin_leave_queue", "admin_attendance_calendar",
+            "qr_attendance_kiosk", "qr_attendance_scan", "qr_my_code",
         },
         # Only lab staff who physically attend — operators + instrument_admins.
         "nav_access": lambda ap, is_owner: ap.get("_is_lab_staff"),

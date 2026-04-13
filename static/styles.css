@@ -3630,14 +3630,10 @@ code {
   padding-bottom: 0.35rem;
 }
 
-/* Tile children get overflow-y: auto so content scrolls inside
-   when it exceeds the tile's max-height. flex-shrink: 1 allows
-   shrinking but flex-basis: auto preserves the content's natural
-   height instead of collapsing to zero. */
+/* Tile children: overflow visible by default so tiles grow to fit.
+   Use .tile-scroll explicitly when scroll is desired. */
 .tile > *:not(.section-head):not(h2):not(h3):not(script) {
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 
 /* Explicit opt-in class for scrollable tile bodies.

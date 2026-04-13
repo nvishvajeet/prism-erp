@@ -126,39 +126,12 @@
         </div>
       </div>
 
-      {# ── Notifications panel (special: inline notification preview) ── #}
-      {% elif nav.nav_type == 'panel' and nav.key == 'notifications' %}
-      <div class="nav-dropdown notif-dropdown" data-vis="{{ V }}">
-        <a class="nav-trigger {% if nav.active %}nav-active{% endif %}"
-           href="{{ nav.url }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}"
-           data-notif-trigger>{{ nav.label }}{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
-        <div class="notif-panel" role="menu" aria-label="Recent notifications" data-vis="{{ V }}">
-          <div class="notif-panel-header" data-vis="{{ V }}">
-            <strong data-vis="{{ V }}">Notifications</strong>
-            {% if nav_notice_count %}<span class="notif-panel-count" data-vis="{{ V }}">{{ nav_notice_count }} unread</span>{% endif %}
-          </div>
-          {% if recent_notices %}
-          <div class="notif-panel-list" data-vis="{{ V }}">
-            {% for n in recent_notices %}
-            <a href="{{ n.href or nav.url }}" class="notif-panel-item{% if not n.is_read %} notif-unread{% endif %}" data-vis="{{ V }}">
-              {% if n.kind == 'system' %}
-              <span class="notif-cat-icon notif-cat-{{ n.scope_label }}" data-vis="{{ V }}"></span>
-              {% else %}
-              <span class="notif-severity-dot notif-sev-{{ n.severity }}" data-vis="{{ V }}"></span>
-              {% endif %}
-              <span class="notif-item-body" data-vis="{{ V }}">
-                <span class="notif-item-subject" data-vis="{{ V }}">{{ n.subject }}</span>
-                <span class="notif-item-meta" data-vis="{{ V }}">{{ time_ago(n.created_at) }} · {{ n.scope_label }}</span>
-              </span>
-            </a>
-            {% endfor %}
-          </div>
-          {% else %}
-          <div class="notif-panel-empty" data-vis="{{ V }}">No recent notifications</div>
-          {% endif %}
-          <a href="{{ nav.url }}" class="notif-panel-footer" data-vis="{{ V }}">View all notifications</a>
-        </div>
-      </div>
+      {# ── Notifications — direct link (user preference: no dropdown) ── #}
+      {% elif nav.key == 'notifications' %}
+      <a class="{% if nav.active %}nav-active{% endif %}" href="{{ nav.url }}" data-vis="{{ V }}">
+        {{- nav.label -}}
+        {%- if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif -%}
+      </a>
 
       {# ── Generic link (inbox, finance, attendance, receipts, admin, future modules) ── #}
       {% else %}

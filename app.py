@@ -4227,6 +4227,7 @@ def init_db() -> None:
             ("price_per_sample", "ALTER TABLE instruments ADD COLUMN price_per_sample TEXT NOT NULL DEFAULT ''"),
             ("payment_instructions", "ALTER TABLE instruments ADD COLUMN payment_instructions TEXT NOT NULL DEFAULT ''"),
             ("payment_proof_note", "ALTER TABLE instruments ADD COLUMN payment_proof_note TEXT NOT NULL DEFAULT ''"),
+            ("default_grant_id", "ALTER TABLE instruments ADD COLUMN default_grant_id INTEGER REFERENCES grants(id)"),
         ]:
             if col_name not in inst_cols:
                 try:
@@ -9107,6 +9108,14 @@ def instrument_detail(instrument_id: int):
             log_action(user["id"], "instrument", instrument_id, "inventory_item_added", {"item_name": item_name, "quantity": quantity})
             flash(f"Inventory item '{item_name}' added.", "success")
             return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        if action == "update_finance":
+            if not can_edit:
+                abort(403)
+            grant_id = request.form.get("default_grant_id", "").strip()
+            execute("UPDATE instruments SET default_grant_id = ? WHERE id = ?",
+                    (int(grant_id) if grant_id else None, instrument_id))
+            flash("Default grant updated.", "success")
+            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
         abort(400)
 
     queue_sql, queue_params = request_history_query(["sr.instrument_id = ?"], [instrument_id], {})
@@ -9312,6 +9321,7 @@ def instrument_detail(instrument_id: int):
             "SELECT * FROM instrument_inventory WHERE instrument_id = ? ORDER BY item_name",
             (instrument_id,),
         ),
+        grants=query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
     )
 
 

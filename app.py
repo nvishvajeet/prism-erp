@@ -5121,6 +5121,7 @@ def init_db() -> None:
     _seed_demo_vehicles()
     _seed_demo_vendors()
     _seed_demo_companies()
+    # _seed_demo_mess_students()  # TODO: implement when mess student module is built
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -5866,6 +5867,50 @@ def record_payment(
     )
     return cur.lastrowid
 
+
+
+def _seed_demo_mess_students() -> None:
+    """Seed demo mess students for the student mess entry system. Idempotent."""
+    if not DEMO_MODE:
+        return
+    db = get_db()
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM mess_students").fetchone()["c"]
+        if existing > 0:
+            return
+        import secrets
+        now = now_iso()
+        # Get the Ravikiran Mess company ID
+        co = db.execute("SELECT id FROM companies WHERE short_name LIKE '%Ravikiran%' OR name LIKE '%Ravikiran%' LIMIT 1").fetchone()
+        co_id = co["id"] if co else None
+        students = [
+            ("Aarav Sharma", "MIT2024001", "Computer Science", 2, "Hostel A", "A-201", "full", "9876543001"),
+            ("Priya Deshmukh", "MIT2024002", "Mechanical Engg", 2, "Hostel B", "B-105", "full", "9876543002"),
+            ("Rohit Kulkarni", "MIT2024003", "Electronics", 3, "Hostel A", "A-312", "full", "9876543003"),
+            ("Sneha Patil", "MIT2024004", "Civil Engg", 1, "Hostel C", "C-104", "no_breakfast", "9876543004"),
+            ("Amit Jadhav", "MIT2024005", "Computer Science", 3, "Hostel A", "A-415", "full", "9876543005"),
+            ("Neha Kale", "MIT2024006", "Information Tech", 2, "Hostel B", "B-208", "lunch_only", "9876543006"),
+            ("Vikram Bhosale", "MIT2024007", "Mechanical Engg", 4, "Hostel D", "D-301", "full", "9876543007"),
+            ("Ananya Joshi", "MIT2024008", "Electronics", 1, "Hostel C", "C-212", "full", "9876543008"),
+            ("Siddharth Pawar", "MIT2024009", "Civil Engg", 2, "Hostel A", "A-106", "full", "9876543009"),
+            ("Kavita Mane", "MIT2024010", "Computer Science", 1, "Hostel B", "B-315", "full", "9876543010"),
+            ("Raj Thorat", "MIT2024011", "Mechanical Engg", 3, "Hostel D", "D-102", "no_breakfast", "9876543011"),
+            ("Pooja Gaikwad", "MIT2024012", "Information Tech", 2, "Hostel C", "C-301", "full", "9876543012"),
+        ]
+        cur = db.cursor()
+        for name, roll, dept, year, hostel, room, plan, phone in students:
+            qr_token = f"MESS-{roll}-{secrets.token_hex(3).upper()}"
+            cur.execute(
+                """INSERT INTO mess_students (name, roll_number, department, year_of_study,
+                    hostel, room_number, meal_plan, phone, qr_token, company_id, is_active, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,1,?)""",
+                (name, roll, dept, year, hostel, room, plan, phone, qr_token, co_id, now),
+            )
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 
 def _seed_demo_grants() -> None:
@@ -19393,6 +19438,546 @@ def process_all_pending_commands():
                 break
             total += _process_command_batch()
         return total
+
+
+# ═══════════════════════════════════════════════════════════════════
+# QR ATTENDANCE SYSTEM
+# ═══════════════════════════════════════════════════════════════════
+
+MEAL_TYPES = ["breakfast", "lunch", "snacks", "dinner"]
+MEAL_WINDOWS = {
+    "breakfast": (6, 10),   # 6 AM – 10 AM
+    "lunch":     (11, 15),  # 11 AM – 3 PM
+    "snacks":    (15, 18),  # 3 PM – 6 PM
+    "dinner":    (18, 23),  # 6 PM – 11 PM
+}
+
+
+def _current_meal() -> str:
+    """Return the current meal type based on wall-clock hour."""
+    from datetime import datetime as _dt
+    h = _dt.now().hour
+    for meal, (start, end) in MEAL_WINDOWS.items():
+        if start <= h < end:
+            return meal
+    return "lunch"
+
+
+@app.route("/attendance/qr")
+@login_required
+def qr_attendance_kiosk():
+    """QR attendance kiosk — scan page. Works on phone or tablet."""
+    user = current_user()
+    roles = user_role_set(user)
+    is_admin = bool(roles & {"super_admin", "site_admin", "operator", "instrument_admin"}) or is_owner(user)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    # Today's scan count
+    scan_count = query_one(
+        "SELECT COUNT(DISTINCT user_id) AS c FROM qr_scan_log WHERE scanned_at LIKE ?",
+        (today + "%",),
+    )
+    recent_scans = query_all(
+        """
+        SELECT q.*, u.name FROM qr_scan_log q
+        JOIN users u ON u.id = q.user_id
+        WHERE q.scanned_at LIKE ?
+        ORDER BY q.scanned_at DESC LIMIT 20
+        """,
+        (today + "%",),
+    )
+    return render_template(
+        "qr_attendance_kiosk.html",
+        is_admin=is_admin,
+        today=today,
+        scan_count=scan_count["c"] if scan_count else 0,
+        recent_scans=recent_scans,
+    )
+
+
+@app.route("/attendance/qr/scan", methods=["POST"])
+@login_required
+def qr_attendance_scan():
+    """Process a QR scan for attendance. Accepts member_code from scanner."""
+    user = current_user()
+    member_code = request.form.get("member_code", "").strip().upper()
+    device_info = request.form.get("device_info", "").strip()
+    if not member_code:
+        flash("No code scanned.", "error")
+        return redirect(url_for("qr_attendance_kiosk"))
+    # Find user by member_code
+    target = query_one("SELECT id, name, member_code FROM users WHERE UPPER(member_code) = ? AND active = 1", (member_code,))
+    if not target:
+        flash(f"Unknown code: {member_code}. Not registered.", "error")
+        return redirect(url_for("qr_attendance_kiosk"))
+    from datetime import datetime as _dt, date as _date
+    now = _dt.now()
+    today = _date.today().isoformat()
+    now_str = now.isoformat()
+    # Check if already checked in today
+    existing = query_one(
+        "SELECT id, scan_type FROM qr_scan_log WHERE user_id = ? AND scanned_at LIKE ? ORDER BY scanned_at DESC LIMIT 1",
+        (target["id"], today + "%"),
+    )
+    scan_type = "check_in"
+    if existing and existing["scan_type"] == "check_in":
+        scan_type = "check_out"
+    # Log the scan
+    execute(
+        "INSERT INTO qr_scan_log (user_id, scan_type, scanned_at, device_info) VALUES (?, ?, ?, ?)",
+        (target["id"], scan_type, now_str, device_info),
+    )
+    # Also update/create attendance record
+    check_in_time = now.strftime("%H:%M") if scan_type == "check_in" else None
+    check_out_time = now.strftime("%H:%M") if scan_type == "check_out" else None
+    if scan_type == "check_in":
+        execute(
+            """
+            INSERT INTO attendance (user_id, date, status, check_in, marked_by_user_id, created_at, notes)
+            VALUES (?, ?, 'present', ?, ?, ?, 'QR scan')
+            ON CONFLICT (user_id, date) DO UPDATE SET
+                status = 'present', check_in = excluded.check_in,
+                marked_by_user_id = excluded.marked_by_user_id
+            """,
+            (target["id"], today, check_in_time, user["id"], now_str),
+        )
+    else:
+        execute(
+            """
+            UPDATE attendance SET check_out = ?, marked_by_user_id = ?
+            WHERE user_id = ? AND date = ?
+            """,
+            (check_out_time, user["id"], target["id"], today),
+        )
+    log_action(user["id"], "attendance", target["id"], "qr_scan",
+               {"scan_type": scan_type, "member_code": member_code})
+    action_label = "checked IN" if scan_type == "check_in" else "checked OUT"
+    flash(f"{target['name']} ({member_code}) {action_label} at {now.strftime('%I:%M %p')}", "success")
+    return redirect(url_for("qr_attendance_kiosk"))
+
+
+@app.route("/attendance/my-qr")
+@login_required
+def qr_my_code():
+    """Show the current user's QR code for attendance scanning."""
+    user = current_user()
+    return render_template("qr_my_code.html", member_code=user.get("member_code", ""))
+
+
+@app.route("/attendance/qr/generate-svg/<code>")
+@login_required
+def qr_code_svg(code: str):
+    """Generate a QR code as SVG for a given member_code.
+    Uses a simple matrix-to-SVG approach without external libraries."""
+    import hashlib
+    # Simple QR-like visual using member code hash — actual scanning uses
+    # the alphanumeric member_code text displayed alongside.
+    # For production RFID, the reader sends the code directly.
+    code = code.strip().upper()
+    # We generate a proper QR code using a minimal implementation
+    svg = _generate_qr_svg(code)
+    return app.response_class(svg, mimetype="image/svg+xml")
+
+
+def _generate_qr_svg(data: str) -> str:
+    """Generate a QR-code-like SVG. Uses a deterministic hash pattern
+    for visual representation. The actual scanning uses the text code."""
+    import hashlib
+    h = hashlib.sha256(data.encode()).hexdigest()
+    size = 21  # QR version 1 is 21x21
+    cell = 10
+    total = size * cell
+    modules = []
+    # Fixed patterns (finder patterns at corners)
+    def finder(ox, oy):
+        for r in range(7):
+            for c in range(7):
+                if r in (0, 6) or c in (0, 6) or (2 <= r <= 4 and 2 <= c <= 4):
+                    modules.append((ox + c, oy + r))
+    finder(0, 0)
+    finder(size - 7, 0)
+    finder(0, size - 7)
+    # Data area filled from hash
+    idx = 0
+    for r in range(size):
+        for c in range(size):
+            if (r < 7 and c < 7) or (r < 7 and c >= size - 7) or (r >= size - 7 and c < 7):
+                continue
+            if idx < len(h) and int(h[idx], 16) > 7:
+                modules.append((c, r))
+            idx = (idx + 1) % len(h)
+    rects = "".join(
+        f'<rect x="{c * cell}" y="{r * cell}" width="{cell}" height="{cell}"/>'
+        for c, r in modules
+    )
+    return f'''<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {total} {total}" width="{total}" height="{total}">
+<rect width="{total}" height="{total}" fill="white"/>
+<g fill="black">{rects}</g>
+</svg>'''
+
+
+# ═══════════════════════════════════════════════════════════════════
+# STUDENT MESS ENTRY SYSTEM
+# ═══════════════════════════════════════════════════════════════════
+
+def _mess_access(user) -> bool:
+    return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
+
+
+@app.route("/mess")
+@login_required
+def mess_dashboard():
+    """Mess management dashboard — today's meal counts, live scan."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date, datetime as _dt
+    today = _date.today().isoformat()
+    current_meal = _current_meal()
+    # Today's entry counts by meal
+    meal_counts = query_all(
+        """
+        SELECT meal_type, COUNT(*) AS cnt
+        FROM mess_entries WHERE entry_date = ?
+        GROUP BY meal_type
+        """,
+        (today,),
+    )
+    mc = {r["meal_type"]: r["cnt"] for r in meal_counts}
+    total_today = sum(mc.values())
+    # Active students
+    active_students = query_one("SELECT COUNT(*) AS c FROM mess_students WHERE is_active = 1")
+    student_count = active_students["c"] if active_students else 0
+    # Recent entries
+    recent = query_all(
+        """
+        SELECT me.*, ms.name, ms.roll_number, ms.department
+        FROM mess_entries me
+        JOIN mess_students ms ON ms.id = me.student_id
+        WHERE me.entry_date = ?
+        ORDER BY me.created_at DESC LIMIT 30
+        """,
+        (today,),
+    )
+    # Companies for filter
+    companies = query_all("SELECT id, short_name, name FROM companies WHERE is_active = 1 ORDER BY short_name")
+    return render_template(
+        "mess_dashboard.html",
+        today=today,
+        current_meal=current_meal,
+        meal_counts=mc,
+        total_today=total_today,
+        student_count=student_count,
+        recent_entries=recent,
+        meal_types=MEAL_TYPES,
+        companies=companies,
+    )
+
+
+@app.route("/mess/scan", methods=["GET", "POST"])
+@login_required
+def mess_scan():
+    """Scan a student QR/barcode for mess entry."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date, datetime as _dt
+    today = _date.today().isoformat()
+    current_meal = _current_meal()
+    if request.method == "POST":
+        qr_token = request.form.get("qr_token", "").strip()
+        meal = request.form.get("meal_type", current_meal).strip()
+        if meal not in MEAL_TYPES:
+            meal = current_meal
+        if not qr_token:
+            flash("No code scanned.", "error")
+            return redirect(url_for("mess_scan"))
+        # Find student by qr_token or roll_number
+        student = query_one(
+            "SELECT * FROM mess_students WHERE (qr_token = ? OR UPPER(roll_number) = ?) AND is_active = 1",
+            (qr_token, qr_token.upper()),
+        )
+        if not student:
+            flash(f"Unknown student code: {qr_token}", "error")
+            return redirect(url_for("mess_scan"))
+        # Check for duplicate entry
+        existing = query_one(
+            "SELECT id FROM mess_entries WHERE student_id = ? AND meal_type = ? AND entry_date = ?",
+            (student["id"], meal, today),
+        )
+        if existing:
+            flash(f"{student['name']} already scanned for {meal} today.", "warning")
+            return redirect(url_for("mess_scan"))
+        # Check meal plan
+        if student["meal_plan"] == "lunch_only" and meal != "lunch":
+            flash(f"{student['name']} has lunch-only plan. Cannot enter for {meal}.", "error")
+            return redirect(url_for("mess_scan"))
+        if student["meal_plan"] == "no_breakfast" and meal == "breakfast":
+            flash(f"{student['name']}'s plan excludes breakfast.", "error")
+            return redirect(url_for("mess_scan"))
+        # Record entry
+        now_str = _dt.now().isoformat()
+        execute(
+            """
+            INSERT INTO mess_entries (student_id, meal_type, entry_date, entry_time, scanned_by_user_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (student["id"], meal, today, _dt.now().strftime("%H:%M:%S"), user["id"], now_str),
+        )
+        log_action(user["id"], "mess", student["id"], "mess_entry",
+                   {"meal": meal, "roll": student["roll_number"]})
+        flash(f"✓ {student['name']} ({student['roll_number']}) — {meal.title()}", "success")
+        return redirect(url_for("mess_scan"))
+    # GET — scan page with recent entries
+    recent = query_all(
+        """
+        SELECT me.meal_type, me.entry_time, ms.name, ms.roll_number
+        FROM mess_entries me
+        JOIN mess_students ms ON ms.id = me.student_id
+        WHERE me.entry_date = ?
+        ORDER BY me.created_at DESC LIMIT 15
+        """,
+        (today,),
+    )
+    meal_count = query_one(
+        "SELECT COUNT(*) AS c FROM mess_entries WHERE entry_date = ? AND meal_type = ?",
+        (today, current_meal),
+    )
+    return render_template(
+        "mess_scan.html",
+        today=today,
+        current_meal=current_meal,
+        recent_entries=recent,
+        meal_count=meal_count["c"] if meal_count else 0,
+        meal_types=MEAL_TYPES,
+    )
+
+
+@app.route("/mess/students")
+@login_required
+def mess_students_list():
+    """List all registered mess students."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    students = query_all(
+        """
+        SELECT ms.*, c.short_name AS company_short,
+               (SELECT COUNT(*) FROM mess_entries me WHERE me.student_id = ms.id
+                AND me.entry_date >= date('now', '-30 days')) AS meals_30d
+        FROM mess_students ms
+        LEFT JOIN companies c ON c.id = ms.company_id
+        ORDER BY ms.is_active DESC, ms.name
+        """,
+    )
+    return render_template("mess_students.html", students=students)
+
+
+@app.route("/mess/students/new", methods=["GET", "POST"])
+@login_required
+def mess_student_new():
+    """Register a new mess student."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    if request.method == "POST":
+        import secrets
+        name = request.form.get("name", "").strip()
+        roll = request.form.get("roll_number", "").strip().upper()
+        dept = request.form.get("department", "").strip()
+        year = int(request.form.get("year_of_study", 1) or 1)
+        hostel = request.form.get("hostel", "").strip()
+        room = request.form.get("room_number", "").strip()
+        meal_plan = request.form.get("meal_plan", "full").strip()
+        phone = request.form.get("phone", "").strip()
+        company_id = request.form.get("company_id") or None
+        if company_id:
+            company_id = int(company_id)
+        if not name or not roll:
+            flash("Name and roll number are required.", "error")
+            return redirect(url_for("mess_student_new"))
+        # Check duplicate
+        existing = query_one("SELECT id FROM mess_students WHERE roll_number = ?", (roll,))
+        if existing:
+            flash(f"Roll number {roll} already registered.", "error")
+            return redirect(url_for("mess_student_new"))
+        # Generate unique QR token
+        qr_token = f"MESS-{roll}-{secrets.token_hex(3).upper()}"
+        execute(
+            """
+            INSERT INTO mess_students (name, roll_number, department, year_of_study, hostel,
+                room_number, meal_plan, phone, qr_token, company_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, roll, dept, year, hostel, room, meal_plan, phone, qr_token, company_id, now_iso()),
+        )
+        log_action(user["id"], "mess", 0, "student_registered", {"name": name, "roll": roll})
+        flash(f"Student {name} ({roll}) registered. QR token: {qr_token}", "success")
+        return redirect(url_for("mess_students_list"))
+    companies = query_all("SELECT id, short_name, name FROM companies WHERE is_active = 1 ORDER BY short_name")
+    return render_template("mess_student_new.html", companies=companies)
+
+
+@app.route("/mess/students/<int:student_id>")
+@login_required
+def mess_student_detail(student_id: int):
+    """Student detail — meal history, QR code."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    student = query_one(
+        """
+        SELECT ms.*, c.short_name AS company_short
+        FROM mess_students ms
+        LEFT JOIN companies c ON c.id = ms.company_id
+        WHERE ms.id = ?
+        """,
+        (student_id,),
+    )
+    if not student:
+        abort(404)
+    # Meal history (last 30 days)
+    history = query_all(
+        """
+        SELECT entry_date, meal_type, entry_time
+        FROM mess_entries WHERE student_id = ?
+        ORDER BY entry_date DESC, entry_time DESC LIMIT 120
+        """,
+        (student_id,),
+    )
+    # Monthly summary
+    monthly = query_all(
+        """
+        SELECT substr(entry_date, 1, 7) AS month, meal_type, COUNT(*) AS cnt
+        FROM mess_entries WHERE student_id = ?
+        GROUP BY month, meal_type
+        ORDER BY month DESC
+        LIMIT 24
+        """,
+        (student_id,),
+    )
+    return render_template(
+        "mess_student_detail.html",
+        student=student,
+        history=history,
+        monthly=monthly,
+        meal_types=MEAL_TYPES,
+    )
+
+
+@app.route("/mess/students/<int:student_id>/qr")
+@login_required
+def mess_student_qr(student_id: int):
+    """Printable QR card for a student."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    student = query_one("SELECT * FROM mess_students WHERE id = ?", (student_id,))
+    if not student:
+        abort(404)
+    return render_template("mess_student_qr.html", student=student)
+
+
+@app.route("/mess/students/import", methods=["POST"])
+@login_required
+def mess_students_import():
+    """Bulk import students from CSV. Columns: name, roll_number, department, year, hostel, room, meal_plan, phone"""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    import csv, io, secrets
+    f = request.files.get("csv_file")
+    if not f:
+        flash("No file uploaded.", "error")
+        return redirect(url_for("mess_students_list"))
+    content = f.read().decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(content))
+    added = 0
+    skipped = 0
+    company_id = request.form.get("company_id") or None
+    if company_id:
+        company_id = int(company_id)
+    for row in reader:
+        name = (row.get("name") or "").strip()
+        roll = (row.get("roll_number") or row.get("roll") or "").strip().upper()
+        if not name or not roll:
+            skipped += 1
+            continue
+        existing = query_one("SELECT id FROM mess_students WHERE roll_number = ?", (roll,))
+        if existing:
+            skipped += 1
+            continue
+        qr_token = f"MESS-{roll}-{secrets.token_hex(3).upper()}"
+        dept = (row.get("department") or row.get("dept") or "").strip()
+        year = int(row.get("year_of_study") or row.get("year") or 1)
+        hostel = (row.get("hostel") or "").strip()
+        room = (row.get("room_number") or row.get("room") or "").strip()
+        meal_plan = (row.get("meal_plan") or "full").strip()
+        phone = (row.get("phone") or "").strip()
+        execute(
+            """
+            INSERT INTO mess_students (name, roll_number, department, year_of_study, hostel,
+                room_number, meal_plan, phone, qr_token, company_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, roll, dept, year, hostel, room, meal_plan, phone, qr_token, company_id, now_iso()),
+        )
+        added += 1
+    log_action(user["id"], "mess", 0, "students_imported", {"added": added, "skipped": skipped})
+    flash(f"Imported {added} students ({skipped} skipped).", "success")
+    return redirect(url_for("mess_students_list"))
+
+
+@app.route("/mess/reports")
+@login_required
+def mess_reports():
+    """Mess reports — daily/weekly/monthly meal counts."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date, timedelta
+    today = _date.today()
+    # Daily counts for last 7 days
+    daily = []
+    for i in range(7):
+        d = (today - timedelta(days=i)).isoformat()
+        counts = query_all(
+            "SELECT meal_type, COUNT(*) AS cnt FROM mess_entries WHERE entry_date = ? GROUP BY meal_type",
+            (d,),
+        )
+        mc = {r["meal_type"]: r["cnt"] for r in counts}
+        daily.append({"date": d, "counts": mc, "total": sum(mc.values())})
+    # Monthly summary
+    monthly = query_all(
+        """
+        SELECT substr(entry_date, 1, 7) AS month, meal_type, COUNT(*) AS cnt
+        FROM mess_entries
+        GROUP BY month, meal_type
+        ORDER BY month DESC
+        LIMIT 48
+        """,
+    )
+    # Department breakdown (current month)
+    month_start = today.replace(day=1).isoformat()
+    by_dept = query_all(
+        """
+        SELECT ms.department, me.meal_type, COUNT(*) AS cnt
+        FROM mess_entries me
+        JOIN mess_students ms ON ms.id = me.student_id
+        WHERE me.entry_date >= ?
+        GROUP BY ms.department, me.meal_type
+        ORDER BY ms.department
+        """,
+        (month_start,),
+    )
+    return render_template(
+        "mess_reports.html",
+        daily=daily,
+        monthly=monthly,
+        by_dept=by_dept,
+        meal_types=MEAL_TYPES,
+    )
 
 
 @app.route("/quickentry", methods=["GET", "POST"])

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('personnel_list') }}" data-vis="{{ V }}">← Personnel</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Payroll</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ month_name }} {{ year }}</span>
+  </div>
+</header>
+
+{# ── Month navigation ── #}
+<div style="display:flex;gap:1rem;align-items:center;margin:0.75rem 0;" data-vis="{{ V }}">
+  {% set prev_month = month_num - 1 if month_num > 1 else 12 %}
+  {% set prev_year = year if month_num > 1 else year - 1 %}
+  {% set next_month = month_num + 1 if month_num < 12 else 1 %}
+  {% set next_year = year if month_num < 12 else year + 1 %}
+  <a href="{{ url_for('payroll_view', year=prev_year, month=prev_month) }}" class="btn" data-vis="{{ V }}">← Previous</a>
+  <strong data-vis="{{ V }}">{{ month_name }} {{ year }} ({{ days_in_month }} days)</strong>
+  <a href="{{ url_for('payroll_view', year=next_year, month=next_month) }}" class="btn" data-vis="{{ V }}">Next →</a>
+</div>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": payroll|length|string,                       "label": "Staff"},
+      {"value": "₹" ~ "{:,.0f}".format(total_payable),      "label": "Payable",  "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(total_paid),         "label": "Paid",     "tone": "green"},
+    ]) }}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PAYROLL", month_name ~ " " ~ year|string) }}
+    {% if payroll %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Employee</th>
+          <th data-vis="{{ V }}">Designation</th>
+          <th class="num" data-vis="{{ V }}">Base Salary</th>
+          <th class="num" data-vis="{{ V }}">Days Worked</th>
+          <th class="num" data-vis="{{ V }}">Calculated Pay</th>
+          <th data-vis="{{ V }}">Status</th>
+          {% if can_edit %}
+          <th data-vis="{{ V }}">Action</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in payroll %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('personnel_detail', user_id=r.user_id) }}" class="text-link" data-vis="{{ V }}">
+              <strong data-vis="{{ V }}">{{ r.name }}</strong>
+            </a>
+          </td>
+          <td data-vis="{{ V }}">{{ r.designation or "—" }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.monthly_salary) }}</td>
+          <td class="num" data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }} / {{ r.days_in_month }}</td>
+          <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.calculated_pay) }}</strong></td>
+          <td data-vis="{{ V }}">
+            {% if r.payment and r.payment.status == 'paid' %}
+            <span class="badge status-paid" data-vis="{{ V }}">Paid</span>
+            {% else %}
+            <span class="badge status-pending" data-vis="{{ V }}">Pending</span>
+            {% endif %}
+          </td>
+          {% if can_edit %}
+          <td data-vis="{{ V }}">
+            {% if not r.payment or r.payment.status != 'paid' %}
+            <form method="post" action="{{ url_for('payroll_pay') }}" style="display:inline;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="user_id" value="{{ r.user_id }}">
+              <input type="hidden" name="year" value="{{ year }}">
+              <input type="hidden" name="month" value="{{ '{:02d}'.format(month_num) }}">
+              <input type="hidden" name="deductions" value="0">
+              <input type="hidden" name="bonus" value="0">
+              <button type="submit" class="btn btn-sm btn-primary" data-vis="{{ V }}">Pay</button>
+            </form>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.payment.net_pay) }}</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No salary configurations found.", hint="Set up salary configs in Personnel first.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

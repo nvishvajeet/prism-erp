@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('personnel_list') }}" data-vis="{{ V }}">← Personnel</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ employee.name }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ employee.email or "" }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Profile Tile ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("PROFILE", employee.name) }}
+    {{ metadata_grid([
+      ("Name", employee.name),
+      ("Email", employee.email or "—"),
+      ("Role", employee.role or "—"),
+      ("Designation", salary_cfg.designation if salary_cfg else "—"),
+      ("Department", salary_cfg.department if salary_cfg else "—"),
+      ("Joined", salary_cfg.join_date if salary_cfg and salary_cfg.join_date else "—"),
+    ]) }}
+  </article>
+
+  {# ── Salary Config Tile ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("SALARY CONFIG", "Compensation details") }}
+    {% if salary_cfg %}
+    {{ metadata_grid([
+      ("Monthly Salary", "₹" ~ "{:,.0f}".format(salary_cfg.monthly_salary)),
+      ("Bank", salary_cfg.bank_name or "—"),
+      ("Account", salary_cfg.bank_account or "—"),
+      ("IFSC", salary_cfg.ifsc_code or "—"),
+      ("PAN", salary_cfg.pan_number or "—"),
+      ("Aadhar", salary_cfg.aadhar_number or "—"),
+    ]) }}
+    {% if salary_cfg.notes %}
+    <div class="dp-metadata-row" style="margin-top:0.5rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Notes</span>
+      <span data-vis="{{ V }}">{{ salary_cfg.notes }}</span>
+    </div>
+    {% endif %}
+    {% else %}
+    {{ empty_state("No salary configuration set.", hint="Set one below.") }}
+    {% endif %}
+  </article>
+
+  {# ── Attendance Summary ── #}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("ATTENDANCE", "Current month") }}
+    {{ kpi_grid([
+      {"value": "{:.1f}".format(days_worked), "label": "Days Worked (this month)"},
+    ]) }}
+  </article>
+
+  {# ── Assigned Vehicles ── #}
+  {% if assigned_vehicles %}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("VEHICLES", assigned_vehicles|length|string ~ " assigned") }}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for av in assigned_vehicles %}
+      <li class="finance-invoice-row" data-vis="{{ V }}">
+        <a href="{{ url_for('vehicle_detail', vehicle_id=av.id) }}" class="text-link" data-vis="{{ V }}">{{ av.name }} ({{ av.registration_no }})</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Set / Update Salary Config ── #}
+  {% if can_edit %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("UPDATE SALARY", "Set compensation and banking details") }}
+    <details class="toggleable-form" {% if not salary_cfg %}open{% endif %} data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">{{ "Edit" if salary_cfg else "+ Set" }} Salary Config</summary>
+      <form method="post" action="{{ url_for('personnel_salary_config', user_id=employee.id) }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label data-vis="{{ V }}">Monthly Salary (₹) <input type="number" step="0.01" name="monthly_salary" value="{{ salary_cfg.monthly_salary if salary_cfg else 0 }}" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Designation <input type="text" name="designation" value="{{ salary_cfg.designation if salary_cfg else '' }}" placeholder="e.g. Driver, Cook" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Department <input type="text" name="department" value="{{ salary_cfg.department if salary_cfg else '' }}" placeholder="e.g. Kitchen, Transport" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Join Date <input type="date" name="join_date" value="{{ salary_cfg.join_date if salary_cfg and salary_cfg.join_date else '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Bank Name <input type="text" name="bank_name" value="{{ salary_cfg.bank_name if salary_cfg else '' }}" placeholder="e.g. SBI" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Bank Account <input type="text" name="bank_account" value="{{ salary_cfg.bank_account if salary_cfg else '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">IFSC Code <input type="text" name="ifsc_code" value="{{ salary_cfg.ifsc_code if salary_cfg else '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">PAN Number <input type="text" name="pan_number" value="{{ salary_cfg.pan_number if salary_cfg else '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Aadhar Number <input type="text" name="aadhar_number" value="{{ salary_cfg.aadhar_number if salary_cfg else '' }}" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Notes <textarea name="notes" rows="2" data-vis="{{ V }}">{{ salary_cfg.notes if salary_cfg else '' }}</textarea></label>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save Config</button>
+      </form>
+    </details>
+  </article>
+  {% endif %}
+
+  {# ── Payment History ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PAYMENT HISTORY", payments|length|string ~ " records") }}
+    {% if payments %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Period</th>
+          <th class="num" data-vis="{{ V }}">Base</th>
+          <th class="num" data-vis="{{ V }}">Days</th>
+          <th class="num" data-vis="{{ V }}">Deductions</th>
+          <th class="num" data-vis="{{ V }}">Bonus</th>
+          <th class="num" data-vis="{{ V }}">Net Pay</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Paid At</th>
+          <th data-vis="{{ V }}">Paid By</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for p in payments %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ p.month }}/{{ p.year }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.base_salary) }}</td>
+          <td class="num" data-vis="{{ V }}">{{ p.days_worked }}/{{ p.days_in_month }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.deductions) }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.bonus) }}</td>
+          <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.net_pay) }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ p.status }}" data-vis="{{ V }}">{{ p.status|capitalize }}</span></td>
+          <td data-vis="{{ V }}">{{ p.paid_at[:10] if p.paid_at else "—" }}</td>
+          <td data-vis="{{ V }}">{{ p.paid_by_name or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No payment records yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

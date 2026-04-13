@@ -1,66 +1,73 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
-{% block hover_back %}<a href="{{ url_for('vehicles_list') }}" class="hover-back-btn" title="Back to Vehicles">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vehicles_list') }}" class="hover-back-btn" title="Back to Fleet">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('vehicles_list') }}" data-vis="{{ V }}">← Vehicles</a>
+    <a class="text-link back-link" href="{{ url_for('vehicles_list') }}" data-vis="{{ V }}">← Fleet</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">{{ vehicle.name }}</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">{{ vehicle.registration_number }}</span>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ vehicle.registration_no }}</span>
   </div>
 </header>
 
-<section class="finance-tiles" data-vis="{{ V }}">
+<section class="inst-tiles" data-vis="{{ V }}">
 
-  {# ── KPI ── #}
+  {# ── KPI Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ kpi_grid([
-      {"value": "₹" ~ "{:,.0f}".format(total_expenses),  "label": "Expenses"},
-      {"value": "₹" ~ "{:,.0f}".format(total_maint),     "label": "Maintenance"},
-      {"value": "₹" ~ "{:,.0f}".format(total_expenses + total_maint), "label": "Total Spend", "tone": "amber"},
-      {"value": trips|length|string,                       "label": "Trips"},
+      {"value": "₹" ~ "{:,.0f}".format(fuel_total),   "label": "Fuel"},
+      {"value": "₹" ~ "{:,.0f}".format(maint_total),  "label": "Maintenance"},
+      {"value": "₹" ~ "{:,.0f}".format(other_total),  "label": "Other"},
+      {"value": "₹" ~ "{:,.0f}".format(fuel_total + maint_total + other_total), "label": "Total Spend", "tone": "amber"},
+      {"value": logs|length|string,                     "label": "Log Entries"},
     ]) }}
   </article>
 
   {# ── Vehicle Info ── #}
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("VEHICLE INFO", vehicle.code) }}
-    <div class="dp-metadata-grid" data-vis="{{ V }}">
-      <div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Make / Model</span><strong data-vis="{{ V }}">{{ vehicle.make }} {{ vehicle.model }}</strong></div>
-      <div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Registration</span><strong data-vis="{{ V }}">{{ vehicle.registration_number }}</strong></div>
-      <div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Type</span><strong data-vis="{{ V }}">{{ vehicle.vehicle_type|title }}</strong></div>
-      <div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Fuel</span><strong data-vis="{{ V }}">{{ vehicle.fuel_type|title }}</strong></div>
-      {% if vehicle.color %}<div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Color</span><strong data-vis="{{ V }}">{{ vehicle.color }}</strong></div>{% endif %}
-      {% if vehicle.year %}<div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Year</span><strong data-vis="{{ V }}">{{ vehicle.year }}</strong></div>{% endif %}
-      <div class="dp-metadata-row" data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Status</span><span class="badge status-{{ vehicle.status }}" data-vis="{{ V }}">{{ vehicle.status|capitalize }}</span></div>
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("VEHICLE INFO", vehicle.registration_no) }}
+    {{ metadata_grid([
+      ("Name", vehicle.name),
+      ("Registration", vehicle.registration_no),
+      ("Type", vehicle.vehicle_type|title),
+      ("Status", vehicle.status|capitalize),
+      ("Purchase Date", vehicle.purchase_date or "—"),
+      ("Purchase Cost", "₹" ~ "{:,.0f}".format(vehicle.purchase_cost)),
+      ("Insurance Expiry", vehicle.insurance_expiry or "—"),
+      ("Driver", driver.name if driver else "— Unassigned —"),
+    ]) }}
+    {% if driver %}
+    <div style="margin-top:0.5rem;" data-vis="{{ V }}">
+      <a href="{{ url_for('personnel_detail', user_id=driver.id) }}" class="text-link" data-vis="{{ V }}">View driver profile →</a>
     </div>
-  </article>
-
-  {# ── Drivers ── #}
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("DRIVERS", drivers|length|string ~ " assigned") }}
-    {% if drivers %}
-    <ul class="finance-invoice-list" data-vis="{{ V }}">
-      {% for d in drivers %}
-      <li class="finance-invoice-row" data-vis="{{ V }}">
-        <div class="finance-invoice-head" data-vis="{{ V }}">
-          <strong class="finance-invoice-title" data-vis="{{ V }}">{{ d.driver_name }}</strong>
-          {% if d.is_primary %}<span class="badge badge-role" data-vis="{{ V }}">Primary</span>{% endif %}
-        </div>
-        <div class="finance-invoice-meta hint" data-vis="{{ V }}">Assigned {{ d.assigned_at[:10] if d.assigned_at else '—' }}</div>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    {{ empty_state("No drivers assigned.") }}
+    {% endif %}
+    {% if vehicle.notes %}
+    <div class="dp-metadata-row" style="margin-top:0.5rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Notes</span>
+      <span data-vis="{{ V }}">{{ vehicle.notes }}</span>
+    </div>
     {% endif %}
   </article>
 
-  {# ── Expenses ── #}
+  {# ── Other vehicles assigned to same driver ── #}
+  {% if assigned_vehicles %}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("SAME DRIVER", "Other vehicles") }}
+    <ul class="finance-invoice-list" data-vis="{{ V }}">
+      {% for av in assigned_vehicles %}
+      <li class="finance-invoice-row" data-vis="{{ V }}">
+        <a href="{{ url_for('vehicle_detail', vehicle_id=av.id) }}" class="text-link" data-vis="{{ V }}">{{ av.name }} ({{ av.registration_no }})</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Log History ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("EXPENSES", expenses|length|string ~ " recorded") }}
-    {% if expenses %}
+    {{ card_heading("LOG HISTORY", logs|length|string ~ " entries") }}
+    {% if logs %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -69,185 +76,52 @@
           <th data-vis="{{ V }}">Description</th>
           <th class="num" data-vis="{{ V }}">Amount</th>
           <th data-vis="{{ V }}">Odometer</th>
-          <th data-vis="{{ V }}">Receipt</th>
-          <th data-vis="{{ V }}">By</th>
+          <th data-vis="{{ V }}">Logged By</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
-        {% for e in expenses %}
+        {% for l in logs %}
         <tr data-vis="{{ V }}">
-          <td data-vis="{{ V }}">{{ e.expense_date }}</td>
-          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ e.expense_type|title }}</span></td>
-          <td data-vis="{{ V }}">{{ e.description }}</td>
-          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(e.amount) }}</td>
-          <td data-vis="{{ V }}">{{ "{:,.0f}".format(e.odometer_km) ~ " km" if e.odometer_km else "—" }}</td>
-          <td data-vis="{{ V }}">{{ e.receipt_number or "—" }}</td>
-          <td data-vis="{{ V }}">{{ e.recorder_name or "—" }}</td>
+          <td data-vis="{{ V }}">{{ l.log_date }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ l.log_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ l.description or "—" }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(l.amount) }}</td>
+          <td data-vis="{{ V }}">{{ "{:,.0f}".format(l.odometer_km) ~ " km" if l.odometer_km else "—" }}</td>
+          <td data-vis="{{ V }}">{{ l.logged_by_name or "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    {{ empty_state("No expenses recorded yet.") }}
+    {{ empty_state("No log entries yet.") }}
     {% endif %}
   </article>
 
-  {# ── Add Expense Form ── #}
-  {% if can_manage %}
+  {# ── Add Log Entry ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("ADD EXPENSE", "Record a vehicle charge") }}
+    {{ card_heading("ADD LOG", "Record fuel, maintenance, or expense") }}
     <details class="toggleable-form" data-vis="{{ V }}">
-      <summary class="text-link" data-vis="{{ V }}">+ New Expense</summary>
-      <form method="post" action="{{ url_for('vehicle_add_expense', vehicle_id=vehicle.id) }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">+ New Log Entry</summary>
+      <form method="post" action="{{ url_for('vehicle_add_log', vehicle_id=vehicle.id) }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label data-vis="{{ V }}">Description <input type="text" name="description" required placeholder="e.g. Diesel refill" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Date <input type="date" name="expense_date" value="{{ today }}" required data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Type
-          <select name="expense_type" data-vis="{{ V }}">
+          <select name="log_type" data-vis="{{ V }}">
             <option value="fuel">Fuel</option>
-            <option value="toll">Toll</option>
-            <option value="parking">Parking</option>
+            <option value="maintenance">Maintenance</option>
             <option value="insurance">Insurance</option>
-            <option value="tax">Road Tax</option>
+            <option value="toll">Toll</option>
+            <option value="fine">Fine</option>
             <option value="other">Other</option>
           </select>
         </label>
+        <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Description <input type="text" name="description" placeholder="e.g. Diesel refill at HP" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Date <input type="date" name="log_date" value="{{ today }}" required data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Odometer (km) <input type="number" step="0.1" name="odometer_km" placeholder="Optional" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Receipt # <input type="text" name="receipt_number" placeholder="Optional" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Notes <textarea name="notes" rows="2" placeholder="Optional" data-vis="{{ V }}"></textarea></label>
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Record Expense</button>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Record Log</button>
       </form>
     </details>
   </article>
-  {% endif %}
-
-  {# ── Maintenance Log ── #}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("MAINTENANCE", maintenance|length|string ~ " events") }}
-    {% if maintenance %}
-    <table class="data-table sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}">
-        <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Date</th>
-          <th data-vis="{{ V }}">Type</th>
-          <th data-vis="{{ V }}">Title</th>
-          <th class="num" data-vis="{{ V }}">Cost</th>
-          <th data-vis="{{ V }}">Next Due</th>
-          <th data-vis="{{ V }}">Performed By</th>
-        </tr>
-      </thead>
-      <tbody data-vis="{{ V }}">
-        {% for m in maintenance %}
-        <tr data-vis="{{ V }}">
-          <td data-vis="{{ V }}">{{ m.performed_at[:10] if m.performed_at else "—" }}</td>
-          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ m.event_type|title }}</span></td>
-          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.title }}</strong>{% if m.description %}<br><span class="hint" data-vis="{{ V }}">{{ m.description }}</span>{% endif %}</td>
-          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(m.cost) }}</td>
-          <td data-vis="{{ V }}">{{ m.next_due_at or "—" }}</td>
-          <td data-vis="{{ V }}">{{ m.performed_by or m.creator_name or "—" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    {{ empty_state("No maintenance events logged.") }}
-    {% endif %}
-  </article>
-
-  {# ── Add Maintenance Form ── #}
-  {% if can_manage %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("LOG MAINTENANCE", "Record service / repair") }}
-    <details class="toggleable-form" data-vis="{{ V }}">
-      <summary class="text-link" data-vis="{{ V }}">+ New Maintenance Entry</summary>
-      <form method="post" action="{{ url_for('vehicle_add_maintenance', vehicle_id=vehicle.id) }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label data-vis="{{ V }}">Title <input type="text" name="title" required placeholder="e.g. Oil change + filter" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Type
-          <select name="event_type" data-vis="{{ V }}">
-            <option value="service">Service</option>
-            <option value="repair">Repair</option>
-            <option value="tyre">Tyre</option>
-            <option value="inspection">Inspection</option>
-            <option value="wash">Wash / Clean</option>
-            <option value="other">Other</option>
-          </select>
-        </label>
-        <label data-vis="{{ V }}">Date <input type="date" name="performed_at" value="{{ today }}" required data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Cost (₹) <input type="number" step="0.01" name="cost" value="0" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Performed By <input type="text" name="performed_by" placeholder="Garage name / mechanic" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Next Due <input type="date" name="next_due_at" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Odometer (km) <input type="number" step="0.1" name="odometer_km" placeholder="Optional" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Description <textarea name="description" rows="2" placeholder="Details" data-vis="{{ V }}"></textarea></label>
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Log Maintenance</button>
-      </form>
-    </details>
-  </article>
-  {% endif %}
-
-  {# ── Trips ── #}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("TRIP LOG", trips|length|string ~ " trips") }}
-    {% if trips %}
-    <table class="data-table sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}">
-        <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Date</th>
-          <th data-vis="{{ V }}">Driver</th>
-          <th data-vis="{{ V }}">Purpose</th>
-          <th data-vis="{{ V }}">From → To</th>
-          <th data-vis="{{ V }}">Distance</th>
-        </tr>
-      </thead>
-      <tbody data-vis="{{ V }}">
-        {% for t in trips %}
-        <tr data-vis="{{ V }}">
-          <td data-vis="{{ V }}">{{ t.trip_date }}</td>
-          <td data-vis="{{ V }}">{{ t.driver_name or "—" }}</td>
-          <td data-vis="{{ V }}">{{ t.purpose }}</td>
-          <td data-vis="{{ V }}">{{ t.start_location or "—" }} → {{ t.end_location or "—" }}</td>
-          <td data-vis="{{ V }}">
-            {% if t.start_odometer and t.end_odometer %}
-            {{ "{:,.0f}".format(t.end_odometer - t.start_odometer) }} km
-            {% else %}—{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    {{ empty_state("No trips logged yet.") }}
-    {% endif %}
-  </article>
-
-  {# ── Add Trip Form ── #}
-  {% if can_manage %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("LOG TRIP", "Record a vehicle trip") }}
-    <details class="toggleable-form" data-vis="{{ V }}">
-      <summary class="text-link" data-vis="{{ V }}">+ New Trip</summary>
-      <form method="post" action="{{ url_for('vehicle_add_trip', vehicle_id=vehicle.id) }}" class="form-grid top-gap" style="padding:0.75rem;" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label data-vis="{{ V }}">Purpose <input type="text" name="purpose" required placeholder="e.g. Airport pickup" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Driver
-          <select name="driver_name" data-vis="{{ V }}">
-            <option value="" data-vis="{{ V }}">Select driver</option>
-            {% for d in drivers %}
-            <option value="{{ d.driver_name }}" data-vis="{{ V }}">{{ d.driver_name }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label data-vis="{{ V }}">Date <input type="date" name="trip_date" value="{{ today }}" required data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">From <input type="text" name="start_location" placeholder="Start location" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">To <input type="text" name="end_location" placeholder="End location" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">Start Odometer <input type="number" step="0.1" name="start_odometer" placeholder="km" data-vis="{{ V }}"></label>
-        <label data-vis="{{ V }}">End Odometer <input type="number" step="0.1" name="end_odometer" placeholder="km" data-vis="{{ V }}"></label>
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Log Trip</button>
-      </form>
-    </details>
-  </article>
-  {% endif %}
 
 </section>
 {% endblock %}

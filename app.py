@@ -244,12 +244,21 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {"stats", "visualizations", "instrument_visualization", "group_visualization"},
     },
     "vehicles": {
-        "label": "Vehicles",
+        "label": "Fleet",
         "icon": "\U0001f697",
         "nav_order": 9,
         "description": "Vehicle fleet management",
         "nav_endpoint": "vehicles_list",
-        "nav_active_endpoints": {"vehicles_list", "vehicle_detail", "vehicle_maintenance_log", "vehicle_expenses_page", "vehicle_trips_page"},
+        "nav_active_endpoints": {"vehicles_list", "vehicle_detail"},
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+    },
+    "personnel": {
+        "label": "Personnel",
+        "icon": "\U0001f465",
+        "nav_order": 10,
+        "description": "Staff & salary management",
+        "nav_endpoint": "personnel_list",
+        "nav_active_endpoints": {"personnel_list", "personnel_detail", "payroll_view"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "admin": {
@@ -4633,86 +4642,75 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS vehicles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                code TEXT UNIQUE NOT NULL,
-                registration_number TEXT NOT NULL DEFAULT '',
-                make TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
+                registration_no TEXT UNIQUE NOT NULL,
                 vehicle_type TEXT NOT NULL DEFAULT 'car',
-                fuel_type TEXT NOT NULL DEFAULT 'petrol',
-                year INTEGER,
-                color TEXT NOT NULL DEFAULT '',
+                assigned_driver_user_id INTEGER,
                 status TEXT NOT NULL DEFAULT 'active',
+                purchase_date TEXT,
+                purchase_cost REAL NOT NULL DEFAULT 0,
+                insurance_expiry TEXT,
                 notes TEXT NOT NULL DEFAULT '',
-                photo_url TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT ''
-            );
-
-            CREATE TABLE IF NOT EXISTS vehicle_drivers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                vehicle_id INTEGER NOT NULL,
-                user_id INTEGER,
-                driver_name TEXT NOT NULL DEFAULT '',
-                is_primary INTEGER NOT NULL DEFAULT 0,
-                assigned_at TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_veh_drivers_vehicle ON vehicle_drivers(vehicle_id);
-
-            CREATE TABLE IF NOT EXISTS vehicle_maintenance (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                vehicle_id INTEGER NOT NULL,
-                event_type TEXT NOT NULL DEFAULT 'service',
-                title TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                performed_by TEXT NOT NULL DEFAULT '',
-                performed_at TEXT NOT NULL DEFAULT '',
-                next_due_at TEXT,
-                cost REAL NOT NULL DEFAULT 0,
-                odometer_km REAL,
-                receipt_number TEXT NOT NULL DEFAULT '',
-                created_by_user_id INTEGER,
                 created_at TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
-                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+                FOREIGN KEY (assigned_driver_user_id) REFERENCES users(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_veh_maint_vehicle ON vehicle_maintenance(vehicle_id);
-            CREATE INDEX IF NOT EXISTS idx_veh_maint_type ON vehicle_maintenance(event_type);
 
-            CREATE TABLE IF NOT EXISTS vehicle_expenses (
+            CREATE TABLE IF NOT EXISTS vehicle_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vehicle_id INTEGER NOT NULL,
-                expense_type TEXT NOT NULL DEFAULT 'fuel',
-                description TEXT NOT NULL DEFAULT '',
+                log_type TEXT NOT NULL DEFAULT 'fuel',
                 amount REAL NOT NULL DEFAULT 0,
-                expense_date TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
                 odometer_km REAL,
-                receipt_number TEXT NOT NULL DEFAULT '',
-                recorded_by_user_id INTEGER,
-                recorded_at TEXT NOT NULL DEFAULT '',
-                notes TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
-                FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_veh_exp_vehicle ON vehicle_expenses(vehicle_id);
-
-            CREATE TABLE IF NOT EXISTS vehicle_trips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                vehicle_id INTEGER NOT NULL,
-                driver_name TEXT NOT NULL DEFAULT '',
-                purpose TEXT NOT NULL DEFAULT '',
-                start_location TEXT NOT NULL DEFAULT '',
-                end_location TEXT NOT NULL DEFAULT '',
-                start_odometer REAL,
-                end_odometer REAL,
-                trip_date TEXT NOT NULL DEFAULT '',
-                requested_by_user_id INTEGER,
-                status TEXT NOT NULL DEFAULT 'completed',
+                logged_by_user_id INTEGER NOT NULL,
+                log_date TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
-                FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+                FOREIGN KEY (logged_by_user_id) REFERENCES users(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_veh_trips_vehicle ON vehicle_trips(vehicle_id);
+            CREATE INDEX IF NOT EXISTS idx_veh_logs_vehicle ON vehicle_logs(vehicle_id);
+            CREATE INDEX IF NOT EXISTS idx_veh_logs_type ON vehicle_logs(log_type);
+        """)
+
+        # ── Personnel / Salary module ─────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS salary_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                monthly_salary REAL NOT NULL DEFAULT 0,
+                bank_account TEXT NOT NULL DEFAULT '',
+                bank_name TEXT NOT NULL DEFAULT '',
+                ifsc_code TEXT NOT NULL DEFAULT '',
+                pan_number TEXT NOT NULL DEFAULT '',
+                aadhar_number TEXT NOT NULL DEFAULT '',
+                join_date TEXT,
+                designation TEXT NOT NULL DEFAULT '',
+                department TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_salary_config_user ON salary_config(user_id);
+
+            CREATE TABLE IF NOT EXISTS salary_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                month TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                base_salary REAL NOT NULL DEFAULT 0,
+                days_worked INTEGER NOT NULL DEFAULT 0,
+                days_in_month INTEGER NOT NULL DEFAULT 30,
+                deductions REAL NOT NULL DEFAULT 0,
+                bonus REAL NOT NULL DEFAULT 0,
+                net_pay REAL NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'pending',
+                paid_at TEXT,
+                paid_by_user_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (paid_by_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_salary_payments_user ON salary_payments(user_id);
+            CREATE INDEX IF NOT EXISTS idx_salary_payments_period ON salary_payments(year, month);
         """)
 
         # Additive column migrations for v1.1.0
@@ -15041,146 +15039,377 @@ def prism_clear():
 @app.route("/vehicles")
 @login_required
 def vehicles_list():
-    """List all vehicles with driver + expense summary."""
+    """List all vehicles with status, assigned driver, last fuel date."""
     user = current_user()
     if not module_enabled("vehicles"):
         abort(404)
     vehicles = query_all("""
         SELECT v.*,
-               (SELECT GROUP_CONCAT(vd.driver_name, ', ')
-                  FROM vehicle_drivers vd WHERE vd.vehicle_id = v.id) AS drivers,
-               (SELECT COALESCE(SUM(ve.amount), 0)
-                  FROM vehicle_expenses ve WHERE ve.vehicle_id = v.id) AS total_expenses,
-               (SELECT COALESCE(SUM(vm.cost), 0)
-                  FROM vehicle_maintenance vm WHERE vm.vehicle_id = v.id) AS total_maintenance_cost,
-               (SELECT COUNT(*)
-                  FROM vehicle_trips vt WHERE vt.vehicle_id = v.id) AS trip_count
+               u.name AS driver_name,
+               (SELECT MAX(vl.log_date) FROM vehicle_logs vl
+                 WHERE vl.vehicle_id = v.id AND vl.log_type = 'fuel') AS last_fuel_date,
+               (SELECT COALESCE(SUM(vl.amount), 0) FROM vehicle_logs vl
+                 WHERE vl.vehicle_id = v.id AND vl.log_type = 'fuel') AS total_fuel,
+               (SELECT COALESCE(SUM(vl.amount), 0) FROM vehicle_logs vl
+                 WHERE vl.vehicle_id = v.id AND vl.log_type = 'maintenance') AS total_maintenance,
+               (SELECT COALESCE(SUM(vl.amount), 0) FROM vehicle_logs vl
+                 WHERE vl.vehicle_id = v.id) AS total_spend
           FROM vehicles v
+          LEFT JOIN users u ON u.id = v.assigned_driver_user_id
          ORDER BY v.status ASC, v.name ASC
     """)
     totals = {
         "count": len(vehicles),
         "active": sum(1 for v in vehicles if v["status"] == "active"),
-        "total_spend": sum((v["total_expenses"] or 0) + (v["total_maintenance_cost"] or 0) for v in vehicles),
+        "total_spend": sum(v["total_spend"] or 0 for v in vehicles),
     }
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    return render_template("vehicles.html", vehicles=vehicles, totals=totals, can_manage=can_manage)
+    all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
+    return render_template("vehicles.html", vehicles=vehicles, totals=totals,
+                           can_manage=can_manage, all_users=all_users)
+
+
+@app.route("/vehicles/new", methods=["POST"])
+@login_required
+def vehicle_create():
+    """Add a new vehicle (admin only)."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
+        abort(403)
+    name = request.form.get("name", "").strip()
+    registration_no = request.form.get("registration_no", "").strip()
+    vehicle_type = request.form.get("vehicle_type", "car").strip()
+    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    purchase_date = request.form.get("purchase_date", "").strip() or None
+    purchase_cost = float(request.form.get("purchase_cost", "0") or "0")
+    insurance_expiry = request.form.get("insurance_expiry", "").strip() or None
+    notes = request.form.get("notes", "").strip()
+    if not name or not registration_no:
+        flash("Name and registration number are required.", "error")
+        return redirect(url_for("vehicles_list"))
+    existing = query_one("SELECT id FROM vehicles WHERE registration_no = ?", (registration_no,))
+    if existing:
+        flash("A vehicle with that registration already exists.", "error")
+        return redirect(url_for("vehicles_list"))
+    new_id = execute(
+        """INSERT INTO vehicles (name, registration_no, vehicle_type, assigned_driver_user_id,
+           status, purchase_date, purchase_cost, insurance_expiry, notes, created_at)
+           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)""",
+        (name, registration_no, vehicle_type,
+         int(assigned_driver) if assigned_driver else None,
+         purchase_date, purchase_cost, insurance_expiry, notes, now_iso()),
+    )
+    log_action(user["id"], "vehicle", new_id, "vehicle_created",
+               {"name": name, "registration_no": registration_no})
+    flash(f"{name} added to fleet.", "success")
+    return redirect(url_for("vehicles_list"))
 
 
 @app.route("/vehicles/<int:vehicle_id>")
 @login_required
 def vehicle_detail(vehicle_id: int):
-    """Vehicle snapshot: info, drivers, recent expenses, maintenance, trips."""
+    """Vehicle detail: info + log history + fuel/maintenance totals."""
     user = current_user()
     if not module_enabled("vehicles"):
         abort(404)
     vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
         abort(404)
-    drivers = query_all("SELECT * FROM vehicle_drivers WHERE vehicle_id = ? ORDER BY is_primary DESC, driver_name", (vehicle_id,))
-    expenses = query_all("SELECT ve.*, u.name AS recorder_name FROM vehicle_expenses ve LEFT JOIN users u ON u.id = ve.recorded_by_user_id WHERE ve.vehicle_id = ? ORDER BY ve.expense_date DESC LIMIT 20", (vehicle_id,))
-    maintenance = query_all("SELECT vm.*, u.name AS creator_name FROM vehicle_maintenance vm LEFT JOIN users u ON u.id = vm.created_by_user_id WHERE vm.vehicle_id = ? ORDER BY vm.performed_at DESC LIMIT 20", (vehicle_id,))
-    trips = query_all("SELECT vt.*, u.name AS requester_name FROM vehicle_trips vt LEFT JOIN users u ON u.id = vt.requested_by_user_id WHERE vt.vehicle_id = ? ORDER BY vt.trip_date DESC LIMIT 20", (vehicle_id,))
-    total_expenses = sum(e["amount"] for e in expenses)
-    total_maint = sum(m["cost"] for m in maintenance)
+    driver = None
+    if vehicle["assigned_driver_user_id"]:
+        driver = query_one("SELECT id, name, email FROM users WHERE id = ?",
+                           (vehicle["assigned_driver_user_id"],))
+    logs = query_all("""
+        SELECT vl.*, u.name AS logged_by_name
+          FROM vehicle_logs vl
+          LEFT JOIN users u ON u.id = vl.logged_by_user_id
+         WHERE vl.vehicle_id = ?
+         ORDER BY vl.log_date DESC, vl.id DESC
+    """, (vehicle_id,))
+    fuel_total = sum(l["amount"] for l in logs if l["log_type"] == "fuel")
+    maint_total = sum(l["amount"] for l in logs if l["log_type"] == "maintenance")
+    other_total = sum(l["amount"] for l in logs if l["log_type"] not in ("fuel", "maintenance"))
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    return render_template("vehicle_detail.html", vehicle=vehicle, drivers=drivers,
-                           expenses=expenses, maintenance=maintenance, trips=trips,
-                           total_expenses=total_expenses, total_maint=total_maint,
-                           can_manage=can_manage, today=date.today().isoformat())
+    # Assigned vehicles for cross-link from personnel
+    assigned_vehicles = []
+    if vehicle["assigned_driver_user_id"]:
+        assigned_vehicles = query_all(
+            "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ? AND id != ?",
+            (vehicle["assigned_driver_user_id"], vehicle_id))
+    return render_template("vehicle_detail.html", vehicle=vehicle, driver=driver,
+                           logs=logs, fuel_total=fuel_total, maint_total=maint_total,
+                           other_total=other_total, can_manage=can_manage,
+                           assigned_vehicles=assigned_vehicles,
+                           today=date.today().isoformat())
 
 
-@app.route("/vehicles/<int:vehicle_id>/expenses", methods=["POST"])
+@app.route("/vehicles/<int:vehicle_id>/log", methods=["POST"])
 @login_required
-def vehicle_add_expense(vehicle_id: int):
-    """Record a vehicle expense."""
+def vehicle_add_log(vehicle_id: int):
+    """Add a fuel/maintenance/expense log entry."""
     user = current_user()
     if not module_enabled("vehicles"):
         abort(404)
     vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
         abort(404)
-    desc = request.form.get("description", "").strip()
+    log_type = request.form.get("log_type", "fuel").strip()
+    if log_type not in ("fuel", "maintenance", "insurance", "toll", "fine", "other"):
+        log_type = "other"
     amount = float(request.form.get("amount", "0") or "0")
-    expense_type = request.form.get("expense_type", "fuel").strip()
-    expense_date = request.form.get("expense_date", "").strip() or date.today().isoformat()
-    odometer = request.form.get("odometer_km", "").strip()
-    receipt_number = request.form.get("receipt_number", "").strip()
-    notes = request.form.get("notes", "").strip()
-    if not desc or amount <= 0:
-        flash("Description and positive amount required.", "error")
-        return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
-    eid = execute(
-        "INSERT INTO vehicle_expenses (vehicle_id, expense_type, description, amount, expense_date, odometer_km, receipt_number, recorded_by_user_id, recorded_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (vehicle_id, expense_type, desc, amount, expense_date,
-         float(odometer) if odometer else None, receipt_number, user["id"], now_iso(), notes),
-    )
-    log_action(user["id"], "vehicle", vehicle_id, "expense_added", {"amount": amount, "type": expense_type})
-    flash(f"Expense ₹{amount:,.0f} recorded.", "success")
-    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
-
-
-@app.route("/vehicles/<int:vehicle_id>/maintenance", methods=["POST"])
-@login_required
-def vehicle_add_maintenance(vehicle_id: int):
-    """Log a maintenance event for a vehicle."""
-    user = current_user()
-    if not module_enabled("vehicles"):
-        abort(404)
-    vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
-    if not vehicle:
-        abort(404)
-    title = request.form.get("title", "").strip()
-    event_type = request.form.get("event_type", "service").strip()
     description = request.form.get("description", "").strip()
-    performed_by = request.form.get("performed_by", "").strip()
-    performed_at = request.form.get("performed_at", "").strip() or date.today().isoformat()
-    next_due_at = request.form.get("next_due_at", "").strip() or None
-    cost = float(request.form.get("cost", "0") or "0")
     odometer = request.form.get("odometer_km", "").strip()
-    receipt_number = request.form.get("receipt_number", "").strip()
-    if not title:
-        flash("Title is required.", "error")
+    log_date = request.form.get("log_date", "").strip() or date.today().isoformat()
+    if amount <= 0:
+        flash("Amount must be positive.", "error")
         return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
     execute(
-        "INSERT INTO vehicle_maintenance (vehicle_id, event_type, title, description, performed_by, performed_at, next_due_at, cost, odometer_km, receipt_number, created_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (vehicle_id, event_type, title, description, performed_by, performed_at,
-         next_due_at, cost, float(odometer) if odometer else None, receipt_number, user["id"], now_iso()),
+        """INSERT INTO vehicle_logs (vehicle_id, log_type, amount, description,
+           odometer_km, logged_by_user_id, log_date, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (vehicle_id, log_type, amount, description,
+         float(odometer) if odometer else None, user["id"], log_date, now_iso()),
     )
-    log_action(user["id"], "vehicle", vehicle_id, "maintenance_logged", {"title": title, "type": event_type, "cost": cost})
-    flash(f"Maintenance '{title}' logged.", "success")
+    log_action(user["id"], "vehicle", vehicle_id, "vehicle_log_added",
+               {"log_type": log_type, "amount": amount})
+    flash(f"{log_type.title()} log ₹{amount:,.0f} recorded.", "success")
     return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
 
 
-@app.route("/vehicles/<int:vehicle_id>/trips", methods=["POST"])
+# ── Personnel / Salary ERP module ──────────────────────────────
+
+
+def _personnel_access(user):
+    """Check if user can access personnel module."""
+    return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "finance_admin"})
+
+
+def _personnel_can_edit(user):
+    """Check if user can edit salary configs and process payroll."""
+    return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+
+
+def _days_in_month(year: int, month: int) -> int:
+    """Return number of days in given month."""
+    import calendar
+    return calendar.monthrange(year, month)[1]
+
+
+def _attendance_days_worked(user_id: int, year: int, month: int) -> float:
+    """Count days worked from attendance table for a user in a given month.
+    'present' = 1 day, 'half' = 0.5 day."""
+    month_str = f"{year}-{month:02d}"
+    rows = query_all(
+        "SELECT status FROM attendance WHERE user_id = ? AND date LIKE ?",
+        (user_id, f"{month_str}-%"))
+    total = 0.0
+    for r in rows:
+        if r["status"] == "present":
+            total += 1
+        elif r["status"] == "half":
+            total += 0.5
+    return total
+
+
+@app.route("/personnel")
 @login_required
-def vehicle_add_trip(vehicle_id: int):
-    """Log a trip for a vehicle."""
+def personnel_list():
+    """Staff directory with salary info (finance_admin/owner only see salary)."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not module_enabled("personnel"):
         abort(404)
-    vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
-    if not vehicle:
+    if not _personnel_access(user):
+        abort(403)
+    can_edit = _personnel_can_edit(user)
+    staff = query_all("""
+        SELECT u.id, u.name, u.email, u.role,
+               sc.monthly_salary, sc.designation, sc.department, sc.join_date
+          FROM users u
+          LEFT JOIN salary_config sc ON sc.user_id = u.id
+         ORDER BY u.name
+    """)
+    return render_template("personnel.html", staff=staff, can_edit=can_edit)
+
+
+@app.route("/personnel/<int:user_id>")
+@login_required
+def personnel_detail(user_id: int):
+    """Employee detail: salary config, attendance summary, payment history."""
+    user = current_user()
+    if not module_enabled("personnel"):
         abort(404)
-    purpose = request.form.get("purpose", "").strip()
-    start_loc = request.form.get("start_location", "").strip()
-    end_loc = request.form.get("end_location", "").strip()
-    driver_name = request.form.get("driver_name", "").strip()
-    trip_date = request.form.get("trip_date", "").strip() or date.today().isoformat()
-    start_odo = request.form.get("start_odometer", "").strip()
-    end_odo = request.form.get("end_odometer", "").strip()
-    if not purpose:
-        flash("Trip purpose is required.", "error")
-        return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+    if not _personnel_access(user):
+        abort(403)
+    employee = query_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    if not employee:
+        abort(404)
+    salary_cfg = query_one("SELECT * FROM salary_config WHERE user_id = ?", (user_id,))
+    payments = query_all(
+        """SELECT sp.*, u.name AS paid_by_name
+             FROM salary_payments sp
+             LEFT JOIN users u ON u.id = sp.paid_by_user_id
+            WHERE sp.user_id = ?
+            ORDER BY sp.year DESC, sp.month DESC""",
+        (user_id,))
+    # Current month attendance summary
+    today = date.today()
+    days_worked = _attendance_days_worked(user_id, today.year, today.month)
+    # Assigned vehicles
+    assigned_vehicles = query_all(
+        "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ?",
+        (user_id,))
+    can_edit = _personnel_can_edit(user)
+    return render_template("personnel_detail.html", employee=employee,
+                           salary_cfg=salary_cfg, payments=payments,
+                           days_worked=days_worked, assigned_vehicles=assigned_vehicles,
+                           can_edit=can_edit, today=today.isoformat())
+
+
+@app.route("/personnel/<int:user_id>/salary-config", methods=["POST"])
+@login_required
+def personnel_salary_config(user_id: int):
+    """Set or update salary configuration for an employee."""
+    user = current_user()
+    if not module_enabled("personnel"):
+        abort(404)
+    if not _personnel_can_edit(user):
+        abort(403)
+    employee = query_one("SELECT id FROM users WHERE id = ?", (user_id,))
+    if not employee:
+        abort(404)
+    monthly_salary = float(request.form.get("monthly_salary", "0") or "0")
+    bank_account = request.form.get("bank_account", "").strip()
+    bank_name = request.form.get("bank_name", "").strip()
+    ifsc_code = request.form.get("ifsc_code", "").strip()
+    pan_number = request.form.get("pan_number", "").strip()
+    aadhar_number = request.form.get("aadhar_number", "").strip()
+    join_date = request.form.get("join_date", "").strip() or None
+    designation = request.form.get("designation", "").strip()
+    department = request.form.get("department", "").strip()
+    notes = request.form.get("notes", "").strip()
+    existing = query_one("SELECT id FROM salary_config WHERE user_id = ?", (user_id,))
+    if existing:
+        execute(
+            """UPDATE salary_config SET monthly_salary=?, bank_account=?, bank_name=?,
+               ifsc_code=?, pan_number=?, aadhar_number=?, join_date=?,
+               designation=?, department=?, notes=? WHERE user_id=?""",
+            (monthly_salary, bank_account, bank_name, ifsc_code, pan_number,
+             aadhar_number, join_date, designation, department, notes, user_id))
+    else:
+        execute(
+            """INSERT INTO salary_config (user_id, monthly_salary, bank_account, bank_name,
+               ifsc_code, pan_number, aadhar_number, join_date, designation, department, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, monthly_salary, bank_account, bank_name, ifsc_code, pan_number,
+             aadhar_number, join_date, designation, department, notes))
+    log_action(user["id"], "personnel", user_id, "salary_config_updated",
+               {"monthly_salary": monthly_salary, "designation": designation})
+    flash("Salary configuration saved.", "success")
+    return redirect(url_for("personnel_detail", user_id=user_id))
+
+
+@app.route("/personnel/payroll")
+@login_required
+def payroll_view():
+    """Monthly payroll view: all staff, days worked, calculated pay."""
+    user = current_user()
+    if not module_enabled("personnel"):
+        abort(404)
+    if not _personnel_access(user):
+        abort(403)
+    can_edit = _personnel_can_edit(user)
+    # Month/year from query params or current month
+    today = date.today()
+    year = int(request.args.get("year", today.year))
+    month_num = int(request.args.get("month", today.month))
+    month_name = date(year, month_num, 1).strftime("%B")
+    dim = _days_in_month(year, month_num)
+
+    staff_configs = query_all("""
+        SELECT sc.*, u.name, u.email
+          FROM salary_config sc
+          JOIN users u ON u.id = sc.user_id
+         ORDER BY u.name
+    """)
+    payroll_rows = []
+    for sc in staff_configs:
+        uid = sc["user_id"]
+        days_worked = _attendance_days_worked(uid, year, month_num)
+        base = sc["monthly_salary"] or 0
+        # Check if already paid
+        existing_payment = query_one(
+            "SELECT * FROM salary_payments WHERE user_id = ? AND year = ? AND month = ?",
+            (uid, year, f"{month_num:02d}"))
+        calculated_pay = (base / dim) * days_worked if dim > 0 else 0
+        payroll_rows.append({
+            "user_id": uid,
+            "name": sc["name"],
+            "email": sc["email"],
+            "designation": sc["designation"],
+            "department": sc["department"],
+            "monthly_salary": base,
+            "days_in_month": dim,
+            "days_worked": days_worked,
+            "calculated_pay": round(calculated_pay, 2),
+            "payment": existing_payment,
+        })
+    total_payable = sum(r["calculated_pay"] for r in payroll_rows if not r["payment"] or r["payment"]["status"] == "pending")
+    total_paid = sum(r["payment"]["net_pay"] for r in payroll_rows if r["payment"] and r["payment"]["status"] == "paid")
+    return render_template("payroll.html", payroll=payroll_rows, year=year,
+                           month_num=month_num, month_name=month_name,
+                           days_in_month=dim, can_edit=can_edit,
+                           total_payable=total_payable, total_paid=total_paid,
+                           today=today.isoformat())
+
+
+@app.route("/personnel/payroll/pay", methods=["POST"])
+@login_required
+def payroll_pay():
+    """Mark an employee as paid for a month."""
+    user = current_user()
+    if not module_enabled("personnel"):
+        abort(404)
+    if not _personnel_can_edit(user):
+        abort(403)
+    uid = int(request.form.get("user_id", "0"))
+    year = int(request.form.get("year", "0"))
+    month = request.form.get("month", "").strip()
+    deductions = float(request.form.get("deductions", "0") or "0")
+    bonus = float(request.form.get("bonus", "0") or "0")
+    notes = request.form.get("notes", "").strip()
+    if not uid or not year or not month:
+        flash("Missing payroll parameters.", "error")
+        return redirect(url_for("payroll_view"))
+    # Check not already paid
+    existing = query_one(
+        "SELECT id FROM salary_payments WHERE user_id = ? AND year = ? AND month = ? AND status = 'paid'",
+        (uid, year, month))
+    if existing:
+        flash("Already paid for this period.", "error")
+        return redirect(url_for("payroll_view", year=year, month=int(month)))
+    sc = query_one("SELECT monthly_salary FROM salary_config WHERE user_id = ?", (uid,))
+    base_salary = sc["monthly_salary"] if sc else 0
+    month_int = int(month)
+    dim = _days_in_month(year, month_int)
+    days_worked = _attendance_days_worked(uid, year, month_int)
+    net_pay = round((base_salary / dim) * days_worked + bonus - deductions, 2) if dim > 0 else 0
+    # Upsert: delete pending, insert paid
+    execute("DELETE FROM salary_payments WHERE user_id = ? AND year = ? AND month = ? AND status = 'pending'",
+            (uid, year, month))
     execute(
-        "INSERT INTO vehicle_trips (vehicle_id, driver_name, purpose, start_location, end_location, start_odometer, end_odometer, trip_date, requested_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (vehicle_id, driver_name, purpose, start_loc, end_loc,
-         float(start_odo) if start_odo else None, float(end_odo) if end_odo else None,
-         trip_date, user["id"], now_iso()),
-    )
-    log_action(user["id"], "vehicle", vehicle_id, "trip_logged", {"purpose": purpose, "driver": driver_name})
-    flash("Trip logged.", "success")
-    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+        """INSERT INTO salary_payments (user_id, month, year, base_salary, days_worked,
+           days_in_month, deductions, bonus, net_pay, status, paid_at, paid_by_user_id, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?)""",
+        (uid, month, year, base_salary, int(days_worked), dim, deductions, bonus,
+         net_pay, now_iso(), user["id"], notes, now_iso()))
+    emp = query_one("SELECT name FROM users WHERE id = ?", (uid,))
+    emp_name = emp["name"] if emp else f"User #{uid}"
+    log_action(user["id"], "personnel", uid, "salary_paid",
+               {"year": year, "month": month, "net_pay": net_pay})
+    flash(f"₹{net_pay:,.0f} paid to {emp_name} for {month}/{year}.", "success")
+    return redirect(url_for("payroll_view", year=year, month=int(month)))
 
 
 # ── Receipts ERP module ─────────────────────────────────────────

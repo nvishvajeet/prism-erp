@@ -18,8 +18,8 @@
   {% endif %}
   <form method="post" class="form-grid" data-vis="requester">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="requester">
-    <label data-vis="requester">Email
-      <input type="email" name="email" required value="{% if _demo_prefill %}admin@lab.local{% endif %}" data-vis="requester">
+    <label data-vis="requester">Username
+      <input type="text" name="email" required value="" placeholder="vishva" data-vis="requester">
     </label>
     <label data-vis="requester">Password
       <input type="password" name="password" required value="{% if _demo_prefill %}12345{% endif %}" data-vis="requester">

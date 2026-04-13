@@ -2,6 +2,35 @@
 
 > Build a complete ERP module in 15 minutes using CATALYST's component library.
 
+## Start here if you only have 5 minutes
+
+Use this sequence and ignore the rest of the document until you need it:
+
+1. Add table(s) in `app.py:init_db()`
+2. Add capability flags in `user_access_profile()`
+3. Add one route that lists or creates records
+4. Add one template using existing tile macros
+5. Add one nav link in `templates/base.html`
+6. Add `log_action(...)` to every write
+7. Run `./venv/bin/python scripts/smoke_test.py`
+
+That is the shortest path to a real module.
+
+## The first-commit rule
+
+Your first module commit should aim for:
+
+- one primary entity
+- one list page
+- one create or update flow
+- one obvious integration at most
+
+Do not start by building analytics, exports, filters, or secondary
+dashboards. Ship a stable `M1` module first and expand later.
+
+For the higher-level mental model, read
+[`ERP_FUTURE_BUILDER.md`](ERP_FUTURE_BUILDER.md).
+
 ## Architecture Overview
 
 CATALYST is a single-file Flask ERP (`app.py`, ~7 000 lines) with:
@@ -11,6 +40,21 @@ CATALYST is a single-file Flask ERP (`app.py`, ~7 000 lines) with:
 - **CSS** — single file `static/styles.css` using CSS custom properties (`--ink`, `--muted`, `--accent`, `--panel`, etc.) with automatic dark-mode support via `[data-theme="dark"]`.
 - **Role-based access** — `user_access_profile(user)` returns a dict of boolean capabilities; routes check these before rendering.
 - **Module toggle** — `CATALYST_MODULES` env var controls which modules are enabled. `module_enabled(name)` gate in templates and routes.
+
+## The 7 surfaces most modules touch
+
+Most modules can be built by touching only:
+
+1. `app.py`
+2. `templates/<module>.html`
+3. `templates/base.html`
+4. `static/styles.css`
+5. `docs/MODULE_INTEGRATION.md` if a new cross-module link was added
+6. `CLAIMS.md`
+7. `scripts/smoke_test.py` only if the new flow needs direct coverage
+
+If you find yourself editing far more than this for a first version,
+reduce scope.
 
 ## The 6 Primitives
 

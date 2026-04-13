@@ -199,14 +199,29 @@ Any AI agent (Claude, GPT, Gemini, Codex) can build new modules:
 
 - [AGENTS.md](AGENTS.md) — vendor-neutral onboarding
 - [docs/SATYAJEET_ONBOARDING.md](docs/SATYAJEET_ONBOARDING.md) — practical 20-minute operator walkthrough for a new Claude user, including terminal / SSH / Homebrew / HTTPS basics
+- [docs/ERP_FUTURE_BUILDER.md](docs/ERP_FUTURE_BUILDER.md) — shortest mental model for extending the ERP safely
 - [docs/ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) — 15-minute module recipe
 - [docs/ARCHITECTURE_SUMMARY.md](docs/ARCHITECTURE_SUMMARY.md) — full UI/CSS/pattern reference
 - [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md) — cross-module wiring guide
+
+## Easiest Way To Build The Next ERP Feature
+
+Use this order:
+
+1. pick the table that owns the truth
+2. add one route and one page
+3. gate it by role + `module_enabled(...)`
+4. wire one integration only if it is obvious
+5. run smoke and ship
+
+That keeps CATALYST simple enough to grow for years without turning it
+into a maze of one-off subsystems.
 
 ## Docs
 
 | File | Purpose |
 |------|---------|
+| [ERP_FUTURE_BUILDER.md](docs/ERP_FUTURE_BUILDER.md) | Fastest summary of how to extend the ERP safely |
 | [ARCHITECTURE_SUMMARY.md](docs/ARCHITECTURE_SUMMARY.md) | Complete UI/CSS/pattern reference |
 | [ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) | Build a module in 15 minutes |
 | [MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md) | Cross-module connection matrix |

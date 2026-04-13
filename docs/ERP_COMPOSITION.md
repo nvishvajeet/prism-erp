@@ -3,6 +3,19 @@
 > How to compose different ERP systems from the same module library.
 > Like LEGO — same bricks, different buildings.
 
+## In one minute
+
+To build a new ERP variant:
+
+1. Pick the smallest useful module bundle
+2. Keep `finance`, `notifications`, and `admin` in mind as shared glue
+3. Enable modules with `CATALYST_MODULES=...`
+4. Add organization-specific seed data
+5. Grow only after the core workflow feels stable
+
+The easiest future systems are the ones that start small and reuse the
+same module patterns.
+
 ## The Idea
 
 Catalyst ERP has 14 modules. Not every organization needs all 14.
@@ -82,6 +95,19 @@ if module_enabled("personnel"):
 
 **If a module is disabled, its integrations silently disappear.**
 No errors, no broken links, no empty tiles. The ERP adapts.
+
+## Recommended starter bundles
+
+If you are unsure where to begin, use one of these:
+
+| ERP type | Start with |
+|---|---|
+| Lab ERP | `instruments,finance,queue,calendar,stats,notifications,admin` |
+| Service business ERP | `finance,personnel,attendance,receipts,notifications,admin` |
+| Ops-heavy field team | `personnel,vehicles,attendance,finance,notifications,admin` |
+| Admin office ERP | `personnel,letters,todos,finance,notifications,admin` |
+
+Add `inbox` when collaboration becomes heavy, not by default.
 
 ## Adding a New Module — Integration Checklist
 

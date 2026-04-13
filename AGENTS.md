@@ -175,6 +175,7 @@ for the task at hand.
 | `docs/PHILOSOPHY.md` | **THE** design creed — hard/soft, demo/op, stable-release discipline | Before any non-trivial change |
 | `docs/PROJECT.md` | Architecture spec — schema, page map, reusable helpers, state machine, security model | Before adding new code, changing routes, or touching the DB |
 | `docs/MODULES.md` | Engine map — 13 engines + 2 tool packages, with file:line handles | Composing a new feature — pick an engine off this list |
+| `docs/ERP_FUTURE_BUILDER.md` | Fast mental model for extending CATALYST without overbuilding | Starting a new module or ERP domain |
 | `docs/NEXT_WAVES.md` | Active forward plan, wave-scoped | Starting a new feature — is it on the current plan? |
 | `docs/ROADMAP.md` | Historical plan (superseded by `NEXT_WAVES.md`) | Only for historical context |
 | `docs/DEPLOY.md` | Mac mini deploy recipe + disaster checklist | Deploying, or when the mini misbehaves |

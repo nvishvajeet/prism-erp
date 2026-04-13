@@ -7276,6 +7276,12 @@ def finance_portal():
         "total_owed": 0, "total_paid": 0, "pending_count": 0, "paid_count": 0,
     }
     kpis["outstanding"] = max(0, (kpis["total_owed"] or 0) - (kpis["total_paid"] or 0))
+    kpis["outstanding_fmt"] = "₹{:,.0f}".format(kpis["outstanding"])
+    kpis["total_owed_fmt"] = "₹{:,.0f}".format(kpis["total_owed"] or 0)
+    kpis["total_paid_fmt"] = "₹{:,.0f}".format(kpis["total_paid"] or 0)
+    kpis["collection_rate"] = int(
+        (kpis["total_paid"] or 0) * 100 / (kpis["total_owed"] or 1)
+    ) if (kpis["total_owed"] or 0) > 0 else 0
 
     # By-instrument aggregation — subquery per metric keeps the join
     # graph shallow and makes each column independently auditable.
@@ -7362,12 +7368,67 @@ def finance_portal():
         LIMIT 15
         """
     )
+    # ── Format amounts as ₹ strings for stat_blob display ──
+    def _fmt(v):
+        return "₹{:,.0f}".format(v or 0)
+
+    kpis["outstanding_fmt"] = _fmt(kpis["outstanding"])
+    kpis["total_owed_fmt"] = _fmt(kpis["total_owed"])
+    kpis["total_paid_fmt"] = _fmt(kpis["total_paid"])
+    total_owed = kpis["total_owed"] or 0
+    collection_rate = "{:.0f}".format(
+        (kpis["total_paid"] or 0) * 100 / total_owed
+    ) if total_owed > 0 else "—"
+
+    # ── By-instrument: pre-format amounts ──
+    by_instrument_fmt = []
+    for row in by_instrument:
+        r = dict(row)
+        r["owed_fmt"] = _fmt(r["owed"])
+        r["paid_fmt"] = _fmt(r["paid"])
+        r["outstanding_amt"] = (r["owed"] or 0) - (r["paid"] or 0)
+        r["outstanding_fmt"] = _fmt(r["outstanding_amt"])
+        by_instrument_fmt.append(r)
+
+    # ── Outstanding / recently paid: pre-format amounts ──
+    outstanding_fmt = []
+    for row in outstanding:
+        r = dict(row)
+        r["balance_fmt"] = _fmt((r["amount_due"] or 0) - (r["amount_paid"] or 0))
+        r["amount_due_fmt"] = _fmt(r["amount_due"])
+        r["amount_paid_fmt"] = _fmt(r["amount_paid"])
+        outstanding_fmt.append(r)
+
+    recently_paid_fmt = []
+    for row in recently_paid:
+        r = dict(row)
+        r["amount_paid_fmt"] = _fmt(r["amount_paid"])
+        recently_paid_fmt.append(r)
+
+    # ── Grant summary for sidebar tile ──
+    grant_summary = query_one(
+        """
+        SELECT
+          COUNT(*) AS total_grants,
+          COUNT(CASE WHEN status = 'active' THEN 1 END) AS active_grants,
+          COALESCE(SUM(total_budget), 0) AS total_budget,
+          COALESCE(SUM(CASE WHEN status = 'active' THEN total_budget END), 0) AS active_budget
+        FROM grants
+        """
+    )
+    grant_kpis = dict(grant_summary) if grant_summary else {
+        "total_grants": 0, "active_grants": 0, "total_budget": 0, "active_budget": 0,
+    }
+    grant_kpis["active_budget_fmt"] = _fmt(grant_kpis["active_budget"])
+
     return render_template(
         "finance.html",
         kpis=kpis,
-        by_instrument=by_instrument,
-        outstanding=outstanding,
-        recently_paid=recently_paid,
+        collection_rate=collection_rate,
+        by_instrument=by_instrument_fmt,
+        outstanding=outstanding_fmt,
+        recently_paid=recently_paid_fmt,
+        grant_kpis=grant_kpis,
         can_edit_finance=_user_can_edit_finance(user),
     )
 
@@ -7984,6 +8045,9 @@ def finance_grants_list():
         "total_budget": 0, "total_paid": 0, "grant_count": 0,
     }
     totals["total_remaining"] = max(0, (totals["total_budget"] or 0) - (totals["total_paid"] or 0))
+    totals["total_budget_fmt"] = "₹{:,.0f}".format(totals["total_budget"] or 0)
+    totals["total_paid_fmt"] = "₹{:,.0f}".format(totals["total_paid"] or 0)
+    totals["total_remaining_fmt"] = "₹{:,.0f}".format(totals["total_remaining"])
     return render_template(
         "finance_grants.html",
         grants=rows,
@@ -8133,7 +8197,34 @@ def finance_grant_detail(grant_id: int):
     total_paid = sum(r["amount_paid"] or 0 for r in charged)
     total_billed = sum(r["amount_due"] or 0 for r in charged)
     remaining = max(0, (grant["total_budget"] or 0) - total_paid)
-    percent_used = (total_paid / grant["total_budget"] * 100) if grant["total_budget"] else 0
+    percent_used = int((total_paid / grant["total_budget"] * 100) if grant["total_budget"] else 0)
+
+    # Pre-compute formatted amounts
+    budget_fmt = "₹{:,.0f}".format(grant["total_budget"] or 0)
+    spent_fmt = "₹{:,.0f}".format(total_paid)
+    remaining_fmt = "₹{:,.0f}".format(remaining)
+    billed_fmt = "₹{:,.0f}".format(total_billed)
+
+    # Budget utilization class for bar color
+    if percent_used >= 100:
+        budget_util_class = "budget-bar-red"
+    elif percent_used >= 80:
+        budget_util_class = "budget-bar-amber"
+    else:
+        budget_util_class = "budget-bar-green"
+
+    # Expenses (non-sample charges)
+    expenses = query_all(
+        """SELECT ge.*, u.name AS recorder_name
+           FROM grant_expenses ge
+           LEFT JOIN users u ON u.id = ge.recorded_by_user_id
+           WHERE ge.grant_id = ?
+           ORDER BY ge.recorded_at DESC""",
+        (grant_id,),
+    )
+    total_expenses = sum(e["amount"] or 0 for e in expenses)
+    expenses_fmt = "₹{:,.0f}".format(total_expenses)
+
     return render_template(
         "finance_grant_detail.html",
         grant=grant,
@@ -8142,6 +8233,15 @@ def finance_grant_detail(grant_id: int):
         total_billed=total_billed,
         remaining=remaining,
         percent_used=percent_used,
+        budget_fmt=budget_fmt,
+        spent_fmt=spent_fmt,
+        remaining_fmt=remaining_fmt,
+        billed_fmt=billed_fmt,
+        utilization_pct=percent_used,
+        budget_util_class=budget_util_class,
+        expenses=expenses,
+        total_expenses=total_expenses,
+        expenses_fmt=expenses_fmt,
         can_edit_finance=_user_can_edit_finance(user),
         admin_candidates=admin_candidates,
         grant_members=grant_members,

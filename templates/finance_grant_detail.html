@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% from "_page_macros.html" import card_heading, stat_blob, kpi_grid, metadata_grid, person_chip, empty_state with context %}
 {% block hover_back %}<a href="{{ url_for('finance_grants_list') }}" class="hover-back-btn" title="Back to Grants">←</a>{% endblock %}
 {% block content %}
 
@@ -13,62 +13,51 @@
       <strong data-vis="{{ V }}">{{ grant.status|upper }}</strong>
     </span>
   </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if can_edit_finance|default(false) %}
+    <a class="btn" href="#metaEditTile" data-vis="{{ V }}">Edit</a>
+    <a class="btn" href="#addMemberTile" data-vis="{{ V }}">Add Member</a>
+    {% endif %}
+  </div>
 </header>
 
 <section class="finance-tiles" data-vis="{{ V }}">
 
-  <article class="card tile tile-finance-kpi tile-span-3" data-vis="{{ V }}">
+  {# ── Row 1: Budget KPI + Metadata ── #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("BUDGET", "Spend vs total") }}
-    <div class="finance-kpi-grid" data-vis="{{ V }}">
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
-        <span class="finance-kpi-label" data-vis="{{ V }}">Total budget</span>
-        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(grant.total_budget) }}</strong>
-        <span class="hint" data-vis="{{ V }}">{{ grant.sponsor }}</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
-        <span class="finance-kpi-label" data-vis="{{ V }}">Paid so far</span>
-        <strong class="finance-kpi-value finance-kpi-collected" data-vis="{{ V }}">₹{{ "{:,.0f}".format(total_paid) }}</strong>
-        <span class="hint" data-vis="{{ V }}">{{ charged|length }} sample{{ "s" if charged|length != 1 else "" }}</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
-        <span class="finance-kpi-label" data-vis="{{ V }}">Billed</span>
-        <strong class="finance-kpi-value" data-vis="{{ V }}">₹{{ "{:,.0f}".format(total_billed) }}</strong>
-        <span class="hint" data-vis="{{ V }}">inc. pending</span>
-      </div>
-      <div class="finance-kpi-cell" data-vis="{{ V }}">
-        <span class="finance-kpi-label" data-vis="{{ V }}">Remaining</span>
-        <strong class="finance-kpi-value finance-kpi-outstanding" data-vis="{{ V }}">₹{{ "{:,.0f}".format(remaining) }}</strong>
-        <span class="hint" data-vis="{{ V }}">{{ "{:.0f}".format(percent_used) }}% used</span>
-      </div>
-    </div>
-    <div class="finance-grant-bar-row" class="top-gap" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": budget_fmt,     "label": "Total Budget"},
+      {"value": spent_fmt,      "label": "Spent",      "tone": "green"},
+      {"value": remaining_fmt,  "label": "Remaining",  "tone": "amber"},
+      {"value": utilization_pct ~ "%", "label": "Utilization"},
+    ]) }}
+    <div class="finance-grant-bar-row top-gap" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
-        <div class="finance-grant-bar-fill{% if percent_used >= 100 %} grant-bar-over{% elif percent_used >= 80 %} grant-bar-warn{% endif %}" style="width: {{ percent_used if percent_used <= 100 else 100 }}%" data-vis="{{ V }}"></div>
+        <div class="finance-grant-bar-fill {{ budget_util_class }}" style="width:{{ [utilization_pct, 100]|min }}%" data-vis="{{ V }}"></div>
       </div>
     </div>
   </article>
 
-  <article class="card tile tile-finance-by-instrument tile-span-3" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("METADATA", "Grant header") }}
-    <dl class="mc-meta-grid" data-vis="{{ V }}">
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Code</dt><dd data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ grant.code }}</code></dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Sponsor</dt><dd data-vis="{{ V }}">{{ grant.sponsor }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Type</dt><dd data-vis="{{ V }}">{{ (grant.grant_type or 'internal')|upper }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Department</dt><dd data-vis="{{ V }}">{{ grant.department or '—' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">PI</dt><dd data-vis="{{ V }}">{{ grant.pi_name or '—' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Portfolio Manager</dt><dd data-vis="{{ V }}">{{ grant.portfolio_manager_name or 'Not assigned' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Administered By</dt><dd data-vis="{{ V }}">{{ grant.administrator_name or 'Not assigned' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Granted To</dt><dd data-vis="{{ V }}">{{ grant.granted_to or '—' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Period</dt><dd data-vis="{{ V }}">{{ grant.start_date or '?' }} → {{ grant.end_date or '?' }}</dd></div>
-      <div class="mc-meta-cell" data-vis="{{ V }}"><dt data-vis="{{ V }}">Status</dt><dd data-vis="{{ V }}">{{ grant.status|upper }}</dd></div>
-    </dl>
+    {{ metadata_grid([
+      ("Sponsor",           grant.sponsor or '—'),
+      ("PI",                grant.pi_name or '—'),
+      ("Start",             grant.start_date or '—'),
+      ("End",               grant.end_date or '—'),
+      ("Department",        grant.department or '—'),
+      ("Type",              (grant.grant_type or 'internal')|upper),
+      ("Portfolio Manager", grant.portfolio_manager_name or 'Not assigned'),
+      ("Administered By",   grant.administrator_name or 'Not assigned'),
+    ]) }}
     {% if grant.notes %}
     <p class="hint top-gap" data-vis="{{ V }}">{{ grant.notes }}</p>
     {% endif %}
 
     {# Editable metadata form — finance editors only #}
     {% if can_edit_finance|default(false) %}
-    <details class="toggleable-form top-gap" data-vis="{{ V }}">
+    <details id="metaEditTile" class="toggleable-form top-gap" data-vis="{{ V }}">
       <summary class="text-link" data-vis="{{ V }}">Edit Metadata</summary>
       <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -101,58 +90,27 @@
             {% endfor %}
           </select>
         </label>
-        {# TODO: Grant approval flow — when a request's invoice is linked to a grant,
-           the approval chain should include:
-           1. Portfolio Manager (if set) — approves budget allocation
-           2. Grant Administrator (if set) — releases funds
-           For now these fields are stored and displayed; actual approval chain
-           integration is a future step. #}
         <button type="submit" class="small-button" data-vis="{{ V }}">Save</button>
       </form>
     </details>
     {% endif %}
   </article>
 
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
+  {# ── Row 2: Members + Finance ── #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("MEMBERS", grant_members|length|string ~ " member" ~ ("s" if grant_members|length != 1 else "")) }}
     {% if grant_members %}
-    <table class="sortable-table" data-vis="{{ V }}">
-      <thead data-vis="{{ V }}">
-        <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Name</th>
-          <th data-vis="{{ V }}">Email</th>
-          <th data-vis="{{ V }}">Role</th>
-          <th data-vis="{{ V }}">Added</th>
-          {% if can_edit_finance|default(false) %}<th data-vis="{{ V }}">Action</th>{% endif %}
-        </tr>
-      </thead>
-      <tbody data-vis="{{ V }}">
-        {% for m in grant_members %}
-        <tr data-vis="{{ V }}">
-          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.name }}</strong></td>
-          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ m.email }}</span></td>
-          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ m.role|upper }}</span></td>
-          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ m.added_at[:10] if m.added_at else '—' }}{% if m.added_by_name %} by {{ m.added_by_name }}{% endif %}</span></td>
-          {% if can_edit_finance|default(false) %}
-          <td data-vis="{{ V }}">
-            <form method="post" class="inline-form" data-vis="{{ V }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="action" value="remove_grant_member">
-              <input type="hidden" name="member_id" value="{{ m.id }}">
-              <button type="submit" class="text-link hint" title="Remove" data-vis="{{ V }}">&#10005;</button>
-            </form>
-          </td>
-          {% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="person-chip-list" data-vis="{{ V }}">
+      {% for m in grant_members %}
+      {{ person_chip(m.name, user_id=m.user_id, subtitle=m.role|upper) }}
+      {% endfor %}
+    </div>
     {% else %}
-    {{ empty_state("No members assigned to this grant yet.") }}
+    {{ empty_state("No members assigned yet.") }}
     {% endif %}
 
     {% if can_edit_finance|default(false) %}
-    <details class="toggleable-form top-gap" data-vis="{{ V }}">
+    <details id="addMemberTile" class="toggleable-form top-gap" data-vis="{{ V }}">
       <summary class="text-link" data-vis="{{ V }}">Add Member</summary>
       <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -175,10 +133,40 @@
         <button type="submit" class="small-button" data-vis="{{ V }}">Add</button>
       </form>
     </details>
+    {% if grant_members %}
+    <details class="toggleable-form top-gap" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">Remove Member</summary>
+      <ul class="compact-list" data-vis="{{ V }}">
+        {% for m in grant_members %}
+        <li data-vis="{{ V }}">
+          {{ m.name }} ({{ m.role }})
+          <form method="post" class="inline-form" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="remove_grant_member">
+            <input type="hidden" name="member_id" value="{{ m.id }}">
+            <button type="submit" class="text-link hint" title="Remove" data-vis="{{ V }}">&#10005;</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
     {% endif %}
   </article>
 
-  <article class="card tile tile-full-width tile-finance-outstanding" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("FINANCE", "Budget allocation") }}
+    <div class="finance-grant-bar-row" data-vis="{{ V }}">
+      <div class="finance-grant-bar" data-vis="{{ V }}">
+        <div class="finance-grant-bar-fill {{ budget_util_class }}" style="width:{{ [utilization_pct, 100]|min }}%" data-vis="{{ V }}"></div>
+      </div>
+      <span class="finance-grant-bar-text" data-vis="{{ V }}">{{ spent_fmt }} / {{ budget_fmt }} ({{ utilization_pct }}%)</span>
+    </div>
+    <a class="text-link top-gap" href="{{ url_for('finance_grant_expenses', grant_id=grant.id) }}" data-vis="{{ V }}">View expenses & non-sample charges →</a>
+  </article>
+
+  {# ── Row 3: Charged Samples ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("CHARGED SAMPLES", charged|length|string ~ " charged") }}
     {% if charged %}
     <div class="table-scroll" data-vis="{{ V }}">
@@ -202,9 +190,7 @@
             <td data-vis="{{ V }}"><code class="inline-code">{{ inv.instrument_code }}</code> {{ inv.instrument_name }}</td>
             <td data-vis="{{ V }}">{{ inv.requester_name or 'external' }}</td>
             <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_due or 0) }}</td>
-            <td data-vis="{{ V }}">
-              <span class="badge status-{{ inv.finance_status }}">{{ inv.finance_status|upper }}</span>
-            </td>
+            <td data-vis="{{ V }}"><span class="badge status-{{ inv.finance_status }}">{{ inv.finance_status|upper }}</span></td>
             <td data-vis="{{ V }}">{{ inv.created_at[:10] }}</td>
           </tr>
           {% endfor %}
@@ -212,14 +198,72 @@
         <tfoot data-vis="{{ V }}">
           <tr data-vis="{{ V }}">
             <td colspan="4" data-vis="{{ V }}"><strong>Total</strong></td>
-            <td class="num" data-vis="{{ V }}"><strong>₹{{ "{:,.0f}".format(total_billed) }}</strong></td>
+            <td class="num" data-vis="{{ V }}"><strong>{{ billed_fmt }}</strong></td>
             <td colspan="2" data-vis="{{ V }}"></td>
           </tr>
         </tfoot>
       </table>
     </div>
     {% else %}
-    <p class="hint" style="padding: 0.5rem 0;" data-vis="{{ V }}">No samples charged to this grant yet.</p>
+    {{ empty_state("No samples charged to this grant yet.") }}
+    {% endif %}
+  </article>
+
+  {# ── Row 4: Expenses ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("EXPENSES", expenses_fmt ~ " total") }}
+    {% if expenses %}
+    <div class="table-scroll" data-vis="{{ V }}">
+      <table class="sortable-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Description</th>
+            <th data-vis="{{ V }}">Type</th>
+            <th class="num" data-vis="{{ V }}">Amount</th>
+            <th data-vis="{{ V }}">Receipt</th>
+            <th data-vis="{{ V }}">Recorded By</th>
+            <th data-vis="{{ V }}">Date</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for e in expenses %}
+          <tr data-vis="{{ V }}">
+            <td data-vis="{{ V }}">{{ e.description }}</td>
+            <td data-vis="{{ V }}"><span class="badge">{{ e.expense_type|upper }}</span></td>
+            <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(e.amount or 0) }}</td>
+            <td data-vis="{{ V }}">{{ e.receipt_number or '—' }}</td>
+            <td data-vis="{{ V }}">{{ e.recorder_name or '—' }}</td>
+            <td data-vis="{{ V }}">{{ e.recorded_at[:10] if e.recorded_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    {{ empty_state("No expenses recorded yet.") }}
+    {% endif %}
+
+    {% if can_edit_finance|default(false) %}
+    <details class="toggleable-form top-gap" data-vis="{{ V }}">
+      <summary class="text-link" data-vis="{{ V }}">Add Expense</summary>
+      <form method="post" action="{{ url_for('finance_grant_expenses', grant_id=grant.id) }}" class="form-grid top-gap" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label data-vis="{{ V }}">Description <input type="text" name="description" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Type
+          <select name="expense_type" data-vis="{{ V }}">
+            <option value="equipment" data-vis="{{ V }}">Equipment</option>
+            <option value="reagent" data-vis="{{ V }}">Reagent</option>
+            <option value="vendor" data-vis="{{ V }}">Vendor</option>
+            <option value="travel" data-vis="{{ V }}">Travel</option>
+            <option value="other" data-vis="{{ V }}">Other</option>
+          </select>
+        </label>
+        <label data-vis="{{ V }}">Receipt # <input type="text" name="receipt_number" data-vis="{{ V }}"></label>
+        <label data-vis="{{ V }}">Notes <input type="text" name="notes" data-vis="{{ V }}"></label>
+        <button type="submit" class="small-button" data-vis="{{ V }}">Add Expense</button>
+      </form>
+    </details>
     {% endif %}
   </article>
 

@@ -4467,6 +4467,12 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
+.person-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
 
 /* ---------- .meta-grid ----------------------------------------------------- */
 .meta-grid {
@@ -9274,6 +9280,9 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 /* ── Grant detail budget bar color zones ── */
 .grant-bar-warn { background: #e67700 !important; }
 .grant-bar-over { background: #c0392b !important; }
+.budget-bar-green { background: #2f9e44 !important; }
+.budget-bar-amber { background: #e67700 !important; }
+.budget-bar-red   { background: #c0392b !important; }
 
 /* ── Payment timeline colored dots ── */
 .payment-dot-paid    { background: #059669 !important; }

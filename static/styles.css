@@ -5263,15 +5263,22 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
    tiles; quick-intake + instrument-queues span full width.
    ========================================================================= */
 
+/* ── iOS-style Tile System ──────────────────────────────────
+   6-column grid. Tiles snap to 3-col (half) or 6-col (full).
+   grid-auto-rows: min-content collapses empty row space.
+   gap: 0.4rem (Apple's 8pt grid = ~0.5rem at 14.5px base).
+   No tile may exceed its content height. No internal scroll.
+   Dense flow fills holes automatically. ──────────────────── */
 .dashboard-tiles {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 0.5rem;
+  grid-auto-rows: min-content;
+  gap: 0.4rem;
   margin: 0 auto;
   max-width: 1400px;
   width: 100%;
   padding: 0 0.5rem;
-  align-items: stretch;
+  align-items: start;
   grid-auto-flow: row dense;
 }
 
@@ -9692,4 +9699,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   opacity: 1;
   border-left: 3px solid var(--accent);
   padding-left: 0.75rem;
+}
+
+/* ── iOS Tile System: unified across ALL pages ────────────
+   Every tile grid uses the same rules:
+   - 6-col on desktop, 4-col tablet, 1-col mobile
+   - grid-auto-rows: min-content (no empty vertical space)
+   - gap: 0.4rem (Apple 8pt rhythm)
+   - align-items: start (tiles size to content)
+   - grid-auto-flow: row dense (fill holes)
+   Tiles: .tile-span-3 = half, .tile-full-width = full row */
+.inst-tiles,
+.finance-tiles,
+.instruments-tiles,
+.request-tiles,
+.sitemap-tiles,
+.new-request-tiles {
+  grid-auto-rows: min-content;
+  align-items: start;
 }

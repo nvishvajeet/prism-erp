@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | docs-satyajeet-ui-onboarding | 2026-04-13 20:17 CEST | `AGENTS.md`, `docs/SATYAJEET_ONBOARDING.md`, `CLAIMS.md` | `docs: add in-interface onboarding behavior for Satyajeet` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

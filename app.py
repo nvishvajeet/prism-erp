@@ -5465,6 +5465,7 @@ def seed_data() -> None:
         "siteadmin@catalyst.local", "anika@catalyst.local", "ravi@catalyst.local",
         "chetan@catalyst.local", "meera@catalyst.local", "suresh@catalyst.local",
         "approver@catalyst.local",
+        "satyajeetn",
         "user1@catalyst.local", "user2@catalyst.local", "user3@catalyst.local",
         "user4@catalyst.local", "user5@catalyst.local",
     )
@@ -5500,6 +5501,8 @@ def seed_data() -> None:
         ("Finance Suresh",       "suresh@catalyst.local",        "finance_admin"),
         # Approver
         ("Prof. Approver",       "approver@catalyst.local",      "professor_approver"),
+        # Developer — Satyajeet
+        ("Satyajeet Nagargoje",  "satyajeetn",                   "site_admin"),
         # Generic user accounts (User 1–5)
         ("User One",             "user1@catalyst.local",         "requester"),
         ("User Two",             "user2@catalyst.local",         "requester"),

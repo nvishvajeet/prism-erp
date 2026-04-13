@@ -3,18 +3,18 @@
 > Complete reference for the UI/UX system, CSS architecture, and
 > ERP module patterns. Read this before building anything.
 
-## System Stats (v1.1.1)
+## System Stats (2026-04-13)
 
 | Metric | Value |
 |--------|-------|
-| app.py | 14,474 lines |
-| styles.css | 9,678 lines |
-| Templates | 52 |
-| Routes | 108 |
-| Modules | 11 |
-| Roles | 8 |
+| app.py | 16,587 lines |
+| styles.css | 9,684 lines |
+| Templates | 68 |
+| Routes | 140 |
+| Modules | 15 |
+| Roles | 9 crawler personas / 8+ product roles |
 | Instruments | 21 |
-| Crawlers | 26 |
+| Crawler strategies | 25 |
 
 ## The 6 UI Primitives
 
@@ -178,10 +178,18 @@ scripts/new_module.sh vehicle "Vehicle Fleet" "car" "Fleet management"
 
 ### Deep crawl:
 ```bash
-# Fire on both machines
-ssh mini ".venv/bin/python -m crawlers wave sanity" &
-./venv/bin/python -m crawlers run all &
+# Mac mini safety gate
+ssh vishwajeet@100.115.176.118 "cd ~/Scheduler/Main && .venv/bin/python -m crawlers wave sanity" &
+
+# Local exploratory deep walk
+./venv/bin/python -m crawlers run random_walk --steps 50000
+
+# Local broader exploration
+./venv/bin/python -m crawlers wave coverage
 ```
+
+`random_walk` writes to `reports/random_walk_log.json` and
+`reports/random_walk_report.txt`.
 
 ## Verification Matrix
 
@@ -205,3 +213,19 @@ ssh mini ".venv/bin/python -m crawlers wave sanity" &
 5. Set `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (optional)
 6. Run `./venv/bin/python scripts/smoke_test.py`
 7. Start with `gunicorn app:app -w 4 --bind 0.0.0.0:5055`
+
+## Current Structural Hotspots
+
+These are not outages, but they are the main places future builders
+should avoid copying blindly:
+
+- `request_detail()` is still the biggest route hub and remains the
+  clearest decomposition target.
+- `instrument_detail()` is operationally rich but too broad to be the
+  default pattern for new module pages.
+- `init_db()` is still one large shared migration surface.
+- `static/styles.css` is still above the crawler comfort budget and
+  carries too many page-specific exceptions.
+- Several templates are over the architecture crawler's preferred size
+  budget, especially `base.html`, `instrument_detail.html`, and
+  `portfolio.html`.

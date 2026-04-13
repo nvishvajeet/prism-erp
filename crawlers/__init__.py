@@ -19,6 +19,7 @@ Usage
     venv/bin/python -m crawlers run visibility
     venv/bin/python -m crawlers run populate
     venv/bin/python -m crawlers run random_walk --steps 5000
+    venv/bin/python -m crawlers run random_walk --steps 50000 --seed 20260410
 
     # Run every crawler in sequence (CI / pre-push gate)
     venv/bin/python -m crawlers run all
@@ -29,6 +30,11 @@ Usage
 Each strategy writes its report to `reports/<name>_report.txt` and a
 JSON log to `reports/<name>_log.json` in the repo root. CI can diff
 these between runs to surface regressions.
+
+Deep random walks now use a first-class CLI override instead of a
+hidden env var. Example:
+
+    ./venv/bin/python -m crawlers run random_walk --steps 50000
 
 Adding a new crawler
 --------------------

@@ -312,6 +312,8 @@ if [[ "$OS" == "Darwin" ]]; then
   <dict>
     <key>CATALYST_URL</key>
     <string>${CATALYST_URL:-https://catalysterp.org}</string>
+    <key>COMPUTE_WORKER_SECRET</key>
+    <string>${COMPUTE_WORKER_SECRET:-${COMPUTE_SECRET:-catalyst-compute-2026}}</string>
     <key>COMPUTE_SECRET</key>
     <string>${COMPUTE_SECRET:-catalyst-compute-2026}</string>
     <key>MAX_CONCURRENT</key>

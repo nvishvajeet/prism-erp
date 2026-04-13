@@ -10,7 +10,8 @@ Usage:
 
 Environment variables:
     CATALYST_URL        Base URL (default: https://catalysterp.org)
-    COMPUTE_SECRET      Shared secret (default: catalyst-compute-2026)
+    COMPUTE_WORKER_SECRET Shared secret (preferred)
+    COMPUTE_SECRET      Legacy shared secret fallback
     POLL_INTERVAL       Seconds between polls (default: 10)
     MAX_CONCURRENT      Max simultaneous jobs (default: 3)
     INPUT_DIR           Where to store downloaded input files
@@ -34,7 +35,10 @@ from threading import Thread
 
 # ── Configuration ──────────────────────────────────────────────
 CATALYST_URL = os.environ.get("CATALYST_URL", "https://catalysterp.org").rstrip("/")
-COMPUTE_SECRET = os.environ.get("COMPUTE_SECRET", "catalyst-compute-2026")
+COMPUTE_SECRET = os.environ.get(
+    "COMPUTE_WORKER_SECRET",
+    os.environ.get("COMPUTE_SECRET", "catalyst-compute-2026"),
+)
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))
 MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", "3"))
 MAX_RUNTIME = int(os.environ.get("MAX_RUNTIME", "7200"))  # 2 hours

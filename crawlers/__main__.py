@@ -43,11 +43,19 @@ def cmd_describe(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_one(name: str) -> int:
+def _run_one(name: str, *, steps: int | None = None, seed: int | None = None) -> int:
     cls = get(name)
     strategy = cls()
+    if steps is not None and hasattr(strategy, "steps"):
+        strategy.steps = steps
+    if seed is not None and hasattr(strategy, "seed"):
+        strategy.seed = seed
     harness = Harness()
     print(f"▶ {name} — {strategy.description}")
+    if steps is not None:
+        print(f"  steps override: {steps}")
+    if seed is not None:
+        print(f"  seed override: {seed}")
     t0 = time.perf_counter()
     try:
         harness.bootstrap()
@@ -95,7 +103,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         names = [args.name]
     worst = 0
     for name in names:
-        code = _run_one(name)
+        code = _run_one(name, steps=args.steps, seed=args.seed)
         worst = max(worst, code)
     print()
     print(f"overall exit code: {worst}")
@@ -150,6 +158,18 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="Run one crawler or `all`")
     p_run.add_argument("name")
+    p_run.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="Override step count for strategies that expose a `steps` attribute (for example `random_walk`).",
+    )
+    p_run.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override random seed for strategies that expose a `seed` attribute.",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_list_waves = sub.add_parser(

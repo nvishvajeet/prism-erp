@@ -154,6 +154,32 @@ Use these standard shapes instead of inventing a new page model:
 - Do not skip audit logging on writes
 - Do not block the first ship waiting for every integration
 
+## Current corners cut in the existing ERP
+
+These are the places where the current system works, but future builders
+should resist copying the shape directly:
+
+- giant route hubs such as `request_detail()` and `instrument_detail()`
+- giant shared schema growth inside `init_db()`
+- page-specific CSS expansions instead of reusing a tighter tile grammar
+- repeated edit-toggle tile scaffolding in templates instead of shared
+  macros
+
+Treat those as refactor targets, not best-practice templates.
+
+## Fastest improvements that still help future builds
+
+If you want to improve the ERP for the next builder, the highest-ROI
+changes are usually:
+
+1. extract a helper from a giant route
+2. convert repeated template structure into a macro
+3. replace raw color or inline style drift with shared CSS variables
+4. add one crawler affordance or operator-facing command shortcut
+5. update the summary docs right after the code changes land
+
+That combination keeps the code and the builder story aligned.
+
 ## The fastest way to pick the next build
 
 If the roadmap gives several choices, prefer the module that:

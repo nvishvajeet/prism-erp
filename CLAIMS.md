@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | docs-erp-builder-simplify | 2026-04-13 21:10 CEST | `README.md`, `docs/ERP_MODULE_BUILDER.md`, `docs/ERP_COMPOSITION.md`, `docs/ERP_FUTURE_BUILDER.md`, `CLAIMS.md` | `docs: simplify ERP builder system` |
 
 ## Stale-claim recovery
 

@@ -154,5 +154,26 @@
     {% endif %}
   </article>
 
+  {# ── Tile: AI Advisor ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("AI ADVISOR", "Ask about invoices, grants, payments, or budgets") }}
+    <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="portal" value="finance">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <label class="control-flex-fill-wide" data-vis="{{ V }}">
+          Ask AI
+          <input type="text" name="ai_prompt" placeholder="e.g. Which invoices are overdue? Summarize grant spending." autocomplete="off" data-vis="{{ V }}">
+        </label>
+        <label class="control-min-width-sm" data-vis="{{ V }}">
+          File
+          <input type="file" name="ai_file" data-vis="{{ V }}">
+        </label>
+        <button type="submit" class="btn btn-primary control-min-width-md" style="align-self:flex-end;" data-vis="{{ V }}">Send</button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">Processed in 4-hour batch cycles. <a href="{{ url_for('ai_advisor_log') }}" class="text-link">View history</a></p>
+    </form>
+  </article>
+
 </section>
 {% endblock %}

@@ -5319,6 +5319,30 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_command_queue_status ON command_queue(status);
             CREATE INDEX IF NOT EXISTS idx_command_queue_user ON command_queue(user_id);
+
+            -- AI Advisor queue: prompts submitted from dashboard / instrument / finance
+            -- processed in 4-hour batch intervals, logged as entries
+            CREATE TABLE IF NOT EXISTS ai_advisor_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                portal TEXT NOT NULL DEFAULT 'dashboard',
+                instrument_id INTEGER,
+                prompt TEXT NOT NULL,
+                file_path TEXT NOT NULL DEFAULT '',
+                file_name TEXT NOT NULL DEFAULT '',
+                context_snapshot TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'queued',
+                response TEXT NOT NULL DEFAULT '',
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                processed_at TEXT,
+                batch_id TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_queue_status ON ai_advisor_queue(status);
+            CREATE INDEX IF NOT EXISTS idx_ai_queue_user ON ai_advisor_queue(user_id);
+            CREATE INDEX IF NOT EXISTS idx_ai_queue_batch ON ai_advisor_queue(batch_id);
         """)
 
         # Additive column migrations for v1.1.0
@@ -19336,6 +19360,161 @@ Return ONLY JSON: [{{"text":"...", "href":"/path", "priority":"high|medium|low"}
     if ctx.get("queue_depth", 0) > 0:
         advice.append({"text": f"{ctx['queue_depth']} samples in queue", "href": "/schedule", "priority": "medium"})
     return advice or [{"text": "All caught up! Check inbox or browse instruments.", "href": "/instruments", "priority": "low"}]
+
+
+# ─── AI Advisor Queue — 4-hour batch processing ────────────────────
+# Users submit prompts (with optional file) from dashboard, instrument
+# detail, or finance portal.  Entries queue up and process in 4-hour
+# intervals.  Processed results are logged and shown to the user.
+
+
+def _ai_advisor_context(user, portal: str, instrument_id: int | None = None) -> str:
+    """Build a context snapshot for the AI advisor based on portal and user."""
+    db = get_db()
+    ctx = {"user": user["name"], "role": user.get("role", ""), "portal": portal}
+    try:
+        ctx["pending_requests"] = db.execute(
+            "SELECT COUNT(*) FROM sample_requests WHERE requester_id=? AND status NOT IN ('completed','cancelled','rejected')",
+            (user["id"],)).fetchone()[0]
+    except Exception:
+        pass
+    if portal == "instrument" and instrument_id:
+        try:
+            inst = query_one("SELECT name, code, status FROM instruments WHERE id=?", (instrument_id,))
+            if inst:
+                ctx["instrument"] = {"name": inst["name"], "code": inst["code"], "status": inst["status"]}
+            ctx["queue_depth"] = db.execute(
+                "SELECT COUNT(*) FROM sample_requests WHERE instrument_id=? AND status IN ('sample_received','scheduled','in_progress')",
+                (instrument_id,)).fetchone()[0]
+        except Exception:
+            pass
+    elif portal == "finance":
+        try:
+            ctx["pending_invoices"] = db.execute("SELECT COUNT(*) FROM invoices WHERE status='pending'").fetchone()[0]
+            ctx["total_outstanding"] = db.execute("SELECT COALESCE(SUM(amount),0) FROM invoices WHERE status='pending'").fetchone()[0]
+        except Exception:
+            pass
+    return json.dumps(ctx)
+
+
+def _process_ai_advisor_entry(entry_id: int) -> None:
+    """Process a single queued AI advisor entry."""
+    entry = query_one("SELECT * FROM ai_advisor_queue WHERE id=?", (entry_id,))
+    if not entry or entry["status"] != "queued":
+        return
+    user_prompt = entry["prompt"]
+    file_content = ""
+    if entry["file_path"]:
+        try:
+            fpath = Path(entry["file_path"])
+            if fpath.exists() and fpath.stat().st_size < 50000:
+                file_content = fpath.read_text(errors="replace")[:8000]
+        except Exception:
+            pass
+    portal = entry["portal"]
+    portal_label = {"dashboard": "Home Dashboard", "instrument": "Instrument Portal", "finance": "Finance Portal"}.get(portal, portal)
+    ctx = entry["context_snapshot"] or "{}"
+    file_section = "Attached file content:\n" + file_content if file_content else "No file attached."
+    system_prompt = f"""You are an AI advisor for Catalyst ERP (university research lab management system).
+Portal: {portal_label}
+Context: {ctx}
+{file_section}
+
+The user asked: "{user_prompt}"
+
+Give a clear, actionable response. If the question is about a process, explain the steps.
+If about data, summarize what you see. If asking for help, give specific guidance.
+Include relevant page links where helpful (e.g. /instruments, /schedule, /finance, /compute).
+Be concise but thorough. Max 300 words."""
+
+    raw = _ai_call_haiku(system_prompt, max_tokens=1500)
+    if not raw:
+        raw = "AI processing unavailable. Please try again later or contact your administrator."
+    execute(
+        "UPDATE ai_advisor_queue SET status='processed', response=?, tokens_used=?, processed_at=? WHERE id=?",
+        (raw, len(raw.split()) * 2, now_iso(), entry_id))
+
+
+def ai_advisor_batch_process(batch_label: str = "") -> int:
+    """Process all queued AI advisor entries. Called every 4 hours or manually.
+    Returns count of processed entries."""
+    bid = batch_label or f"batch-{now_iso()[:13]}"
+    with app.app_context():
+        queued = query_all("SELECT id FROM ai_advisor_queue WHERE status='queued' ORDER BY created_at")
+        if not queued:
+            return 0
+        execute("UPDATE ai_advisor_queue SET batch_id=? WHERE status='queued'", (bid,))
+        for entry in queued:
+            try:
+                _process_ai_advisor_entry(entry["id"])
+            except Exception as exc:
+                execute("UPDATE ai_advisor_queue SET status='failed', response=? WHERE id=?",
+                        (f"Processing error: {str(exc)[:200]}", entry["id"]))
+        return len(queued)
+
+
+@app.route("/ai/ask", methods=["POST"])
+@login_required
+def ai_advisor_submit():
+    """Submit a prompt to the AI advisor queue."""
+    user = current_user()
+    prompt_text = request.form.get("ai_prompt", "").strip()
+    portal = request.form.get("portal", "dashboard")
+    instrument_id = request.form.get("instrument_id", type=int)
+    if not prompt_text:
+        flash("Please enter a question or request.", "warning")
+        return redirect(request.referrer or url_for("index"))
+    # Handle optional file upload
+    file_path = ""
+    file_name = ""
+    uploaded = request.files.get("ai_file")
+    if uploaded and uploaded.filename:
+        safe_name = secure_filename(uploaded.filename)
+        upload_dir = DATA_DIR / "ai_uploads" / str(user["id"])
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        dest = upload_dir / f"{now_iso()[:10]}_{safe_name}"
+        uploaded.save(str(dest))
+        file_path = str(dest)
+        file_name = safe_name
+    # Build context snapshot
+    ctx = _ai_advisor_context(user, portal, instrument_id)
+    execute(
+        "INSERT INTO ai_advisor_queue (user_id, portal, instrument_id, prompt, file_path, file_name, context_snapshot, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (user["id"], portal, instrument_id, prompt_text, file_path, file_name, ctx, now_iso()))
+    # Count queue position
+    pos = query_one("SELECT COUNT(*) as cnt FROM ai_advisor_queue WHERE status='queued'")
+    queue_count = pos["cnt"] if pos else 1
+    flash(f"Your question has been queued (position #{queue_count}). It will be processed in the next batch cycle.", "success")
+    # Redirect back
+    if portal == "instrument" and instrument_id:
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    elif portal == "finance":
+        return redirect(url_for("finance_portal"))
+    return redirect(url_for("index"))
+
+
+@app.route("/ai/log")
+@login_required
+def ai_advisor_log():
+    """View processed AI advisor entries for the current user."""
+    user = current_user()
+    entries = query_all(
+        "SELECT * FROM ai_advisor_queue WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
+        (user["id"],))
+    return render_template("ai_advisor_log.html", entries=entries)
+
+
+@app.route("/ai/process", methods=["POST"])
+@login_required
+def ai_advisor_trigger_batch():
+    """Manually trigger AI advisor batch processing (owner/super_admin only)."""
+    user = current_user()
+    if not (is_owner(user) or user.get("role") == "super_admin"):
+        flash("Only owners can trigger batch processing.", "warning")
+        return redirect(url_for("index"))
+    count = ai_advisor_batch_process(f"manual-{now_iso()}")
+    flash(f"Processed {count} queued AI advisor entries.", "success")
+    return redirect(request.referrer or url_for("ai_advisor_log"))
 
 
 def _run_compute_job(job_id):

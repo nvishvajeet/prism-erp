@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&larr;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&larr; Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">AI Advisor Log</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if current_user() and (is_owner(current_user()) or current_user().get('role') == 'super_admin') %}
+    <form method="post" action="{{ url_for('ai_advisor_trigger_batch') }}" style="display:inline;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Process Queue Now</button>
+    </form>
+    {% endif %}
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {% if entries %}
+  {% for e in entries %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div class="section-head" data-vis="{{ V }}">
+      <span data-vis="{{ V }}">
+        {% if e.portal == 'instrument' %}Instrument{% elif e.portal == 'finance' %}Finance{% else %}Dashboard{% endif %}
+      </span>
+      <span style="float:right;font-size:0.85rem;color:var(--muted);" data-vis="{{ V }}">
+        {{ e.created_at[:16] }}
+        {% if e.status == 'queued' %}
+        <span class="badge status-wait" data-vis="{{ V }}">Queued</span>
+        {% elif e.status == 'processed' %}
+        <span class="badge status-active" data-vis="{{ V }}">Processed</span>
+        {% elif e.status == 'failed' %}
+        <span class="badge status-archived" data-vis="{{ V }}">Failed</span>
+        {% endif %}
+      </span>
+    </div>
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <p style="font-weight:600;margin-bottom:0.5rem;" data-vis="{{ V }}">{{ e.prompt }}</p>
+      {% if e.file_name %}
+      <p class="hint" data-vis="{{ V }}">Attached: {{ e.file_name }}</p>
+      {% endif %}
+      {% if e.response %}
+      <div style="margin-top:0.5rem;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;white-space:pre-wrap;font-size:0.9rem;line-height:1.6;" data-vis="{{ V }}">{{ e.response }}</div>
+      {% endif %}
+      {% if e.batch_id %}
+      <p class="hint" style="margin-top:0.25rem;" data-vis="{{ V }}">Batch: {{ e.batch_id }} &middot; Processed: {{ e.processed_at[:16] if e.processed_at else 'pending' }}</p>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+  {% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ empty_state("No AI advisor entries yet. Ask a question from the dashboard, instrument, or finance page.") }}
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

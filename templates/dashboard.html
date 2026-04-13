@@ -70,13 +70,16 @@
   </article>
   {% endif %}
 
-  {# ── TILE: AI ADVISOR — personalized recommendations ── #}
-  {% if ai_advice %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
+  {# ── TILE: AI ADVISOR — directive recommendations + prompt ── #}
+  <article class="card tile tile-full-width tile-accent-blue" data-vis="{{ V }}">
     <div class="section-head" data-vis="{{ V }}">
-      ✨ AI Advisor
-      <a href="?refresh_advice=1" class="text-link" style="float:right;font-size:0.85rem;" data-vis="{{ V }}">Refresh</a>
+      AI Advisor
+      <span style="float:right;display:flex;gap:0.5rem;align-items:center;" data-vis="{{ V }}">
+        <a href="{{ url_for('ai_advisor_log') }}" class="text-link" style="font-size:0.85rem;" data-vis="{{ V }}">History</a>
+        <a href="?refresh_advice=1" class="text-link" style="font-size:0.85rem;" data-vis="{{ V }}">Refresh</a>
+      </span>
     </div>
+    {% if ai_advice %}
     <div class="activity-feed" data-vis="{{ V }}">
       {% for item in ai_advice %}
       <a href="{{ item.href }}" class="activity-entry" style="text-decoration:none;color:inherit;" data-vis="{{ V }}">
@@ -89,8 +92,24 @@
       </a>
       {% endfor %}
     </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;border-top:1px solid var(--color-separator);" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="portal" value="dashboard">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <label class="control-flex-fill-wide" data-vis="{{ V }}">
+          Ask AI
+          <input type="text" name="ai_prompt" placeholder="e.g. How do I submit a sample request?" autocomplete="off" data-vis="{{ V }}">
+        </label>
+        <label class="control-min-width-sm" data-vis="{{ V }}">
+          File
+          <input type="file" name="ai_file" data-vis="{{ V }}">
+        </label>
+        <button type="submit" class="btn btn-primary control-min-width-md" style="align-self:flex-end;" data-vis="{{ V }}">Send</button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">Questions are processed in 4-hour batch cycles. Attach a file for context (CSV, PDF, text).</p>
+    </form>
   </article>
-  {% endif %}
 
   {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
   {% if dash_action_items %}

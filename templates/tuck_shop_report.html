@@ -51,6 +51,24 @@
     {% endif %}
   </article>
 
+  {# ── Cash Drawer vs Bank ── #}
+  {% set total_cash = (sales_summary.cash_total or 0) + (token_summary.token_cash or 0) %}
+  {% set total_bank = (sales_summary.qr_total or 0) + (token_summary.token_qr or 0) %}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("END-OF-DAY TALLY", "Cash drawer + bank expected") }}
+    {{ kpi_grid([
+      {"value": "₹{:,.0f}".format(total_cash),  "label": "Cash in Drawer",     "tone": "green"},
+      {"value": "₹{:,.0f}".format(total_bank),   "label": "Expected in Bank",   "tone": "green"},
+      {"value": "₹{:,.0f}".format(total_cash + total_bank), "label": "Total Revenue"},
+    ]) }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        Cash in Drawer = all cash sales + cash tokens.
+        Expected in Bank = all QR/UPI sales + QR tokens (verify against bank statement).
+      </p>
+    </div>
+  </article>
+
   {# ── Top Items ── #}
   {% if top_items %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">

@@ -34,6 +34,10 @@
         <label data-vis="{{ V }}">Amount (₹)
           <input type="number" id="tokenAmount" min="0" data-vis="{{ V }}" style="font-size:1.25rem;font-weight:700;">
         </label>
+        <label id="payRefLabel" style="display:none;" data-vis="{{ V }}">UPI / Transaction Ref
+          <input type="text" id="tokenPayRef" placeholder="e.g. UPI/428719283 or GPay ref" autocomplete="off" data-vis="{{ V }}">
+          <span class="hint" data-vis="{{ V }}">Enter the UPI transaction ID for bank reconciliation</span>
+        </label>
         <label data-vis="{{ V }}">Student Roll No (optional)
           <input type="text" id="tokenRoll" placeholder="e.g. MIT2024001" autocomplete="off" data-vis="{{ V }}">
           <span id="tokenStudentName" class="hint" data-vis="{{ V }}"></span>
@@ -91,7 +95,17 @@
   var tokenBig = document.getElementById('tokenBig');
   var tokenMealLabel = document.getElementById('tokenMealLabel');
   var tokenStudentLabel = document.getElementById('tokenStudentLabel');
+  var payRefLabel = document.getElementById('payRefLabel');
+  var payRefInput = document.getElementById('tokenPayRef');
   var nextNum = {{ next_num }};
+
+  // Show/hide payment ref based on payment method
+  function togglePayRef(){
+    payRefLabel.style.display = paymentSel.value === 'qr' ? '' : 'none';
+    if(paymentSel.value !== 'qr') payRefInput.value = '';
+  }
+  paymentSel.addEventListener('change', togglePayRef);
+  togglePayRef();
 
   // Auto-fill amount from meal rate
   function updateAmount(){
@@ -132,7 +146,7 @@
     fetch('{{ url_for("tuck_shop_api_issue_token") }}', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
-      body: JSON.stringify({meal_type: meal, payment_method: payment, amount: amount, student_id: studentId})
+      body: JSON.stringify({meal_type: meal, payment_method: payment, payment_ref: payRefInput.value.trim(), amount: amount, student_id: studentId})
     })
     .then(function(r){return r.json();})
     .then(function(data){

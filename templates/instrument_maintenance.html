@@ -98,7 +98,8 @@
           {% if e.description %}<div class="activity-entry-text" data-vis="{{ V }}">{{ e.description }}</div>{% endif %}
           {% if e.certificate_number %}<p class="hint" data-vis="{{ V }}">Certificate: <code class="inline-code" data-vis="{{ V }}">{{ e.certificate_number }}</code></p>{% endif %}
           {% if e.next_due_at %}<p class="hint" data-vis="{{ V }}">Next due: {{ e.next_due_at[:10] }}</p>{% endif %}
-          {% if e.cost > 0 %}<p class="hint" data-vis="{{ V }}">Cost: ₹{{ "{:,.0f}".format(e.cost) }}</p>{% endif %}
+          {% if e.cost > 0 %}<p class="hint" data-vis="{{ V }}">Cost: ₹{{ "{:,.0f}".format(e.cost) }}{% if e.grant_code %} · Grant: {{ e.grant_code }}{% endif %}</p>{% endif %}
+          {% if e.grant_code and (not e.cost or e.cost == 0) %}<p class="hint" data-vis="{{ V }}">Grant: {{ e.grant_code }} — {{ e.grant_name }}</p>{% endif %}
         </div>
       </div>
       {% endfor %}

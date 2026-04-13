@@ -48,7 +48,49 @@
       <span data-vis="{{ V }}">{{ vehicle.notes }}</span>
     </div>
     {% endif %}
+    {% if can_manage %}
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem;" data-vis="{{ V }}">
+      <form method="post" action="{{ url_for('vehicle_archive', vehicle_id=vehicle.id) }}" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn {% if vehicle.status == 'active' %}danger{% else %}btn-primary{% endif %}" data-vis="{{ V }}">
+          {{ "Archive Vehicle" if vehicle.status == "active" else "Reactivate Vehicle" }}
+        </button>
+      </form>
+    </div>
+    {% endif %}
   </article>
+
+  {# ── Edit Vehicle ── #}
+  {% if can_manage %}
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("EDIT", "Update vehicle details") }}
+    <form method="post" action="{{ url_for('vehicle_edit', vehicle_id=vehicle.id) }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Name <input type="text" name="name" value="{{ vehicle.name }}" required data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Registration No. <input type="text" name="registration_no" value="{{ vehicle.registration_no }}" required data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Type
+        <select name="vehicle_type" data-vis="{{ V }}">
+          {% for vt in ["car","van","truck","bike","auto","other"] %}
+          <option value="{{ vt }}" {% if vehicle.vehicle_type == vt %}selected{% endif %} data-vis="{{ V }}">{{ vt|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Assigned Driver
+        <select name="assigned_driver_user_id" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">— None —</option>
+          {% for u in all_users %}
+          <option value="{{ u.id }}" {% if vehicle.assigned_driver_user_id == u.id %}selected{% endif %} data-vis="{{ V }}">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Purchase Date <input type="date" name="purchase_date" value="{{ vehicle.purchase_date or '' }}" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Purchase Cost (₹) <input type="number" step="0.01" name="purchase_cost" value="{{ vehicle.purchase_cost }}" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Insurance Expiry <input type="date" name="insurance_expiry" value="{{ vehicle.insurance_expiry or '' }}" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Notes <textarea name="notes" rows="2" data-vis="{{ V }}">{{ vehicle.notes }}</textarea></label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save Changes</button>
+    </form>
+  </article>
+  {% endif %}
 
   {# ── Other vehicles assigned to same driver ── #}
   {% if assigned_vehicles %}

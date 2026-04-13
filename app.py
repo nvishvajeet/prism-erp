@@ -46,7 +46,7 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
-ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "Catalyst ERP")
+ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,7 +70,7 @@ OWNER_EMAILS = {
     # Default: vishva (the demo seed super_admin).
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "vishva",
+        "owner@catalyst.local",
     ).split(",")
     if email.strip()
 }
@@ -4311,6 +4311,14 @@ def init_db() -> None:
                 except Exception:
                     pass
 
+        # Maintenance log — charge to grant
+        maint_cols = {col[1] for col in cur.execute("PRAGMA table_info(instrument_maintenance)").fetchall()}
+        if "grant_id" not in maint_cols:
+            try:
+                cur.execute("ALTER TABLE instrument_maintenance ADD COLUMN grant_id INTEGER REFERENCES grants(id)")
+            except Exception:
+                pass
+
         # Migrate: add member_code column to users if it doesn't exist
         user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "member_code" not in user_columns:
@@ -5453,12 +5461,12 @@ def seed_data() -> None:
     # Rebind every seeded persona's password on every boot so existing
     # demo DBs catch up without a re-seed.
     _persona_emails = (
-        "vishva", "dean", "kondhalkar",
-        "admin", "anika", "ravi",
-        "chetan", "meera", "suresh",
-        "approver",
-        "user1", "user2", "user3",
-        "user4", "user5",
+        "owner@catalyst.local", "dean@catalyst.local", "kondhalkar@catalyst.local",
+        "siteadmin@catalyst.local", "anika@catalyst.local", "ravi@catalyst.local",
+        "chetan@catalyst.local", "meera@catalyst.local", "suresh@catalyst.local",
+        "approver@catalyst.local",
+        "user1@catalyst.local", "user2@catalyst.local", "user3@catalyst.local",
+        "user4@catalyst.local", "user5@catalyst.local",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -5476,28 +5484,28 @@ def seed_data() -> None:
     # Password for ALL demo accounts: "12345"
     core_users = [
         # Owner (god-view via OWNER_EMAILS env var)
-        ("Facility Owner", "vishva",      "super_admin"),
+        ("Facility Owner", "owner@catalyst.local",      "super_admin"),
         # Dean — super admin
-        ("Dean Rao",             "dean",          "super_admin"),
+        ("Dean Rao",             "dean@catalyst.local",          "super_admin"),
         # Kondhalkar — admin across many instruments
-        ("Prof. Kondhalkar",     "kondhalkar",    "instrument_admin"),
+        ("Prof. Kondhalkar",     "kondhalkar@catalyst.local",    "instrument_admin"),
         # Site admin
-        ("Site Admin",           "admin",         "site_admin"),
+        ("Site Admin",           "siteadmin@catalyst.local",         "site_admin"),
         # Operators
-        ("Operator Anika",       "anika",         "operator"),
-        ("Operator Ravi",        "ravi",          "operator"),
-        ("Operator Chetan",      "chetan",        "operator"),
+        ("Operator Anika",       "anika@catalyst.local",         "operator"),
+        ("Operator Ravi",        "ravi@catalyst.local",          "operator"),
+        ("Operator Chetan",      "chetan@catalyst.local",        "operator"),
         # Finance operators
-        ("Finance Meera",        "meera",         "finance_admin"),
-        ("Finance Suresh",       "suresh",        "finance_admin"),
+        ("Finance Meera",        "meera@catalyst.local",         "finance_admin"),
+        ("Finance Suresh",       "suresh@catalyst.local",        "finance_admin"),
         # Approver
-        ("Prof. Approver",       "approver",      "professor_approver"),
+        ("Prof. Approver",       "approver@catalyst.local",      "professor_approver"),
         # Generic user accounts (User 1–5)
-        ("User One",             "user1",         "requester"),
-        ("User Two",             "user2",         "requester"),
-        ("User Three",           "user3",         "requester"),
-        ("User Four",            "user4",         "requester"),
-        ("User Five",            "user5",         "requester"),
+        ("User One",             "user1@catalyst.local",         "requester"),
+        ("User Two",             "user2@catalyst.local",         "requester"),
+        ("User Three",           "user3@catalyst.local",         "requester"),
+        ("User Four",            "user4@catalyst.local",         "requester"),
+        ("User Five",            "user5@catalyst.local",         "requester"),
     ]
     for name, email, role in core_users:
         db.execute(
@@ -5937,7 +5945,7 @@ def _recent_combined_notifications(user) -> list[dict]:
 def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
-    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "admin@lab.local"
+    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
     V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
@@ -14448,17 +14456,20 @@ def instrument_maintenance_log(instrument_id: int):
         next_due_at = request.form.get("next_due_at", "").strip() or None
         cost = float(request.form.get("cost") or 0)
         certificate_number = request.form.get("certificate_number", "").strip()
+        grant_id = request.form.get("grant_id", "").strip() or None
+        if grant_id:
+            grant_id = int(grant_id)
         execute(
             """
             INSERT INTO instrument_maintenance
                 (instrument_id, event_type, title, description,
                  performed_by_user_id, performed_at, next_due_at,
-                 cost, certificate_number, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 cost, certificate_number, grant_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (instrument_id, event_type, title, description,
              user["id"], performed_at, next_due_at,
-             cost, certificate_number, now_iso()),
+             cost, certificate_number, grant_id, now_iso()),
         )
         log_action(user["id"], "instrument", instrument_id, "maintenance_logged",
                    {"event_type": event_type, "title": title})
@@ -14467,9 +14478,11 @@ def instrument_maintenance_log(instrument_id: int):
 
     entries = query_all(
         """
-        SELECT m.*, u.name AS performed_by_name
+        SELECT m.*, u.name AS performed_by_name,
+               g.code AS grant_code, g.name AS grant_name
           FROM instrument_maintenance m
           LEFT JOIN users u ON u.id = m.performed_by_user_id
+          LEFT JOIN grants g ON g.id = m.grant_id
          WHERE m.instrument_id = ?
          ORDER BY m.performed_at DESC, m.id DESC
          LIMIT 200
@@ -15195,10 +15208,12 @@ def vehicle_detail(vehicle_id: int):
         assigned_vehicles = query_all(
             "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ? AND id != ?",
             (vehicle["assigned_driver_user_id"], vehicle_id))
+    all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
     return render_template("vehicle_detail.html", vehicle=vehicle, driver=driver,
                            logs=logs, fuel_total=fuel_total, maint_total=maint_total,
                            other_total=other_total, can_manage=can_manage,
                            assigned_vehicles=assigned_vehicles,
+                           all_users=all_users,
                            today=date.today().isoformat())
 
 
@@ -15241,6 +15256,59 @@ def vehicle_add_log(vehicle_id: int):
                    href=url_for("vehicle_detail", vehicle_id=vehicle_id),
                    source_type="vehicle", source_id=vehicle_id)
     flash(f"{log_type.title()} log ₹{amount:,.0f} recorded.", "success")
+    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+
+
+@app.route("/vehicles/<int:vehicle_id>/edit", methods=["POST"])
+@login_required
+def vehicle_edit(vehicle_id: int):
+    """Update vehicle details (admin only)."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
+        abort(403)
+    vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    name = request.form.get("name", "").strip() or vehicle["name"]
+    registration_no = request.form.get("registration_no", "").strip() or vehicle["registration_no"]
+    vehicle_type = request.form.get("vehicle_type", "").strip() or vehicle["vehicle_type"]
+    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    purchase_date = request.form.get("purchase_date", "").strip() or vehicle["purchase_date"]
+    purchase_cost = float(request.form.get("purchase_cost", "") or vehicle["purchase_cost"])
+    insurance_expiry = request.form.get("insurance_expiry", "").strip() or vehicle["insurance_expiry"]
+    notes = request.form.get("notes", "").strip()
+    execute(
+        """UPDATE vehicles SET name=?, registration_no=?, vehicle_type=?,
+           assigned_driver_user_id=?, purchase_date=?, purchase_cost=?,
+           insurance_expiry=?, notes=? WHERE id=?""",
+        (name, registration_no, vehicle_type,
+         int(assigned_driver) if assigned_driver else None,
+         purchase_date, purchase_cost, insurance_expiry, notes, vehicle_id),
+    )
+    log_action(user["id"], "vehicle", vehicle_id, "vehicle_updated", {"name": name})
+    flash(f"{name} updated.", "success")
+    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+
+
+@app.route("/vehicles/<int:vehicle_id>/archive", methods=["POST"])
+@login_required
+def vehicle_archive(vehicle_id: int):
+    """Toggle vehicle status between active and archived."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
+        abort(403)
+    vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    new_status = "archived" if vehicle["status"] == "active" else "active"
+    execute("UPDATE vehicles SET status = ? WHERE id = ?", (new_status, vehicle_id))
+    log_action(user["id"], "vehicle", vehicle_id, "vehicle_status_changed",
+               {"old": vehicle["status"], "new": new_status})
+    flash(f"{vehicle['name']} is now {new_status}.", "success")
     return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
 
 

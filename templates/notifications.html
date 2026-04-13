@@ -44,7 +44,7 @@
     <ul class="inbox-list" data-vis="{{ V }}">
       {% for n in notices %}
       <li class="inbox-row{% if not n.is_read %} inbox-row-unread{% endif %}" data-vis="{{ V }}">
-        <a class="inbox-row-link" href="{{ n.href if n.href else '#' }}" data-vis="{{ V }}"{% if not n.href %} onclick="event.preventDefault()"{% endif %}>
+        <a class="inbox-row-link" href="{{ n.href if n.href else url_for('admin_notices') }}" data-vis="{{ V }}">
           <div class="inbox-row-head" data-vis="{{ V }}">
             {% if not n.is_read %}<span class="inbox-unread-dot" aria-hidden="true" data-vis="{{ V }}"></span>{% endif %}
             <strong class="inbox-subject" data-vis="{{ V }}">{{ n.title }}</strong>

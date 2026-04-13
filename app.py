@@ -148,7 +148,9 @@ MODULE_REGISTRY = {
             "visualizations", "instrument_visualization", "group_visualization",
         },
         "nav_type": "dropdown",
-        "nav_access": lambda ap, is_owner: ap["can_access_instruments"],
+        # Operational staff nav: owner, super/site admin, instrument_admin, operator, finance_admin.
+        # NOT approvers, requesters, faculty — they access instruments via Settings or direct links.
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "finance": {
         "label": "Finance",
@@ -196,7 +198,7 @@ MODULE_REGISTRY = {
             "attendance_page", "leave_request_new",
             "admin_leave_queue", "admin_attendance_calendar",
         },
-        "nav_access": lambda ap, is_owner: ap["can_access_instruments"] or is_owner,
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "todos": {
         "label": "Tasks",
@@ -3083,6 +3085,7 @@ def is_owner(user: sqlite3.Row | None) -> bool:
 
 ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     "requester": {
+        "_is_operational_nav": False,
         "can_access_instruments": False,
         "can_access_schedule": False,
         "can_access_calendar": False,
@@ -3100,6 +3103,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment", "mark_submitted"},
     },
     "finance_admin": {
+        "_is_operational_nav": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3117,6 +3121,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment"},
     },
     "professor_approver": {
+        "_is_operational_nav": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3134,6 +3139,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment"},
     },
     "faculty_in_charge": {
+        "_is_operational_nav": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3151,6 +3157,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment"},
     },
     "instrument_admin": {
+        "_is_operational_nav": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3168,6 +3175,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
     "operator": {
+        "_is_operational_nav": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3185,6 +3193,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received"},
     },
     "site_admin": {
+        "_is_operational_nav": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3202,6 +3211,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
     "super_admin": {
+        "_is_operational_nav": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3269,6 +3279,7 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         "can_view_professor_stage": bool(preset["can_view_professor_stage"] or is_owner_user),
         "can_access_receipts": bool(preset.get("can_access_receipts", False) or is_owner_user),
         "can_review_receipts": bool(preset.get("can_review_receipts", False) or is_owner_user),
+        "_is_operational_nav": bool(preset.get("_is_operational_nav", False) or is_owner_user),
         "card_visible_fields": card_fields,
         "card_action_fields": card_actions,
     }

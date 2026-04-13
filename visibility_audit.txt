@@ -1,0 +1,201 @@
+======================================================================
+PRISM ROLE VISIBILITY AUDIT REPORT
+Generated: 2026-04-10T09:12:48.836913
+======================================================================
+Total checks:   176
+  PASS:         171
+  FAIL:         0
+  WARN:         2
+
+─── super_admin ─── 22 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ access_/admin/users: got 200 (expected 200)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ✓ request_detail: accessible
+  ✓ view_other_profile: can view other users
+
+─── site_admin ─── 22 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ access_/admin/users: got 200 (expected 200)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ✓ request_detail: accessible
+  ✓ view_other_profile: can view other users
+
+─── instrument_admin ─── 22 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ✓ request_detail: accessible
+  ✓ view_other_profile_deny: correctly denied
+
+─── faculty_in_charge ─── 22 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ✓ request_detail: accessible
+  ✓ view_other_profile_deny: correctly denied
+
+─── operator ─── 22 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ✓ request_detail: accessible
+  ✓ view_other_profile_deny: correctly denied
+
+─── professor_approver ─── 20 PASS / 0 FAIL / 1 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail: accessible as expected
+  ⚠ view_other_profile: can view other user profile — verify this is intended
+
+─── finance_admin ─── 20 PASS / 0 FAIL / 0 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ view_other_profile_deny: correctly denied
+
+─── requester ─── 21 PASS / 0 FAIL / 1 WARN
+  ✓ access_/: got 200 (expected 200)
+  ✓ access_/instruments: got 200 (expected 200)
+  ✓ access_/schedule: got 200 (expected 200)
+  ✓ access_/calendar: got 200 (expected 200)
+  ✓ access_/stats: got 200 (expected 200)
+  ✓ access_/visualizations: got 200 (expected 200)
+  ✓ deny_/admin/users: got 403 (correctly denied)
+  ✓ access_/docs: got 200 (expected 200)
+  ✓ access_/sitemap: got 200 (expected 200)
+  ✓ access_/requests/new: got 200 (expected 200)
+  ✓ access_/me: got 200 (expected 200)
+  ✓ access_/profile/change-password: got 200 (expected 200)
+  ✓ access_/api/health-check: got 200 (expected 200)
+  ✓ nav_tabs: all 8 expected tabs present
+  ✓ dashboard_render: dashboard rendered cleanly
+  ✓ leak_check_/: no obvious data leaks
+  ✓ leak_check_/instruments: no obvious data leaks
+  ✓ leak_check_/schedule: no obvious data leaks
+  ✓ leak_check_/stats: no obvious data leaks
+  ✓ instrument_detail_deny: correctly denied
+  ⚠ request_detail: got 403 — may be expected if not assigned to instrument
+  ✓ view_other_profile_deny: correctly denied
+
+======================================================================
+ALL VISIBILITY CHECKS PASSED
+======================================================================

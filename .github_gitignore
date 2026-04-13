@@ -1,0 +1,23 @@
+# Data (regenerable)
+data/
+logs/
+reports/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.db
+*.db-shm
+*.db-wal
+
+# Dev artifacts
+Screenshots/
+grid-screenshots/
+FOCS-submission/
+cert.pem
+key.pem
+.env
+
+# IDE
+*.code-workspace
+.claude/

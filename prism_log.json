@@ -1,0 +1,27 @@
+{
+  "url": "https://127.0.0.1:5055/instruments/4",
+  "page": "instruments/4",
+  "timestamp": "2026-04-13T10:30:36.809Z",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+  "codes": {},
+  "feedLog": [],
+  "errorLog": [
+    {
+      "type": "console.error",
+      "message": "Speech error: no-speech",
+      "source": "",
+      "line": 0,
+      "col": 0,
+      "stack": "",
+      "page": "instruments/4",
+      "time": "2026-04-13T10:30:36.407Z"
+    }
+  ],
+  "paths": [],
+  "meta": {
+    "gridActive": false,
+    "totalCodes": 0,
+    "totalClicks": 0,
+    "totalErrors": 1
+  }
+}

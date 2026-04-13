@@ -198,7 +198,8 @@ MODULE_REGISTRY = {
             "attendance_page", "leave_request_new",
             "admin_leave_queue", "admin_attendance_calendar",
         },
-        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+        # Only lab staff who physically attend — operators + instrument_admins.
+        "nav_access": lambda ap, is_owner: ap.get("_is_lab_staff"),
     },
     "todos": {
         "label": "Tasks",
@@ -3086,6 +3087,7 @@ def is_owner(user: sqlite3.Row | None) -> bool:
 ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     "requester": {
         "_is_operational_nav": False,
+        "_is_lab_staff": False,
         "can_access_instruments": False,
         "can_access_schedule": False,
         "can_access_calendar": False,
@@ -3104,6 +3106,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "finance_admin": {
         "_is_operational_nav": True,
+        "_is_lab_staff": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3122,6 +3125,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "professor_approver": {
         "_is_operational_nav": False,
+        "_is_lab_staff": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3140,6 +3144,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "faculty_in_charge": {
         "_is_operational_nav": False,
+        "_is_lab_staff": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3158,6 +3163,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "instrument_admin": {
         "_is_operational_nav": True,
+        "_is_lab_staff": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3176,6 +3182,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "operator": {
         "_is_operational_nav": True,
+        "_is_lab_staff": True,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3194,6 +3201,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "site_admin": {
         "_is_operational_nav": True,
+        "_is_lab_staff": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3212,6 +3220,7 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
     "super_admin": {
         "_is_operational_nav": True,
+        "_is_lab_staff": False,
         "can_access_instruments": True,
         "can_access_schedule": True,
         "can_access_calendar": True,
@@ -3280,6 +3289,7 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         "can_access_receipts": bool(preset.get("can_access_receipts", False) or is_owner_user),
         "can_review_receipts": bool(preset.get("can_review_receipts", False) or is_owner_user),
         "_is_operational_nav": bool(preset.get("_is_operational_nav", False) or is_owner_user),
+        "_is_lab_staff": bool(preset.get("_is_lab_staff", False)),
         "card_visible_fields": card_fields,
         "card_action_fields": card_actions,
     }

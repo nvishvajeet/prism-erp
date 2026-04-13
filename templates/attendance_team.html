@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Team Attendance</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('attendance_team_mark_all') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Mark All Present</button>
+    </form>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Team Members (" ~ team|length ~ ")") }}
+    {% if team %}
+    <div class="quick-intake-grid" data-vis="{{ V }}">
+      {% for m in team %}
+      <div class="quick-intake-card quick-intake-card-{{ 'approved' if m.today_status == 'present' else 'pending' if m.today_status == 'half' else 'in_progress' if m.today_status == 'absent' else 'scheduled' }}" data-vis="{{ V }}">
+        <div class="quick-intake-card-body" data-vis="{{ V }}">
+          <strong class="quick-intake-sample" data-vis="{{ V }}">{{ m.name }}</strong>
+          <span class="quick-intake-requester hint" data-vis="{{ V }}">{{ m.role|replace('_',' ')|title }}</span>
+          {% if m.today_status %}
+          <span class="badge status-{{ m.today_status }}" data-vis="{{ V }}">{{ m.today_status|upper }}</span>
+          {% else %}
+          <span class="badge" data-vis="{{ V }}">NOT MARKED</span>
+          {% endif %}
+        </div>
+        <div class="quick-intake-actions" data-vis="{{ V }}">
+          <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ m.id }}">
+            <input type="hidden" name="status" value="present">
+            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">&#10003;</button>
+          </form>
+          <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ m.id }}">
+            <input type="hidden" name="status" value="absent">
+            <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">&#10007;</button>
+          </form>
+          <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ m.id }}">
+            <input type="hidden" name="status" value="half">
+            <button type="submit" class="qi-btn qi-btn-view" data-vis="{{ V }}">&#189;</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No team members found.", "Add users from Settings.") }}
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

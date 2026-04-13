@@ -13775,6 +13775,91 @@ def attendance_team_leave_reject(leave_id: int):
     return redirect(url_for("attendance_page"))
 
 
+# ── Team Attendance — supervisors mark attendance for workers ────
+@app.route("/attendance/team")
+@login_required
+def attendance_team():
+    """Supervisors / admins mark attendance for all workers they manage."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin", "instrument_admin", "finance_admin"} or is_owner(user)):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    if is_owner(user) or roles & {"super_admin", "site_admin", "finance_admin"}:
+        team = query_all("SELECT id, name, email, role FROM users WHERE active = 1 AND id != ? ORDER BY name", (user["id"],))
+    else:
+        team = query_all("""
+            SELECT DISTINCT u.id, u.name, u.email, u.role
+            FROM users u
+            JOIN instrument_operators io ON io.user_id = u.id
+            JOIN instrument_admins ia ON ia.instrument_id = io.instrument_id
+            WHERE ia.user_id = ? AND u.active = 1
+            ORDER BY u.name
+        """, (user["id"],))
+    team_dicts = []
+    for member in team:
+        m = dict(member)
+        att = query_one("SELECT status FROM attendance WHERE user_id = ? AND date = ?", (m["id"], today))
+        m["today_status"] = att["status"] if att else None
+        team_dicts.append(m)
+    return render_template("attendance_team.html", team=team_dicts, today=today)
+
+
+@app.route("/attendance/team/mark", methods=["POST"])
+@login_required
+def attendance_team_mark():
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin", "instrument_admin", "finance_admin"} or is_owner(user)):
+        abort(403)
+    user_id = int(request.form["user_id"])
+    status = request.form.get("status", "present")
+    if status not in ("present", "absent", "half"):
+        status = "present"
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (user_id, today))
+    if existing:
+        execute("UPDATE attendance SET status = ? WHERE id = ?", (status, existing["id"]))
+    else:
+        execute("INSERT INTO attendance (user_id, date, status, check_in, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, today, status, now_iso(), now_iso()))
+    flash("Attendance marked.", "success")
+    return redirect(url_for("attendance_team"))
+
+
+@app.route("/attendance/team/mark-all", methods=["POST"])
+@login_required
+def attendance_team_mark_all():
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin", "instrument_admin", "finance_admin"} or is_owner(user)):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    if is_owner(user) or roles & {"super_admin", "site_admin", "finance_admin"}:
+        team = query_all("SELECT id FROM users WHERE active = 1 AND id != ?", (user["id"],))
+    else:
+        team = query_all("""
+            SELECT DISTINCT u.id FROM users u
+            JOIN instrument_operators io ON io.user_id = u.id
+            JOIN instrument_admins ia ON ia.instrument_id = io.instrument_id
+            WHERE ia.user_id = ? AND u.active = 1
+        """, (user["id"],))
+    count = 0
+    for m in team:
+        existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (m["id"], today))
+        if existing:
+            execute("UPDATE attendance SET status = 'present' WHERE id = ?", (existing["id"],))
+        else:
+            execute("INSERT INTO attendance (user_id, date, status, check_in, created_at) VALUES (?, ?, 'present', ?, ?)",
+                    (m["id"], today, now_iso(), now_iso()))
+        count += 1
+    flash("%d marked present." % count, "success")
+    return redirect(url_for("attendance_team"))
+
+
 @app.route("/leave/new", methods=["GET", "POST"])
 @login_required
 def leave_request_new():

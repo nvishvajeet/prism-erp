@@ -14,7 +14,7 @@
 <div class="inst-tiles" data-vis="{{ V }}">
 
   {# ── Tile 1: Approval Sequence (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Approval Sequence") }}
     <p class="tile-lead" data-vis="{{ V }}">Configure up to 6 approval steps. Requests advance through each role in order.</p>
     <form method="post" data-vis="{{ V }}">
@@ -51,7 +51,7 @@
   </section>
 
   {# ── Tile 2: Custom Fields (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Custom Fields") }}
     <p class="tile-lead" data-vis="{{ V }}">Fields requesters fill in when submitting to this instrument. Up to 20 fields.</p>
     <form method="post" id="customFieldsForm" data-vis="{{ V }}">
@@ -79,7 +79,7 @@
   </section>
 
   {# ── Tile 3: Pricing & Payment Instructions (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Pricing & Payment Instructions") }}
     <p class="tile-lead" data-vis="{{ V }}">Shown to requesters before they fill in the submission form. Editable by operator and area admins.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
@@ -99,7 +99,7 @@
   </section>
 
   {# ── Tile 4: Message Templates (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Message Templates") }}
     <p class="tile-lead" data-vis="{{ V }}">Customise email notifications sent when workflow events occur on this instrument.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
@@ -121,7 +121,7 @@
   </section>
 
   {# ── Tile 5: Overview (span 3) ── #}
-  <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+  <section class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("", "Overview") }}
     <ul class="tile-summary-list" data-vis="{{ V }}">
       <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ approval_config|length }}</strong> approval step{{ "s" if approval_config|length != 1 }} configured</li>

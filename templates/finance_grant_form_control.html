@@ -14,7 +14,7 @@
 <div class="inst-tiles" data-vis="{{ V }}">
 
   {# ── Tile 1: Approval Config (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Approval Config") }}
     <p class="tile-lead" data-vis="{{ V }}">Grant-level approval settings. Large expenses above the budget warning threshold require additional sign-off from the PI or finance admin.</p>
     <dl class="mc-meta-grid" data-vis="{{ V }}">
@@ -26,7 +26,7 @@
   </section>
 
   {# ── Tile 2: Budget Rules (full width) ── #}
-  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Budget Rules") }}
     <p class="tile-lead" data-vis="{{ V }}">Set warning and freeze thresholds for grant spending. When spend reaches the warning threshold, the PI is alerted. At the freeze threshold, new charges are blocked.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
@@ -47,7 +47,7 @@
   </section>
 
   {# ── Tile 3: Overview (span 3) ── #}
-  <section class="card tile" style="grid-column: span 3;" data-vis="{{ V }}">
+  <section class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("", "Overview") }}
     <ul class="tile-summary-list" data-vis="{{ V }}">
       <li data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ expense_count }}</strong> expense{{ "s" if expense_count != 1 }} recorded</li>

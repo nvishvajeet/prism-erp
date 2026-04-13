@@ -55,56 +55,81 @@
 <p class="subtitle">MacBook Pro (M1 Pro, 32 GB) + Mac mini (M4, 24 GB) &nbsp;·&nbsp; {{ machine_time }}</p>
 
 <!-- ═══════════════ PROJECTS ═══════════════ -->
-<div class="section-title">Projects — click to open, tags show reusable patterns</div>
+<div class="section-title">Projects — click to open &nbsp;·&nbsp; each has a <code>PROJECT_ASSETS.md</code> describing what AI agents can reuse</div>
 <div class="grid">
 
-  <a class="card" href="/">
-    <div class="card-kicker">PRISM Lab Scheduler <span class="badge badge-live">live on mini</span></div>
-    <h3>Lab Scheduler (ERP)</h3>
-    <p>Flask ERP: sample requests, 9 roles, approval chains, SHA-256 audit, tile architecture, 15 Jinja macros, 14 crawler strategies.</p>
+  <a class="card" href="/" style="border-color:var(--accent);border-width:2px">
+    <div class="card-kicker">PRISM Lab Scheduler <span class="badge badge-live">live on mini</span> <span class="badge" style="background:var(--accent)">primary build source</span></div>
+    <h3>Lab Scheduler (ERP) ★</h3>
+    <p>The biggest project on this machine. Flask ERP with 15 Jinja macros, tile grid architecture, 8k-line CSS design system, 9-role auth, SHA-256 audit chain, 14 crawler strategies. <strong>Use this to build any new ERP module, dashboard, website, or UI.</strong></p>
     <div class="reuse-tags">
       <span class="tag tag-ui">15 UI macros</span>
       <span class="tag tag-ui">tile grid</span>
       <span class="tag tag-ui">dark mode CSS</span>
+      <span class="tag tag-ui">8k CSS system</span>
       <span class="tag tag-data">state machine</span>
       <span class="tag tag-data">audit chain</span>
       <span class="tag tag-infra">role auth</span>
+      <span class="tag tag-infra">module system</span>
       <span class="tag tag-infra">crawler suite</span>
     </div>
+    <p style="font-size:11px;color:var(--accent);margin-top:8px">📄 <code>PROJECT_ASSETS.md</code> at repo root — full catalog of reusable components</p>
   </a>
 
   <a class="card" href="/admin/portfolio">
     <div class="card-kicker">Portfolio Plan <span class="badge badge-local">local only</span></div>
     <h3>Portfolio Dashboard</h3>
-    <p>9-step data pipeline: fetch → compute → analyze → recommend. YAML config, JSON state files, Flask integration. Daily buy recs, Monte Carlo, peer rankings.</p>
+    <p>9-step linear data pipeline: fetch → compute → analyze → recommend. YAML config, JSON state files, Flask integration. <strong>Use this for any multi-step data processing or reporting pipeline.</strong></p>
     <div class="reuse-tags">
       <span class="tag tag-data">pipeline pattern</span>
       <span class="tag tag-data">YAML config</span>
       <span class="tag tag-data">state files</span>
+      <span class="tag tag-data">composite scoring</span>
       <span class="tag tag-ui">Chart.js</span>
       <span class="tag tag-infra">CLI subcommands</span>
     </div>
+    <p style="font-size:11px;color:var(--green);margin-top:8px">📄 <code>PROJECT_ASSETS.md</code> at repo root — pipeline patterns, data fetching recipes, state contracts</p>
   </a>
 
   <a class="card" href="https://nvishvajeet.github.io" target="_blank">
     <div class="card-kicker">Personal Website <span class="badge badge-ext">github pages</span></div>
     <h3>nvishvajeet.github.io</h3>
-    <p>Jekyll static site. Manual publish to GitHub Pages.</p>
+    <p>Jekyll + vanilla JS static site. Dark mode toggle, data-driven content rendering, responsive typography. <strong>Use this for static sites, landing pages, or content-heavy pages.</strong></p>
     <div class="reuse-tags">
-      <span class="tag tag-ui">Jekyll templates</span>
+      <span class="tag tag-ui">dark mode toggle</span>
+      <span class="tag tag-ui">data-driven rendering</span>
+      <span class="tag tag-ui">IBM Plex typography</span>
+      <span class="tag tag-infra">Jekyll templates</span>
       <span class="tag tag-infra">GitHub Pages deploy</span>
     </div>
+    <p style="font-size:11px;color:var(--amber);margin-top:8px">📄 <code>PROJECT_ASSETS.md</code> at repo root — dark mode pattern, component classes, data rendering</p>
   </a>
 
   <div class="card" style="border-style:dashed;opacity:0.6">
     <div class="card-kicker">Parallel Greedy Matching <span class="badge badge-local">local only</span></div>
     <h3>FOCS 2026 Paper</h3>
-    <p>Research algorithms project. No web interface.</p>
+    <p>Research algorithms project. No web interface. Python computation patterns only.</p>
     <div class="reuse-tags">
       <span class="tag tag-data">Python algorithms</span>
     </div>
   </div>
 
+</div>
+
+<!-- ═══════════════ HOW TO BUILD FROM THESE PROJECTS ═══════════════ -->
+<div class="section-title">Building New Things — What to Take From Where</div>
+<div class="inner" style="margin-bottom:20px">
+  <table style="width:100%;font-size:12px;border-collapse:collapse">
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0;font-weight:700;width:35%">I need to build...</td><td style="padding:6px 8px;font-weight:700">Start from...</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">A new ERP module or admin panel</td><td style="padding:6px 8px"><strong>Lab Scheduler</strong> — copy <code>_page_macros.html</code>, use tile grid, auth decorators, module system. Read <code>docs/ERP_MODULE_BUILDER.md</code>.</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">A dashboard with charts and KPIs</td><td style="padding:6px 8px"><strong>Lab Scheduler</strong> — <code>stat_blob</code>, <code>kpi_grid</code>, <code>chart_bar</code> macros. CSS tone system for status colors.</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">A data processing pipeline</td><td style="padding:6px 8px"><strong>Portfolio Plan</strong> — linear pipeline pattern, <code>run.sh</code> orchestrator, JSON state contract.</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">A static website or landing page</td><td style="padding:6px 8px"><strong>Website</strong> — Jekyll layout, dark mode toggle, responsive typography. Or use Lab Scheduler CSS for richer components.</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">API data fetching (India finance)</td><td style="padding:6px 8px"><strong>Portfolio Plan</strong> — mfapi.in (mutual funds), frankfurter.app (FX), RSS feeds. No API keys needed.</td></tr>
+    <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 0">User auth + role-based access</td><td style="padding:6px 8px"><strong>Lab Scheduler</strong> — <code>@login_required</code>, <code>@role_required</code>, <code>request_scope_sql</code>, card policy pattern.</td></tr>
+    <tr><td style="padding:6px 0">Dark mode for any project</td><td style="padding:6px 8px"><strong>Lab Scheduler</strong> (CSS variables on <code>:root[data-theme]</code>) or <strong>Website</strong> (localStorage + system preference JS).</td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--muted);margin-top:10px"><strong>Rule:</strong> Always read the target project's <code>PROJECT_ASSETS.md</code> before copying code. It tells you exactly what's reusable and what's domain-specific.</p>
 </div>
 
 <!-- ═══════════════ STARTER PACK: UI TOOLKIT ═══════════════ -->

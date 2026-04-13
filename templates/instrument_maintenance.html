@@ -72,7 +72,7 @@
   </article>
   {% endif %}
 
-  <article class="card tile" style="grid-column: span {{ 3 if can_add else 6 }};" data-vis="{{ V }}">
+  <article class="card tile {{ 'tile-span-3' if can_add else 'tile-full-width' }}" data-vis="{{ V }}">
     {{ card_heading("HISTORY", entries|length|string ~ " entries") }}
     {% if entries %}
     <div class="activity-feed" data-vis="{{ V }}">

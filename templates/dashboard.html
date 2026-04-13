@@ -12,27 +12,26 @@
        severity accent on critical, amber on warning, ink on
        info. Each notice is a terminal-style card with a
        monospaced SCOPE eyebrow + severity badge. ── #}
-  {% if module_enabled('notifications') and active_notices %}
+  {% if module_enabled('notifications') %}
   <article class="card tile tile-dash-noticeboard" data-vis="{{ V }}">
-    {{ card_heading("NOTICEBOARD", active_notices|length|string ~ " active") }}
+    {{ card_heading("NOTICEBOARD", (active_notices|length|string ~ " active") if active_notices else "All caught up") }}
+    {% if active_notices %}
     <ul class="notice-list" data-vis="{{ V }}">
       {% for n in active_notices %}
-      <li class="notice notice-{{ n.severity }} notice-clickable" data-vis="{{ V }}">
-        <div class="notice-link" data-vis="{{ V }}">
-          <div class="notice-head" data-vis="{{ V }}">
-            <span class="notice-severity-dot notice-dot-{{ n.severity }}" data-vis="{{ V }}"></span>
-            <span class="notice-eyebrow" data-vis="{{ V }}">{{ n.scope_label|upper }}</span>
-            <span class="notice-severity notice-severity-{{ n.severity }}" data-vis="{{ V }}">{{ n.severity|upper }}</span>
-            <span class="notice-date hint" data-vis="{{ V }}">{{ n.created_at[:10] }}</span>
-          </div>
-          <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
-          {% if n.body %}
-          <p class="notice-body notice-body-clamp" data-vis="{{ V }}">{{ n.body }}</p>
-          {% endif %}
-        </div>
+      <li class="notice notice-{{ n.severity }}" data-vis="{{ V }}">
+        <a class="notice-link clickable-row" href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">
+          <span class="notice-severity-dot notice-dot-{{ n.severity }}" data-vis="{{ V }}"></span>
+          <span class="notice-content" data-vis="{{ V }}">
+            <strong class="notice-subject" data-vis="{{ V }}">{{ n.subject }}</strong>
+            <span class="notice-meta hint" data-vis="{{ V }}">{{ n.scope_label }} · {{ time_ago(n.created_at) }}</span>
+          </span>
+        </a>
       </li>
       {% endfor %}
     </ul>
+    {% else %}
+    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">✓ All caught up — no active notices</p>
+    {% endif %}
   </article>
   {% endif %}
 

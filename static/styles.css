@@ -9672,3 +9672,17 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .finance-tiles .toggleable-form summary { padding: 0.6rem 0.75rem; }
 .finance-tiles .card { min-height: 3rem; }
 .finance-tiles .hint { padding: 0.3rem 0; }
+
+/* Dashboard noticeboard — clean list layout */
+.tile-dash-noticeboard .notice-list { list-style: none; padding: 0; margin: 0; }
+.tile-dash-noticeboard .notice { border-bottom: 1px solid var(--line); }
+.tile-dash-noticeboard .notice:last-child { border-bottom: none; }
+.tile-dash-noticeboard .notice-link {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 0.75rem; text-decoration: none; color: inherit;
+  border-radius: 8px; transition: background 0.12s;
+}
+.tile-dash-noticeboard .notice-link:hover { background: var(--hover, rgba(0,0,0,0.03)); }
+.tile-dash-noticeboard .notice-content { flex: 1; min-width: 0; }
+.tile-dash-noticeboard .notice-subject { display: block; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-dash-noticeboard .notice-meta { display: block; font-size: 0.72rem; margin-top: 0.15rem; }

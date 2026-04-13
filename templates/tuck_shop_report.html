@@ -13,6 +13,7 @@
     <form method="get" data-vis="{{ V }}">
       <input type="date" name="date" value="{{ report_date }}" onchange="this.form.submit()" data-vis="{{ V }}">
     </form>
+    <a href="{{ url_for('tuck_shop_report_csv', date=report_date) }}" class="btn" data-vis="{{ V }}">Export CSV</a>
   </div>
 </header>
 
@@ -68,6 +69,64 @@
       </p>
     </div>
   </article>
+
+  {# ── UPI Transactions for Bank Matching ── #}
+  {% if upi_transactions or upi_sales %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("UPI TRANSACTION LOG", "For bank statement reconciliation") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Source</th>
+          <th data-vis="{{ V }}">Ref #</th>
+          <th data-vis="{{ V }}">UPI / Transaction Ref</th>
+          <th class="num" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Detail</th>
+          <th data-vis="{{ V }}">Matched</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for t in upi_transactions %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">Token</span></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ "%03d"|format(t.token_number) }}</code></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ t.payment_ref }}</code></td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</td>
+          <td data-vis="{{ V }}">{{ t.meal_type|title }} — {{ t.student_name or "Walk-in" }}</td>
+          <td data-vis="{{ V }}">
+            {% if t.bank_matched %}
+            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Matched</span>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% for s in upi_sales %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">POS</span></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">S-{{ s.id }}</code></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ s.payment_ref }}</code></td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(s.total_amount) }}</td>
+          <td data-vis="{{ V }}">{{ s.sale_time[:5] if s.sale_time else "" }} — {{ s.cashier_name or "" }}</td>
+          <td data-vis="{{ V }}">
+            {% if s.bank_matched %}
+            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Matched</span>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        Match these UPI refs against the bank statement. Future: upload bank PDF for auto-matching.
+      </p>
+    </div>
+  </article>
+  {% endif %}
 
   {# ── Top Items ── #}
   {% if top_items %}

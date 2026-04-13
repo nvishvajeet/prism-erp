@@ -131,6 +131,47 @@
       redeem(parseInt(card.dataset.token));
     });
   });
+
+  // Auto-poll for new tokens every 10s
+  var queueEl = document.querySelector('.quick-intake-grid');
+  var kpiPending = document.querySelector('.kpi-value');  // first one = pending count
+  function pollPending(){
+    fetch('{{ url_for("tuck_shop_api_pending_tokens") }}')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        // Update KPI counts
+        var kpis = document.querySelectorAll('.kpi-value');
+        if(kpis.length >= 2){
+          kpis[0].textContent = data.pending.length;
+          kpis[1].textContent = data.redeemed_count;
+        }
+        // Rebuild queue if new tokens appeared
+        if(!queueEl) return;
+        var existing = new Set();
+        queueEl.querySelectorAll('.redeem-card').forEach(function(c){
+          existing.add(parseInt(c.dataset.token));
+        });
+        data.pending.forEach(function(t){
+          if(existing.has(t.token_number)) return;
+          // New token — add to queue
+          var card = document.createElement('div');
+          card.className = 'quick-intake-card quick-intake-card-pending redeem-card';
+          card.dataset.token = t.token_number;
+          card.style.cursor = 'pointer';
+          var pad = ('000' + t.token_number).slice(-3);
+          card.innerHTML =
+            '<div class="quick-intake-card-body">' +
+              '<span style="font-size:2.5rem;font-weight:900;font-family:monospace;color:var(--tone-amber);">#' + pad + '</span>' +
+              '<span class="badge">' + t.meal_type.charAt(0).toUpperCase() + t.meal_type.slice(1) + '</span>' +
+              '<span>' + (t.student_name || 'Walk-in') + '</span>' +
+              '<span class="hint">₹' + t.amount_paid + '</span>' +
+            '</div>';
+          card.addEventListener('click', function(){ redeem(t.token_number); });
+          queueEl.appendChild(card);
+        });
+      }).catch(function(){});
+  }
+  setInterval(pollPending, 10000);
 })();
 </script>
 {% endblock %}

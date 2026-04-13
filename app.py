@@ -96,6 +96,34 @@ DEMO_ROLE_SWITCHES = {
     "professor": {"label": "Approver", "email": "approver@catalyst.local"},
 }
 
+# ─── ERP Portal definitions ────────────────────────────────────────
+# Each portal is a distinct "house" that users enter.  The `modules`
+# list controls which nav items and route groups are visible.
+ERP_PORTALS = {
+    "lab": {
+        "name": "Lab R&D",
+        "tagline": "Instruments · Samples · Grants · Compute",
+        "icon": "🔬",
+        "color": "blue",
+        "modules": [
+            "instruments", "schedule", "requests", "grants",
+            "finance", "compute", "inbox", "notifications",
+            "todos", "admin",
+        ],
+    },
+    "hq": {
+        "name": "Ravikiran Group HQ",
+        "tagline": "Mess · Tuck Shop · Attendance · Vehicles · Payroll · HR",
+        "icon": "🏢",
+        "color": "green",
+        "modules": [
+            "mess", "tuck_shop", "attendance", "vehicles",
+            "payroll", "personnel", "finance", "filing",
+            "inbox", "notifications", "todos", "admin",
+        ],
+    },
+}
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
@@ -336,8 +364,11 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {
             "tuck_shop_dashboard", "tuck_shop_terminal", "tuck_shop_items_manage",
             "tuck_shop_token_issue", "tuck_shop_token_redeem",
-            "tuck_shop_daily_report", "tuck_shop_api_record_sale",
-            "tuck_shop_api_issue_token", "tuck_shop_api_redeem_token",
+            "tuck_shop_daily_report", "tuck_shop_report_csv",
+            "tuck_shop_api_record_sale", "tuck_shop_api_issue_token",
+            "tuck_shop_api_redeem_token", "tuck_shop_api_void_token",
+            "tuck_shop_api_pending_tokens", "tuck_shop_api_today_stats",
+            "tuck_shop_item_edit", "tuck_shop_item_toggle",
         },
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
@@ -376,20 +407,56 @@ def module_enabled(name: str) -> bool:
     return name in ENABLED_MODULES
 
 
+def _user_portals(user_id: int) -> list:
+    """Get all ERP portals this user belongs to."""
+    return query_all(
+        """SELECT ep.*, eup.portal_role, eup.is_default
+           FROM erp_portals ep
+           JOIN erp_user_portals eup ON eup.portal_id = ep.id
+           WHERE eup.user_id = ? AND ep.is_active = 1
+           ORDER BY eup.is_default DESC, ep.sort_order""",
+        (user_id,),
+    )
+
+
+def _active_portal_modules() -> set:
+    """Get modules for the currently active portal from session.
+    Returns ALL_MODULES if no portal is selected (backwards compat)."""
+    portal_slug = session.get("active_portal")
+    if not portal_slug:
+        return ALL_MODULES
+    cfg = ERP_PORTALS.get(portal_slug)
+    if not cfg:
+        return ALL_MODULES
+    return set(cfg["modules"])
+
+
+def _active_portal_config() -> dict | None:
+    """Get the config dict for the active portal, or None."""
+    slug = session.get("active_portal")
+    if slug and slug in ERP_PORTALS:
+        return {"slug": slug, **ERP_PORTALS[slug]}
+    return None
+
+
 def build_nav_items(user, access_profile, is_owner):
     """Build sorted list of nav item dicts from MODULE_REGISTRY.
 
     Each item: {key, label, icon, url, active, badge, nav_type, meta}
     Only includes modules that are enabled, have nav_order > 0,
-    and pass their access gate.
+    pass their access gate, AND belong to the active ERP portal.
     """
     from flask import request as _req, url_for as _url_for
     endpoint = _req.endpoint or ""
+    portal_modules = _active_portal_modules()
     items = []
     for key, meta in sorted(MODULE_REGISTRY.items(), key=lambda kv: kv[1].get("nav_order", 50)):
         if meta.get("nav_order", 0) <= 0:
             continue
         if not module_enabled(key):
+            continue
+        # Portal filter: only show modules belonging to the active portal
+        if key not in portal_modules and key not in ("admin", "inbox", "notifications", "todos"):
             continue
         access_fn = meta.get("nav_access")
         if access_fn and not access_fn(access_profile, is_owner):
@@ -5343,6 +5410,36 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_ai_queue_status ON ai_advisor_queue(status);
             CREATE INDEX IF NOT EXISTS idx_ai_queue_user ON ai_advisor_queue(user_id);
             CREATE INDEX IF NOT EXISTS idx_ai_queue_batch ON ai_advisor_queue(batch_id);
+
+            -- ERP Portal system: multi-tenant portal separation
+            -- Each portal is a distinct ERP "house" (e.g. Ravikiran HQ, Lab R&D)
+            CREATE TABLE IF NOT EXISTS erp_portals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                tagline TEXT NOT NULL DEFAULT '',
+                icon TEXT NOT NULL DEFAULT '',
+                color TEXT NOT NULL DEFAULT 'blue',
+                modules TEXT NOT NULL DEFAULT '[]',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+
+            -- Which users belong to which portals (many-to-many)
+            CREATE TABLE IF NOT EXISTS erp_user_portals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                portal_id INTEGER NOT NULL,
+                portal_role TEXT NOT NULL DEFAULT 'member',
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (portal_id) REFERENCES erp_portals(id),
+                UNIQUE (user_id, portal_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_erp_user_portals_user ON erp_user_portals(user_id);
+            CREATE INDEX IF NOT EXISTS idx_erp_user_portals_portal ON erp_user_portals(portal_id);
         """)
 
         # Additive column migrations for v1.1.0
@@ -5397,11 +5494,14 @@ def init_db() -> None:
     _seed_demo_vendors()
     _seed_demo_companies()
     _seed_demo_mess_students()
+    _seed_demo_tuck_shop_items()
     # v2.1 — seed software catalog for compute scheduler
     try:
         _seed_software_catalog()
     except Exception:
         pass
+    # v3.0 — seed ERP portals and assign all users to both portals by default.
+    _seed_erp_portals()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -5409,6 +5509,39 @@ def init_db() -> None:
     _drop_legacy_finance_columns()
     # v2.0.2 — sweep stale debug/trace logs older than 7 days.
     _purge_stale_logs()
+
+
+def _seed_erp_portals() -> None:
+    """Seed the two ERP portals and assign all existing users to both.
+    Idempotent — skips if portals already exist."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) FROM erp_portals").fetchone()[0]
+        if existing:
+            return
+        for slug, cfg in ERP_PORTALS.items():
+            db.execute(
+                "INSERT INTO erp_portals (slug, name, tagline, icon, color, modules, sort_order, is_active, created_at) VALUES (?,?,?,?,?,?,?,1,?)",
+                (slug, cfg["name"], cfg["tagline"], cfg["icon"], cfg["color"],
+                 json.dumps(cfg["modules"]), 0 if slug == "lab" else 1, now_iso()),
+            )
+        portals = db.execute("SELECT id, slug FROM erp_portals").fetchall()
+        users = db.execute("SELECT id FROM users").fetchall()
+        for u in users:
+            for p in portals:
+                try:
+                    db.execute(
+                        "INSERT OR IGNORE INTO erp_user_portals (user_id, portal_id, portal_role, is_default, created_at) VALUES (?,?,?,?,?)",
+                        (u[0], p[0], "member", 1 if p[1] == "lab" else 0, now_iso()),
+                    )
+                except Exception:
+                    pass
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 
 def _purge_stale_logs(retention_days: int = 7) -> None:
@@ -6186,6 +6319,47 @@ def _seed_demo_mess_students() -> None:
                     hostel, room_number, meal_plan, phone, qr_token, company_id, is_active, created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?,1,?)""",
                 (name, roll, dept, year, hostel, room, plan, phone, qr_token, co_id, now),
+            )
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+def _seed_demo_tuck_shop_items() -> None:
+    """Seed demo tuck shop catalog. DEMO_MODE only, idempotent."""
+    if not DEMO_MODE:
+        return
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM tuck_shop_items").fetchone()["c"]
+        if existing > 0:
+            return
+        now = now_iso()
+        items = [
+            ("Samosa", 15, "snack", 1),
+            ("Vada Pav", 20, "snack", 2),
+            ("Sandwich", 30, "snack", 3),
+            ("Biscuit Pack", 10, "snack", 4),
+            ("Maggi", 25, "snack", 5),
+            ("Chai", 10, "beverage", 1),
+            ("Coffee", 15, "beverage", 2),
+            ("Cold Coffee", 30, "beverage", 3),
+            ("Lemon Soda", 20, "beverage", 4),
+            ("Water Bottle", 20, "beverage", 5),
+            ("Thali", 60, "meal", 1),
+            ("Biryani", 80, "meal", 2),
+            ("Paratha Plate", 40, "meal", 3),
+            ("Notebook", 25, "stationery", 1),
+            ("Pen", 10, "stationery", 2),
+        ]
+        cur = db.cursor()
+        for name, price, cat, order in items:
+            cur.execute(
+                "INSERT INTO tuck_shop_items (name, price, category, sort_order, created_at) VALUES (?, ?, ?, ?, ?)",
+                (name, price, cat, order, now),
             )
         db.commit()
     except Exception:
@@ -7114,6 +7288,9 @@ def inject_globals():
         "instrument_photo_src": instrument_photo_src,
         "request_card_policy_user": lambda request_row: request_card_policy(user, request_row),
         "request_card_can_view_field_user": lambda request_row, field_name: request_card_field_allowed(user, request_row, field_name),
+        # ERP Portal context
+        "active_portal": _active_portal_config(),
+        "user_portals": _user_portals(user["id"]) if user else [],
     }
 
 
@@ -10225,12 +10402,48 @@ def login():
                 notice=role_notice,
             )
             flash(f"Signed in as {user['name']}.", "success")
+            # Check ERP portals — auto-enter if single portal, show picker if multiple
+            portals = _user_portals(user["id"])
+            if len(portals) == 1:
+                session["active_portal"] = portals[0]["slug"]
+            elif len(portals) > 1:
+                return redirect(url_for("portal_picker"))
+            # else: no portals assigned → show all modules (backwards compat)
             return redirect(url_for("role_manual"))
         # Log failed attempt — use user id if email matched but password wrong
         failed_uid = user["id"] if user else None
         log_action(failed_uid, "auth", failed_uid or 0, "login_failed", {"email": email, "ip": request.remote_addr or ""})
         flash("Invalid login.", "error")
     return render_template("login.html")
+
+
+@app.route("/portals")
+@login_required
+def portal_picker():
+    """Portal picker — shows available ERP 'houses' for multi-portal users."""
+    user = current_user()
+    portals = _user_portals(user["id"])
+    if len(portals) <= 1:
+        if portals:
+            session["active_portal"] = portals[0]["slug"]
+        return redirect(url_for("index"))
+    return render_template("portal_picker.html", portals=portals)
+
+
+@app.route("/portals/enter/<slug>")
+@login_required
+def portal_enter(slug: str):
+    """Enter a specific ERP portal — sets session context."""
+    user = current_user()
+    portals = _user_portals(user["id"])
+    valid_slugs = {p["slug"] for p in portals}
+    if slug not in valid_slugs:
+        flash("You don't have access to that portal.", "warning")
+        return redirect(url_for("portal_picker"))
+    session["active_portal"] = slug
+    portal_name = ERP_PORTALS.get(slug, {}).get("name", slug)
+    flash(f"Entered {portal_name}.", "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/logout")
@@ -22143,9 +22356,169 @@ def tuck_shop_daily_report():
            ORDER BY total_revenue DESC LIMIT 15""",
         (report_date,),
     )
+    # UPI transactions for bank matching
+    upi_transactions = query_all(
+        """SELECT t.token_number, t.payment_ref, t.amount_paid, t.meal_type,
+                  t.issued_at, t.bank_matched, ms.name AS student_name
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           WHERE t.issue_date = ? AND t.payment_method = 'qr' AND t.payment_ref != ''
+           ORDER BY t.token_number""",
+        (report_date,),
+    )
+    upi_sales = query_all(
+        """SELECT ts.id, ts.payment_ref, ts.total_amount, ts.sale_time,
+                  ts.bank_matched, u.name AS cashier_name
+           FROM tuck_shop_sales ts
+           LEFT JOIN users u ON u.id = ts.cashier_user_id
+           WHERE ts.sale_date = ? AND ts.payment_method = 'qr' AND ts.payment_ref != ''
+           ORDER BY ts.sale_time""",
+        (report_date,),
+    )
     return render_template("tuck_shop_report.html",
                            report_date=report_date, sales_summary=sales_summary,
-                           token_summary=token_summary, top_items=top_items)
+                           token_summary=token_summary, top_items=top_items,
+                           upi_transactions=upi_transactions, upi_sales=upi_sales)
+
+
+@app.route("/tuck-shop/api/token/void", methods=["POST"])
+@login_required
+def tuck_shop_api_void_token():
+    """AJAX: Void a token (cancellation at payment counter)."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(force=True)
+    token_number = int(data.get("token_number", 0))
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    token = query_one(
+        "SELECT * FROM tuck_shop_tokens WHERE token_number = ? AND issue_date = ?",
+        (token_number, today),
+    )
+    if not token:
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} not found"})
+    if token["status"] == "redeemed":
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} already redeemed — cannot void"})
+    if token["status"] == "void":
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} already voided"})
+    execute("UPDATE tuck_shop_tokens SET status = 'void' WHERE id = ?", (token["id"],))
+    return jsonify({"ok": True, "token_number": token_number})
+
+
+@app.route("/tuck-shop/items/<int:item_id>/edit", methods=["POST"])
+@login_required
+def tuck_shop_item_edit(item_id: int):
+    """Update a tuck shop item's price, name, or category."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        abort(403)
+    item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
+    if not item:
+        abort(404)
+    name = request.form.get("name", item["name"]).strip()
+    price = float(request.form.get("price", item["price"]))
+    category = request.form.get("category", item["category"]).strip()
+    execute("UPDATE tuck_shop_items SET name = ?, price = ?, category = ? WHERE id = ?",
+            (name, price, category, item_id))
+    flash(f"Updated {name} → ₹{price:.0f}", "success")
+    return redirect(url_for("tuck_shop_items_manage"))
+
+
+@app.route("/tuck-shop/report/csv")
+@login_required
+def tuck_shop_report_csv():
+    """CSV export of daily tuck shop report."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        abort(403)
+    from datetime import date as _date
+    report_date = request.args.get("date", _date.today().isoformat())
+    tokens = query_all(
+        """SELECT t.token_number, t.meal_type, t.payment_method, t.payment_ref,
+                  t.amount_paid, t.status, t.issued_at, t.redeemed_at,
+                  ms.name AS student_name, ms.roll_number
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           WHERE t.issue_date = ? ORDER BY t.token_number""",
+        (report_date,),
+    )
+    sales = query_all(
+        """SELECT ts.id, ts.sale_time, ts.payment_method, ts.payment_ref,
+                  ts.total_amount, u.name AS cashier_name
+           FROM tuck_shop_sales ts
+           LEFT JOIN users u ON u.id = ts.cashier_user_id
+           WHERE ts.sale_date = ? ORDER BY ts.sale_time""",
+        (report_date,),
+    )
+    import csv, io
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["=== TOKENS ==="])
+    w.writerow(["Token#", "Meal", "Payment", "UPI Ref", "Amount", "Status",
+                "Student", "Roll No", "Issued At", "Redeemed At"])
+    for t in tokens:
+        w.writerow([f"#{t['token_number']:03d}", t["meal_type"], t["payment_method"],
+                    t["payment_ref"] or "", f"{t['amount_paid']:.0f}", t["status"],
+                    t["student_name"] or "Walk-in", t["roll_number"] or "",
+                    t["issued_at"] or "", t["redeemed_at"] or ""])
+    w.writerow([])
+    w.writerow(["=== POS SALES ==="])
+    w.writerow(["Sale#", "Time", "Payment", "UPI Ref", "Amount", "Cashier"])
+    for s in sales:
+        w.writerow([s["id"], s["sale_time"] or "", s["payment_method"],
+                    s["payment_ref"] or "", f"{s['total_amount']:.0f}", s["cashier_name"] or ""])
+    return app.response_class(
+        out.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=tuck_shop_{report_date}.csv"},
+    )
+
+
+@app.route("/tuck-shop/api/token/pending")
+@login_required
+def tuck_shop_api_pending_tokens():
+    """AJAX: Live-refresh pending tokens for serving counter."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify([])
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    rows = query_all(
+        """SELECT t.token_number, t.meal_type, t.amount_paid, ms.name AS student_name
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           WHERE t.issue_date = ? AND t.status = 'issued'
+           ORDER BY t.token_number ASC""",
+        (today,),
+    )
+    redeemed = query_one(
+        "SELECT COUNT(*) AS c FROM tuck_shop_tokens WHERE issue_date = ? AND status = 'redeemed'",
+        (today,),
+    )
+    return jsonify({"pending": [dict(r) for r in rows],
+                    "redeemed_count": redeemed["c"] if redeemed else 0})
+
+
+@app.route("/tuck-shop/api/today-stats")
+@login_required
+def tuck_shop_api_today_stats():
+    """AJAX: Live stats for payment counter header."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({})
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    stats = query_one(
+        """SELECT COUNT(*) AS total,
+                  SUM(CASE WHEN status='issued' THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN status='redeemed' THEN 1 ELSE 0 END) AS redeemed,
+                  COALESCE(SUM(amount_paid), 0) AS total_collected,
+                  COALESCE(SUM(CASE WHEN payment_method='cash' THEN amount_paid ELSE 0 END), 0) AS cash,
+                  COALESCE(SUM(CASE WHEN payment_method='qr' THEN amount_paid ELSE 0 END), 0) AS qr
+           FROM tuck_shop_tokens WHERE issue_date = ?""",
+        (today,),
+    )
+    return jsonify(dict(stats) if stats else {})
 
 
 @app.route("/quickentry", methods=["GET", "POST"])

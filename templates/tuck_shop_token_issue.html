@@ -13,6 +13,17 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
+  {# ── Live Stats ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div id="liveStats" class="control-flex-wrap" style="padding:0.5rem 0.75rem;gap:1rem;text-align:center;" data-vis="{{ V }}">
+      <div style="flex:1;min-width:80px;" data-vis="{{ V }}"><p class="kpi-value" id="statTotal" data-vis="{{ V }}">—</p><p class="hint" data-vis="{{ V }}">Issued</p></div>
+      <div style="flex:1;min-width:80px;" data-vis="{{ V }}"><p class="kpi-value" id="statPending" style="color:var(--tone-amber);" data-vis="{{ V }}">—</p><p class="hint" data-vis="{{ V }}">Pending</p></div>
+      <div style="flex:1;min-width:80px;" data-vis="{{ V }}"><p class="kpi-value" id="statRedeemed" style="color:var(--tone-green);" data-vis="{{ V }}">—</p><p class="hint" data-vis="{{ V }}">Served</p></div>
+      <div style="flex:1;min-width:80px;" data-vis="{{ V }}"><p class="kpi-value" id="statCash" data-vis="{{ V }}">—</p><p class="hint" data-vis="{{ V }}">Cash</p></div>
+      <div style="flex:1;min-width:80px;" data-vis="{{ V }}"><p class="kpi-value" id="statQR" data-vis="{{ V }}">—</p><p class="hint" data-vis="{{ V }}">QR</p></div>
+    </div>
+  </article>
+
   {# ── Issue Token Widget ── #}
   <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("ISSUE TOKEN", "Student pays → gets a token number") }}
@@ -66,13 +77,16 @@
     {{ card_heading("PENDING TOKENS", "Issued but not yet redeemed") }}
     <div class="quick-intake-grid" data-vis="{{ V }}">
       {% for t in pending %}
-      <div class="quick-intake-card quick-intake-card-pending" data-vis="{{ V }}">
+      <div class="quick-intake-card quick-intake-card-pending" id="token-{{ t.token_number }}" data-vis="{{ V }}">
         <div class="quick-intake-card-body" data-vis="{{ V }}">
           <span style="font-size:2rem;font-weight:900;font-family:monospace;" data-vis="{{ V }}">#{{ "%03d"|format(t.token_number) }}</span>
           <span class="badge" data-vis="{{ V }}">{{ t.meal_type|title }}</span>
           <span data-vis="{{ V }}">{{ t.student_name or "Walk-in" }}</span>
           <span class="badge {% if t.payment_method == 'qr' %}status-active{% endif %}" data-vis="{{ V }}">{{ t.payment_method|upper }}</span>
           <span class="hint" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</span>
+        </div>
+        <div class="quick-intake-actions" data-vis="{{ V }}">
+          <button class="qi-btn qi-btn-decline void-btn" data-token="{{ t.token_number }}" title="Void / Cancel" data-vis="{{ V }}">✗</button>
         </div>
       </div>
       {% endfor %}
@@ -136,6 +150,44 @@
     }, 300);
   });
 
+  // Live stats refresh
+  function refreshStats(){
+    fetch('{{ url_for("tuck_shop_api_today_stats") }}')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        document.getElementById('statTotal').textContent = d.total || 0;
+        document.getElementById('statPending').textContent = d.pending || 0;
+        document.getElementById('statRedeemed').textContent = d.redeemed || 0;
+        document.getElementById('statCash').textContent = '₹' + (d.cash || 0).toLocaleString('en-IN');
+        document.getElementById('statQR').textContent = '₹' + (d.qr || 0).toLocaleString('en-IN');
+      }).catch(function(){});
+  }
+  refreshStats();
+  setInterval(refreshStats, 15000);
+
+  // Void token
+  document.querySelectorAll('.void-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var num = parseInt(btn.dataset.token);
+      if(!confirm('Void token #' + ('000'+num).slice(-3) + '?')) return;
+      fetch('{{ url_for("tuck_shop_api_void_token") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+        body: JSON.stringify({token_number: num})
+      })
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.ok){
+          var card = document.getElementById('token-' + num);
+          if(card) card.style.opacity = '0.3';
+          refreshStats();
+        } else {
+          alert(data.error || 'Error');
+        }
+      });
+    });
+  });
+
   // Issue
   issueBtn.addEventListener('click', function(){
     var meal = mealSel.value;
@@ -166,6 +218,8 @@
         rollInput.value = '';
         rollInput.dataset.studentId = '';
         studentName.textContent = '';
+        payRefInput.value = '';
+        refreshStats();
       } else {
         result.innerHTML = '<span style="color:var(--tone-red);">' + (data.error||'Error') + '</span>';
       }

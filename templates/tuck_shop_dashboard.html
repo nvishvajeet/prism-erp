@@ -69,6 +69,7 @@
           <th data-vis="{{ V }}">Meal</th>
           <th data-vis="{{ V }}">Student</th>
           <th data-vis="{{ V }}">Payment</th>
+          <th data-vis="{{ V }}">Ref</th>
           <th class="num" data-vis="{{ V }}">Amount</th>
           <th data-vis="{{ V }}">Status</th>
           <th data-vis="{{ V }}">Issued By</th>
@@ -81,6 +82,7 @@
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ t.meal_type|title }}</span></td>
           <td data-vis="{{ V }}">{{ t.student_name or "Walk-in" }}</td>
           <td data-vis="{{ V }}"><span class="badge {% if t.payment_method == 'qr' %}status-active{% endif %}" data-vis="{{ V }}">{{ t.payment_method|upper }}</span></td>
+          <td data-vis="{{ V }}">{% if t.payment_ref %}<code class="inline-code" style="font-size:0.75rem;" data-vis="{{ V }}">{{ t.payment_ref[:15] }}{{ "…" if t.payment_ref|length > 15 else "" }}</code>{% else %}—{% endif %}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</td>
           <td data-vis="{{ V }}">
             {% if t.status == 'redeemed' %}

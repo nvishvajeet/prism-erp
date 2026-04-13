@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | docs-v2-gap-map | 2026-04-13 19:50 CEST | `docs/V2_GAP_MAP.md`, `docs/NEXT_WAVES.md`, `CLAIMS.md` | `docs: add v2 gap map and execution board` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

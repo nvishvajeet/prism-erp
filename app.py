@@ -540,6 +540,29 @@ def close_db(_exc: object) -> None:
         db.close()
 
 
+@app.route("/api/health")
+def health_check():
+    """Health check endpoint — returns system status as JSON.
+    No auth required (for monitoring tools, load balancers, cron checks)."""
+    import time
+    start = time.monotonic()
+    status = "ok"
+    db_ok = False
+    try:
+        row = query_one("SELECT COUNT(*) AS c FROM users")
+        db_ok = row is not None
+    except Exception:
+        status = "degraded"
+    elapsed_ms = (time.monotonic() - start) * 1000
+    return jsonify({
+        "status": status,
+        "database": "ok" if db_ok else "error",
+        "response_ms": round(elapsed_ms, 1),
+        "demo_mode": DEMO_MODE,
+        "version": "1.3.0",
+    })
+
+
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_upload(_exc):
     flash("Upload too large. Maximum file size is 100 MB.", "error")
@@ -12910,6 +12933,22 @@ def dev_panel():
         },
     }
 
+    # ── System entity counts ──────────────────────────────
+    entity_counts = {}
+    for table_name in ["users", "instruments", "sample_requests", "purchase_orders",
+                       "vendors", "companies", "vehicles", "salary_config",
+                       "mess_students", "mess_entries", "attendance", "leave_requests",
+                       "notices", "audit_logs", "compute_jobs", "letters"]:
+        try:
+            c = query_one(f"SELECT COUNT(*) AS c FROM {table_name}")
+            entity_counts[table_name] = c["c"] if c else 0
+        except Exception:
+            entity_counts[table_name] = "—"
+    # DB file size
+    db_size_mb = 0
+    if DB_PATH.exists():
+        db_size_mb = round(DB_PATH.stat().st_size / 1024 / 1024, 2)
+
     return render_template(
         "dev_panel.html",
         progress=progress,
@@ -12920,6 +12959,9 @@ def dev_panel():
         crawler_health=crawler_health,
         doc_files=DEV_PANEL_DOC_FILES,
         infra_stats=infra_stats,
+        entity_counts=entity_counts,
+        db_size_mb=db_size_mb,
+        enabled_modules=sorted(ENABLED_MODULES),
         server_now_iso=datetime.now().astimezone().isoformat(timespec="seconds"),
     )
 
@@ -19556,6 +19598,55 @@ Commands to parse:
                 (str(exc)[:200], now_iso(), pid),
             )
         return 0
+
+
+def mess_daily_summary():
+    """Generate a daily mess summary. Run via cron at 11pm:
+      55 22 * * * cd ~/ravikiran-services && .venv/bin/python -c "import app; app.mess_daily_summary()"
+
+    Returns a text summary suitable for WhatsApp/SMS to the manager."""
+    with app.app_context():
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        MEAL_RATES = {"breakfast": 35, "lunch": 65, "snacks": 25, "dinner": 55}
+        lines = [f"📊 CATALYST Mess Summary — {today}", ""]
+        total_meals = 0
+        total_cost = 0
+        for meal in MEAL_TYPES:
+            c = query_one(
+                "SELECT COUNT(*) AS c FROM mess_entries WHERE entry_date = ? AND meal_type = ?",
+                (today, meal),
+            )
+            cnt = c["c"] if c else 0
+            cost = cnt * MEAL_RATES.get(meal, 0)
+            total_meals += cnt
+            total_cost += cost
+            lines.append(f"  {meal.title():12s} {cnt:>5,} plates  ₹{cost:>8,.0f}")
+        lines.append(f"  {'TOTAL':12s} {total_meals:>5,} plates  ₹{total_cost:>8,.0f}")
+        lines.append("")
+        # Wastage if logged
+        prep = query_one(
+            "SELECT SUM(plates_prepared) AS p, SUM(plates_wasted) AS w FROM mess_prep_log WHERE prep_date = ?",
+            (today,),
+        )
+        if prep and prep["p"]:
+            waste_pct = (prep["w"] or 0) / prep["p"] * 100
+            lines.append(f"  Prepared: {prep['p']:,}  Wasted: {prep['w'] or 0:,}  ({waste_pct:.1f}%)")
+        # Active students
+        active = query_one("SELECT COUNT(*) AS c FROM mess_students WHERE is_active = 1")
+        if active:
+            utilization = (total_meals / (active["c"] * 4) * 100) if active["c"] > 0 else 0
+            lines.append(f"  Active students: {active['c']:,}  Utilization: {utilization:.0f}%")
+        summary = "\n".join(lines)
+        # Store as a notice for in-app viewing
+        execute(
+            """
+            INSERT INTO notices (title, body, category, is_active, created_at)
+            VALUES (?, ?, 'admin', 1, ?)
+            """,
+            (f"Mess Summary — {today}", summary, now_iso()),
+        )
+        return summary
 
 
 def check_command_queue():

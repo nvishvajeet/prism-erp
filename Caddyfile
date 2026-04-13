@@ -1,26 +1,29 @@
 # Caddy reverse proxy for goje.local
 # TLS terminated here using mkcert wildcard cert.
 # Gunicorn runs HTTP on 127.0.0.1:5055 behind this.
+#
+# URLs:
+#   https://lab.goje.local:8443        → scheduler app
+#   https://portfolio.goje.local:8443  → portfolio page
+#   https://goje.local:8443            → redirects to lab
 
 {
-	# Don't use Caddy's built-in ACME — we use mkcert certs
 	auto_https off
+	http_port 8080
+	https_port 8443
 }
 
-# Main domain — redirect to lab.goje.local
-https://goje.local {
+https://goje.local:8443 {
 	tls /Users/vishvajeetn/Documents/Scheduler/Main/cert.pem /Users/vishvajeetn/Documents/Scheduler/Main/key.pem
-	redir https://lab.goje.local{uri} permanent
+	redir https://lab.goje.local:8443{uri} permanent
 }
 
-# lab.goje.local — full scheduler app
-https://lab.goje.local {
+https://lab.goje.local:8443 {
 	tls /Users/vishvajeetn/Documents/Scheduler/Main/cert.pem /Users/vishvajeetn/Documents/Scheduler/Main/key.pem
 	reverse_proxy 127.0.0.1:5055
 }
 
-# portfolio.goje.local — direct link to portfolio page
-https://portfolio.goje.local {
+https://portfolio.goje.local:8443 {
 	tls /Users/vishvajeetn/Documents/Scheduler/Main/cert.pem /Users/vishvajeetn/Documents/Scheduler/Main/key.pem
 	reverse_proxy 127.0.0.1:5055
 }

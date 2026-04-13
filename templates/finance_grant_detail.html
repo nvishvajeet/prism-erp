@@ -93,25 +93,43 @@
   <article class="card tile tile-full-width tile-finance-outstanding" data-vis="{{ V }}">
     {{ card_heading("CHARGED SAMPLES", charged|length|string ~ " charged") }}
     {% if charged %}
-    <ul class="finance-invoice-list" data-vis="{{ V }}">
-      {% for inv in charged %}
-      <li class="finance-invoice-row finance-invoice-{{ inv.finance_status }}{% if inv.finance_status == 'paid' %} finance-invoice-paid-row{% endif %}" data-vis="{{ V }}">
-        <a href="{{ url_for('request_detail', request_id=inv.id) }}" class="finance-invoice-link" data-vis="{{ V }}">
-          <div class="finance-invoice-head" data-vis="{{ V }}">
-            <span class="finance-invoice-status notice-severity-{% if inv.finance_status == 'paid' %}info{% elif inv.finance_status in ('pending','partial') %}warning{% else %}info{% endif %}" data-vis="{{ V }}">{{ inv.finance_status|upper }}</span>
-            <strong class="finance-invoice-title" data-vis="{{ V }}">{{ inv.title }}</strong>
-            <span class="finance-invoice-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_paid or 0) }}{% if inv.amount_due and inv.amount_paid != inv.amount_due %} / ₹{{ "{:,.0f}".format(inv.amount_due) }}{% endif %}</span>
-          </div>
-          <div class="finance-invoice-meta hint" data-vis="{{ V }}">
-            <code class="inline-code" data-vis="{{ V }}">{{ inv.request_no }}</code> ·
-            <code class="inline-code" data-vis="{{ V }}">{{ inv.instrument_code }}</code> ·
-            {{ inv.requester_name or 'external' }}{% if inv.receipt_number %} · receipt {{ inv.receipt_number }}{% endif %} ·
-            {{ inv.created_at[:10] }}
-          </div>
-        </a>
-      </li>
-      {% endfor %}
-    </ul>
+    <div class="table-scroll" data-vis="{{ V }}">
+      <table class="sortable-table finance-charge-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Request #</th>
+            <th data-vis="{{ V }}">Sample</th>
+            <th data-vis="{{ V }}">Instrument</th>
+            <th data-vis="{{ V }}">Requester</th>
+            <th class="num" data-vis="{{ V }}">Amount</th>
+            <th data-vis="{{ V }}">Status</th>
+            <th data-vis="{{ V }}">Date</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for inv in charged %}
+          <tr class="clickable-row" data-href="{{ url_for('request_detail', request_id=inv.id) }}" data-vis="{{ V }}">
+            <td data-vis="{{ V }}"><code class="inline-code">{{ inv.request_no }}</code></td>
+            <td data-vis="{{ V }}">{{ inv.sample_name or inv.title }}</td>
+            <td data-vis="{{ V }}"><code class="inline-code">{{ inv.instrument_code }}</code> {{ inv.instrument_name }}</td>
+            <td data-vis="{{ V }}">{{ inv.requester_name or 'external' }}</td>
+            <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(inv.amount_due or 0) }}</td>
+            <td data-vis="{{ V }}">
+              <span class="badge status-{{ inv.finance_status }}">{{ inv.finance_status|upper }}</span>
+            </td>
+            <td data-vis="{{ V }}">{{ inv.created_at[:10] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <td colspan="4" data-vis="{{ V }}"><strong>Total</strong></td>
+            <td class="num" data-vis="{{ V }}"><strong>₹{{ "{:,.0f}".format(total_billed) }}</strong></td>
+            <td colspan="2" data-vis="{{ V }}"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
     {% else %}
     <p class="hint" style="padding: 0.5rem 0;" data-vis="{{ V }}">No samples charged to this grant yet.</p>
     {% endif %}

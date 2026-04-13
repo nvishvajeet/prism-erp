@@ -8000,7 +8000,7 @@ def finance_grant_detail(grant_id: int):
     charged = query_all(
         """
         SELECT
-          sr.id, sr.request_no, sr.title, sr.created_at, sr.sample_origin,
+          sr.id, sr.request_no, sr.title, sr.sample_name, sr.created_at, sr.sample_origin,
           COALESCE(inv.amount_due, 0) AS amount_due,
           COALESCE((
             SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = inv.id

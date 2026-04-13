@@ -275,6 +275,13 @@
       </label>
       <button type="submit" class="btn btn-primary btn-sm top-gap" data-vis="{{ V }}">Save</button>
     </form>
+    {% if instrument.default_grant_id %}
+    <div class="top-gap" data-vis="{{ V }}">
+      <a class="text-link" href="{{ url_for('finance_grant_detail', grant_id=instrument.default_grant_id) }}" data-vis="{{ V }}">
+        View grant charges &rarr;
+      </a>
+    </div>
+    {% endif %}
   </section>
   {% endif %}
 

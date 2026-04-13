@@ -3674,7 +3674,8 @@ code {
 }
 .request-tiles > .tile,
 .sitemap-tiles > .tile,
-.new-request-tiles > .tile { max-height: none; }
+.new-request-tiles > .tile,
+.instruments-tiles > .tile { max-height: none; overflow: visible; }
 /* Explainer tile: fixed height, details content scrolls inside.
    Opening "Show the full pipeline" never pushes other tiles. */
 .tile-request-explainer {

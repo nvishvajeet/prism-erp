@@ -2,11 +2,7 @@
 {% from "_page_macros.html" import card_heading, stat_blob, empty_state, chart_bar with context %}
 {% block content %}
 
-{# ─── PROJECT CONTROL banner — Mission Control header strip.
-     Always-visible status bar rendered above the tile grid. Four
-     status lights (stable / branch / dirty / crawlers) + a big
-     monospaced version tag, framed like a NASA consoles readout.
-     Replaces the compact inst-header that used to live here. ─── #}
+{# ─── 1. BANNER — PRISM · PROJECT CONTROL ─────────────── #}
 <header class="mc-banner" data-vis="{{ V }}">
   <div class="mc-banner-title" data-vis="{{ V }}">
     <span class="mc-banner-brand" data-vis="{{ V }}">PRISM</span>
@@ -32,11 +28,6 @@
       <span class="mc-light-label" data-vis="{{ V }}">CRAWLERS</span>
       <span class="mc-light-value" data-vis="{{ V }}">{% if progress.reports_latest_age_hours is none %}never{% elif progress.reports_latest_age_hours < 1 %}{{ (progress.reports_latest_age_hours * 60)|round(0, 'floor')|int }}m ago{% elif progress.reports_latest_age_hours < 24 %}{{ progress.reports_latest_age_hours|round(0, 'floor')|int }}h ago{% else %}stale{% endif %}</span>
     </div>
-    <div class="mc-light {% if progress.future_fixes.total == 0 %}mc-light-ok{% else %}mc-light-info{% endif %}" data-vis="{{ V }}">
-      <span class="mc-light-dot" aria-hidden="true"></span>
-      <span class="mc-light-label" data-vis="{{ V }}">v1.5.0</span>
-      <span class="mc-light-value" data-vis="{{ V }}">{{ progress.future_fixes.total }} TODO</span>
-    </div>
     <div class="mc-light mc-light-ok" data-vis="{{ V }}">
       <span class="mc-light-dot" aria-hidden="true"></span>
       <span class="mc-light-label" data-vis="{{ V }}">SESSION</span>
@@ -59,210 +50,58 @@
 {# ─── Tile Grid ──────────────────────────────────────── #}
 <div class="inst-tiles" data-vis="{{ V }}">
 
-  {# ─── Stable Release tile — the iOS-cadence answer to
-       "what's the current stable version?" Pulled straight from
-       `git tag --list` via `_dev_panel_progress()`, not from
-       CHANGELOG (which drifts). See PHILOSOPHY.md §3.1 for the
-       tag-often philosophy. ─── #}
-  <section class="card tile tile-dev-stable-release" id="devStableRelease" data-vis="{{ V }}">
-    {{ card_heading("STABLE RELEASE", "Latest tag on origin") }}
-    {% if progress.latest_tag and progress.latest_tag.tag %}
-    <div class="dev-stable-body" data-vis="{{ V }}">
-      <strong class="dev-stable-tag" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</strong>
-      {% if progress.latest_tag.sha %}
-      <div class="dev-stable-meta" data-vis="{{ V }}">
-        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.sha }}</code>
-        {% if progress.latest_tag.tagged_at %}
-        <span class="hint" data-vis="{{ V }}">tagged {{ progress.latest_tag.tagged_at[:16]|replace("T", " ") }}</span>
-        {% endif %}
+  {# ─── 2. INFRASTRUCTURE — Three engines + session stats ─── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("INFRASTRUCTURE", "Engines powering this build") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% for eng in infra_stats.engines %}
+      <div class="dp-metadata-row" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ eng.name }}</strong>
+        <span data-vis="{{ V }}">{{ eng.metric }}</span>
+        <small class="hint" data-vis="{{ V }}">{{ eng.detail }}</small>
       </div>
-      {% endif %}
-      {% if progress.latest_tag.subject %}
-      <p class="dev-stable-subject" data-vis="{{ V }}">{{ progress.latest_tag.subject }}</p>
-      {% endif %}
-      <p class="hint dev-stable-depth" data-vis="{{ V }}">
-        {% if progress.latest_tag.commits_since == 0 %}
-        HEAD is exactly this tag — nothing untagged to cut.
-        {% elif progress.latest_tag.commits_since == 1 %}
-        1 commit on trunk since this tag — candidate for the next patch.
-        {% else %}
-        {{ progress.latest_tag.commits_since }} commits on trunk since this tag — candidates for the next patch.
-        {% endif %}
-      </p>
-    </div>
-    {% else %}
-    {{ empty_state("No semver tags found. Cut the first one via `git tag -a v1.X.Y <sha>`.") }}
-    {% endif %}
-  </section>
-
-  {# ─── Latest Shipped tile — the HEAD commit as a "what just
-       landed" card. Different from HISTORY (which lists 6 recent)
-       and from PROGRESS (which counts today). This answers
-       "what's the freshest thing on trunk?" ─── #}
-  <section class="card tile tile-dev-latest-shipped" id="devLatestShipped" data-vis="{{ V }}">
-    {{ card_heading("LATEST SHIPPED", "HEAD commit") }}
-    {% if progress.latest_commit and progress.latest_commit.sha %}
-    <div class="dev-shipped-body" data-vis="{{ V }}">
-      <strong class="dev-shipped-subject" data-vis="{{ V }}">{{ progress.latest_commit.subject }}</strong>
-      <div class="dev-shipped-meta" data-vis="{{ V }}">
-        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_commit.sha }}</code>
-        <span class="hint" data-vis="{{ V }}">by {{ progress.latest_commit.author }}</span>
-        {% if progress.latest_commit.at %}
-        <span class="hint" data-vis="{{ V }}">· {{ progress.latest_commit.at[:16]|replace("T", " ") }}</span>
-        {% endif %}
-      </div>
-      {% if progress.latest_tag and progress.latest_tag.tag and progress.latest_tag.commits_since > 0 %}
-      <p class="hint dev-shipped-depth" data-vis="{{ V }}">
-        This commit is <strong>+{{ progress.latest_tag.commits_since }}</strong> ahead of the last stable tag
-        <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</code>.
-      </p>
-      {% elif progress.latest_tag and progress.latest_tag.tag %}
-      <p class="hint dev-shipped-depth" data-vis="{{ V }}">
-        HEAD is on the stable tag <code class="inline-code" data-vis="{{ V }}">{{ progress.latest_tag.tag }}</code>.
-      </p>
-      {% endif %}
-    </div>
-    {% else %}
-    {{ empty_state("git log returned nothing for HEAD.") }}
-    {% endif %}
-  </section>
-
-  {# ─── v1.5.0 Pre-seed future-fixes counter tile. Counts
-       remaining `# TODO [vX.Y.Z …]` markers seeded by
-       `scripts/seed_fixes.py` in app.py + templates. Crawler
-       `future_fixes_placeholder` owns the full breakdown; this
-       tile surfaces the headline total at a glance. ─── #}
-  <section class="card tile tile-dev-future-fixes" id="devFutureFixes" data-vis="{{ V }}">
-    {{ card_heading("v1.5.0 PRE-SEED", "Marker progress") }}
-    <div class="dev-future-fixes-body" data-vis="{{ V }}">
-      <strong class="dev-future-fixes-total" data-vis="{{ V }}">{{ progress.future_fixes.total }}</strong>
-      <span class="hint dev-future-fixes-label" data-vis="{{ V }}">TODO markers awaiting multi-role graduation</span>
-      {% if progress.future_fixes.total > 0 %}
-      {% set app_count = progress.future_fixes.by_file.get("app.py", 0) %}
-      <p class="hint dev-future-fixes-depth" data-vis="{{ V }}">
-        {{ app_count }} sites in <code class="inline-code" data-vis="{{ V }}">app.py</code> — see
-        <code class="inline-code" data-vis="{{ V }}">scripts/seed_fixes.py --dry-run</code>
-      </p>
-      {% else %}
-      <p class="hint dev-future-fixes-depth" data-vis="{{ V }}">
-        v1.5.0 work complete — all markers retired.
-      </p>
-      {% endif %}
-    </div>
-  </section>
-
-  {# ─── PROJECT TIMELINE — the "Mission Control" past/present at a
-       glance. Every shipped tag on the v1.x line, newest-first,
-       grouped by minor-line (v1.3.x / v1.4.x / v1.5.x) with the
-       latest tag highlighted. No fake future placeholders — the
-       operator decides what comes next, the tile shows what's real.
-       Full-width tile spanning the tile grid. ─── #}
-  <section class="card tile tile-dev-timeline" id="devProjectTimeline" data-vis="{{ V }}">
-    {{ card_heading("PROJECT TIMELINE", "Every shipped tag, newest first") }}
-    {% if progress.timeline %}
-    <div class="dev-timeline-body" data-vis="{{ V }}">
-      {% set ns = namespace(last_line='') %}
-      {% for t in progress.timeline %}
-        {% if t.line != ns.last_line %}
-          {% if not loop.first %}</ol>{% endif %}
-          <div class="dev-timeline-line-head" data-vis="{{ V }}">
-            <strong data-vis="{{ V }}">{{ t.line }}</strong>
-            <span class="hint" data-vis="{{ V }}">line</span>
-          </div>
-          <ol class="dev-timeline-list" data-vis="{{ V }}">
-          {% set ns.last_line = t.line %}
-        {% endif %}
-        <li class="dev-timeline-item{% if t.is_latest %} dev-timeline-item-latest{% endif %}" data-vis="{{ V }}">
-          <a class="dev-timeline-link" href="{{ url_for('dev_panel_tag', tag=t.tag) }}" title="Drill into this tag" data-vis="{{ V }}">
-            <code class="inline-code dev-timeline-tag" data-vis="{{ V }}">{{ t.tag }}</code>
-            {% if t.tagged_at %}<span class="hint dev-timeline-date" data-vis="{{ V }}">{{ t.tagged_at }}</span>{% endif %}
-            {% if t.is_latest %}<span class="dev-timeline-latest-chip" data-vis="{{ V }}">LATEST</span>{% endif %}
-          </a>
-        </li>
       {% endfor %}
-      </ol>
     </div>
-    {% else %}
-    {{ empty_state("No semver tags yet — cut the first via `git tag -a v1.X.Y <sha>`.") }}
-    {% endif %}
-  </section>
-
-  {# ─── Hero: Now Shipping — "you are here" at a glance. ───
-       Answers four questions in 5 seconds: what's the current
-       release, which wave is hot right now, did anything ship
-       today, and when did the crawlers last run. W1.4.3 c2. #}
-  <section class="card tile tile-dev-now-shipping" id="devNowShipping" data-vis="{{ V }}">
-    {{ card_heading("NOW SHIPPING", "You are here") }}
-    <div class="dev-now-grid" data-vis="{{ V }}">
-      <div class="dev-now-cell dev-now-release" data-vis="{{ V }}">
-        <span class="dev-now-label" data-vis="{{ V }}">Current release</span>
-        <strong class="dev-now-value dev-now-release-value" data-vis="{{ V }}">v{{ progress.current_release }}</strong>
-        <span class="hint" data-vis="{{ V }}">branch <code class="inline-code">{{ progress.branch }}</code></span>
-      </div>
-      <div class="dev-now-cell dev-now-hot" data-vis="{{ V }}">
-        <span class="dev-now-label" data-vis="{{ V }}">Hot wave</span>
-        {% if hot_wave %}
-        <strong class="dev-now-value dev-now-hot-value" id="devNowHotWave" data-vis="{{ V }}">{{ hot_wave.wave }}</strong>
-        <span class="hint" data-vis="{{ V }}">{{ hot_wave.track }} · {{ hot_wave.est }}{% if hot_wave.tag and hot_wave.tag not in ("—", "-") %} · target <code class="inline-code">{{ hot_wave.tag }}</code>{% endif %}</span>
-        {% else %}
-        <strong class="dev-now-value" data-vis="{{ V }}">—</strong>
-        <span class="hint" data-vis="{{ V }}">All tracked waves shipped.</span>
-        {% endif %}
-      </div>
-      <div class="dev-now-cell dev-now-commits" data-vis="{{ V }}">
-        <span class="dev-now-label" data-vis="{{ V }}">Today's commits</span>
-        <strong class="dev-now-value dev-now-commits-value" id="devNowCommitsToday" data-vis="{{ V }}">{{ progress.commits_today }}</strong>
-        {% if progress.last_commit_at %}
-        <span class="hint" data-vis="{{ V }}">last at {{ progress.last_commit_at[:16]|replace("T", " ") }} UTC</span>
-        {% else %}
-        <span class="hint" data-vis="{{ V }}">no commits yet</span>
-        {% endif %}
-      </div>
-      <div class="dev-now-cell dev-now-reports" data-vis="{{ V }}">
-        <span class="dev-now-label" data-vis="{{ V }}">Crawlers last ran</span>
-        {% if progress.reports_latest_age_hours is not none %}
-        {% set age = progress.reports_latest_age_hours %}
-        {% if age < 1 %}
-          {% set age_label = (age * 60)|round(0, 'floor')|int ~ "m ago" %}
-          {% set age_tone = "fresh" %}
-        {% elif age < 24 %}
-          {% set age_label = age|round(0, 'floor')|int ~ "h ago" %}
-          {% set age_tone = "ok" %}
-        {% else %}
-          {% set age_label = (age / 24)|round(0, 'floor')|int ~ "d ago" %}
-          {% set age_tone = "stale" %}
-        {% endif %}
-        <strong class="dev-now-value dev-now-reports-value dev-now-reports-{{ age_tone }}" id="devNowReports" data-vis="{{ V }}">{{ age_label }}</strong>
-        <span class="hint" data-vis="{{ V }}">{{ progress.reports_latest_at[:16]|replace("T", " ") }}</span>
-        {% else %}
-        <strong class="dev-now-value dev-now-reports-stale" id="devNowReports" data-vis="{{ V }}">never</strong>
-        <span class="hint" data-vis="{{ V }}">run <code class="inline-code">python -m crawlers wave sanity</code></span>
-        {% endif %}
-      </div>
-    </div>
-    <div class="dev-now-pipeline" data-vis="{{ V }}">
-      {{ chart_bar("Pipeline", (pipeline_shipped|string) ~ "/" ~ (pipeline_total|string), (pipeline_shipped * 100 / pipeline_total) if pipeline_total > 0 else 0) }}
-    </div>
-  </section>
-
-  {# ── Tile: Project Progress ── #}
-  <section class="card tile tile-stats" data-vis="{{ V }}">
-    {{ card_heading("PROGRESS", "Release " ~ progress.current_release) }}
     <div class="tile-stat-stack" data-vis="{{ V }}">
-      {{ stat_blob(progress.ahead, "Ahead of main", "#", tone="active") }}
-      {{ stat_blob(progress.behind, "Behind main", "#", tone="wait") }}
-      {{ stat_blob(progress.dirty, "Uncommitted files", "#", tone="open") }}
-      {{ stat_blob(progress.commits_today, "Commits today", "#", tone="completed") }}
+      {{ stat_blob(infra_stats.session.commits, "Commits today", "#", tone="completed") }}
+      {{ stat_blob(infra_stats.session.files_touched, "Files touched", "#", tone="active") }}
+      {{ stat_blob(infra_stats.session.total_checks|string, "Total checks", "#", tone="active") }}
+      {{ stat_blob(infra_stats.session.peak_cpu|string ~ "%", "Peak CPU", "#", tone="wait") }}
     </div>
   </section>
 
-  {# ── Tile: Recent Commits ── #}
+  {# ─── 3. HEALTH SUMMARY — Smoke, sanity, route health ─── #}
   <section class="card tile tile-stats" data-vis="{{ V }}">
-    {{ card_heading("HISTORY", "Recent commits") }}
+    {{ card_heading("HEALTH", "Test and crawler status") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(crawler_health.passed, "Passed", "#", tone="completed") }}
+      {{ stat_blob(crawler_health.failed, "Failed", "#", tone="open") }}
+      {{ stat_blob(crawler_health.warnings, "Warnings", "#", tone="wait") }}
+      {{ stat_blob(crawler_health.rows|length, "Strategies", "#", tone="active") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if crawler_health.rows %}
+      <ul class="dp-crawler-list" data-vis="{{ V }}">
+        {% for r in crawler_health.rows[:5] %}
+        {{ chart_bar(r.strategy, (r.passed|string) ~ "/" ~ (r.total|string) ~ (r.failed > 0 and (" · " ~ r.failed|string ~ "F") or ""), r.pct) }}
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No crawler reports yet.", hint="Run `python -m crawlers wave sanity` to generate.") }}
+      {% endif %}
+      <div style="margin-top:var(--sp-3)" data-vis="{{ V }}">
+        <a class="btn btn-sm" href="{{ url_for('dev_panel') }}?run=smoke" data-vis="{{ V }}">Run smoke test</a>
+      </div>
+    </div>
+  </section>
+
+  {# ─── 4. RECENT COMMITS — Last 5 in a clean list ─── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("RECENT COMMITS", "Last 5 on trunk") }}
     <div class="tile-info-body" data-vis="{{ V }}">
       {% if progress.recent_commits %}
       <ul class="dp-commit-list" data-vis="{{ V }}">
-        {% for c in progress.recent_commits[:6] %}
+        {% for c in progress.recent_commits[:5] %}
         <li class="dp-commit-row" data-vis="{{ V }}">
           <a class="dp-commit-link" href="{{ url_for('dev_panel_commit', sha=c.sha) }}" title="Drill into this commit" data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ c.sha }}</code></a>
           <span data-vis="{{ V }}">{{ c.subject }}</span>
@@ -276,142 +115,7 @@
     </div>
   </section>
 
-  {# ── Tile: Deployment ── #}
-  <section class="card tile tile-stats" data-vis="{{ V }}">
-    {{ card_heading("DEPLOY", "Production host") }}
-    <div class="tile-info-body" data-vis="{{ V }}">
-      <div class="dp-metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Host</strong>
-        <span data-vis="{{ V }}">Mac mini</span>
-      </div>
-      <div class="dp-metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Address</strong>
-        <span data-vis="{{ V }}">100.115.176.118:5055</span>
-      </div>
-      <div class="dp-metadata-row" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Network</strong>
-        <span data-vis="{{ V }}">Tailscale</span>
-      </div>
-      <p class="hint dp-bridge-detail" data-vis="{{ V }}">
-        See <code>DEPLOY.md</code> for the atomic pull → smoke → kickstart deploy.
-      </p>
-    </div>
-  </section>
-
-  {# ── Tile: Roadmap ── #}
-  <section class="card tile tile-info" data-vis="{{ V }}">
-    {{ card_heading("ROADMAP", "Versions in flight") }}
-    <div class="tile-info-body" data-vis="{{ V }}">
-      {% if progress.versions %}
-      {% for v in progress.versions %}
-      {% set vtotal = v.done + v.open %}
-      {% set vpct = (v.done * 100 / vtotal) if vtotal > 0 else 0 %}
-      {{ chart_bar(v.name, (v.done|string) ~ "/" ~ (vtotal|string), vpct) }}
-      {% if v.entries %}
-      <ul class="dp-todo-list" data-vis="{{ V }}">
-        {% for item in v.entries %}
-        <li class="dp-todo-item{% if item.done %} dp-todo-done{% endif %}" data-vis="{{ V }}">
-          <span class="dp-todo-mark" data-vis="{{ V }}">{% if item.done %}✓{% else %}○{% endif %}</span>
-          <span data-vis="{{ V }}">{{ item.label }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-      {% endfor %}
-      {% else %}
-      {{ empty_state("No version blocks parsed from TODO_AI.txt.") }}
-      {% endif %}
-    </div>
-  </section>
-
-  {# ── Tile: Waves (task + progress panel) ── #}
-  <section class="card tile tile-stats" data-vis="{{ V }}">
-    {{ card_heading("WAVES", "Next-waves pipeline") }}
-    <div class="tile-info-body" data-vis="{{ V }}">
-      {% if waves %}
-        {% set shipped = waves|selectattr("status", "equalto", "shipped")|list|length %}
-        {% set total = waves|length %}
-        {% set pct = (shipped * 100 / total) if total > 0 else 0 %}
-        {{ chart_bar("Pipeline", (shipped|string) ~ "/" ~ (total|string), pct) }}
-        <ul class="dp-wave-list" data-vis="{{ V }}">
-          {% for w in waves %}
-          <li class="dp-wave-row dp-wave-{{ w.status }}" data-vis="{{ V }}">
-            <span class="dp-wave-mark" data-vis="{{ V }}">{% if w.status == "shipped" %}✓{% elif w.status == "hot" %}▶{% else %}○{% endif %}</span>
-            <strong class="dp-wave-id" data-vis="{{ V }}">{{ w.wave }}</strong>
-            <span class="dp-wave-track" data-vis="{{ V }}">{{ w.track }}</span>
-            <span class="dp-wave-est" data-vis="{{ V }}">{{ w.est }}</span>
-            {% if w.status == "hot" %}
-            <span class="dp-wave-hot-pill" data-vis="{{ V }}">HOT</span>
-            {% elif w.tag and w.tag not in ("—", "-") %}
-            <span class="dp-wave-tag" data-vis="{{ V }}">{{ w.tag }}</span>
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        {{ empty_state("No waves parsed from NEXT_WAVES.md.") }}
-      {% endif %}
-    </div>
-  </section>
-
-  {# ── Tile: Crawler Health ── #}
-  <section class="card tile tile-stats" data-vis="{{ V }}">
-    {{ card_heading("CRAWLERS", "Last report health") }}
-    <div class="tile-stat-stack" data-vis="{{ V }}">
-      {{ stat_blob(crawler_health.passed, "Passed", "#", tone="completed") }}
-      {{ stat_blob(crawler_health.failed, "Failed", "#", tone="open") }}
-      {{ stat_blob(crawler_health.warnings, "Warnings", "#", tone="wait") }}
-      {{ stat_blob(crawler_health.rows|length, "Strategies", "#", tone="active") }}
-    </div>
-    <div class="tile-info-body" data-vis="{{ V }}">
-      {% if crawler_health.rows %}
-      <ul class="dp-crawler-list" data-vis="{{ V }}">
-        {% for r in crawler_health.rows[:10] %}
-        {{ chart_bar(r.strategy, (r.passed|string) ~ "/" ~ (r.total|string) ~ (r.failed > 0 and (" · " ~ r.failed|string ~ "F") or ""), r.pct) }}
-        {% endfor %}
-      </ul>
-      {% else %}
-      {{ empty_state("No crawler reports yet. Run `python -m crawlers wave sanity`.") }}
-      {% endif %}
-    </div>
-  </section>
-
-  {# ── Tile: Infrastructure ── #}
-  <section class="card tile mc-tile" style="grid-column: 1 / -1;" data-vis="{{ V }}">
-    {{ card_heading("INFRASTRUCTURE", "Three-Engine Development") }}
-    <div style="padding: 0.25rem 1rem 0;">
-      <a class="text-link" href="{{ url_for('dev_panel_doc') }}?name=SESSION_LOG.md">Full log →</a>
-    </div>
-
-    <div class="mc-infra-engines" data-vis="{{ V }}">
-      {% for engine in infra_stats.engines %}
-      <div class="mc-infra-engine" data-vis="{{ V }}">
-        <div class="mc-infra-engine-status mc-light-{{ 'ok' if engine.status == 'active' else 'warn' }}" data-vis="{{ V }}">
-          <span class="mc-light-dot" aria-hidden="true"></span>
-        </div>
-        <div class="mc-infra-engine-body" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ engine.name }}</strong>
-          <span class="hint" data-vis="{{ V }}">{{ engine.type }}</span>
-        </div>
-        <div class="mc-infra-engine-metric" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ engine.metric }}</strong>
-          <span class="hint" data-vis="{{ V }}">{{ engine.detail }}</span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-
-    <div class="mc-infra-session" data-vis="{{ V }}">
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ infra_stats.session.commits }}</strong><span>commits</span></div>
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ "{:,}".format(infra_stats.session.lines_changed) }}</strong><span>lines Δ</span></div>
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ infra_stats.session.files_touched }}</strong><span>files</span></div>
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ "{:,}".format(infra_stats.session.total_checks) }}</strong><span>checks</span></div>
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ infra_stats.session.peak_cpu }}%</strong><span>peak CPU</span></div>
-      <div class="mc-infra-stat" data-vis="{{ V }}"><strong>{{ infra_stats.session.peak_processes }}</strong><span>peak procs</span></div>
-    </div>
-  </section>
-
-  {# ── Tile: Document Viewer ── #}
+  {# ─── 5. DOCUMENT VIEWER — In-page doc browser ─── #}
   <section class="card tile tile-edit" data-vis="{{ V }}">
     {{ card_heading("DOCS", "In-page document viewer") }}
     <div class="tile-info-body" data-vis="{{ V }}">
@@ -421,7 +125,7 @@
         {% endfor %}
       </div>
       <div class="dp-doc-wrap" data-vis="{{ V }}">
-        <pre class="dp-doc" id="dpDoc" data-vis="{{ V }}">(loading…)</pre>
+        <pre class="dp-doc" id="dpDoc" data-vis="{{ V }}">(loading...)</pre>
       </div>
     </div>
   </section>

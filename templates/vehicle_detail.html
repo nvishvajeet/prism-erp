@@ -129,11 +129,11 @@
           <td data-vis="{{ V }}">{{ l.log_date }}</td>
           <td data-vis="{{ V }}">
             {% if l.log_type == 'fuel' %}
-            <span class="badge" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Fuel</span>
+            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Fuel</span>
             {% elif l.log_type == 'maintenance' %}
-            <span class="badge" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Maintenance</span>
+            <span class="badge" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Maintenance</span>
             {% elif l.log_type == 'insurance' %}
-            <span class="badge" style="background:var(--tone-blue, #3b82f6);color:#fff;" data-vis="{{ V }}">Insurance</span>
+            <span class="badge" style="background:var(--tone-blue);color:var(--bg);" data-vis="{{ V }}">Insurance</span>
             {% else %}
             <span class="badge" data-vis="{{ V }}">{{ l.log_type|title }}</span>
             {% endif %}

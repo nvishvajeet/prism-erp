@@ -82,6 +82,7 @@
 {% macro input_dialog(form_action, action_name, placeholder='Write a message...', submit_label='Send',
                       note_types=[], allow_file=True, allow_routing=False, routing_options=[]) -%}
 <form method="post" action="{{ form_action }}" enctype="multipart/form-data" class="input-dialog" data-vis="{{ V }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="action" value="{{ action_name }}">
   {% if note_types %}
   <select name="note_kind" class="input-dialog-type" data-vis="{{ V }}">
@@ -304,6 +305,7 @@
 <div class="queue-action-stack" data-vis="{{ V }}">
   {% if can_accept %}
   <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-accept" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="mark_received">
     <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
@@ -312,6 +314,7 @@
   {% endif %}
   {% if can_assign %}
   <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-assign" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="quick_assign">
     <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}

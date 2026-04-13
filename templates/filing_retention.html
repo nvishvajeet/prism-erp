@@ -28,7 +28,7 @@
 {# ── Files Eligible for Destruction ── #}
 {% if destroy_eligible %}
 <section class="inst-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--danger,#c44);">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--danger);">
     {{ card_heading("ELIGIBLE FOR DESTRUCTION", "Retention period expired — review and approve destruction") }}
     <p class="hint" style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
       These folders have exceeded their retention period under Indian law.
@@ -64,7 +64,7 @@
             <form method="post" action="{{ url_for('filing_archive_folder', pf_id=r.pf_id) }}" style="display:flex;gap:0.25rem;" data-vis="{{ V }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" name="action" value="hide" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;">Hide</button>
-              <button type="submit" name="action" value="destroy" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;background:var(--danger);color:#fff;">Destroy</button>
+              <button type="submit" name="action" value="destroy" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;background:var(--danger);color:var(--bg);">Destroy</button>
             </form>
             {% else %}
             <form method="post" action="{{ url_for('filing_register_folder') }}" style="display:inline;" data-vis="{{ V }}">
@@ -89,7 +89,7 @@
 {# ── Active Files (Within Retention) ── #}
 {% if active_files %}
 <section class="inst-tiles" data-vis="{{ V }}">
-  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-green,#34a853);">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-green);">
     {{ card_heading("ACTIVE FILES", "Within retention period — do not destroy") }}
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

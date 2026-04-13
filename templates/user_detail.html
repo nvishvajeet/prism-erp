@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, operator_block, status_block, meta_link with context %}
 {% from "_page_macros.html" import page_intro, card_heading with context %}
-{% block hover_back %}<a href="javascript:history.back()" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
 {% call page_intro("", target_user["name"]) %}
   {% if is_self %}

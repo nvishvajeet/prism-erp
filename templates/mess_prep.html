@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Prep & Wastage</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Demand Prediction ── #}
+  <article class="card tile tile-full-width tile-accent-amber" data-vis="{{ V }}">
+    {{ card_heading("TODAY'S DEMAND FORECAST", "Based on 7-day average + 10% buffer") }}
+    <div class="control-flex-wrap" style="padding:0.75rem;gap:1rem;" data-vis="{{ V }}">
+      {% for m in meal_types %}
+      <div style="text-align:center;flex:1;min-width:120px;padding:0.75rem;border-radius:8px;{% if m == current_meal %}background:var(--color-amber-bg, rgba(230,168,0,0.08));{% endif %}" data-vis="{{ V }}">
+        <p style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--muted);" data-vis="{{ V }}">{{ m|title }}{% if m == current_meal %} ●{% endif %}</p>
+        <p style="font-size:2rem;font-weight:800;" data-vis="{{ V }}">{{ predictions.get(m, 0) }}</p>
+        <p class="hint" data-vis="{{ V }}">plates needed</p>
+        <p style="font-size:1rem;font-weight:600;color:var(--color-green, #34c759);margin-top:0.25rem;" data-vis="{{ V }}">{{ today_counts.get(m, 0) }} served</p>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  {# ── Monthly Wastage KPI ── #}
+  {% if wastage_summary and wastage_summary.total_prepared %}
+  {% set waste_pct = (wastage_summary.total_wasted or 0) / wastage_summary.total_prepared * 100 %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": "{:,}".format(wastage_summary.total_prepared or 0), "label": "Plates Prepared (Month)"},
+      {"value": "{:,}".format(wastage_summary.total_served or 0),   "label": "Plates Served",     "tone": "green"},
+      {"value": "{:,}".format(wastage_summary.total_wasted or 0),   "label": "Plates Wasted",     "tone": "amber" if waste_pct > 10 else ""},
+      {"value": "{:.1f}%".format(waste_pct),                        "label": "Waste Rate",         "tone": "amber" if waste_pct > 10 else "green"},
+    ]) }}
+  </article>
+  {% endif %}
+
+  {# ── Log Prep ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("LOG PREPARATION", "Record plates prepared for a meal") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Date
+        <input type="date" name="prep_date" value="{{ today }}" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Meal
+        <select name="meal_type" data-vis="{{ V }}">
+          {% for m in meal_types %}
+          <option value="{{ m }}"{% if m == current_meal %} selected{% endif %} data-vis="{{ V }}">{{ m|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Plates Prepared
+        <input type="number" name="plates_prepared" min="0" placeholder="e.g. 2500" required data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Menu Items
+        <input type="text" name="menu_items" placeholder="e.g. Rice, Dal, Paneer, Roti" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Notes
+        <input type="text" name="notes" placeholder="Special event, extra supply, etc." data-vis="{{ V }}">
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}">Log Preparation</button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">
+        Plates served is auto-filled from scanner data. Wastage = prepared − served.
+      </p>
+    </form>
+  </article>
+
+  {# ── Recent Prep Logs ── #}
+  {% if recent_preps %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PREP HISTORY", "Last 4 weeks") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th class="col-amount" data-vis="{{ V }}">Prepared</th>
+          <th class="col-amount" data-vis="{{ V }}">Served</th>
+          <th class="col-amount" data-vis="{{ V }}">Wasted</th>
+          <th data-vis="{{ V }}">Waste %</th>
+          <th data-vis="{{ V }}">Menu</th>
+          <th data-vis="{{ V }}">By</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for p in recent_preps %}
+        {% set wpct = (p.plates_wasted / p.plates_prepared * 100) if p.plates_prepared > 0 else 0 %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ p.prep_date }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ p.meal_type|title }}</span></td>
+          <td class="col-amount" data-vis="{{ V }}">{{ p.plates_prepared }}</td>
+          <td class="col-amount" data-vis="{{ V }}">{{ p.plates_served }}</td>
+          <td class="col-amount" data-vis="{{ V }}">
+            <span class="{% if wpct > 15 %}copy-urgent{% elif wpct > 10 %}{% endif %}" data-vis="{{ V }}">{{ p.plates_wasted }}</span>
+          </td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if wpct > 15 %}status-archived{% elif wpct < 5 %}status-active{% endif %}" data-vis="{{ V }}">
+              {{ "{:.0f}".format(wpct) }}%
+            </span>
+          </td>
+          <td data-vis="{{ V }}">{{ p.menu_items[:30] }}{{ '…' if p.menu_items|length > 30 else '' }}</td>
+          <td data-vis="{{ V }}">{{ p.logged_by_name or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

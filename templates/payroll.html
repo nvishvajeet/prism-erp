@@ -67,18 +67,18 @@
               {% if r.days_worked >= 25 %}
               <span style="color:var(--tone-green);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
               {% elif r.days_worked >= 15 %}
-              <span style="color:var(--tone-amber, #f59e0b);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
+              <span style="color:var(--tone-amber);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
               {% else %}
-              <span style="color:var(--tone-red, #ef4444);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
+              <span style="color:var(--tone-red);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
               {% endif %}
             </a> / {{ r.days_in_month }}
           </td>
           <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.calculated_pay) }}</strong></td>
           <td data-vis="{{ V }}">
             {% if r.payment and r.payment.status == 'paid' %}
-            <span class="badge status-paid" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Paid</span>
+            <span class="badge status-paid" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Paid</span>
             {% else %}
-            <span class="badge status-pending" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Pending</span>
+            <span class="badge status-pending" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Pending</span>
             {% endif %}
           </td>
           {% if can_edit %}

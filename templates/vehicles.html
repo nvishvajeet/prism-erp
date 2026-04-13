@@ -59,11 +59,11 @@
           <td data-vis="{{ V }}">{{ v.last_fuel_date or '—' }}</td>
           <td data-vis="{{ V }}">
             {% if v.status == 'active' %}
-            <span class="badge status-active" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Active</span>
+            <span class="badge status-active" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Active</span>
             {% elif v.status == 'maintenance' %}
-            <span class="badge status-maintenance" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Maintenance</span>
+            <span class="badge status-maintenance" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Maintenance</span>
             {% elif v.status == 'retired' %}
-            <span class="badge status-retired" style="background:var(--tone-red, #ef4444);color:#fff;" data-vis="{{ V }}">Retired</span>
+            <span class="badge status-retired" style="background:var(--tone-red);color:var(--bg);" data-vis="{{ V }}">Retired</span>
             {% else %}
             <span class="badge status-{{ v.status }}" data-vis="{{ V }}">{{ v.status|capitalize }}</span>
             {% endif %}

@@ -136,9 +136,9 @@
           <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.net_pay) }}</strong></td>
           <td data-vis="{{ V }}">
             {% if p.status == 'paid' %}
-            <span class="badge status-paid" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Paid</span>
+            <span class="badge status-paid" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Paid</span>
             {% else %}
-            <span class="badge status-pending" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Pending</span>
+            <span class="badge status-pending" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Pending</span>
             {% endif %}
           </td>
           <td data-vis="{{ V }}">{{ p.paid_at[:10] if p.paid_at else "—" }}</td>

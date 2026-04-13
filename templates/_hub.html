@@ -58,7 +58,7 @@
 <div class="section-title">Projects — click to open &nbsp;·&nbsp; each has a <code>PROJECT_ASSETS.md</code> describing what AI agents can reuse</div>
 <div class="grid">
 
-  <a class="card" href="/" style="border-color:var(--accent);border-width:2px">
+  <a class="card" href="{{ url_for('index') }}" style="border-color:var(--accent);border-width:2px">
     <div class="card-kicker">CATALYST Lab Scheduler <span class="badge badge-live">live on mini</span> <span class="badge" style="background:var(--accent)">primary build source</span></div>
     <h3>Lab Scheduler (ERP) ★</h3>
     <p>The biggest project on this machine. Flask ERP with 15 Jinja macros, tile grid architecture, 8k-line CSS design system, 9-role auth, SHA-256 audit chain, 14 crawler strategies. <strong>Use this to build any new ERP module, dashboard, website, or UI.</strong></p>
@@ -76,7 +76,7 @@
     <p style="font-size:11px;color:var(--accent);margin-top:8px">📄 <code>PROJECT_ASSETS.md</code> at repo root — full catalog of reusable components</p>
   </a>
 
-  <a class="card" href="/admin/portfolio">
+  <a class="card" href="{{ url_for('portfolio_panel') }}">
     <div class="card-kicker">Portfolio Plan <span class="badge badge-local">local only</span></div>
     <h3>Portfolio Dashboard</h3>
     <p>9-step linear data pipeline: fetch → compute → analyze → recommend. YAML config, JSON state files, Flask integration. <strong>Use this for any multi-step data processing or reporting pipeline.</strong></p>

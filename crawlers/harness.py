@@ -184,7 +184,8 @@ class Harness:
         flask_app.config["TESTING"] = True
         flask_app.config["WTF_CSRF_ENABLED"] = False
 
-        catalyst_app.init_db()
+        with flask_app.app_context():
+            catalyst_app.init_db()
         self.flask_app = flask_app
         self.client = flask_app.test_client()
         self.log.started_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"

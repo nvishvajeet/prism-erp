@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&#8592;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&#8592; Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Data Storage</h2>
+  </div>
+</header>
+
+{# ── Current Storage KPIs ── #}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Storage Overview") }}
+    {{ kpi_grid([
+      {"value": total_size_mb|string ~ " MB", "label": "Total Data"},
+      {"value": db_size_mb|string ~ " MB",    "label": "Database"},
+      {"value": upload_size_mb|string ~ " MB", "label": "Uploads"},
+      {"value": export_size_mb|string ~ " MB", "label": "Exports"},
+    ]) }}
+  </article>
+</section>
+
+{# ── Current Path ── #}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Active Data Path") }}
+    <div class="metadata-grid" data-vis="{{ V }}">
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Path</span>
+        <span class="metadata-value" data-vis="{{ V }}"><code data-vis="{{ V }}">{{ active_path }}</code></span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Mode</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ "Demo" if demo_mode else "Operational" }}</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Custom Location</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ "Yes (CATALYST_DATA_DIR)" if is_custom else "Default (inside app directory)" }}</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Disk Total</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ disk_total_gb }} GB</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Disk Free</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ disk_free_gb }} GB ({{ 100 - disk_used_pct }}% available)</span>
+      </div>
+    </div>
+
+    {# Disk usage bar #}
+    <div style="margin-top:0.75rem" data-vis="{{ V }}">
+      <div class="progress-bar-bg" data-vis="{{ V }}">
+        <div class="progress-bar-fill{% if disk_used_pct > 90 %} progress-bar-fill-danger{% elif disk_used_pct > 75 %} progress-bar-fill-warning{% endif %}" style="width:{{ disk_used_pct }}%" data-vis="{{ V }}"></div>
+      </div>
+      <span class="hint" data-vis="{{ V }}">{{ disk_used_pct }}% used</span>
+    </div>
+  </article>
+</section>
+
+{# ── Available Volumes ── #}
+{% if volumes %}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Available Volumes") }}
+    <p class="hint" data-vis="{{ V }}">Plug in an external SSD and it will appear here. Select a volume to migrate data.</p>
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Volume</th>
+          <th data-vis="{{ V }}">Path</th>
+          <th class="num" data-vis="{{ V }}">Total</th>
+          <th class="num" data-vis="{{ V }}">Free</th>
+          <th class="num" data-vis="{{ V }}">Used</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for v in volumes %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ v.name }}</strong></td>
+          <td data-vis="{{ V }}"><code data-vis="{{ V }}">{{ v.path }}</code></td>
+          <td class="num" data-vis="{{ V }}">{{ v.total_gb }} GB</td>
+          <td class="num" data-vis="{{ V }}">{{ v.free_gb }} GB</td>
+          <td class="num" data-vis="{{ V }}">{{ v.used_pct }}%</td>
+          <td data-vis="{{ V }}">
+            <form method="post" action="{{ url_for('admin_data_migrate') }}" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+              <input type="hidden" name="target_path" value="{{ v.path }}/catalyst" data-vis="{{ V }}">
+              <button type="submit" class="btn btn-sm btn-secondary" data-vis="{{ V }}"
+                onclick="return confirm('Migrate all data to {{ v.path }}/catalyst? This copies {{ total_size_mb }} MB. The server must be restarted after.')">
+                Migrate Here
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Custom Path Migration ── #}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Migrate to Custom Path") }}
+    <p class="hint" data-vis="{{ V }}">Enter any writable directory path. The data will be copied (not moved) — the old location is preserved as a backup.</p>
+    <form method="post" action="{{ url_for('admin_data_migrate') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <div class="form-field" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Target Directory</label>
+        <input type="text" name="target_path" placeholder="/Volumes/ExternalSSD/catalyst" required data-vis="{{ V }}">
+      </div>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}"
+        onclick="return confirm('Copy all data to this path? Server restart required after migration.')">
+        Migrate Data
+      </button>
+    </form>
+  </article>
+</section>
+
+{# ── How It Works ── #}
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "How Data Separation Works") }}
+    <div class="hint" data-vis="{{ V }}">
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Program files</strong> (code, templates, static assets) stay in the app directory.</p>
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Data files</strong> (database, uploads, exports) can live anywhere — set <code data-vis="{{ V }}">CATALYST_DATA_DIR</code> in <code data-vis="{{ V }}">.env</code> to point to any mounted volume.</p>
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Adding more SSDs:</strong> Mount a new SSD at <code data-vis="{{ V }}">/Volumes/&lt;name&gt;</code>, then use the migrate button above. The app auto-discovers mounted volumes.</p>
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">After migration:</strong> Restart the CATALYST server. The new path is saved in <code data-vis="{{ V }}">.env</code> and persists across reboots.</p>
+    </div>
+  </article>
+</section>
+
+{% endblock %}

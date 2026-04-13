@@ -313,7 +313,9 @@ MODULE_REGISTRY = {
             "mess_student_detail", "mess_student_new", "mess_reports",
             "mess_student_qr", "mess_camera_scan", "mess_student_pass",
             "mess_api_validate_scan", "mess_batch_passes",
-            "mess_students_import",
+            "mess_students_import", "mess_prep_log",
+            "mess_tally_export", "mess_api_search_student",
+            "mess_student_toggle", "mess_student_edit",
         },
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
@@ -5053,6 +5055,23 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_mess_entries_date ON mess_entries(entry_date);
             CREATE INDEX IF NOT EXISTS idx_mess_entries_student ON mess_entries(student_id, entry_date);
             CREATE INDEX IF NOT EXISTS idx_mess_entries_meal ON mess_entries(meal_type, entry_date);
+
+            -- Mess preparation planning + wastage tracking
+            CREATE TABLE IF NOT EXISTS mess_prep_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prep_date TEXT NOT NULL,
+                meal_type TEXT NOT NULL,
+                plates_prepared INTEGER NOT NULL DEFAULT 0,
+                plates_served INTEGER NOT NULL DEFAULT 0,
+                plates_wasted INTEGER NOT NULL DEFAULT 0,
+                menu_items TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                logged_by_user_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (logged_by_user_id) REFERENCES users(id),
+                UNIQUE (prep_date, meal_type)
+            );
+            CREATE INDEX IF NOT EXISTS idx_mess_prep_date ON mess_prep_log(prep_date);
         """)
 
         # ── Compute / HPC Job Scheduler module ───────────────────
@@ -20416,6 +20435,111 @@ def mess_reports():
         by_dept=by_dept,
         meal_types=MEAL_TYPES,
         meal_rates=MEAL_RATES,
+    )
+
+
+@app.route("/mess/prep", methods=["GET", "POST"])
+@login_required
+def mess_prep_log():
+    """Food preparation planning — log plates prepared, track wastage.
+    Uses 7-day historical average to predict demand."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date, timedelta, datetime as _dt
+    today = _date.today()
+    current_meal = _current_meal()
+
+    if request.method == "POST":
+        prep_date = request.form.get("prep_date", today.isoformat()).strip()
+        meal = request.form.get("meal_type", current_meal).strip()
+        if meal not in MEAL_TYPES:
+            meal = current_meal
+        plates_prepared = int(request.form.get("plates_prepared", 0) or 0)
+        menu_items = request.form.get("menu_items", "").strip()
+        notes = request.form.get("notes", "").strip()
+        # Auto-fill served from actual scan count
+        served = query_one(
+            "SELECT COUNT(*) AS c FROM mess_entries WHERE entry_date = ? AND meal_type = ?",
+            (prep_date, meal),
+        )
+        plates_served = served["c"] if served else 0
+        plates_wasted = max(0, plates_prepared - plates_served)
+        execute(
+            """
+            INSERT INTO mess_prep_log (prep_date, meal_type, plates_prepared, plates_served,
+                plates_wasted, menu_items, notes, logged_by_user_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (prep_date, meal_type) DO UPDATE SET
+                plates_prepared = excluded.plates_prepared,
+                plates_served = excluded.plates_served,
+                plates_wasted = excluded.plates_wasted,
+                menu_items = excluded.menu_items,
+                notes = excluded.notes,
+                logged_by_user_id = excluded.logged_by_user_id
+            """,
+            (prep_date, meal, plates_prepared, plates_served, plates_wasted,
+             menu_items, notes, user["id"], now_iso()),
+        )
+        waste_pct = (plates_wasted / plates_prepared * 100) if plates_prepared > 0 else 0
+        flash(f"Prep log: {plates_prepared} prepared, {plates_served} served, {plates_wasted} wasted ({waste_pct:.0f}%)", "success")
+        return redirect(url_for("mess_prep_log"))
+
+    # GET — show prep form + history + predictions
+    # 7-day average per meal for demand prediction
+    predictions = {}
+    for meal in MEAL_TYPES:
+        avg = query_one(
+            """
+            SELECT AVG(cnt) AS avg_count FROM (
+                SELECT COUNT(*) AS cnt FROM mess_entries
+                WHERE meal_type = ? AND entry_date >= ?
+                GROUP BY entry_date
+            )
+            """,
+            (meal, (today - timedelta(days=7)).isoformat()),
+        )
+        predictions[meal] = int((avg["avg_count"] or 0) * 1.1)  # 10% buffer
+
+    # Today's actual counts
+    today_counts = {}
+    for meal in MEAL_TYPES:
+        c = query_one(
+            "SELECT COUNT(*) AS c FROM mess_entries WHERE entry_date = ? AND meal_type = ?",
+            (today.isoformat(), meal),
+        )
+        today_counts[meal] = c["c"] if c else 0
+
+    # Recent prep logs
+    recent_preps = query_all(
+        """
+        SELECT p.*, u.name AS logged_by_name
+        FROM mess_prep_log p
+        LEFT JOIN users u ON u.id = p.logged_by_user_id
+        ORDER BY p.prep_date DESC, p.meal_type
+        LIMIT 28
+        """,
+    )
+    # Wastage summary (this month)
+    month_start = today.replace(day=1).isoformat()
+    wastage_summary = query_one(
+        """
+        SELECT SUM(plates_prepared) AS total_prepared,
+               SUM(plates_served) AS total_served,
+               SUM(plates_wasted) AS total_wasted
+        FROM mess_prep_log WHERE prep_date >= ?
+        """,
+        (month_start,),
+    )
+    return render_template(
+        "mess_prep.html",
+        today=today.isoformat(),
+        current_meal=current_meal,
+        meal_types=MEAL_TYPES,
+        predictions=predictions,
+        today_counts=today_counts,
+        recent_preps=recent_preps,
+        wastage_summary=wastage_summary,
     )
 
 

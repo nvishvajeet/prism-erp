@@ -2,18 +2,18 @@
 {% block content %}
 
 <div style="padding:2rem;text-align:center;" data-vis="{{ V }}">
-  <div style="display:inline-block;background:#fff;padding:2rem 3rem;border-radius:16px;border:3px solid #000;max-width:350px;" data-vis="{{ V }}">
-    <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.2em;color:#888;margin-bottom:0.5rem;" data-vis="{{ V }}">CATALYST MESS ENTRY CARD</p>
+  <div style="display:inline-block;background:var(--bg);padding:2rem 3rem;border-radius:16px;border:3px solid var(--ink);max-width:350px;" data-vis="{{ V }}">
+    <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.2em;color:var(--muted);margin-bottom:0.5rem;" data-vis="{{ V }}">CATALYST MESS ENTRY CARD</p>
     <h2 style="margin:0;font-size:1.5rem;" data-vis="{{ V }}">{{ student.name }}</h2>
-    <p style="font-family:monospace;font-size:1rem;color:#555;margin:0.25rem 0;" data-vis="{{ V }}">{{ student.roll_number }}</p>
-    <p style="font-size:0.8rem;color:#888;" data-vis="{{ V }}">{{ student.department }} · Year {{ student.year_of_study }}</p>
+    <p style="font-family:monospace;font-size:1rem;color:var(--muted);margin:0.25rem 0;" data-vis="{{ V }}">{{ student.roll_number }}</p>
+    <p style="font-size:0.8rem;color:var(--muted);" data-vis="{{ V }}">{{ student.department }} · Year {{ student.year_of_study }}</p>
 
     <div style="margin:1.5rem 0;" data-vis="{{ V }}">
       <img src="{{ url_for('qr_code_svg', code=student.qr_token) }}" alt="QR Code" style="width:180px;height:180px;" data-vis="{{ V }}">
     </div>
 
     <p style="font-family:monospace;font-size:0.9rem;font-weight:700;letter-spacing:0.15em;" data-vis="{{ V }}">{{ student.qr_token }}</p>
-    <p style="font-size:0.7rem;color:#999;margin-top:0.5rem;" data-vis="{{ V }}">{{ student.hostel }} {{ student.room_number }} · {{ student.meal_plan|title }} Plan</p>
+    <p style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem;" data-vis="{{ V }}">{{ student.hostel }} {{ student.room_number }} · {{ student.meal_plan|title }} Plan</p>
   </div>
 </div>
 

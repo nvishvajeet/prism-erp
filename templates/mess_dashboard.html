@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -11,6 +12,7 @@
     <a href="{{ url_for('mess_scan') }}" class="btn btn-primary" data-vis="{{ V }}">Scan Entry</a>
     <a href="{{ url_for('mess_camera_scan') }}" class="btn" data-vis="{{ V }}">Camera Scan</a>
     <a href="{{ url_for('mess_students_list') }}" class="btn" data-vis="{{ V }}">Students</a>
+    <a href="{{ url_for('mess_prep_log') }}" class="btn" data-vis="{{ V }}">Prep & Waste</a>
     <a href="{{ url_for('mess_batch_passes') }}" class="btn" data-vis="{{ V }}">Passes</a>
     <a href="{{ url_for('mess_reports') }}" class="btn" data-vis="{{ V }}">Reports</a>
   </div>

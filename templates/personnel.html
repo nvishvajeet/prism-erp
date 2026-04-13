@@ -58,11 +58,11 @@
           <td data-vis="{{ V }}">{{ s.email or "—" }}</td>
           <td data-vis="{{ V }}">
             {% if s.role == 'operator' %}
-            <span class="badge badge-role" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            <span class="badge badge-role" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
             {% elif s.role == 'admin' %}
-            <span class="badge badge-role" style="background:var(--tone-blue, #3b82f6);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            <span class="badge badge-role" style="background:var(--tone-blue);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
             {% elif s.role == 'finance' %}
-            <span class="badge badge-role" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            <span class="badge badge-role" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
             {% else %}
             <span class="badge badge-role" data-vis="{{ V }}">{{ s.role or "—" }}</span>
             {% endif %}

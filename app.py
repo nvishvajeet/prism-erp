@@ -5176,11 +5176,14 @@ def init_db() -> None:
                 sale_date TEXT NOT NULL,
                 sale_time TEXT NOT NULL DEFAULT '',
                 payment_method TEXT NOT NULL DEFAULT 'cash',
+                payment_ref TEXT NOT NULL DEFAULT '',
                 student_id INTEGER,
                 cashier_user_id INTEGER,
                 total_amount REAL NOT NULL DEFAULT 0,
                 notes TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT '',
+                bank_matched INTEGER NOT NULL DEFAULT 0,
+                bank_match_date TEXT,
                 FOREIGN KEY (student_id) REFERENCES mess_students(id),
                 FOREIGN KEY (cashier_user_id) REFERENCES users(id)
             );
@@ -5205,12 +5208,15 @@ def init_db() -> None:
                 meal_type TEXT NOT NULL DEFAULT 'lunch',
                 student_id INTEGER,
                 payment_method TEXT NOT NULL DEFAULT 'cash',
+                payment_ref TEXT NOT NULL DEFAULT '',
                 amount_paid REAL NOT NULL DEFAULT 0,
                 issued_by_user_id INTEGER,
                 issued_at TEXT NOT NULL DEFAULT '',
                 redeemed_by_user_id INTEGER,
                 redeemed_at TEXT,
                 status TEXT NOT NULL DEFAULT 'issued',
+                bank_matched INTEGER NOT NULL DEFAULT 0,
+                bank_match_date TEXT,
                 FOREIGN KEY (student_id) REFERENCES mess_students(id),
                 FOREIGN KEY (issued_by_user_id) REFERENCES users(id),
                 FOREIGN KEY (redeemed_by_user_id) REFERENCES users(id),
@@ -7352,6 +7358,16 @@ def hub():
     return render_template("_hub.html", machine_time=_dt.now().strftime("%Y-%m-%d %H:%M"))
 
 
+def _ai_dashboard_advice_cached(user):
+    """Cache AI advice in session — one call per login, refreshable."""
+    try:
+        advice = _ai_dashboard_advice(user)
+        session["ai_advisor"] = advice
+        return advice
+    except Exception:
+        return session.get("ai_advisor", [{"text": "Welcome! Check your notifications.", "href": "/notifications", "priority": "low"}])
+
+
 @app.route("/")
 @login_required
 def index():
@@ -7589,6 +7605,7 @@ def index():
         attendance_streak=attendance_streak,
         dash_fleet_status=dash_fleet_status,
         dash_payroll_due=dash_payroll_due,
+        ai_advice=session.get("ai_advisor") if session.get("ai_advisor") and not request.args.get("refresh_advice") else _ai_dashboard_advice_cached(user),
     )
 
 
@@ -19853,7 +19870,7 @@ def api_ai_fill():
     user = current_user()
     if not text:
         return jsonify({})
-    result = _ai_fill_form(page, fields, text, user.get("role", ""))
+    result = _ai_fill_form(page, fields, text, dict(user).get("role", ""))
     log_action(user["id"], "ai_assistant", None, "form_fill", {"page": page})
     return jsonify(result)
 
@@ -21678,11 +21695,12 @@ def tuck_shop_api_record_sale():
         return jsonify({"ok": False, "error": "No valid items"})
     db = get_db()
     cur = db.cursor()
+    payment_ref = data.get("payment_ref", "")
     cur.execute(
-        """INSERT INTO tuck_shop_sales (sale_date, sale_time, payment_method, student_id,
-           cashier_user_id, total_amount, notes, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (today, time_now, payment, student_id, user["id"], total, notes, now_iso()),
+        """INSERT INTO tuck_shop_sales (sale_date, sale_time, payment_method, payment_ref,
+           student_id, cashier_user_id, total_amount, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (today, time_now, payment, payment_ref, student_id, user["id"], total, notes, now_iso()),
     )
     sale_id = cur.lastrowid
     for item_id, qty, unit_price, line_total in line_items:
@@ -21741,6 +21759,7 @@ def tuck_shop_api_issue_token():
     data = request.get_json(force=True)
     meal_type = data.get("meal_type", "lunch")
     payment_method = data.get("payment_method", "cash")
+    payment_ref = data.get("payment_ref", "")
     student_id = data.get("student_id")
     amount = float(data.get("amount", 0))
     from datetime import date as _date
@@ -21749,10 +21768,10 @@ def tuck_shop_api_issue_token():
     execute(
         """INSERT INTO tuck_shop_tokens
            (token_number, issue_date, meal_type, student_id, payment_method,
-            amount_paid, issued_by_user_id, issued_at, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued')""",
+            payment_ref, amount_paid, issued_by_user_id, issued_at, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'issued')""",
         (token_num, today, meal_type, student_id, payment_method,
-         amount, user["id"], now_iso()),
+         payment_ref, amount, user["id"], now_iso()),
     )
     student_name = None
     if student_id:

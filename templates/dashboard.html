@@ -70,6 +70,28 @@
   </article>
   {% endif %}
 
+  {# ── TILE: AI ADVISOR — personalized recommendations ── #}
+  {% if ai_advice %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div class="section-head" data-vis="{{ V }}">
+      ✨ AI Advisor
+      <a href="?refresh_advice=1" class="text-link" style="float:right;font-size:0.85rem;" data-vis="{{ V }}">Refresh</a>
+    </div>
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for item in ai_advice %}
+      <a href="{{ item.href }}" class="activity-entry" style="text-decoration:none;color:inherit;" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div class="activity-entry-text" data-vis="{{ V }}">
+            {% if item.priority == 'high' %}🔴{% elif item.priority == 'medium' %}🟡{% else %}🟢{% endif %}
+            {{ item.text }}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+
   {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
   {% if dash_action_items %}
   <article class="card tile tile-full-width tile-dash-action-items tile-dash-operational" data-vis="{{ V }}">

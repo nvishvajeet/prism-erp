@@ -638,34 +638,33 @@ major-version decision.
 
 **Blocked on:** multi-role landing first.
 
-### Tech bet — ERP v2.0 transition
+### Active program — ERP v2.0 shipping line
 
-**Goal:** the long-horizon evolution documented in
-`docs/ERP_VISION.md`. CATALYST becomes the first portal of an
-internal ERP, integrating finance / inventory / HR / academic
-administration. All the hard attributes of `v1.x` are candidates
-for reshaping inside `v2.0`.
+The operator has now explicitly kicked off the `v2.0` line. This
+is no longer just a tech bet. The working source of truth is now
+[`docs/V2_GAP_MAP.md`](docs/V2_GAP_MAP.md).
 
-**ERP-readiness proof point — `v1.7.0`.** The finance portal
-(`/finance`) and grants/budgets (`/finance/grants`) shipped in
-`v1.7.0` demonstrate that CATALYST can absorb a new ERP domain as
-an additive capability on top of `sample_requests` — no schema
-rebuild, no role taxonomy change, no v2.0 required. That
-reframes the v2.0 question: it is no longer "can we become an
-ERP?" (answered: yes, capability by capability on the v1.x
-line). It is now "when does the current frame stop being the
-right frame?" — the paradigm-shift threshold, not a feature
-checklist.
+**Program frame:** `v2.0` means one unified CATALYST product
+across:
 
-**Why it's a tech bet:** it's literally a major-version bump and
-a paradigm shift. Not a task; a direction of travel. Do not
-admit to the progress table — admit to a `v2.0.0-alpha` branch
-when the team is ready to start.
+- the public website,
+- the Ravikiran-facing deployment story,
+- the Lab ERP / operations surface,
+- and the shared ERP spine.
 
-**Blocked on:** deliberate operator kickoff. The old blockers
-(`v1.4.x` stable, `v1.5.x` schema waves landed) have all been
-crossed — we are running `v1.7.0` in production with multi-role,
-finance, messaging, and noticeboard all shipped on v1.x.
+**Current framing from the gap map:**
+
+- already strong: instruments, finance, attendance, vehicles,
+  personnel, inbox, notifications, receipts, tasks, letters,
+  audit, RBAC, crawler discipline
+- partial: public website, Ravikiran presentation, leave
+  planning/calendar, fleet trip depth, structural portability
+- missing: vendor/procurement, inventory/consumables, invoice PDF
+  export, budget alerts, fuller integration API
+
+**Decision:** the `v2.0` line starts by finishing the missing ERP
+domains and unifying the public product shell before doing a
+major-version tag.
 
 ## Parallel task board
 
@@ -694,6 +693,12 @@ finance, messaging, and noticeboard all shipped on v1.x.
 
 | task-id                                                    | lane               | files                                                                                                                         | blocks              | est    | notes                                                                                                                                                                                                |
 |------------------------------------------------------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------|---------------------|--------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `v2/w2.0.a1-vendor-registry`                               | erp-finance        | `app.py`, `templates/finance.html`, `templates/finance_vendor*.html` (new), `docs/V2_GAP_MAP.md`                             | —                   | ~2-4 h | First `v2.0` ERP-completeness wave. Add vendor registry, payment-history view, and finance entry point. Keep it inside the finance portal rather than inventing a disconnected module first.       |
+| `v2/w2.0.a2-invoice-pdf-export`                            | erp-finance        | `app.py`, `templates/finance_invoice_detail.html`, `templates/finance_invoice_pdf.html` (new), `docs/V2_GAP_MAP.md`          | `v2/w2.0.a1-vendor-registry` | ~2 h   | Convert invoices from on-screen records into downloadable artifacts. PDF route + print stylesheet / HTML-to-PDF path acceptable if stable and professional.                                      |
+| `v2/w2.0.a3-budget-alerts`                                 | erp-finance        | `app.py`, `templates/finance_grant_detail.html`, `templates/notifications.html`, `docs/V2_GAP_MAP.md`                        | —                   | ~90 m  | Add 80% / 100% utilization alerts and wire them into the notification spine.                                                                                                                        |
+| `v2/w2.0.a4-leave-calendar`                                | erp-attendance     | `app.py`, `templates/admin_attendance.html`, `templates/attendance_team.html`, `docs/V2_GAP_MAP.md`                          | —                   | ~2 h   | Upgrade attendance from records to planning with a true leave calendar surface.                                                                                                                     |
+| `v2/w2.0.a5-fleet-trip-logging`                            | erp-operations     | `app.py`, `templates/vehicle_detail.html`, `templates/vehicles.html`, `docs/V2_GAP_MAP.md`                                   | —                   | ~2 h   | Make vehicle logs explicitly capture start/end, distance, purpose, and driver-facing operational context.                                                                                          |
+| `v2/w2.0.b1-public-site-unification`                       | public-site        | `templates/portfolio.html`, `templates/dashboard.html`, `static/styles.css`, `docs/V2_GAP_MAP.md`                            | —                   | ~3 h   | Unify the public product shell with the app's interior so CATALYST reads as one brand across website, Ravikiran presentation, and Lab ERP.                                                       |
 | `crawler-expansion/ui-uniformity-v1`                       | crawler-expansion  | `crawlers/strategies/ui_uniformity.py` (new), `crawlers/strategies/__init__.py`, `crawlers/waves.py`                          | —                   | ~1 h   | New strategy asserting every non-exempt template has `<main class="page">`, a `.*-tiles` grid, and uses shared macros. Wire into `behavioral` (not `sanity` — polish not correctness). ~60 lines.    |
 | `css-hygiene/orphan-allowlist-audit`                       | css-hygiene        | `static/styles.css` (read-only probe), `crawlers/strategies/css_orphan.py`                                                    | —                   | ~45 m  | W1.3.8 left ~229 orphans on the allowlist. Walk the list, grep each selector against templates, drop the truly unused ones, document why survivors stay. No new orphans, `css_orphan` stays green.  |
 | `template-polish/sitemap-hover-polish`                     | template-polish    | `templates/sitemap.html`, `static/styles.css`                                                                                 | (css-hygiene lane)  | ~30 m  | Hover-state polish on the role-scoped link grid. CSS collides with css-hygiene lane — coordinate via claim. Prior attempt killed mid-flight (agent 5, 2026-04-11) — audit first, NOOP if already polished. |

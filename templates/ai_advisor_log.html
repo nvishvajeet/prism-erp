@@ -9,7 +9,10 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">AI Advisor Log</h2>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    {% if current_user() and (is_owner(current_user()) or current_user().get('role') == 'super_admin') %}
+    {% if current_user and (is_owner_user or 'super_admin' in current_role_set) %}
+    {% if is_owner_user %}
+    <a href="{{ url_for('admin_ai_settings') }}" class="btn btn-secondary" data-vis="{{ V }}">AI Settings</a>
+    {% endif %}
     <form method="post" action="{{ url_for('ai_advisor_trigger_batch') }}" style="display:inline;" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Process Queue Now</button>

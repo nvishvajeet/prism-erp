@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&larr;</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&larr; Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">AI Settings</h2>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('ai_advisor_log') }}" class="btn btn-secondary" data-vis="{{ V }}">Advisor Log</a>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Provider Status") }}
+    {{ kpi_grid([
+      {"value": ai_settings.mode|title, "label": "Active Mode"},
+      {"value": "Ready" if ai_settings.claude_available else "Missing key", "label": "Claude"},
+      {"value": "Ready" if ai_settings.openai_available else "Missing key", "label": "OpenAI"},
+      {"value": "On" if ai_settings.fallback_enabled else "Off", "label": "Fallback"},
+    ]) }}
+    <p class="hint" data-vis="{{ V }}">
+      Mixed mode keeps the UI fast by preferring Claude for instant parsing and OpenAI for queued/batch work, then falls back when one side is unavailable.
+    </p>
+  </article>
+</section>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Routing Map") }}
+    <div class="metadata-grid" data-vis="{{ V }}">
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Interactive Pane</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ lane_map.interactive|join(" → ") }}</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Queued Advisor</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ lane_map.batch|join(" → ") }}</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Command Parser</span>
+        <span class="metadata-value" data-vis="{{ V }}">{{ lane_map.parser|join(" → ") }}</span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">Claude Model</span>
+        <span class="metadata-value" data-vis="{{ V }}"><code data-vis="{{ V }}">{{ ai_settings.claude_model }}</code></span>
+      </div>
+      <div class="metadata-item" data-vis="{{ V }}">
+        <span class="metadata-label" data-vis="{{ V }}">OpenAI Model</span>
+        <span class="metadata-value" data-vis="{{ V }}"><code data-vis="{{ V }}">{{ ai_settings.openai_model }}</code></span>
+      </div>
+    </div>
+  </article>
+</section>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Provider Controls") }}
+    <form method="post" action="{{ url_for('admin_ai_settings') }}" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <div class="form-field" data-vis="{{ V }}">
+        <label for="ai_provider_mode" data-vis="{{ V }}">Mode</label>
+        <select id="ai_provider_mode" name="ai_provider_mode" data-vis="{{ V }}">
+          <option value="claude" {% if ai_settings.mode == "claude" %}selected{% endif %}>Claude only</option>
+          <option value="openai" {% if ai_settings.mode == "openai" %}selected{% endif %}>OpenAI only</option>
+          <option value="mixed" {% if ai_settings.mode == "mixed" %}selected{% endif %}>Mixed</option>
+        </select>
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label for="ai_claude_model" data-vis="{{ V }}">Claude model</label>
+        <input id="ai_claude_model" type="text" name="ai_claude_model" value="{{ ai_settings.claude_model }}" data-vis="{{ V }}">
+      </div>
+      <div class="form-field" data-vis="{{ V }}">
+        <label for="ai_openai_model" data-vis="{{ V }}">OpenAI model</label>
+        <input id="ai_openai_model" type="text" name="ai_openai_model" value="{{ ai_settings.openai_model }}" data-vis="{{ V }}">
+      </div>
+      <label class="checkbox-inline" style="display:flex;gap:0.6rem;align-items:center;margin:0.75rem 0 1rem;" data-vis="{{ V }}">
+        <input type="checkbox" name="ai_fallback_enabled" value="1" {% if ai_settings.fallback_enabled %}checked{% endif %} data-vis="{{ V }}">
+        <span data-vis="{{ V }}">Enable fallback to the other provider when the preferred side is unavailable.</span>
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save AI Settings</button>
+    </form>
+  </article>
+</section>
+
+{% endblock %}

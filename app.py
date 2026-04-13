@@ -3344,6 +3344,37 @@ def is_owner(user: sqlite3.Row | None) -> bool:
     return bool(user and user["email"].strip().lower() in OWNER_EMAILS)
 
 
+def get_system_setting(key: str, default: str = "") -> str:
+    try:
+        row = query_one("SELECT value FROM system_settings WHERE key = ?", (key,))
+    except sqlite3.OperationalError:
+        return default
+    if row is None:
+        return default
+    return row["value"] or default
+
+
+def set_system_setting(key: str, value: str, user_id: int | None = None) -> None:
+    sql = """
+        INSERT INTO system_settings (key, value, updated_at, updated_by_user_id)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = excluded.updated_at,
+            updated_by_user_id = excluded.updated_by_user_id
+        """
+    params = (key, value, now_iso(), user_id)
+    try:
+        execute(sql, params)
+    except sqlite3.OperationalError:
+        init_db()
+        execute(sql, params)
+
+
+def _setting_truthy(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     "requester": {
         "_is_operational_nav": False,
@@ -5431,6 +5462,14 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_ai_pane_user ON ai_pane_log(user_id);
             CREATE INDEX IF NOT EXISTS idx_ai_pane_date ON ai_pane_log(created_at);
 
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT '',
+                updated_by_user_id INTEGER,
+                FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+            );
+
             -- ERP Portal system: multi-tenant portal separation
             -- Each portal is a distinct ERP "house" (e.g. Ravikiran HQ, Lab R&D)
             CREATE TABLE IF NOT EXISTS erp_portals (
@@ -7246,6 +7285,7 @@ def _recent_combined_notifications(user) -> list[dict]:
 def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
+    ai_settings = _ai_settings_snapshot()
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
     V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     # Instruments for nav hover dropdown (only if user has instrument area access)
@@ -7311,6 +7351,9 @@ def inject_globals():
         # ERP Portal context
         "active_portal": _active_portal_config(),
         "user_portals": _user_portals(user["id"]) if user else [],
+        "ai_settings_global": ai_settings,
+        "ai_provider_label": ai_settings["mode"].title(),
+        "ai_interactive_model_label": _ai_active_model_label("interactive"),
     }
 
 
@@ -19476,21 +19519,163 @@ def _purge_compute_outputs():
         return purged
 
 
-def _ai_call_haiku(prompt: str, max_tokens: int = 4096) -> str:
-    """Single Claude Haiku API call. Returns text or '' on failure."""
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_API_BASE = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+DEFAULT_CLAUDE_MODEL = "claude-haiku-4-20250414"
+DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+
+
+def _ai_settings_snapshot() -> dict[str, object]:
+    mode = get_system_setting("ai_provider_mode", "claude").strip().lower() or "claude"
+    if mode not in {"claude", "openai", "mixed"}:
+        mode = "claude"
+    claude_model = get_system_setting("ai_claude_model", DEFAULT_CLAUDE_MODEL).strip() or DEFAULT_CLAUDE_MODEL
+    openai_model = get_system_setting("ai_openai_model", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
+    fallback_enabled = _setting_truthy(get_system_setting("ai_fallback_enabled", "1"))
+    return {
+        "mode": mode,
+        "claude_model": claude_model,
+        "openai_model": openai_model,
+        "fallback_enabled": fallback_enabled,
+        "claude_available": bool(ANTHROPIC_API_KEY),
+        "openai_available": bool(OPENAI_API_KEY),
+    }
+
+
+def _ai_provider_order(lane: str, settings: dict[str, object] | None = None) -> list[str]:
+    settings = settings or _ai_settings_snapshot()
+    mode = settings["mode"]
+    if mode == "mixed":
+        if lane in {"interactive", "parser"}:
+            return ["claude", "openai"]
+        return ["openai", "claude"]
+    return [mode]
+
+
+def _openai_response_text(data: dict) -> str:
+    output_text = str(data.get("output_text", "") or "").strip()
+    if output_text:
+        return output_text
+    parts: list[str] = []
+    for item in data.get("output", []) or []:
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content", []) or []:
+            if content.get("type") in {"output_text", "text"} and content.get("text"):
+                parts.append(content["text"])
+    return "\n".join(part for part in parts if part).strip()
+
+
+def _anthropic_call(prompt: str, *, max_tokens: int = 4096, system: str = "", model: str = DEFAULT_CLAUDE_MODEL) -> tuple[str, dict]:
     import urllib.request as _urllib_req
     if not ANTHROPIC_API_KEY:
-        return ""
+        return "", {"provider": "claude", "model": model, "tokens_used": 0}
     try:
-        payload = json.dumps({"model": "claude-haiku-4-20250414", "max_tokens": max_tokens,
-                              "messages": [{"role": "user", "content": prompt}]}).encode()
-        req = _urllib_req.Request("https://api.anthropic.com/v1/messages", data=payload,
-                                 headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
+        payload_obj = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            payload_obj["system"] = system
+        payload = json.dumps(payload_obj).encode()
+        req = _urllib_req.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
         resp = _urllib_req.urlopen(req, timeout=30)
         data = json.loads(resp.read())
-        return data.get("content", [{}])[0].get("text", "")
+        text = data.get("content", [{}])[0].get("text", "")
+        usage = data.get("usage", {}) or {}
+        return text, {
+            "provider": "claude",
+            "model": model,
+            "tokens_used": (usage.get("input_tokens", 0) or 0) + (usage.get("output_tokens", 0) or 0),
+        }
     except Exception:
-        return ""
+        return "", {"provider": "claude", "model": model, "tokens_used": 0}
+
+
+def _openai_call(prompt: str, *, max_tokens: int = 4096, system: str = "", model: str = DEFAULT_OPENAI_MODEL) -> tuple[str, dict]:
+    import urllib.request as _urllib_req
+    if not OPENAI_API_KEY:
+        return "", {"provider": "openai", "model": model, "tokens_used": 0}
+    try:
+        payload_obj = {
+            "model": model,
+            "input": prompt,
+            "max_output_tokens": max_tokens,
+        }
+        if system:
+            payload_obj["instructions"] = system
+        payload = json.dumps(payload_obj).encode()
+        req = _urllib_req.Request(
+            f"{OPENAI_API_BASE.rstrip('/')}/responses",
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+            },
+            method="POST",
+        )
+        resp = _urllib_req.urlopen(req, timeout=30)
+        data = json.loads(resp.read())
+        usage = data.get("usage", {}) or {}
+        return _openai_response_text(data), {
+            "provider": "openai",
+            "model": model,
+            "tokens_used": usage.get("total_tokens", 0) or 0,
+        }
+    except Exception:
+        return "", {"provider": "openai", "model": model, "tokens_used": 0}
+
+
+def _ai_generate_text(prompt: str, *, max_tokens: int = 4096, system: str = "", lane: str = "default") -> tuple[str, dict]:
+    settings = _ai_settings_snapshot()
+    providers = _ai_provider_order(lane, settings)
+    if settings.get("fallback_enabled", True):
+        for fallback in ("claude", "openai"):
+            if fallback not in providers:
+                providers.append(fallback)
+    for provider in providers:
+        if provider == "claude":
+            text, meta = _anthropic_call(
+                prompt,
+                max_tokens=max_tokens,
+                system=system,
+                model=str(settings["claude_model"]),
+            )
+        else:
+            text, meta = _openai_call(
+                prompt,
+                max_tokens=max_tokens,
+                system=system,
+                model=str(settings["openai_model"]),
+            )
+        if text:
+            meta["lane"] = lane
+            return text, meta
+    return "", {"provider": "none", "model": "", "tokens_used": 0, "lane": lane}
+
+
+def _ai_active_model_label(lane: str) -> str:
+    settings = _ai_settings_snapshot()
+    provider = _ai_provider_order(lane, settings)[0]
+    if provider == "openai":
+        return str(settings["openai_model"])
+    return str(settings["claude_model"])
+
+
+def _ai_call_haiku(prompt: str, max_tokens: int = 4096) -> str:
+    """Shared AI text helper retained for legacy call sites."""
+    text, _meta = _ai_generate_text(prompt, max_tokens=max_tokens, lane="analysis")
+    return text
 
 
 def _ai_parse_json(raw: str) -> object:
@@ -19686,12 +19871,12 @@ If about data, summarize what you see. If asking for help, give specific guidanc
 Include relevant page links where helpful (e.g. /instruments, /schedule, /finance, /compute).
 Be concise but thorough. Max 300 words."""
 
-    raw = _ai_call_haiku(system_prompt, max_tokens=1500)
+    raw, meta = _ai_generate_text(system_prompt, max_tokens=1500, lane="batch")
     if not raw:
         raw = "AI processing unavailable. Please try again later or contact your administrator."
     execute(
         "UPDATE ai_advisor_queue SET status='processed', response=?, tokens_used=?, processed_at=? WHERE id=?",
-        (raw, len(raw.split()) * 2, now_iso(), entry_id))
+        (raw, meta.get("tokens_used", len(raw.split()) * 2), now_iso(), entry_id))
 
 
 def ai_advisor_batch_process(batch_label: str = "") -> int:
@@ -20653,6 +20838,44 @@ def admin_data_storage():
     )
 
 
+@app.route("/admin/ai-settings", methods=["GET", "POST"])
+@owner_required
+def admin_ai_settings():
+    """Owner control panel for AI provider selection and model defaults."""
+    user = current_user()
+    if request.method == "POST":
+        mode = request.form.get("ai_provider_mode", "claude").strip().lower()
+        if mode not in {"claude", "openai", "mixed"}:
+            mode = "claude"
+        claude_model = request.form.get("ai_claude_model", DEFAULT_CLAUDE_MODEL).strip() or DEFAULT_CLAUDE_MODEL
+        openai_model = request.form.get("ai_openai_model", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
+        fallback_enabled = "1" if request.form.get("ai_fallback_enabled") else "0"
+        set_system_setting("ai_provider_mode", mode, user["id"])
+        set_system_setting("ai_claude_model", claude_model, user["id"])
+        set_system_setting("ai_openai_model", openai_model, user["id"])
+        set_system_setting("ai_fallback_enabled", fallback_enabled, user["id"])
+        log_action(user["id"], "system", 0, "ai_settings_updated", {
+            "mode": mode,
+            "claude_model": claude_model,
+            "openai_model": openai_model,
+            "fallback_enabled": fallback_enabled,
+        })
+        flash("AI settings updated.", "success")
+        return redirect(url_for("admin_ai_settings"))
+
+    settings = _ai_settings_snapshot()
+    lane_map = {
+        "interactive": _ai_provider_order("interactive", settings),
+        "batch": _ai_provider_order("batch", settings),
+        "parser": _ai_provider_order("parser", settings),
+    }
+    return render_template(
+        "admin_ai_settings.html",
+        ai_settings=settings,
+        lane_map=lane_map,
+    )
+
+
 @app.route("/admin/data-storage/migrate", methods=["POST"])
 @owner_required
 def admin_data_migrate():
@@ -20769,34 +20992,14 @@ Commands to parse:
     try:
         import re as _re
 
-        payload = json.dumps({
-            "model": "claude-haiku-4-20250414",
-            "max_tokens": 4096,
-            "messages": [{"role": "user", "content": batch_prompt}],
-        }).encode()
-
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
+        response_text, _meta = _ai_generate_text(batch_prompt, max_tokens=4096, lane="parser")
+        if not response_text:
             for pid in ids:
                 execute(
-                    "UPDATE command_queue SET status='failed', result_message='No API key configured', processed_at=? WHERE id=?",
+                    "UPDATE command_queue SET status='failed', result_message='No AI provider configured', processed_at=? WHERE id=?",
                     (now_iso(), pid),
                 )
             return 0
-
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
-            method="POST",
-        )
-        resp = urllib.request.urlopen(req, timeout=60)
-        resp_data = json.loads(resp.read())
-        response_text = resp_data.get("content", [{}])[0].get("text", "")
 
         json_match = _re.search(r'\[.*\]', response_text, _re.DOTALL)
         parsed_commands = json.loads(json_match.group()) if json_match else []
@@ -22602,9 +22805,6 @@ Available actions (return ONE):
 Return ONLY a JSON object: {"action": "...", "data": {...}, "summary": "one-line human summary", "route_to": "role that should review this (owner/finance_admin/instrument_admin/operator/self)"}
 """
 
-AI_PANE_MODEL = "claude-haiku-4-20250414"
-
-
 def _ai_pane_route_label(action: str) -> str:
     """Human-readable routing label for the action."""
     labels = {
@@ -22671,47 +22871,31 @@ def ai_pane_submit():
     except Exception:
         pass
 
-    # Try Claude API for instant parsing
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     action = "unknown"
     action_data = {}
     summary = "Received — queued for processing"
     route_to = "admin"
     tokens_used = 0
 
-    if api_key:
-        try:
-            payload = json.dumps({
-                "model": AI_PANE_MODEL,
-                "max_tokens": 512,
-                "system": AI_PANE_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": f"{user_context}\n\n{message}"}],
-            }).encode()
-            req = urllib.request.Request(
-                "https://api.anthropic.com/v1/messages",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                },
-                method="POST",
-            )
-            resp = urllib.request.urlopen(req, timeout=15)
-            resp_data = json.loads(resp.read())
-            response_text = resp_data.get("content", [{}])[0].get("text", "")
-            tokens_used = resp_data.get("usage", {}).get("input_tokens", 0) + resp_data.get("usage", {}).get("output_tokens", 0)
+    try:
+        response_text, meta = _ai_generate_text(
+            f"{user_context}\n\n{message}",
+            max_tokens=512,
+            system=AI_PANE_SYSTEM_PROMPT,
+            lane="interactive",
+        )
+        tokens_used = int(meta.get("tokens_used", 0) or 0)
 
-            import re as _re
-            json_match = _re.search(r'\{.*\}', response_text, _re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group())
-                action = parsed.get("action", "unknown")
-                action_data = parsed.get("data", {})
-                summary = parsed.get("summary", summary)
-                route_to = parsed.get("route_to", "admin")
-        except Exception:
-            pass  # Fall through to queue-based processing
+        import re as _re
+        json_match = _re.search(r'\{.*\}', response_text, _re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            action = parsed.get("action", "unknown")
+            action_data = parsed.get("data", {})
+            summary = parsed.get("summary", summary)
+            route_to = parsed.get("route_to", "admin")
+    except Exception:
+        pass  # Fall through to queue-based processing
 
     # Queue in command_queue for execution (reuse existing infra)
     cmd_id = execute(
@@ -22726,7 +22910,7 @@ def ai_pane_submit():
            action_taken, action_data, file_name, tokens_used, model, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (user["id"], page_context, message, summary, action,
-         json.dumps(action_data), file_name, tokens_used, AI_PANE_MODEL, now_iso()),
+         json.dumps(action_data), file_name, tokens_used, _ai_active_model_label("interactive"), now_iso()),
     )
 
     # Execute safe actions immediately (self-serve)

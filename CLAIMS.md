@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | full-lightening-rewrite-v2 | 2026-04-14 00:xx CEST | `app.py`, `templates/base.html`, `templates/_page_macros.html`, `templates/_hub.html`, `templates/admin_data_storage.html`, `templates/payroll.html`, `templates/personnel.html`, `templates/personnel_detail.html`, `templates/vehicles.html`, `templates/vehicle_detail.html`, `templates/filing_retention.html`, `templates/tally_export.html`, `static/styles.css`, `README.md`, `WORKFLOW.md`, `docs/ERP_FUTURE_BUILDER.md`, `docs/DATA_POLICY.md`, `crawlers/strategies/philosophy_propagation.py`, `crawlers/strategies/css_orphan.py`, `crawlers/strategies/cleanup.py`, `CLAIMS.md` | `refactor: lighten core structure without behavior change` |
 
 ## Stale-claim recovery
 

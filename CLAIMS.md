@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| _(empty)_ | — | — | — | — |
+| codex | docs-machine-capacity-policy | 2026-04-13 18:08 CEST | `WORKFLOW.md`, `AGENTS.md`, `docs/DEPLOY.md`, `CLAIMS.md` | `docs: add machine capacity and operator config policy` |
 
 ## Stale-claim recovery
 

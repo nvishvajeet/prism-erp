@@ -3367,13 +3367,6 @@ code {
 .notif-unread { background: rgba(59, 109, 153, 0.06); }
 :root[data-theme="dark"] .notif-unread { background: rgba(155, 227, 229, 0.06); }
 
-.notif-severity-dot {
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 0.35rem;
-}
 .notif-sev-info     { background: var(--accent); }
 .notif-sev-warning  { background: #e8a735; }
 .notif-sev-critical { background: var(--danger); }
@@ -6086,10 +6079,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .explainer-steps strong { color: var(--accent, #4c6ef5); }
 
 /* ── DEV CONSOLE (owner-only /admin/dev_panel) ── */
-.dp-todo-list { list-style: none; padding: 0; margin: 0.25rem 0 0.75rem; }
-.dp-todo-item { display: flex; gap: 0.4rem; padding: 0.15rem 0; font-size: 0.85rem; }
-.dp-todo-done { opacity: 0.55; text-decoration: line-through; }
-.dp-todo-mark { display: inline-block; width: 1.1rem; text-align: center; opacity: 0.7; }
 .dp-doc-wrap { max-height: 22rem; border: 1px solid var(--border, #d0d4dc); border-radius: 8px; background: var(--surface-2, #f6f7fa); }
 .dp-doc { margin: 0; padding: 0.7rem 0.9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 22rem; overflow-y: auto; }
 .code-scroll-block {
@@ -6132,7 +6121,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dp-commit-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.82rem; align-items: baseline; }
 .dp-metadata-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.85rem; }
 .dp-metadata-row-topgap { margin-top: 0.5rem; }
-.dp-bridge-detail { margin: 0.1rem 0 0.5rem; font-size: 0.75rem; }
 .dp-wave-list { list-style: none; padding: 0; margin: 0.25rem 0 0.25rem; }
 .dp-wave-row { display: grid; grid-template-columns: 1rem 4.5rem 1.2rem 5rem 1fr; align-items: baseline; gap: 0.45rem; padding: 0.18rem 0; font-size: 0.8rem; border-bottom: 1px dashed var(--border, #e4e6ec); }
 .dp-wave-row:last-child { border-bottom: 0; }
@@ -6164,14 +6152,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 .dp-commit-when { margin-left: auto; font-size: 0.72rem; opacity: 0.7; }
 
-/* W1.4.3 c2 — Dev panel "Now Shipping" hero tile. */
-.tile-dev-now-shipping {
-  grid-column: 1 / -1;
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent, #4c6ef5) 6%, var(--panel)),
-    var(--panel));
-  border-left: 3px solid var(--accent, #4c6ef5);
-}
 .dev-now-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -6698,18 +6678,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .mc-commit-subject { flex: 1; color: var(--ink); }
 .mc-commit-meta { font-size: 0.75rem; white-space: nowrap; }
 
-/* Clickable PROJECT TIMELINE entries (anchor wrapping the pill) */
-.dev-timeline-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  text-decoration: none;
-  color: inherit;
-}
-.dev-timeline-link:hover .dev-timeline-tag {
-  background: color-mix(in srgb, var(--accent, #4c6ef5) 20%, var(--panel));
-  border-color: var(--accent, #4c6ef5);
-}
 
 /* v1.6.0 — NOTICEBOARD + QUICK ACTIONS home tiles (Ferrari aesthetic).
    Earthy-red severity accents on critical, amber on warning, ink on
@@ -7473,7 +7441,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   background: var(--panel);
 }
 
-.finance-invoice-paid-row{ border-left-color: #2f9e44; background: color-mix(in srgb, #2f9e44 2%, var(--panel)); }
 .finance-invoice-link {
   display: block;
   padding: 0.7rem 0.95rem;
@@ -7505,7 +7472,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
-.finance-invoice-paid-row .finance-invoice-amount { color: #2f9e44; }
 .finance-invoice-meta {
   margin-top: 0.2rem;
   font-size: 0.72rem;
@@ -8053,7 +8019,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 
 /* ── Finance paid amounts ───────────────────────────────── */
-:root[data-theme="dark"] .finance-invoice-paid-row .finance-invoice-amount { color: var(--lifecycle-ok); }
 
 /* ── Table header + body text ───────────────────────────── */
 :root[data-theme="dark"] th { color: var(--muted); }
@@ -9056,16 +9021,9 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 .inline-actions-row-topgap {
   margin-top: 0.75rem;
 }
-.inline-self-center {
-  align-self: center;
-}
 .centered-padded-block {
   padding: 2rem;
   text-align: center;
-}
-.queue-position-value {
-  font-size: 3rem;
-  font-weight: 700;
 }
 .body-copy-prewrap {
   white-space: pre-wrap;
@@ -9184,27 +9142,8 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 .tile-accent-danger {
   border-left: 3px solid var(--danger, #b84a4a);
 }
-.badge-solid-green {
-  background: var(--tone-green, #2d8659);
-  color: #fff;
-}
-.badge-solid-amber {
-  background: var(--tone-amber, #f59e0b);
-  color: #fff;
-}
-.badge-solid-blue {
-  background: var(--tone-blue, #3b82f6);
-  color: #fff;
-}
-.badge-solid-red {
-  background: var(--tone-red, #ef4444);
-  color: #fff;
-}
 .copy-urgent {
   color: var(--danger, #b84a4a);
-}
-.row-muted {
-  opacity: 0.6;
 }
 
 /* Muted badge */

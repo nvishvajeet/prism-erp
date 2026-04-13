@@ -20,14 +20,15 @@
 
   {# ── FOCUS · KPI Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {% set active_count = staff|selectattr('is_active', 'defined')|selectattr('is_active')|list|length if staff|first is mapping and 'is_active' in (staff|first).keys() else staff|length %}
-    {% set on_leave_count = staff|length - active_count %}
-    {% set total_payroll = staff|sum(attribute='monthly_salary', default=0) %}
+    {% set active_count = staff|length %}
+    {% set on_leave_count = 0 %}
+    {% set total_payroll = namespace(v=0) %}
+    {% for s in staff %}{% if s.monthly_salary %}{% set total_payroll.v = total_payroll.v + s.monthly_salary %}{% endif %}{% endfor %}
     {{ kpi_grid([
       {"value": staff|length|string,                          "label": "Total Staff"},
       {"value": active_count|string,                          "label": "Active",          "tone": "green"},
       {"value": on_leave_count|string,                        "label": "On Leave",        "tone": "amber"},
-      {"value": "₹" ~ "{:,.0f}".format(total_payroll),       "label": "Monthly Payroll"},
+      {"value": "₹" ~ "{:,.0f}".format(total_payroll.v),      "label": "Monthly Payroll"},
     ]) }}
   </article>
 

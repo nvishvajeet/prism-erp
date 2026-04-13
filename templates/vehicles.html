@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Vehicles</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ totals.count }} vehicle{{ "s" if totals.count != 1 else "" }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": totals.count|string,                          "label": "Total Vehicles"},
+      {"value": totals.active|string,                         "label": "Active",        "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(totals.total_spend),  "label": "Total Spend"},
+    ]) }}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Fleet") }}
+    <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    {% if vehicles %}
+    <table class="data-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Vehicle</th>
+          <th data-vis="{{ V }}">Registration</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">Drivers</th>
+          <th class="num" data-vis="{{ V }}">Expenses</th>
+          <th class="num" data-vis="{{ V }}">Maintenance</th>
+          <th class="num" data-vis="{{ V }}">Trips</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for v in vehicles %}
+        <tr class="clickable-row" data-href="{{ url_for('vehicle_detail', vehicle_id=v.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ v.name }}</strong><br><span class="hint" data-vis="{{ V }}">{{ v.make }} {{ v.model }}</span></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ v.registration_number }}</code></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ v.vehicle_type|upper }}</span></td>
+          <td data-vis="{{ V }}">{{ v.drivers or '—' }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total_expenses or 0) }}</td>
+          <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total_maintenance_cost or 0) }}</td>
+          <td class="num" data-vis="{{ V }}">{{ v.trip_count or 0 }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-{{ v.status }}" data-vis="{{ V }}">{{ v.status|capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No vehicles added yet.") }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input,select,form'))return;
+      window.location=r.dataset.href;
+    });
+  });
+  var searchInput=document.getElementById('vehSearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('tbody tr');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){
+        r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}

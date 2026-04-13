@@ -243,6 +243,15 @@ MODULE_REGISTRY = {
         "nav_endpoint": "stats",
         "nav_active_endpoints": {"stats", "visualizations", "instrument_visualization", "group_visualization"},
     },
+    "vehicles": {
+        "label": "Vehicles",
+        "icon": "\U0001f697",
+        "nav_order": 9,
+        "description": "Vehicle fleet management",
+        "nav_endpoint": "vehicles_list",
+        "nav_active_endpoints": {"vehicles_list", "vehicle_detail", "vehicle_maintenance_log", "vehicle_expenses_page", "vehicle_trips_page"},
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+    },
     "admin": {
         "label": "Admin",
         "icon": "\u2699\ufe0f",
@@ -4619,6 +4628,93 @@ def init_db() -> None:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_letters_author ON letters(author_user_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_letters_status ON letters(status)")
 
+        # ── Vehicle / Fleet module ──────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS vehicles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                code TEXT UNIQUE NOT NULL,
+                registration_number TEXT NOT NULL DEFAULT '',
+                make TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                vehicle_type TEXT NOT NULL DEFAULT 'car',
+                fuel_type TEXT NOT NULL DEFAULT 'petrol',
+                year INTEGER,
+                color TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                notes TEXT NOT NULL DEFAULT '',
+                photo_url TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS vehicle_drivers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vehicle_id INTEGER NOT NULL,
+                user_id INTEGER,
+                driver_name TEXT NOT NULL DEFAULT '',
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                assigned_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_veh_drivers_vehicle ON vehicle_drivers(vehicle_id);
+
+            CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vehicle_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL DEFAULT 'service',
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                performed_by TEXT NOT NULL DEFAULT '',
+                performed_at TEXT NOT NULL DEFAULT '',
+                next_due_at TEXT,
+                cost REAL NOT NULL DEFAULT 0,
+                odometer_km REAL,
+                receipt_number TEXT NOT NULL DEFAULT '',
+                created_by_user_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_veh_maint_vehicle ON vehicle_maintenance(vehicle_id);
+            CREATE INDEX IF NOT EXISTS idx_veh_maint_type ON vehicle_maintenance(event_type);
+
+            CREATE TABLE IF NOT EXISTS vehicle_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vehicle_id INTEGER NOT NULL,
+                expense_type TEXT NOT NULL DEFAULT 'fuel',
+                description TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL DEFAULT 0,
+                expense_date TEXT NOT NULL DEFAULT '',
+                odometer_km REAL,
+                receipt_number TEXT NOT NULL DEFAULT '',
+                recorded_by_user_id INTEGER,
+                recorded_at TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_veh_exp_vehicle ON vehicle_expenses(vehicle_id);
+
+            CREATE TABLE IF NOT EXISTS vehicle_trips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vehicle_id INTEGER NOT NULL,
+                driver_name TEXT NOT NULL DEFAULT '',
+                purpose TEXT NOT NULL DEFAULT '',
+                start_location TEXT NOT NULL DEFAULT '',
+                end_location TEXT NOT NULL DEFAULT '',
+                start_odometer REAL,
+                end_odometer REAL,
+                trip_date TEXT NOT NULL DEFAULT '',
+                requested_by_user_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'completed',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (requested_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_veh_trips_vehicle ON vehicle_trips(vehicle_id);
+        """)
+
         # Additive column migrations for v1.1.0
         for col_sql in [
             "ALTER TABLE invoices ADD COLUMN invoice_number TEXT NOT NULL DEFAULT ''",
@@ -4652,6 +4748,7 @@ def init_db() -> None:
     # v1.7.0 — seed demo grants + link some external requests to them
     # so the /finance/grants portal renders populated budgets + spend.
     _seed_demo_grants()
+    _seed_demo_vehicles()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -4749,6 +4846,46 @@ def _drop_legacy_finance_columns() -> None:
                     # leave it. The runtime never reads it anyway.
                     pass
         db.commit()
+    finally:
+        db.close()
+
+
+def _seed_demo_vehicles() -> None:
+    """Seed 2 demo vehicles + 3 drivers. Idempotent."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        existing = db.execute("SELECT COUNT(*) AS c FROM vehicles").fetchone()["c"]
+        if existing > 0:
+            return
+        now = now_iso()
+        cur = db.cursor()
+        # Vehicles
+        cur.execute(
+            "INSERT INTO vehicles (name, code, registration_number, make, model, vehicle_type, fuel_type, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Innova", "VEH-001", "MH 12 MB 0350", "Toyota", "Innova Crysta", "suv", "diesel", "White", "active", now),
+        )
+        innova_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO vehicles (name, code, registration_number, make, model, vehicle_type, fuel_type, color, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("Camry", "VEH-002", "MH 12 3339", "Toyota", "Camry", "sedan", "petrol", "Silver", "active", now),
+        )
+        camry_id = cur.lastrowid
+        # Drivers — look up by name first, fall back to standalone entries
+        driver_names = ["Balaji Phunde", "Balu Patil", "Mangesh Ghule"]
+        for i, dname in enumerate(driver_names):
+            user_row = db.execute("SELECT id FROM users WHERE name = ?", (dname,)).fetchone()
+            uid = user_row["id"] if user_row else None
+            # Assign first two drivers to Innova, third to Camry
+            vid = innova_id if i < 2 else camry_id
+            is_primary = 1 if i in (0, 2) else 0
+            cur.execute(
+                "INSERT INTO vehicle_drivers (vehicle_id, user_id, driver_name, is_primary, assigned_at) VALUES (?, ?, ?, ?, ?)",
+                (vid, uid, dname, is_primary, now),
+            )
+        db.commit()
+    except Exception:
+        pass
     finally:
         db.close()
 
@@ -14896,6 +15033,154 @@ def prism_clear():
     if PRISM_LOG.exists():
         PRISM_LOG.write_text("{}")
     return jsonify(ok=True)
+
+
+# ── Vehicle / Fleet ERP module ──────────────────────────────────
+
+
+@app.route("/vehicles")
+@login_required
+def vehicles_list():
+    """List all vehicles with driver + expense summary."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    vehicles = query_all("""
+        SELECT v.*,
+               (SELECT GROUP_CONCAT(vd.driver_name, ', ')
+                  FROM vehicle_drivers vd WHERE vd.vehicle_id = v.id) AS drivers,
+               (SELECT COALESCE(SUM(ve.amount), 0)
+                  FROM vehicle_expenses ve WHERE ve.vehicle_id = v.id) AS total_expenses,
+               (SELECT COALESCE(SUM(vm.cost), 0)
+                  FROM vehicle_maintenance vm WHERE vm.vehicle_id = v.id) AS total_maintenance_cost,
+               (SELECT COUNT(*)
+                  FROM vehicle_trips vt WHERE vt.vehicle_id = v.id) AS trip_count
+          FROM vehicles v
+         ORDER BY v.status ASC, v.name ASC
+    """)
+    totals = {
+        "count": len(vehicles),
+        "active": sum(1 for v in vehicles if v["status"] == "active"),
+        "total_spend": sum((v["total_expenses"] or 0) + (v["total_maintenance_cost"] or 0) for v in vehicles),
+    }
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    return render_template("vehicles.html", vehicles=vehicles, totals=totals, can_manage=can_manage)
+
+
+@app.route("/vehicles/<int:vehicle_id>")
+@login_required
+def vehicle_detail(vehicle_id: int):
+    """Vehicle snapshot: info, drivers, recent expenses, maintenance, trips."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    drivers = query_all("SELECT * FROM vehicle_drivers WHERE vehicle_id = ? ORDER BY is_primary DESC, driver_name", (vehicle_id,))
+    expenses = query_all("SELECT ve.*, u.name AS recorder_name FROM vehicle_expenses ve LEFT JOIN users u ON u.id = ve.recorded_by_user_id WHERE ve.vehicle_id = ? ORDER BY ve.expense_date DESC LIMIT 20", (vehicle_id,))
+    maintenance = query_all("SELECT vm.*, u.name AS creator_name FROM vehicle_maintenance vm LEFT JOIN users u ON u.id = vm.created_by_user_id WHERE vm.vehicle_id = ? ORDER BY vm.performed_at DESC LIMIT 20", (vehicle_id,))
+    trips = query_all("SELECT vt.*, u.name AS requester_name FROM vehicle_trips vt LEFT JOIN users u ON u.id = vt.requested_by_user_id WHERE vt.vehicle_id = ? ORDER BY vt.trip_date DESC LIMIT 20", (vehicle_id,))
+    total_expenses = sum(e["amount"] for e in expenses)
+    total_maint = sum(m["cost"] for m in maintenance)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    return render_template("vehicle_detail.html", vehicle=vehicle, drivers=drivers,
+                           expenses=expenses, maintenance=maintenance, trips=trips,
+                           total_expenses=total_expenses, total_maint=total_maint,
+                           can_manage=can_manage, today=date.today().isoformat())
+
+
+@app.route("/vehicles/<int:vehicle_id>/expenses", methods=["POST"])
+@login_required
+def vehicle_add_expense(vehicle_id: int):
+    """Record a vehicle expense."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    desc = request.form.get("description", "").strip()
+    amount = float(request.form.get("amount", "0") or "0")
+    expense_type = request.form.get("expense_type", "fuel").strip()
+    expense_date = request.form.get("expense_date", "").strip() or date.today().isoformat()
+    odometer = request.form.get("odometer_km", "").strip()
+    receipt_number = request.form.get("receipt_number", "").strip()
+    notes = request.form.get("notes", "").strip()
+    if not desc or amount <= 0:
+        flash("Description and positive amount required.", "error")
+        return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+    eid = execute(
+        "INSERT INTO vehicle_expenses (vehicle_id, expense_type, description, amount, expense_date, odometer_km, receipt_number, recorded_by_user_id, recorded_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (vehicle_id, expense_type, desc, amount, expense_date,
+         float(odometer) if odometer else None, receipt_number, user["id"], now_iso(), notes),
+    )
+    log_action(user["id"], "vehicle", vehicle_id, "expense_added", {"amount": amount, "type": expense_type})
+    flash(f"Expense ₹{amount:,.0f} recorded.", "success")
+    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+
+
+@app.route("/vehicles/<int:vehicle_id>/maintenance", methods=["POST"])
+@login_required
+def vehicle_add_maintenance(vehicle_id: int):
+    """Log a maintenance event for a vehicle."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    title = request.form.get("title", "").strip()
+    event_type = request.form.get("event_type", "service").strip()
+    description = request.form.get("description", "").strip()
+    performed_by = request.form.get("performed_by", "").strip()
+    performed_at = request.form.get("performed_at", "").strip() or date.today().isoformat()
+    next_due_at = request.form.get("next_due_at", "").strip() or None
+    cost = float(request.form.get("cost", "0") or "0")
+    odometer = request.form.get("odometer_km", "").strip()
+    receipt_number = request.form.get("receipt_number", "").strip()
+    if not title:
+        flash("Title is required.", "error")
+        return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+    execute(
+        "INSERT INTO vehicle_maintenance (vehicle_id, event_type, title, description, performed_by, performed_at, next_due_at, cost, odometer_km, receipt_number, created_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (vehicle_id, event_type, title, description, performed_by, performed_at,
+         next_due_at, cost, float(odometer) if odometer else None, receipt_number, user["id"], now_iso()),
+    )
+    log_action(user["id"], "vehicle", vehicle_id, "maintenance_logged", {"title": title, "type": event_type, "cost": cost})
+    flash(f"Maintenance '{title}' logged.", "success")
+    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+
+
+@app.route("/vehicles/<int:vehicle_id>/trips", methods=["POST"])
+@login_required
+def vehicle_add_trip(vehicle_id: int):
+    """Log a trip for a vehicle."""
+    user = current_user()
+    if not module_enabled("vehicles"):
+        abort(404)
+    vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
+    if not vehicle:
+        abort(404)
+    purpose = request.form.get("purpose", "").strip()
+    start_loc = request.form.get("start_location", "").strip()
+    end_loc = request.form.get("end_location", "").strip()
+    driver_name = request.form.get("driver_name", "").strip()
+    trip_date = request.form.get("trip_date", "").strip() or date.today().isoformat()
+    start_odo = request.form.get("start_odometer", "").strip()
+    end_odo = request.form.get("end_odometer", "").strip()
+    if not purpose:
+        flash("Trip purpose is required.", "error")
+        return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
+    execute(
+        "INSERT INTO vehicle_trips (vehicle_id, driver_name, purpose, start_location, end_location, start_odometer, end_odometer, trip_date, requested_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (vehicle_id, driver_name, purpose, start_loc, end_loc,
+         float(start_odo) if start_odo else None, float(end_odo) if end_odo else None,
+         trip_date, user["id"], now_iso()),
+    )
+    log_action(user["id"], "vehicle", vehicle_id, "trip_logged", {"purpose": purpose, "driver": driver_name})
+    flash("Trip logged.", "success")
+    return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
 
 
 # ── Receipts ERP module ─────────────────────────────────────────

@@ -15415,6 +15415,90 @@ def attendance_team_leave_reject(leave_id: int):
 
 
 # ── Team Attendance — supervisors mark attendance for workers ────
+@app.route("/attendance/api/quick-mark", methods=["POST"])
+@login_required
+def attendance_api_quick_mark():
+    """AJAX rapid-fire attendance: admin types 3-letter code → person marked present.
+    Returns JSON with name + status for instant feedback."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin", "instrument_admin", "finance_admin"} or is_owner(user)):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    status = (data.get("status") or "present").strip()
+    if status not in ("present", "absent", "half", "leave"):
+        status = "present"
+    if not code or len(code) < 2:
+        return jsonify({"ok": False, "error": "Code too short"})
+    # Find by short_code, member_code, or name prefix
+    target = query_one(
+        "SELECT id, name, short_code FROM users WHERE UPPER(short_code) = ? AND active = 1",
+        (code,),
+    )
+    if not target:
+        # Fallback: try member_code
+        target = query_one(
+            "SELECT id, name, short_code FROM users WHERE UPPER(member_code) = ? AND active = 1",
+            (code,),
+        )
+    if not target:
+        # Fallback: fuzzy match on name start
+        target = query_one(
+            "SELECT id, name, short_code FROM users WHERE UPPER(name) LIKE ? AND active = 1 LIMIT 1",
+            (code + "%",),
+        )
+    if not target:
+        return jsonify({"ok": False, "error": f"No match for '{code}'"})
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
+    if existing:
+        execute("UPDATE attendance SET status = ?, marked_by_user_id = ? WHERE id = ?",
+                (status, user["id"], existing["id"]))
+    else:
+        execute(
+            "INSERT INTO attendance (user_id, date, status, check_in, marked_by_user_id, created_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (target["id"], today, status, now_iso()[:16], user["id"], now_iso(), "Quick mark"),
+        )
+    log_action(user["id"], "attendance", target["id"], "quick_mark",
+               {"code": code, "status": status})
+    return jsonify({
+        "ok": True,
+        "name": target["name"],
+        "code": target["short_code"] or code,
+        "status": status,
+    })
+
+
+@app.route("/attendance/api/search-staff")
+@login_required
+def attendance_api_search_staff():
+    """AJAX search for staff by short_code, name, or member_code."""
+    user = current_user()
+    roles = user_role_set(user)
+    if not (roles & {"super_admin", "site_admin", "instrument_admin", "finance_admin"} or is_owner(user)):
+        return jsonify([])
+    q = request.args.get("q", "").strip().upper()
+    if len(q) < 1:
+        return jsonify([])
+    results = query_all(
+        """
+        SELECT id, name, short_code, role
+        FROM users
+        WHERE active = 1 AND (
+            UPPER(short_code) LIKE ? OR UPPER(name) LIKE ? OR UPPER(member_code) LIKE ?
+        )
+        ORDER BY name LIMIT 8
+        """,
+        (q + "%", q + "%", q + "%"),
+    )
+    return jsonify([{
+        "id": r["id"], "name": r["name"],
+        "code": r["short_code"] or "", "role": r["role"],
+    } for r in results])
+
+
 @app.route("/attendance/team")
 @login_required
 def attendance_team():
@@ -15426,10 +15510,10 @@ def attendance_team():
     from datetime import date as _date
     today = _date.today().isoformat()
     if is_owner(user) or roles & {"super_admin", "site_admin", "finance_admin"}:
-        team = query_all("SELECT id, name, email, role FROM users WHERE active = 1 AND id != ? ORDER BY name", (user["id"],))
+        team = query_all("SELECT id, name, email, role, short_code FROM users WHERE active = 1 AND id != ? ORDER BY name", (user["id"],))
     else:
         team = query_all("""
-            SELECT DISTINCT u.id, u.name, u.email, u.role
+            SELECT DISTINCT u.id, u.name, u.email, u.role, u.short_code
             FROM users u
             JOIN instrument_operators io ON io.user_id = u.id
             JOIN instrument_admins ia ON ia.instrument_id = io.instrument_id
@@ -16572,13 +16656,21 @@ def personnel_list():
         abort(403)
     can_edit = _personnel_can_edit(user)
     staff = query_all("""
-        SELECT u.id, u.name, u.email, u.role,
+        SELECT u.id, u.name, u.email, u.role, u.short_code, u.active,
                sc.monthly_salary, sc.designation, sc.department, sc.join_date
           FROM users u
           LEFT JOIN salary_config sc ON sc.user_id = u.id
          ORDER BY u.name
     """)
-    return render_template("personnel.html", staff=staff, can_edit=can_edit)
+    # Get today's attendance for quick-mark widget
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    attendance_map = {}
+    att_rows = query_all("SELECT user_id, status FROM attendance WHERE date = ?", (today,))
+    for a in att_rows:
+        attendance_map[a["user_id"]] = a["status"]
+    return render_template("personnel.html", staff=staff, can_edit=can_edit,
+                           attendance_map=attendance_map, today=today)
 
 
 @app.route("/personnel/<int:user_id>")

@@ -32,6 +32,29 @@
     ]) }}
   </article>
 
+  {# ── QUICK ATTENDANCE · Rapid mark widget ── #}
+  {% if can_edit %}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("QUICK ATTENDANCE", "Type 3-letter code → mark present") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL…)" autocomplete="off" data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.15em;max-width:16rem;font-family:monospace;font-weight:700;">
+        <select id="quickStatus" data-vis="{{ V }}">
+          <option value="present" data-vis="{{ V }}">Present</option>
+          <option value="half" data-vis="{{ V }}">Half Day</option>
+          <option value="absent" data-vis="{{ V }}">Absent</option>
+        </select>
+        <span id="quickResult" style="font-weight:600;min-width:10rem;" data-vis="{{ V }}"></span>
+      </div>
+      <div id="quickLog" style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.3rem;" data-vis="{{ V }}"></div>
+      <p class="hint" style="margin-top:0.25rem;" data-vis="{{ V }}">
+        Type code + Enter. Codes shown next to each name below.
+        <a href="{{ url_for('attendance_team') }}" class="text-link" data-vis="{{ V }}">Full attendance page →</a>
+      </p>
+    </div>
+  </article>
+  {% endif %}
+
   {# ── ATTENTION · Staff Directory ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("STAFF", "Directory") }}
@@ -40,11 +63,12 @@
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Code</th>
           <th data-vis="{{ V }}">Name</th>
-          <th data-vis="{{ V }}">Username</th>
           <th data-vis="{{ V }}">Role</th>
           <th data-vis="{{ V }}">Designation</th>
           <th data-vis="{{ V }}">Department</th>
+          <th data-vis="{{ V }}">Today</th>
           {% if can_edit %}
           <th class="num" data-vis="{{ V }}">Monthly Salary</th>
           {% endif %}
@@ -54,8 +78,8 @@
       <tbody data-vis="{{ V }}">
         {% for s in staff %}
         <tr class="clickable-row" data-href="{{ url_for('personnel_detail', user_id=s.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code style="font-weight:700;letter-spacing:0.1em;" data-vis="{{ V }}">{{ s.short_code or '—' }}</code></td>
           <td data-vis="{{ V }}">{{ person_chip(s.name, user_id=s.id, size='sm') }}</td>
-          <td data-vis="{{ V }}">{{ s.email or "—" }}</td>
           <td data-vis="{{ V }}">
             {% if s.role == 'operator' %}
             <span class="badge badge-role" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
@@ -69,6 +93,18 @@
           </td>
           <td data-vis="{{ V }}">{{ s.designation or "—" }}</td>
           <td data-vis="{{ V }}">{{ s.department or "—" }}</td>
+          <td data-vis="{{ V }}">
+            {% set att = attendance_map.get(s.id) %}
+            {% if att == 'present' %}
+            <span class="badge status-active" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Present</span>
+            {% elif att == 'absent' %}
+            <span class="badge" style="background:var(--tone-red);color:var(--bg);" data-vis="{{ V }}">Absent</span>
+            {% elif att == 'half' %}
+            <span class="badge" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">Half</span>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
           {% if can_edit %}
           <td class="num" data-vis="{{ V }}">{% if s.monthly_salary %}₹{{ "{:,.0f}".format(s.monthly_salary) }}{% else %}—{% endif %}</td>
           {% endif %}
@@ -86,12 +122,15 @@
 
 <script>
 (function(){
+  /* ── Clickable rows ── */
   document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
     r.addEventListener('click',function(e){
       if(e.target.closest('a,button,input,select,form'))return;
       window.location=r.dataset.href;
     });
   });
+
+  /* ── Staff search ── */
   var si=document.getElementById('staffSearch');
   if(si){
     var rows=document.querySelectorAll('tbody tr');
@@ -100,6 +139,44 @@
       rows.forEach(function(r){r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';});
     });
   }
+
+  /* ── Quick attendance mark ── */
+  var input = document.getElementById('quickCode');
+  var result = document.getElementById('quickResult');
+  var log = document.getElementById('quickLog');
+  var statusSel = document.getElementById('quickStatus');
+  if(!input) return;
+
+  input.addEventListener('keypress', function(e){
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    var code = input.value.trim().toUpperCase();
+    if(!code) return;
+    var status = statusSel.value;
+    result.innerHTML = '<span class="hint">Marking…</span>';
+    fetch('{{ url_for("attendance_api_quick_mark") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({code: code, status: status})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.ok) {
+        result.innerHTML = '<span style="color:var(--tone-green);font-weight:700;">✓ ' + data.name + ' — ' + data.status + '</span>';
+        var chip = document.createElement('span');
+        chip.style.cssText = 'padding:0.2rem 0.5rem;border-radius:4px;background:var(--color-green-bg, rgba(52,199,89,0.12));font-size:0.8rem;font-weight:600;';
+        chip.textContent = data.code + ' ' + data.name.split(' ')[0];
+        log.appendChild(chip);
+      } else {
+        result.innerHTML = '<span style="color:var(--tone-red);font-weight:600;">✗ ' + (data.error || 'Unknown') + '</span>';
+      }
+      input.value = '';
+      input.focus();
+    })
+    .catch(function(err){
+      result.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+    });
+  });
 })();
 </script>
 {% endblock %}

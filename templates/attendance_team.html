@@ -30,6 +30,42 @@
     ]) }}
   </article>
 
+  {# ── RAPID MARK · Type 3-letter code to mark present instantly ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("QUICK MARK", "Type 3-letter code → instant present") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL, MAN…)" autocomplete="off" autofocus data-vis="{{ V }}" style="font-size:1.5rem;text-transform:uppercase;letter-spacing:0.2em;max-width:20rem;font-family:monospace;font-weight:700;">
+        <select id="quickStatus" data-vis="{{ V }}">
+          <option value="present" data-vis="{{ V }}">Present</option>
+          <option value="half" data-vis="{{ V }}">Half Day</option>
+          <option value="absent" data-vis="{{ V }}">Absent</option>
+        </select>
+      </div>
+      <div id="quickResult" style="margin-top:0.5rem;min-height:2rem;" data-vis="{{ V }}"></div>
+      <div id="quickSuggestions" style="margin-top:0.25rem;" data-vis="{{ V }}"></div>
+      <div id="quickLog" style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;" data-vis="{{ V }}"></div>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">
+        Type the 3-letter code and press Enter. Each person has a unique code shown below their name.
+        Multiple ways: type code + Enter, click the ✓/✗ buttons below, or "Mark All Present".
+      </p>
+    </div>
+  </article>
+
+  {# ── Code Reference ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CODE REFERENCE", "3-letter codes for quick marking") }}
+    <div class="control-flex-wrap" style="padding:0.5rem 0.75rem;gap:0.5rem;" data-vis="{{ V }}">
+      {% for m in team %}
+      <div style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.6rem;border-radius:6px;background:var(--color-separator, rgba(255,255,255,0.06));font-size:0.8rem;" data-vis="{{ V }}">
+        <code style="font-weight:700;letter-spacing:0.1em;font-size:0.9rem;" data-vis="{{ V }}">{{ m.short_code or '—' }}</code>
+        <span data-vis="{{ V }}">{{ m.name.split(' ')[0] }}</span>
+        {% if m.today_status == 'present' %}<span style="color:var(--tone-green);" data-vis="{{ V }}">✓</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
   {# ── ATTENTION · Team Members ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ATTENDANCE", "Team Members (" ~ team|length ~ ")") }}
@@ -39,6 +75,7 @@
       <div class="quick-intake-card quick-intake-card-{{ 'approved' if m.today_status == 'present' else 'pending' if m.today_status == 'half' else 'in_progress' if m.today_status == 'absent' else 'scheduled' }}" data-vis="{{ V }}">
         <div class="quick-intake-card-body" data-vis="{{ V }}">
           {{ person_chip(m.name, user_id=m.id, size='sm') }}
+          <code style="font-weight:700;letter-spacing:0.1em;font-size:0.85rem;" data-vis="{{ V }}">{{ m.short_code or '—' }}</code>
           <span class="quick-intake-requester hint" data-vis="{{ V }}">{{ m.role|replace('_',' ')|title }}</span>
           {# ── Prominent status indicator ── #}
           {% if m.today_status == 'present' %}
@@ -83,4 +120,68 @@
     {% endif %}
   </article>
 </section>
+
+<script>
+(function(){
+  var input = document.getElementById('quickCode');
+  var result = document.getElementById('quickResult');
+  var suggestions = document.getElementById('quickSuggestions');
+  var log = document.getElementById('quickLog');
+  var statusSel = document.getElementById('quickStatus');
+  if(!input) return;
+
+  // Submit on Enter
+  input.addEventListener('keypress', function(e){
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    var code = input.value.trim().toUpperCase();
+    if(!code) return;
+    var status = statusSel.value;
+    result.innerHTML = '<span class="hint">Marking…</span>';
+    fetch('{{ url_for("attendance_api_quick_mark") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({code: code, status: status})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.ok) {
+        result.innerHTML = '<span style="color:var(--tone-green);font-weight:700;font-size:1.1rem;">✓ ' + data.name + ' — ' + data.status + '</span>';
+        // Add to log strip
+        var chip = document.createElement('span');
+        chip.style.cssText = 'padding:0.2rem 0.5rem;border-radius:4px;background:var(--color-green-bg, rgba(52,199,89,0.12));font-size:0.8rem;font-weight:600;';
+        chip.textContent = data.code + ' ' + data.name.split(' ')[0];
+        log.appendChild(chip);
+      } else {
+        result.innerHTML = '<span style="color:var(--tone-red);font-weight:600;">✗ ' + (data.error || 'Unknown') + '</span>';
+      }
+      input.value = '';
+      input.focus();
+      suggestions.innerHTML = '';
+    })
+    .catch(function(err){
+      result.innerHTML = '<span style="color:var(--tone-red);">Network error</span>';
+    });
+  });
+
+  // Live suggestions as you type
+  var debounce;
+  input.addEventListener('input', function(){
+    clearTimeout(debounce);
+    var q = input.value.trim();
+    if(q.length < 1){ suggestions.innerHTML = ''; return; }
+    debounce = setTimeout(function(){
+      fetch('{{ url_for("attendance_api_search_staff") }}?q=' + encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(!data.length){ suggestions.innerHTML = '<span class="hint">No match</span>'; return; }
+          suggestions.innerHTML = data.map(function(s){
+            return '<span style="display:inline-block;padding:0.2rem 0.5rem;margin:0.15rem;border-radius:4px;background:var(--color-separator, rgba(255,255,255,0.06));font-size:0.8rem;cursor:pointer;" onclick="document.getElementById(\'quickCode\').value=\'' + s.code + '\';document.getElementById(\'quickCode\').dispatchEvent(new KeyboardEvent(\'keypress\',{key:\'Enter\'}));">' +
+              '<code style="font-weight:700;">' + s.code + '</code> ' + s.name + '</span>';
+          }).join('');
+        });
+    }, 200);
+  });
+})();
+</script>
 {% endblock %}

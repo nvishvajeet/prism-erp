@@ -19532,11 +19532,35 @@ Return ONLY the converted file content. No markdown fences. If impossible, start
 
 
 def _ai_fill_form(page_context: str, form_fields: list, user_text: str, user_role: str) -> dict:
-    """AI form-filling: natural language to field values."""
-    prompt = f"""You are a form assistant for Catalyst ERP (university research lab).
+    """AI form-filling: natural language to field values.
+    Extracts metadata from user's description and maps to form fields.
+    Also suggests routing when relevant (instrument, approver, category)."""
+    # Build context-aware prompt with available instruments and users
+    extra_context = ""
+    try:
+        db = get_db()
+        instruments = [r["name"] for r in db.execute("SELECT name FROM instruments WHERE status='active' ORDER BY name").fetchall()]
+        if instruments:
+            extra_context += f"\nAvailable instruments: {', '.join(instruments)}"
+        users = [r["name"] for r in db.execute("SELECT name FROM users WHERE active=1 AND invite_status='active' ORDER BY name LIMIT 50").fetchall()]
+        if users:
+            extra_context += f"\nKnown users: {', '.join(users[:30])}"
+        categories = ["fuel", "travel", "equipment", "consumables", "maintenance", "general"]
+        extra_context += f"\nExpense categories: {', '.join(categories)}"
+    except Exception:
+        pass
+    prompt = f"""You are a metadata extraction assistant for Catalyst ERP (university research lab + hostel services).
 Page: "{page_context}", Role: "{user_role}"
-Fields: {json.dumps(form_fields[:50])}
-User: "{user_text}"
+{extra_context}
+Form fields: {json.dumps(form_fields[:50])}
+User said: "{user_text}"
+
+Extract metadata from the user's description and map to form field names.
+For instrument/sample requests: infer instrument, sample details, priority, origin.
+For finance/expenses: extract amounts, categories, vendor names, dates.
+For attendance: extract person names, dates, status.
+For vehicles: extract registration, log type, amounts.
+Match user names and instrument names to the known lists above (fuzzy match OK).
 Return ONLY valid JSON mapping field names to values."""
     raw = _ai_call_haiku(prompt, max_tokens=1000)
     try:
@@ -22550,8 +22574,13 @@ def tuck_shop_api_today_stats():
 
 AI_PANE_SYSTEM_PROMPT = """You are CATALYST AI, the assistant for an ERP system at a university lab and hostel services company.
 
+Your primary job is METADATA EXTRACTION and ROUTING SUGGESTIONS.
+- Extract structured data from natural language (names, instruments, amounts, dates, sample details)
+- Suggest where to route things (which instrument, which approver, which category)
+- All data-modifying actions create DRAFTS that require human approval before becoming live
+- You never act autonomously — you extract, suggest, and let humans confirm
+
 Parse the user's message into a structured action. The user's role and current page give you context.
-All data-modifying actions create DRAFTS that require human approval before becoming live.
 
 Available actions (return ONE):
 - submit_request: {instrument, requester_name, title, sample_name, sample_count, description, priority, sample_origin} — create a draft sample request for an instrument. Operator says "new FESEM request for Priya" → draft request created → appears in operator approval queue.
@@ -22629,7 +22658,18 @@ def ai_pane_submit():
     if not message:
         return jsonify({"ok": False, "error": "Please type a message"})
 
+    # Build rich context with real data for accurate metadata extraction
     user_context = f"User: {user['name']} (role: {user['role']})\nPage: {page_context}"
+    try:
+        db = get_db()
+        inst_names = [r["name"] for r in db.execute("SELECT name FROM instruments WHERE status='active' ORDER BY name").fetchall()]
+        if inst_names:
+            user_context += f"\nAvailable instruments: {', '.join(inst_names)}"
+        user_names = [r["name"] for r in db.execute("SELECT name FROM users WHERE active=1 AND invite_status='active' ORDER BY name LIMIT 40").fetchall()]
+        if user_names:
+            user_context += f"\nKnown users: {', '.join(user_names[:30])}"
+    except Exception:
+        pass
 
     # Try Claude API for instant parsing
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")

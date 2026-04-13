@@ -5411,6 +5411,24 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_ai_queue_user ON ai_advisor_queue(user_id);
             CREATE INDEX IF NOT EXISTS idx_ai_queue_batch ON ai_advisor_queue(batch_id);
 
+            -- AI Pane: real-time AI interactions (instant, not batch)
+            CREATE TABLE IF NOT EXISTS ai_pane_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                page_context TEXT NOT NULL DEFAULT '',
+                user_message TEXT NOT NULL,
+                ai_response TEXT NOT NULL DEFAULT '',
+                action_taken TEXT NOT NULL DEFAULT '',
+                action_data TEXT NOT NULL DEFAULT '',
+                file_name TEXT NOT NULL DEFAULT '',
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                model TEXT NOT NULL DEFAULT 'claude-haiku',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_pane_user ON ai_pane_log(user_id);
+            CREATE INDEX IF NOT EXISTS idx_ai_pane_date ON ai_pane_log(created_at);
+
             -- ERP Portal system: multi-tenant portal separation
             -- Each portal is a distinct ERP "house" (e.g. Ravikiran HQ, Lab R&D)
             CREATE TABLE IF NOT EXISTS erp_portals (
@@ -22519,6 +22537,343 @@ def tuck_shop_api_today_stats():
         (today,),
     )
     return jsonify(dict(stats) if stats else {})
+
+
+# ─── AI Hover Pane — real-time assistant on every page ─────────────────
+# Accepts text + optional file. Routes to Claude Haiku for parsing,
+# queues the action, notifies the appropriate admin, logs everything.
+# Users get instant feedback; admins get a review notification.
+
+AI_PANE_SYSTEM_PROMPT = """You are CATALYST AI, the assistant for an ERP system at a university lab and hostel services company.
+
+Parse the user's message into a structured action. The user's role and current page give you context.
+
+Available actions (return ONE):
+- submit_request: {instrument, sample_description, num_samples, urgency} — lab user wants to submit a sample for analysis
+- mark_attendance: {target_name, status (present/absent/half), date} — admin marks someone's attendance
+- create_receipt: {amount, category (fuel/travel/equipment/consumables/general), title, description} — submit expense
+- create_todo: {title, assign_to, priority (normal/high/urgent)} — create a task
+- create_grant: {code, name, sponsor, pi_name, total_budget, start_date, end_date} — admin creates a grant
+- reset_password: {target_name, new_password} — admin resets a user's password
+- send_message: {to_name, subject, body} — send internal message
+- approve_request: {request_id_or_title} — admin approves a pending request
+- route_request: {request_id_or_title, instrument_name} — route request to a specific instrument
+- vehicle_log: {vehicle_reg, log_type (fuel/maintenance), amount, description} — log vehicle expense
+- salary_note: {user_name, note} — add a payroll note
+- general_query: {question} — user is asking a question, not requesting an action
+- unknown: {} — cannot parse
+
+Return ONLY a JSON object: {"action": "...", "data": {...}, "summary": "one-line human summary", "route_to": "role that should review this (owner/finance_admin/instrument_admin/operator/self)"}
+"""
+
+AI_PANE_MODEL = "claude-haiku-4-20250414"
+
+
+def _ai_pane_route_label(action: str) -> str:
+    """Human-readable routing label for the action."""
+    labels = {
+        "submit_request": "Lab Admin",
+        "mark_attendance": "HR / Personnel",
+        "create_receipt": "Finance",
+        "create_todo": "You",
+        "create_grant": "Finance Admin",
+        "reset_password": "System Admin",
+        "send_message": "Recipient",
+        "approve_request": "Instrument Admin",
+        "route_request": "Instrument Admin",
+        "vehicle_log": "Fleet Admin",
+        "salary_note": "Payroll Admin",
+        "general_query": "AI",
+        "unknown": "System",
+    }
+    return labels.get(action, "Admin")
+
+
+@app.route("/api/ai/pane", methods=["POST"])
+@login_required
+def ai_pane_submit():
+    """AJAX: Real-time AI pane submission. Parses via Claude Haiku,
+    queues the action, returns instant feedback."""
+    user = current_user()
+    message = ""
+    page_context = ""
+    file_name = ""
+
+    # Support both JSON and multipart form data (for file uploads)
+    if request.is_json:
+        data = request.get_json(force=True)
+        message = data.get("message", "").strip()
+        page_context = data.get("page_context", "")
+    else:
+        message = request.form.get("message", "").strip()
+        page_context = request.form.get("page_context", "")
+        f = request.files.get("file")
+        if f and f.filename:
+            file_name = f.filename
+            # Save to uploads
+            safe_name = f"{user['id']}_{int(datetime.utcnow().timestamp())}_{f.filename}"
+            upload_path = UPLOAD_DIR / "ai_pane" / safe_name
+            upload_path.parent.mkdir(parents=True, exist_ok=True)
+            f.save(str(upload_path))
+            message += f"\n\n[Attached file: {f.filename}]"
+
+    if not message:
+        return jsonify({"ok": False, "error": "Please type a message"})
+
+    user_context = f"User: {user['name']} (role: {user['role']})\nPage: {page_context}"
+
+    # Try Claude API for instant parsing
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    action = "unknown"
+    action_data = {}
+    summary = "Received — queued for processing"
+    route_to = "admin"
+    tokens_used = 0
+
+    if api_key:
+        try:
+            payload = json.dumps({
+                "model": AI_PANE_MODEL,
+                "max_tokens": 512,
+                "system": AI_PANE_SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": f"{user_context}\n\n{message}"}],
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                method="POST",
+            )
+            resp = urllib.request.urlopen(req, timeout=15)
+            resp_data = json.loads(resp.read())
+            response_text = resp_data.get("content", [{}])[0].get("text", "")
+            tokens_used = resp_data.get("usage", {}).get("input_tokens", 0) + resp_data.get("usage", {}).get("output_tokens", 0)
+
+            import re as _re
+            json_match = _re.search(r'\{.*\}', response_text, _re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                action = parsed.get("action", "unknown")
+                action_data = parsed.get("data", {})
+                summary = parsed.get("summary", summary)
+                route_to = parsed.get("route_to", "admin")
+        except Exception:
+            pass  # Fall through to queue-based processing
+
+    # Queue in command_queue for execution (reuse existing infra)
+    cmd_id = execute(
+        "INSERT INTO command_queue (user_id, raw_text, source, status, parsed_action, parsed_data, result_message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user["id"], message, "ai_pane", "pending" if action == "unknown" else "parsed",
+         action, json.dumps(action_data), summary, now_iso()),
+    )
+
+    # Log the AI interaction
+    execute(
+        """INSERT INTO ai_pane_log (user_id, page_context, user_message, ai_response,
+           action_taken, action_data, file_name, tokens_used, model, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user["id"], page_context, message, summary, action,
+         json.dumps(action_data), file_name, tokens_used, AI_PANE_MODEL, now_iso()),
+    )
+
+    # Execute safe actions immediately (self-serve)
+    entity_created = None
+    if action == "create_todo" and action_data:
+        execute(
+            "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
+            (user["id"], user["id"], action_data.get("title", message[:50]),
+             "[Created via AI Pane]", action_data.get("priority", "normal"), now_iso()),
+        )
+        entity_created = "todo"
+        summary += " — Task created"
+        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+
+    elif action == "send_message" and action_data.get("to_name"):
+        target = query_one("SELECT id FROM users WHERE name LIKE ?", ("%" + action_data["to_name"] + "%",))
+        if target:
+            execute(
+                "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at) VALUES (?, ?, ?, ?, ?)",
+                (user["id"], target["id"], action_data.get("subject", "Message from AI Pane"),
+                 action_data.get("body", message), now_iso()),
+            )
+            entity_created = "message"
+            summary += f" — Sent to {action_data['to_name']}"
+            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                    (summary, now_iso(), cmd_id))
+
+    elif action == "mark_attendance" and action_data.get("target_name"):
+        target = query_one("SELECT id, name FROM users WHERE name LIKE ?", ("%" + action_data["target_name"] + "%",))
+        if target:
+            today = action_data.get("date", date.today().isoformat())
+            status_val = action_data.get("status", "present")
+            existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
+            if existing:
+                execute("UPDATE attendance SET status = ? WHERE id = ?", (status_val, existing["id"]))
+            else:
+                execute("INSERT INTO attendance (user_id, date, status, notes, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (target["id"], today, status_val, f"[AI Pane by {user['name']}]", now_iso()))
+            entity_created = "attendance"
+            summary += f" — {target['name']} marked {status_val}"
+            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                    (summary, now_iso(), cmd_id))
+
+    elif action == "create_receipt" and action_data.get("amount"):
+        d = action_data
+        receipt_id = execute(
+            "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            (user["id"], d.get("title", message[:50]), float(d["amount"]),
+             d.get("category", "general"), f"[AI Pane] {d.get('description', '')}", now_iso()),
+        )
+        entity_created = "receipt"
+        summary += f" — Receipt ₹{d['amount']} created (pending finance review)"
+        execute("UPDATE command_queue SET status='completed', result_entity_type='receipt', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (receipt_id, summary, now_iso(), cmd_id))
+        # Notify finance
+        for fa in query_all("SELECT id FROM users WHERE role = 'finance_admin' LIMIT 3"):
+            notify(fa["id"], "finance", "AI receipt needs review",
+                   f"{user['name']} submitted ₹{d['amount']} via AI Pane", url_for("receipts_list"))
+
+    elif action == "general_query":
+        # For questions, the AI already answered in the summary
+        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+        entity_created = "answer"
+
+    # For actions that need admin review (grants, password resets, approvals), leave as 'parsed'
+    # The batch processor or admin will pick them up
+    if action in ("create_grant", "reset_password", "approve_request", "route_request") and not entity_created:
+        # Notify the appropriate admin
+        admin_roles = {"create_grant": "finance_admin", "reset_password": "super_admin",
+                       "approve_request": "instrument_admin", "route_request": "operator"}
+        target_role = admin_roles.get(action, "super_admin")
+        admins = query_all("SELECT id FROM users WHERE role = ? LIMIT 3", (target_role,))
+        if not admins:
+            admins = query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 3")
+        for adm in admins:
+            notify(adm["id"], "task", f"AI request from {user['name']}",
+                   f"{summary} — needs your review", url_for("quick_entry"))
+        summary += " — Sent to admin for review"
+
+    route_label = _ai_pane_route_label(action)
+    return jsonify({
+        "ok": True,
+        "action": action,
+        "summary": summary,
+        "route_to": route_label,
+        "entity_created": entity_created,
+        "command_id": cmd_id,
+    })
+
+
+@app.route("/api/ai/pane/history")
+@login_required
+def ai_pane_history():
+    """AJAX: Get recent AI pane interactions for the current user."""
+    user = current_user()
+    rows = query_all(
+        """SELECT id, page_context, user_message, ai_response, action_taken,
+                  file_name, created_at
+           FROM ai_pane_log WHERE user_id = ?
+           ORDER BY created_at DESC LIMIT 20""",
+        (user["id"],),
+    )
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/ai/pane/summary")
+@login_required
+def ai_pane_summary():
+    """AJAX: Context-aware summary for the current user — their requests,
+    pending actions, and what they can do on the current page."""
+    user = current_user()
+    page = request.args.get("page", "")
+    role = user["role"] or "requester"
+
+    # Gather user's active items
+    items = []
+
+    # Their pending requests
+    my_requests = query_all(
+        "SELECT id, title, status FROM sample_requests WHERE requester_id = ? AND status NOT IN ('completed', 'rejected', 'archived') ORDER BY created_at DESC LIMIT 5",
+        (user["id"],),
+    )
+    for r in my_requests:
+        items.append({"type": "request", "text": f"Request #{r['id']}: {r['title']} — {r['status']}"})
+
+    # Their unread messages
+    unread = query_one("SELECT COUNT(*) AS c FROM messages WHERE recipient_id = ? AND read_at IS NULL", (user["id"],))
+    if unread and unread["c"] > 0:
+        items.append({"type": "messages", "text": f"{unread['c']} unread message{'s' if unread['c'] > 1 else ''}"})
+
+    # Their open todos
+    todos = query_all(
+        "SELECT title, priority FROM user_todos WHERE user_id = ? AND status = 'open' ORDER BY created_at DESC LIMIT 5",
+        (user["id"],),
+    )
+    for t in todos:
+        items.append({"type": "todo", "text": f"Task: {t['title']}" + (" (urgent)" if t["priority"] == "urgent" else "")})
+
+    # Admin-specific: pending approvals
+    if role in ("super_admin", "site_admin", "instrument_admin", "finance_admin", "approver"):
+        pending_approvals = query_one(
+            "SELECT COUNT(*) AS c FROM approval_steps WHERE status = 'pending' AND approver_role = ?",
+            (role,),
+        )
+        if pending_approvals and pending_approvals["c"]:
+            items.append({"type": "approval", "text": f"{pending_approvals['c']} pending approval{'s' if pending_approvals['c'] > 1 else ''} for your role"})
+
+    # Pending AI commands needing review
+    pending_cmds = query_one(
+        "SELECT COUNT(*) AS c FROM command_queue WHERE status = 'parsed'",
+    )
+    if pending_cmds and pending_cmds["c"] and role in ("super_admin", "site_admin", "finance_admin"):
+        items.append({"type": "ai_review", "text": f"{pending_cmds['c']} AI-generated action{'s' if pending_cmds['c'] > 1 else ''} awaiting review"})
+
+    # Context hints based on current page
+    hints = []
+    if "instrument" in page.lower():
+        hints.append("You can ask AI to submit a sample request or check instrument availability")
+    elif "finance" in page.lower():
+        hints.append("You can ask AI to create an expense receipt or check grant balances")
+    elif "attendance" in page.lower() or "personnel" in page.lower():
+        hints.append("You can ask AI to mark attendance or create a salary note")
+    elif "mess" in page.lower() or "tuck" in page.lower():
+        hints.append("You can ask AI about today's meal stats or token reconciliation")
+    else:
+        hints.append("Try: 'Submit a request for FESEM analysis' or 'Mark Prashant present today'")
+
+    return jsonify({"items": items, "hints": hints, "role": role, "name": user["name"]})
+
+
+@app.route("/admin/ai-log")
+@login_required
+def ai_admin_log():
+    """Admin view: all AI interactions across all users."""
+    user = current_user()
+    if not is_owner(user) and user["role"] not in ("super_admin", "site_admin"):
+        abort(403)
+    logs = query_all(
+        """SELECT al.*, u.name AS user_name, u.role AS user_role
+           FROM ai_pane_log al
+           JOIN users u ON u.id = al.user_id
+           ORDER BY al.created_at DESC LIMIT 100""",
+    )
+    # Stats
+    total = query_one("SELECT COUNT(*) AS c FROM ai_pane_log")
+    total_tokens = query_one("SELECT COALESCE(SUM(tokens_used), 0) AS t FROM ai_pane_log")
+    today_count = query_one(
+        "SELECT COUNT(*) AS c FROM ai_pane_log WHERE substr(created_at, 1, 10) = ?",
+        (date.today().isoformat(),),
+    )
+    return render_template("ai_admin_log.html", logs=logs,
+                           total=total["c"] if total else 0,
+                           total_tokens=total_tokens["t"] if total_tokens else 0,
+                           today_count=today_count["c"] if today_count else 0)
 
 
 @app.route("/quickentry", methods=["GET", "POST"])

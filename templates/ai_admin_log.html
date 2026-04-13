@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">AI Activity Log</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">All interactions</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── KPIs ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": total|string,                       "label": "Total Interactions"},
+      {"value": today_count|string,                  "label": "Today",           "tone": "green"},
+      {"value": "{:,}".format(total_tokens),         "label": "Tokens Used"},
+      {"value": "₹{:,.1f}".format(total_tokens * 0.0000003), "label": "Est. Cost (Haiku)"},
+    ]) }}
+  </article>
+
+  {# ── Log Table ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("INTERACTIONS", "Last 100") }}
+    <input type="text" id="logSearch" class="table-search-input" placeholder="Search logs…" style="margin-bottom:0.5rem;width:100%;max-width:20rem;" data-vis="{{ V }}">
+    {% if logs %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Time</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Role</th>
+          <th data-vis="{{ V }}">Page</th>
+          <th data-vis="{{ V }}">Message</th>
+          <th data-vis="{{ V }}">Action</th>
+          <th data-vis="{{ V }}">Response</th>
+          <th data-vis="{{ V }}">File</th>
+          <th class="num" data-vis="{{ V }}">Tokens</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for log in logs %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">{{ log.created_at[:16] if log.created_at else "—" }}</span></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ log.user_name }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge badge-role" data-vis="{{ V }}">{{ log.user_role }}</span></td>
+          <td data-vis="{{ V }}"><span class="hint" style="font-size:0.7rem;" data-vis="{{ V }}">{{ log.page_context[:30] if log.page_context else "—" }}</span></td>
+          <td data-vis="{{ V }}" style="max-width:15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.user_message[:80] }}</td>
+          <td data-vis="{{ V }}">
+            {% if log.action_taken and log.action_taken != 'unknown' %}
+            <span class="badge status-active" data-vis="{{ V }}">{{ log.action_taken }}</span>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}" style="max-width:15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ log.ai_response[:80] if log.ai_response else "—" }}</td>
+          <td data-vis="{{ V }}">{% if log.file_name %}<code class="inline-code" style="font-size:0.7rem;" data-vis="{{ V }}">{{ log.file_name }}</code>{% else %}—{% endif %}</td>
+          <td class="num" data-vis="{{ V }}">{{ log.tokens_used }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No AI interactions yet.", hint="The AI pane button appears on every page. Users can type natural language commands.") }}
+    {% endif %}
+  </article>
+
+</section>
+
+<script>
+(function(){
+  var si = document.getElementById('logSearch');
+  if(!si) return;
+  var rows = document.querySelectorAll('tbody tr');
+  si.addEventListener('input', function(){
+    var q = this.value.toLowerCase();
+    rows.forEach(function(r){ r.style.display = (!q || r.textContent.toLowerCase().indexOf(q) !== -1) ? '' : 'none'; });
+  });
+})();
+</script>
+{% endblock %}

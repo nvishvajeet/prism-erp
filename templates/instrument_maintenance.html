@@ -14,7 +14,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
 
   {% if upcoming_calibrations %}
-  <article class="card tile" data-columns="6" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("UPCOMING CALIBRATIONS", upcoming_calibrations|length|string ~ " due soon") }}
     <ul class="finance-invoice-list" data-vis="{{ V }}">
       {% for c in upcoming_calibrations %}
@@ -34,7 +34,7 @@
   {% endif %}
 
   {% if can_add %}
-  <article class="card tile" data-columns="3" data-vis="{{ V }}">
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("LOG EVENT", "Add maintenance or calibration record") }}
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
@@ -65,8 +65,18 @@
       <label data-vis="{{ V }}">Cost (₹)
         <input type="number" step="0.01" min="0" name="cost" value="0" data-vis="{{ V }}">
       </label>
+      {% if grants %}
+      <label data-vis="{{ V }}">Charge to Grant
+        <select name="grant_id" data-vis="{{ V }}">
+          <option value="">— None —</option>
+          {% for g in grants %}
+          <option value="{{ g.id }}" {% if instrument.default_grant_id == g.id %}selected{% endif %}>{{ g.code }} — {{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
       <div data-vis="{{ V }}">
-        <button type="submit" class="primary-action" data-vis="{{ V }}">Log Event</button>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Log Event</button>
       </div>
     </form>
   </article>

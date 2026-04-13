@@ -13687,6 +13687,7 @@ def instrument_maintenance_log(instrument_id: int):
         entries=entries,
         upcoming_calibrations=upcoming_calibrations,
         can_add=can_view,
+        grants=query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
     )
 
 

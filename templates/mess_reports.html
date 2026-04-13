@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Mess Reports</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Daily Report (7 days) ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("DAILY REPORT", "Last 7 days") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          {% for m in meal_types %}
+          <th class="col-amount" data-vis="{{ V }}">{{ m|title }}</th>
+          {% endfor %}
+          <th class="col-amount" data-vis="{{ V }}">Total</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for d in daily %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ d.date }}</strong></td>
+          {% for m in meal_types %}
+          <td class="col-amount" data-vis="{{ V }}">{{ d.counts.get(m, 0) }}</td>
+          {% endfor %}
+          <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ d.total }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+
+  {# ── Monthly Breakdown ── #}
+  {% if monthly %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MONTHLY BREAKDOWN", "Meals per month by type") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Month</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th class="col-amount" data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for m in monthly %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.month }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ m.meal_type|title }}</span></td>
+          <td class="col-amount" data-vis="{{ V }}">{{ m.cnt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Department Breakdown ── #}
+  {% if by_dept %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BY DEPARTMENT", "Current month") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Department</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th class="col-amount" data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for d in by_dept %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ d.department or 'Unspecified' }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ d.meal_type|title }}</span></td>
+          <td class="col-amount" data-vis="{{ V }}">{{ d.cnt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

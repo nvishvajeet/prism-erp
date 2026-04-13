@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Meal Scanner</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ current_meal|title }} · {{ meal_count }} served</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Scanner ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("SCAN STUDENT ENTRY", current_meal|title ~ " service") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}" id="scanForm">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <label class="control-flex-fill-wide" data-vis="{{ V }}">
+          Student QR / Roll Number
+          <input type="text" name="qr_token" id="qrInput" placeholder="Scan QR code or type roll number" autofocus autocomplete="off" required data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.1em;">
+        </label>
+        <label data-vis="{{ V }}">
+          Meal
+          <select name="meal_type" data-vis="{{ V }}">
+            {% for m in meal_types %}
+            <option value="{{ m }}"{% if m == current_meal %} selected{% endif %} data-vis="{{ V }}">{{ m|title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}" style="align-self:flex-end;">
+          Record Entry
+        </button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">
+        Meal type auto-selects based on time. Scanner auto-submits on Enter.
+        Duplicate entries for the same meal are blocked.
+      </p>
+    </form>
+  </article>
+
+  {# ── Live Count ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div style="padding:1.5rem;text-align:center;" data-vis="{{ V }}">
+      <p style="font-size:3rem;font-weight:800;" data-vis="{{ V }}">{{ meal_count }}</p>
+      <p class="hint" data-vis="{{ V }}">{{ current_meal|title }} entries today</p>
+    </div>
+  </article>
+
+  {# ── Recent Entries ── #}
+  {% if recent_entries %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("LAST 15 ENTRIES", "Most recent first") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Student</th>
+          <th data-vis="{{ V }}">Roll</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th data-vis="{{ V }}">Time</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for e in recent_entries %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ e.name }}</strong></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ e.roll_number }}</code></td>
+          <td data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">{{ e.meal_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ e.entry_time[:5] if e.entry_time else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  var input = document.getElementById('qrInput');
+  if(input){
+    input.addEventListener('keypress', function(e){
+      if(e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('scanForm').submit();
+      }
+    });
+    // Re-focus after page load for continuous scanning
+    setTimeout(function(){ input.focus(); }, 300);
+    // Re-focus on any click outside the input (kiosk mode)
+    document.addEventListener('click', function(e){
+      if(!e.target.closest('input,select,button,a')) input.focus();
+    });
+  }
+})();
+</script>
+{% endblock %}

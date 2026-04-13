@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">QR Attendance Kiosk</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('qr_my_code') }}" class="btn" data-vis="{{ V }}">My QR Code</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Scanner Card ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("SCAN ATTENDANCE", "Enter member code or scan QR") }}
+    <form method="post" action="{{ url_for('qr_attendance_scan') }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}" id="scanForm">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        <label class="control-flex-fill-wide" data-vis="{{ V }}">
+          Member Code
+          <input type="text" name="member_code" id="memberCodeInput" placeholder="Scan QR or type code (e.g. SHRQ001)" autofocus autocomplete="off" required data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.1em;">
+        </label>
+        <input type="hidden" name="device_info" id="deviceInfo" value="">
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}" style="align-self:flex-end;">
+          Scan In/Out
+        </button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">
+        Point a barcode/QR scanner at this field, or type the member code manually.
+        The system auto-detects check-in vs check-out.
+      </p>
+    </form>
+  </article>
+
+  {# ── Today Stats ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": scan_count|string, "label": "Staff Scanned Today", "tone": "green"},
+      {"value": today, "label": "Date"},
+    ]) }}
+  </article>
+
+  {# ── Camera Scanner (HTML5) ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CAMERA SCANNER", "Use phone camera to scan QR codes") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div id="cameraContainer" style="display:none;" data-vis="{{ V }}">
+        <video id="qrVideo" style="width:100%;max-width:400px;border-radius:8px;background:#000;" autoplay playsinline data-vis="{{ V }}"></video>
+        <canvas id="qrCanvas" style="display:none;" data-vis="{{ V }}"></canvas>
+        <p class="hint" data-vis="{{ V }}" id="cameraStatus">Scanning...</p>
+      </div>
+      <button type="button" class="btn" id="startCamera" data-vis="{{ V }}">Start Camera Scanner</button>
+      <p class="hint" data-vis="{{ V }}">
+        Camera scanning requires HTTPS or localhost. For production, use a USB barcode scanner
+        connected to this device — it types the code directly into the field above.
+      </p>
+    </div>
+  </article>
+
+  {# ── Recent Scans ── #}
+  {% if recent_scans %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT SCANS", "Today's activity") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">Time</th>
+          <th data-vis="{{ V }}">Device</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in recent_scans %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.name }}</strong></td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if s.scan_type == 'check_in' %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+              {{ s.scan_type|replace('_', ' ')|title }}
+            </span>
+          </td>
+          <td data-vis="{{ V }}">{{ s.scanned_at[11:16] if s.scanned_at|length > 16 else s.scanned_at }}</td>
+          <td data-vis="{{ V }}">{{ s.device_info or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── RFID Integration Guide ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RFID / HARDWARE SETUP", "Integration with Ashim Patil's RFID system") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <ol style="padding-left:1.25rem;line-height:1.8;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">USB RFID Reader</strong> — Plug any HID-compatible RFID reader into the kiosk device. It emulates keyboard input — the code goes directly into the Member Code field above.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">RFID Card Programming</strong> — Program each card with the staff member's member code (e.g. SHRQ001). Use the card writer software from Ashim Patil's company.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Auto-submit</strong> — The scanner adds a newline (Enter) after reading, which auto-submits the form. No manual clicking needed.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Mobile QR Alternative</strong> — Staff can show the QR from "My QR Code" page on their phone. The kiosk operator scans it with a camera or handheld scanner.</li>
+      </ol>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">
+        Supported hardware: Any USB HID barcode/RFID reader. Recommended: Ashim Patil's EM-4100 readers
+        with CR suffix (auto-Enter after read). No drivers needed — plug and play on any OS.
+      </p>
+    </div>
+  </article>
+</section>
+
+<script>
+(function(){
+  // Auto-detect device info
+  var di = document.getElementById('deviceInfo');
+  if(di) di.value = navigator.userAgent.substring(0, 100);
+
+  // Auto-submit on Enter (for RFID/barcode scanners that append Enter)
+  var input = document.getElementById('memberCodeInput');
+  if(input){
+    input.addEventListener('keypress', function(e){
+      if(e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('scanForm').submit();
+      }
+    });
+    // Re-focus input after page load (for continuous scanning)
+    setTimeout(function(){ input.focus(); }, 300);
+  }
+
+  // Camera scanner (basic — production would use a proper QR library)
+  var startBtn = document.getElementById('startCamera');
+  var container = document.getElementById('cameraContainer');
+  var video = document.getElementById('qrVideo');
+  if(startBtn && video){
+    startBtn.addEventListener('click', function(){
+      container.style.display = 'block';
+      startBtn.style.display = 'none';
+      navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}})
+        .then(function(stream){
+          video.srcObject = stream;
+          document.getElementById('cameraStatus').textContent = 'Camera active. Point at a QR code. (Full QR decoding requires a JS library like jsQR — for now, use a hardware scanner.)';
+        })
+        .catch(function(err){
+          document.getElementById('cameraStatus').textContent = 'Camera access denied: ' + err.message;
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}

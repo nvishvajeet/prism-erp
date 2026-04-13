@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">My QR Code</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("YOUR ATTENDANCE QR", "Show this to the kiosk scanner") }}
+    <div style="padding:1.5rem;text-align:center;" data-vis="{{ V }}">
+      {% if member_code %}
+      <div style="display:inline-block;background:#fff;padding:1.5rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.15);" data-vis="{{ V }}">
+        <img src="{{ url_for('qr_code_svg', code=member_code) }}" alt="QR Code" style="width:200px;height:200px;display:block;margin:0 auto;" data-vis="{{ V }}">
+        <p style="margin-top:1rem;font-size:1.5rem;font-weight:700;letter-spacing:0.15em;font-family:monospace;" data-vis="{{ V }}">{{ member_code }}</p>
+      </div>
+      <p class="hint" style="margin-top:1rem;" data-vis="{{ V }}">
+        Show this code at the attendance kiosk. The scanner reads the code above.
+        You can also print this page for an ID card badge.
+      </p>
+      <div style="margin-top:1rem;" data-vis="{{ V }}">
+        <button onclick="window.print()" class="btn btn-primary" data-vis="{{ V }}">Print QR Card</button>
+      </div>
+      {% else %}
+      <p data-vis="{{ V }}">No member code assigned yet. Contact your administrator.</p>
+      {% endif %}
+    </div>
+  </article>
+</section>
+
+<style>
+@media print {
+  .inst-header, nav, .hover-back-btn, .hint, .btn { display: none !important; }
+  .card { box-shadow: none !important; border: 2px solid #000 !important; }
+}
+</style>
+{% endblock %}

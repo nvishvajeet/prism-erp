@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">Mess Dashboard</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ today }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_scan') }}" class="btn btn-primary" data-vis="{{ V }}">Scan Entry</a>
+    <a href="{{ url_for('mess_students_list') }}" class="btn" data-vis="{{ V }}">Students</a>
+    <a href="{{ url_for('mess_reports') }}" class="btn" data-vis="{{ V }}">Reports</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── KPI Row ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": total_today|string,                              "label": "Total Meals Today", "tone": "green"},
+      {"value": (meal_counts.get("breakfast", 0))|string,        "label": "Breakfast"},
+      {"value": (meal_counts.get("lunch", 0))|string,            "label": "Lunch"},
+      {"value": (meal_counts.get("snacks", 0))|string,           "label": "Snacks"},
+      {"value": (meal_counts.get("dinner", 0))|string,           "label": "Dinner"},
+      {"value": student_count|string,                            "label": "Active Students"},
+    ]) }}
+  </article>
+
+  {# ── Current Meal Status ── #}
+  <article class="card tile tile-full-width tile-accent-amber" data-vis="{{ V }}">
+    {{ card_heading("CURRENT SERVICE", current_meal|title ~ " is being served") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" data-vis="{{ V }}">
+        {% for m in meal_types %}
+        <div style="flex:1;min-width:120px;text-align:center;padding:0.5rem;border-radius:8px;{% if m == current_meal %}background:var(--color-green-bg, rgba(52,199,89,0.12));{% endif %}" data-vis="{{ V }}">
+          <p style="font-size:1.5rem;font-weight:700;" data-vis="{{ V }}">{{ meal_counts.get(m, 0) }}</p>
+          <p class="hint" data-vis="{{ V }}">{{ m|title }}{% if m == current_meal %} <strong data-vis="{{ V }}">●</strong>{% endif %}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </article>
+
+  {# ── Quick Scan Link ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
+      <a href="{{ url_for('mess_scan') }}" class="btn btn-primary control-min-width-xl" data-vis="{{ V }}" style="font-size:1.25rem;padding:0.75rem 2rem;">
+        Open Scanner
+      </a>
+      <p class="hint" style="margin-top:0.75rem;" data-vis="{{ V }}">
+        Open the scanner on a phone or tablet at the mess entrance.
+        Students show their QR code; the scanner records the entry.
+      </p>
+    </div>
+  </article>
+
+  {# ── Recent Entries ── #}
+  {% if recent_entries %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("RECENT ENTRIES", "Last 30 entries today") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Student</th>
+          <th data-vis="{{ V }}">Roll No</th>
+          <th data-vis="{{ V }}">Dept</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th data-vis="{{ V }}">Time</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for e in recent_entries %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ e.name }}</strong></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ e.roll_number }}</code></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ e.department }}</span></td>
+          <td data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">{{ e.meal_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ e.entry_time[:5] if e.entry_time else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

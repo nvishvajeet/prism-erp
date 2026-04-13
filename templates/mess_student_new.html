@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('mess_students_list') }}" class="hover-back-btn" title="Back to Students">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_students_list') }}" data-vis="{{ V }}">← Students</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Register Student</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("NEW STUDENT", "Register for mess entry") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label data-vis="{{ V }}">Name *
+        <input type="text" name="name" required placeholder="Full name" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Roll Number *
+        <input type="text" name="roll_number" required placeholder="e.g. MIT2024001" style="text-transform:uppercase;" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Department
+        <input type="text" name="department" placeholder="e.g. Computer Science" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Year of Study
+        <select name="year_of_study" data-vis="{{ V }}">
+          <option value="1" data-vis="{{ V }}">1st Year</option>
+          <option value="2" data-vis="{{ V }}">2nd Year</option>
+          <option value="3" data-vis="{{ V }}">3rd Year</option>
+          <option value="4" data-vis="{{ V }}">4th Year</option>
+          <option value="5" data-vis="{{ V }}">5th Year (PG)</option>
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Hostel
+        <input type="text" name="hostel" placeholder="e.g. Hostel A" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Room Number
+        <input type="text" name="room_number" placeholder="e.g. A-201" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Meal Plan
+        <select name="meal_plan" data-vis="{{ V }}">
+          <option value="full" data-vis="{{ V }}">Full (All meals)</option>
+          <option value="no_breakfast" data-vis="{{ V }}">No Breakfast</option>
+          <option value="lunch_only" data-vis="{{ V }}">Lunch Only</option>
+        </select>
+      </label>
+
+      <label data-vis="{{ V }}">Phone
+        <input type="tel" name="phone" placeholder="10-digit mobile" data-vis="{{ V }}">
+      </label>
+
+      {% if companies and companies|length > 0 %}
+      <label data-vis="{{ V }}">Company
+        <select name="company_id" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">— Select —</option>
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}">Register Student</button>
+      </div>
+    </form>
+  </article>
+</section>
+{% endblock %}

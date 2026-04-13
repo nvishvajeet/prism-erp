@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('mess_students_list') }}" class="hover-back-btn" title="Back to Students">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_students_list') }}" data-vis="{{ V }}">← Students</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ student.name }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ student.roll_number }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_student_qr', student_id=student.id) }}" class="btn" data-vis="{{ V }}">Print QR Card</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Student Info ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ metadata_grid([
+      {"label": "Roll Number",   "value": student.roll_number},
+      {"label": "Department",    "value": student.department or '—'},
+      {"label": "Year",          "value": student.year_of_study|string},
+      {"label": "Hostel",        "value": (student.hostel ~ ' ' ~ student.room_number) if student.hostel else '—'},
+      {"label": "Meal Plan",     "value": student.meal_plan|title},
+      {"label": "Phone",         "value": student.phone or '—'},
+      {"label": "Company",       "value": student.company_short or '—'},
+      {"label": "Status",        "value": 'Active' if student.is_active else 'Inactive'},
+    ]) }}
+  </article>
+
+  {# ── QR Code ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("QR TOKEN", student.qr_token) }}
+    <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
+      <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+        <img src="{{ url_for('qr_code_svg', code=student.qr_token) }}" alt="QR" style="width:150px;height:150px;" data-vis="{{ V }}">
+        <p style="font-family:monospace;font-weight:700;margin-top:0.5rem;letter-spacing:0.1em;" data-vis="{{ V }}">{{ student.qr_token }}</p>
+      </div>
+    </div>
+  </article>
+
+  {# ── Monthly Summary ── #}
+  {% if monthly %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MONTHLY SUMMARY", "Meals per month") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Month</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th class="col-amount" data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for m in monthly %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ m.month }}</strong></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ m.meal_type|title }}</span></td>
+          <td class="col-amount" data-vis="{{ V }}">{{ m.cnt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Recent History ── #}
+  {% if history %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MEAL HISTORY", "Last 30 days") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th data-vis="{{ V }}">Time</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for h in history %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ h.entry_date }}</td>
+          <td data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">{{ h.meal_type|title }}</span></td>
+          <td data-vis="{{ V }}">{{ h.entry_time[:5] if h.entry_time else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

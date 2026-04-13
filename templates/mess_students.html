@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Students</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ students|length }} registered</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_student_new') }}" class="btn btn-primary" data-vis="{{ V }}">+ Add Student</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── CSV Import ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BULK IMPORT", "Upload CSV of students") }}
+    <form method="post" action="{{ url_for('mess_students_import') }}" enctype="multipart/form-data" class="form-inline-shell control-flex-wrap" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="file" name="csv_file" accept=".csv" required data-vis="{{ V }}">
+      <button type="submit" class="btn control-min-width-md" data-vis="{{ V }}">Import CSV</button>
+      <span class="hint" data-vis="{{ V }}">Columns: name, roll_number, department, year_of_study, hostel, room_number, meal_plan, phone</span>
+    </form>
+  </article>
+
+  {# ── Student List ── #}
+  {% if students %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("ALL STUDENTS", students|length|string ~ " total") }}
+    <input type="text" id="studentSearch" class="table-search-input" placeholder="Search students…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Roll No</th>
+          <th data-vis="{{ V }}">Dept</th>
+          <th data-vis="{{ V }}">Year</th>
+          <th data-vis="{{ V }}">Hostel</th>
+          <th data-vis="{{ V }}">Plan</th>
+          <th data-vis="{{ V }}">Meals (30d)</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">QR</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in students %}
+        <tr class="clickable-row" data-href="{{ url_for('mess_student_detail', student_id=s.id) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.name }}</strong></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ s.roll_number }}</code></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ s.department }}</span></td>
+          <td data-vis="{{ V }}">{{ s.year_of_study }}</td>
+          <td data-vis="{{ V }}">{{ s.hostel }} {{ s.room_number }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ s.meal_plan }}</span></td>
+          <td data-vis="{{ V }}">{{ s.meals_30d or 0 }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if s.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+              {{ 'Active' if s.is_active else 'Inactive' }}
+            </span>
+          </td>
+          <td data-vis="{{ V }}">
+            <a href="{{ url_for('mess_student_qr', student_id=s.id) }}" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">QR</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ empty_state("No students registered.", "Add students individually or import from CSV.") }}
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
+    r.addEventListener('click',function(e){
+      if(e.target.closest('a,button,input'))return;
+      window.location=r.dataset.href;
+    });
+  });
+  var searchInput=document.getElementById('studentSearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('tbody tr');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){ r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none'; });
+    });
+  }
+})();
+</script>
+{% endblock %}

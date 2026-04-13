@@ -53,6 +53,13 @@ FROM_IMPORT_RE = re.compile(r'{%\s*from\s*["\']([^"\']+)["\']')
 STALE_PATTERNS = ["*_old.*", "*.bak", "*~", "*.orig", "*_draft*",
                   "TODO_OLD*", "*.deprecated"]
 
+KNOWN_DYNAMIC_FUNCTIONS = {
+    "create_invoice_for_request",
+    "flush_email_queue",
+    "queue_external_email",
+    "record_payment",
+}
+
 
 class CleanupStrategy(CrawlerStrategy):
     """Surface suspected dead code: functions, templates, modules, files."""
@@ -134,6 +141,8 @@ class CleanupStrategy(CrawlerStrategy):
             if name.startswith("_"):
                 continue  # private helpers — skip
             if name in {"main", "init_db"}:
+                continue
+            if name in KNOWN_DYNAMIC_FUNCTIONS:
                 continue
             # Word-boundary search for the name anywhere outside its def line
             pattern = re.compile(rf"(?<![\w-]){re.escape(name)}(?![\w-])")

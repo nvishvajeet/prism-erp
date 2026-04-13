@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&#8592;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&#8592; Home</a>
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Letters</h2>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">

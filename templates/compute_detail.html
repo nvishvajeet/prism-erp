@@ -32,7 +32,7 @@
       ("Duration", ("%.1f s"|format(job.duration_ms / 1000)) if job.duration_ms else "—"),
     ]) }}
 
-    <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
+    <div class="inline-actions-row inline-actions-row-topgap" data-vis="{{ V }}">
       {% if is_mine or can_manage %}
       <form method="post" action="{{ url_for('compute_rerun', job_id=job.id) }}" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
@@ -45,11 +45,11 @@
   {# ── Prompt tile ── #}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("PROMPT", "") }}
-    <pre class="code-block" style="max-height:16rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;" data-vis="{{ V }}">{{ job.prompt }}</pre>
+    <pre class="code-block code-scroll-block" data-vis="{{ V }}">{{ job.prompt }}</pre>
     {% if job.context %}
-    <div style="margin-top:0.75rem;" data-vis="{{ V }}">
+    <div class="top-gap" data-vis="{{ V }}">
       {{ card_heading("CONTEXT", "") }}
-      <pre class="code-block" style="max-height:12rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;" data-vis="{{ V }}">{{ job.context }}</pre>
+      <pre class="code-block code-scroll-block" data-vis="{{ V }}">{{ job.context }}</pre>
     </div>
     {% endif %}
   </article>
@@ -58,10 +58,10 @@
   {% if job.status == 'completed' and job.result %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("RESULT", "") }}
-    <div style="position:relative;" data-vis="{{ V }}">
+    <div class="compute-result-shell" data-vis="{{ V }}">
       <button onclick="navigator.clipboard.writeText(document.getElementById('resultText').textContent).then(function(){this.textContent='Copied!'}.bind(this))"
-              class="btn" style="position:absolute;top:0.5rem;right:0.5rem;font-size:0.75rem;padding:0.25rem 0.5rem;" data-vis="{{ V }}">Copy</button>
-      <pre id="resultText" class="code-block" style="max-height:32rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--bg-2);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;" data-vis="{{ V }}">{{ job.result }}</pre>
+              class="btn compute-copy-btn" data-vis="{{ V }}">Copy</button>
+      <pre id="resultText" class="code-block code-scroll-block compute-result-block" data-vis="{{ V }}">{{ job.result }}</pre>
     </div>
   </article>
   {% endif %}
@@ -70,7 +70,7 @@
   {% if job.status == 'failed' and job.error %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ERROR", "") }}
-    <pre class="code-block" style="max-height:16rem;overflow:auto;padding:0.75rem;font-size:0.8rem;background:var(--surface);border-radius:0.5rem;white-space:pre-wrap;word-wrap:break-word;color:var(--danger);" data-vis="{{ V }}">{{ job.error }}</pre>
+    <pre class="code-block code-scroll-block code-scroll-block-danger" data-vis="{{ V }}">{{ job.error }}</pre>
   </article>
   {% endif %}
 
@@ -78,9 +78,9 @@
   {% if job.status in ('queued', 'running') %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("STATUS", "Auto-refreshes every 5 seconds") }}
-    <div style="text-align:center;padding:2rem;" data-vis="{{ V }}">
-      <div style="font-size:1.5rem;font-weight:600;" data-vis="{{ V }}">Processing...</div>
-      <div class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">This page refreshes automatically.</div>
+    <div class="centered-padded-block" data-vis="{{ V }}">
+      <div class="compute-processing-title" data-vis="{{ V }}">Processing...</div>
+      <div class="hint dp-metadata-row-topgap" data-vis="{{ V }}">This page refreshes automatically.</div>
     </div>
   </article>
   {% endif %}

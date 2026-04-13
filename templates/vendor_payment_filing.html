@@ -9,6 +9,11 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">Filing Cabinet</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ folders|length }} folders</span>
   </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('filing_retention') }}" data-vis="{{ V }}">Retention</a>
+    <a class="btn" href="{{ url_for('tally_export_page') }}" data-vis="{{ V }}">Tally Export</a>
+    <a class="btn" href="{{ url_for('receipt_inbox') }}" data-vis="{{ V }}">Receipt Inbox</a>
+  </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">

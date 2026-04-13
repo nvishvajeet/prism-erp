@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
-{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -12,24 +12,46 @@
   <div class="inst-header-actions" data-vis="{{ V }}">
     <form method="post" action="{{ url_for('attendance_team_mark_all') }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Mark All Present</button>
+      <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:0.6rem 1.5rem;" data-vis="{{ V }}">Mark All Present</button>
     </form>
   </div>
 </header>
 
-<section class="dashboard-tiles" data-vis="{{ V }}">
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── FOCUS · Summary Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("", "Team Members (" ~ team|length ~ ")") }}
+    {% set marked_count = team|selectattr('today_status')|list|length %}
+    {% set unmarked_count = team|length - marked_count %}
+    {{ kpi_grid([
+      {"value": team|length|string,    "label": "Total Team"},
+      {"value": marked_count|string,   "label": "Marked Today",  "tone": "green"},
+      {"value": unmarked_count|string, "label": "Unmarked",      "tone": "active"},
+    ]) }}
+  </article>
+
+  {# ── ATTENTION · Team Members ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("ATTENDANCE", "Team Members (" ~ team|length ~ ")") }}
     {% if team %}
     <div class="quick-intake-grid" data-vis="{{ V }}">
       {% for m in team %}
       <div class="quick-intake-card quick-intake-card-{{ 'approved' if m.today_status == 'present' else 'pending' if m.today_status == 'half' else 'in_progress' if m.today_status == 'absent' else 'scheduled' }}" data-vis="{{ V }}">
         <div class="quick-intake-card-body" data-vis="{{ V }}">
-          <strong class="quick-intake-sample" data-vis="{{ V }}">{{ m.name }}</strong>
+          {{ person_chip(m.name, user_id=m.id, size='sm') }}
           <span class="quick-intake-requester hint" data-vis="{{ V }}">{{ m.role|replace('_',' ')|title }}</span>
-          {% if m.today_status %}
-          <span class="badge status-{{ m.today_status }}" data-vis="{{ V }}">{{ m.today_status|upper }}</span>
+          {# ── Prominent status indicator ── #}
+          {% if m.today_status == 'present' %}
+          <span style="font-size:1.8rem;color:var(--tone-green);line-height:1;" data-vis="{{ V }}">&#10003;</span>
+          <span class="badge status-present" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">PRESENT</span>
+          {% elif m.today_status == 'absent' %}
+          <span style="font-size:1.8rem;color:var(--tone-red, #ef4444);line-height:1;" data-vis="{{ V }}">&#10007;</span>
+          <span class="badge status-absent" style="background:var(--tone-red, #ef4444);color:#fff;" data-vis="{{ V }}">ABSENT</span>
+          {% elif m.today_status == 'half' %}
+          <span style="font-size:1.8rem;color:var(--tone-amber, #f59e0b);line-height:1;" data-vis="{{ V }}">&#189;</span>
+          <span class="badge status-half" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">HALF DAY</span>
           {% else %}
+          <span style="font-size:1.8rem;color:var(--muted);line-height:1;" data-vis="{{ V }}">—</span>
           <span class="badge" data-vis="{{ V }}">NOT MARKED</span>
           {% endif %}
         </div>
@@ -38,26 +60,26 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="present">
-            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">✓</button>
+            <button type="submit" class="qi-btn qi-btn-accept" title="Present" data-vis="{{ V }}">&#10003;</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="absent">
-            <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">✗</button>
+            <button type="submit" class="qi-btn qi-btn-decline" title="Absent" data-vis="{{ V }}">&#10007;</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="half">
-            <button type="submit" class="qi-btn qi-btn-view" data-vis="{{ V }}">½</button>
+            <button type="submit" class="qi-btn qi-btn-view" title="Half Day" data-vis="{{ V }}">&#189;</button>
           </form>
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    {{ empty_state("No team members found.", "Add users from Settings.") }}
+    {{ empty_state("No team members found.", hint="Add users from Settings.") }}
     {% endif %}
   </article>
 </section>

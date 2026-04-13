@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid, metadata_grid with context %}
-{% block hover_back %}<a href="{{ url_for('vehicles_list') }}" class="hover-back-btn" title="Back to Fleet">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vehicles_list') }}" class="hover-back-btn" title="Back to Fleet" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -13,20 +13,27 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  {# ── KPI Stats ── #}
+  {# ── FOCUS · KPI Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ kpi_grid([
-      {"value": "₹" ~ "{:,.0f}".format(fuel_total),   "label": "Fuel"},
-      {"value": "₹" ~ "{:,.0f}".format(maint_total),  "label": "Maintenance"},
-      {"value": "₹" ~ "{:,.0f}".format(other_total),  "label": "Other"},
-      {"value": "₹" ~ "{:,.0f}".format(fuel_total + maint_total + other_total), "label": "Total Spend", "tone": "amber"},
-      {"value": logs|length|string,                     "label": "Log Entries"},
+      {"value": "₹" ~ "{:,.0f}".format(fuel_total + maint_total + other_total), "label": "Total Spend",    "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(fuel_total),                              "label": "Fuel",           "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(maint_total),                             "label": "Maintenance",    "tone": "active"},
+      {"value": "₹" ~ "{:,.0f}".format(other_total),                             "label": "Other"},
+      {"value": logs|length|string,                                                "label": "Log Entries"},
     ]) }}
   </article>
 
-  {# ── Vehicle Info ── #}
+  {# ── ATTENTION · Vehicle Info ── #}
   <article class="card tile" data-vis="{{ V }}">
     {{ card_heading("VEHICLE INFO", vehicle.registration_no) }}
+    {% set driver_chip %}
+      {% if driver %}
+        {{ person_chip(driver.name, user_id=driver.id, size='sm') }}
+      {% else %}
+        — Unassigned —
+      {% endif %}
+    {% endset %}
     {{ metadata_grid([
       ("Name", vehicle.name),
       ("Registration", vehicle.registration_no),
@@ -35,13 +42,8 @@
       ("Purchase Date", vehicle.purchase_date or "—"),
       ("Purchase Cost", "₹" ~ "{:,.0f}".format(vehicle.purchase_cost)),
       ("Insurance Expiry", vehicle.insurance_expiry or "—"),
-      ("Driver", driver.name if driver else "— Unassigned —"),
+      ("Driver", driver_chip),
     ]) }}
-    {% if driver %}
-    <div style="margin-top:0.5rem;" data-vis="{{ V }}">
-      <a href="{{ url_for('personnel_detail', user_id=driver.id) }}" class="text-link" data-vis="{{ V }}">View driver profile →</a>
-    </div>
-    {% endif %}
     {% if vehicle.notes %}
     <div class="dp-metadata-row" style="margin-top:0.5rem;" data-vis="{{ V }}">
       <span class="hint" data-vis="{{ V }}">Notes</span>
@@ -106,7 +108,7 @@
   </article>
   {% endif %}
 
-  {# ── Log History ── #}
+  {# ── ATTENTION · Log History ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("LOG HISTORY", logs|length|string ~ " entries") }}
     {% if logs %}
@@ -125,7 +127,17 @@
         {% for l in logs %}
         <tr data-vis="{{ V }}">
           <td data-vis="{{ V }}">{{ l.log_date }}</td>
-          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ l.log_type|title }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if l.log_type == 'fuel' %}
+            <span class="badge" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Fuel</span>
+            {% elif l.log_type == 'maintenance' %}
+            <span class="badge" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Maintenance</span>
+            {% elif l.log_type == 'insurance' %}
+            <span class="badge" style="background:var(--tone-blue, #3b82f6);color:#fff;" data-vis="{{ V }}">Insurance</span>
+            {% else %}
+            <span class="badge" data-vis="{{ V }}">{{ l.log_type|title }}</span>
+            {% endif %}
+          </td>
           <td data-vis="{{ V }}">{{ l.description or "—" }}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(l.amount) }}</td>
           <td data-vis="{{ V }}">{{ "{:,.0f}".format(l.odometer_km) ~ " km" if l.odometer_km else "—" }}</td>
@@ -135,7 +147,7 @@
       </tbody>
     </table>
     {% else %}
-    {{ empty_state("No log entries yet.") }}
+    {{ empty_state("No log entries yet.", hint="Add a fuel or maintenance record below.") }}
     {% endif %}
   </article>
 
@@ -148,12 +160,12 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label data-vis="{{ V }}">Type
           <select name="log_type" data-vis="{{ V }}">
-            <option value="fuel">Fuel</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="insurance">Insurance</option>
-            <option value="toll">Toll</option>
-            <option value="fine">Fine</option>
-            <option value="other">Other</option>
+            <option value="fuel" data-vis="{{ V }}">Fuel</option>
+            <option value="maintenance" data-vis="{{ V }}">Maintenance</option>
+            <option value="insurance" data-vis="{{ V }}">Insurance</option>
+            <option value="toll" data-vis="{{ V }}">Toll</option>
+            <option value="fine" data-vis="{{ V }}">Fine</option>
+            <option value="other" data-vis="{{ V }}">Other</option>
           </select>
         </label>
         <label data-vis="{{ V }}">Amount (₹) <input type="number" step="0.01" name="amount" required data-vis="{{ V }}"></label>

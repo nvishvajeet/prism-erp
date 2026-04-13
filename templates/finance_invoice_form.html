@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading with context %}
-{% block hover_back %}<a href="{{ url_for('finance_invoices_list') }}" class="hover-back-btn" title="Back to Invoices">&larr;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('finance_invoices_list') }}" class="hover-back-btn" title="Back to Invoices">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">&larr; Invoices</a>
+    <a class="text-link back-link" href="{{ url_for('finance_invoices_list') }}" data-vis="{{ V }}">← Invoices</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">New Invoice</h2>
     <span class="inst-header-code" data-vis="{{ V }}">Create a billing document</span>
   </div>
@@ -43,7 +43,7 @@
         </div>
 
         <div class="finance-form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Amount Due (&#8377;)</label>
+          <label data-vis="{{ V }}">Amount Due (₹)</label>
           <input type="number" name="amount_due" step="0.01" min="0.01" required placeholder="0.00" data-vis="{{ V }}">
         </div>
 

@@ -6108,6 +6108,23 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   max-height: 16rem;
   color: var(--danger, #b84a4a);
 }
+.compute-result-shell {
+  position: relative;
+}
+.compute-copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+.compute-result-block {
+  max-height: 32rem;
+}
+.compute-processing-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
 .dp-doc-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
 .dp-doc-tab { padding: 0.25rem 0.6rem; border: 1px solid var(--border, #d0d4dc); background: transparent; border-radius: 6px; cursor: pointer; font-size: 0.78rem; }
 .dp-doc-tab-active { background: var(--accent, #4c6ef5); color: #fff; border-color: var(--accent, #4c6ef5); }

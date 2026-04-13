@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
-{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -24,14 +24,19 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
+  {# ── FOCUS · KPI Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% set paid_count = payroll|selectattr('payment')|selectattr('payment.status', 'equalto', 'paid')|list|length %}
+    {% set pending_count = payroll|length - paid_count %}
     {{ kpi_grid([
-      {"value": payroll|length|string,                       "label": "Staff"},
-      {"value": "₹" ~ "{:,.0f}".format(total_payable),      "label": "Payable",  "tone": "amber"},
-      {"value": "₹" ~ "{:,.0f}".format(total_paid),         "label": "Paid",     "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(total_payable + total_paid), "label": "Total Payroll", "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(total_paid),                 "label": "Paid",           "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(total_payable),              "label": "Pending",         "tone": "active"},
+      {"value": payroll|length|string,                                "label": "Staff Count"},
     ]) }}
   </article>
 
+  {# ── ATTENTION · Payroll Table ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("PAYROLL", month_name ~ " " ~ year|string) }}
     {% if payroll %}
@@ -51,21 +56,29 @@
       </thead>
       <tbody data-vis="{{ V }}">
         {% for r in payroll %}
-        <tr data-vis="{{ V }}">
+        <tr{% if r.payment and r.payment.status == 'paid' %} style="opacity:0.6;"{% endif %} data-vis="{{ V }}">
           <td data-vis="{{ V }}">
-            <a href="{{ url_for('personnel_detail', user_id=r.user_id) }}" class="text-link" data-vis="{{ V }}">
-              <strong data-vis="{{ V }}">{{ r.name }}</strong>
-            </a>
+            {{ person_chip(r.name, user_id=r.user_id, size='sm') }}
           </td>
           <td data-vis="{{ V }}">{{ r.designation or "—" }}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.monthly_salary) }}</td>
-          <td class="num" data-vis="{{ V }}"><a href="{{ url_for('attendance_page', user_id=r.user_id, year=year, month=month_num) }}" class="text-link" title="View attendance">{{ "{:.1f}".format(r.days_worked) }}</a> / {{ r.days_in_month }}</td>
+          <td class="num" data-vis="{{ V }}">
+            <a href="{{ url_for('attendance_page', user_id=r.user_id, year=year, month=month_num) }}" class="text-link" title="View attendance" data-vis="{{ V }}">
+              {% if r.days_worked >= 25 %}
+              <span style="color:var(--tone-green);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
+              {% elif r.days_worked >= 15 %}
+              <span style="color:var(--tone-amber, #f59e0b);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
+              {% else %}
+              <span style="color:var(--tone-red, #ef4444);" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ "{:.1f}".format(r.days_worked) }}</strong></span>
+              {% endif %}
+            </a> / {{ r.days_in_month }}
+          </td>
           <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.calculated_pay) }}</strong></td>
           <td data-vis="{{ V }}">
             {% if r.payment and r.payment.status == 'paid' %}
-            <span class="badge status-paid" data-vis="{{ V }}">Paid</span>
+            <span class="badge status-paid" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Paid</span>
             {% else %}
-            <span class="badge status-pending" data-vis="{{ V }}">Pending</span>
+            <span class="badge status-pending" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Pending</span>
             {% endif %}
           </td>
           {% if can_edit %}

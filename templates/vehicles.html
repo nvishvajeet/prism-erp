@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
-{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -13,14 +13,17 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
+  {# ── FOCUS · KPI Stats ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ kpi_grid([
-      {"value": totals.count|string,                          "label": "Total Vehicles"},
-      {"value": totals.active|string,                         "label": "Active",        "tone": "green"},
-      {"value": "₹" ~ "{:,.0f}".format(totals.total_spend),  "label": "Total Spend"},
+      {"value": totals.count|string,                                       "label": "Total Vehicles"},
+      {"value": totals.active|string,                                      "label": "Active",             "tone": "green"},
+      {"value": "₹" ~ "{:,.0f}".format(totals.fuel_this_month|default(0)),"label": "Fuel This Month",    "tone": "amber"},
+      {"value": (totals.insurance_expiring|default(0))|string,             "label": "Insurance Expiring", "tone": "active"},
     ]) }}
   </article>
 
+  {# ── ATTENTION · Fleet Table ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FLEET", "All Vehicles") }}
     <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
@@ -44,17 +47,33 @@
           <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ v.name }}</strong></td>
           <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ v.registration_no }}</code></td>
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ v.vehicle_type|upper }}</span></td>
-          <td data-vis="{{ V }}">{{ v.driver_name or '—' }}</td>
+          <td data-vis="{{ V }}">
+            {% if v.driver_name %}
+            {{ person_chip(v.driver_name, user_id=v.assigned_driver_user_id|default(None), size='sm') }}
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total_fuel or 0) }}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(v.total_maintenance or 0) }}</td>
           <td data-vis="{{ V }}">{{ v.last_fuel_date or '—' }}</td>
-          <td data-vis="{{ V }}"><span class="badge status-{{ v.status }}" data-vis="{{ V }}">{{ v.status|capitalize }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if v.status == 'active' %}
+            <span class="badge status-active" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Active</span>
+            {% elif v.status == 'maintenance' %}
+            <span class="badge status-maintenance" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Maintenance</span>
+            {% elif v.status == 'retired' %}
+            <span class="badge status-retired" style="background:var(--tone-red, #ef4444);color:#fff;" data-vis="{{ V }}">Retired</span>
+            {% else %}
+            <span class="badge status-{{ v.status }}" data-vis="{{ V }}">{{ v.status|capitalize }}</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    {{ empty_state("No vehicles added yet.") }}
+    {{ empty_state("No vehicles added yet.", hint="Use the form below to add your first vehicle.") }}
     {% endif %}
   </article>
 
@@ -69,17 +88,17 @@
         <label data-vis="{{ V }}">Registration No. <input type="text" name="registration_no" required placeholder="MH-12-AB-1234" data-vis="{{ V }}"></label>
         <label data-vis="{{ V }}">Type
           <select name="vehicle_type" data-vis="{{ V }}">
-            <option value="car">Car</option>
-            <option value="van">Van</option>
-            <option value="truck">Truck</option>
-            <option value="bike">Bike</option>
-            <option value="auto">Auto</option>
-            <option value="other">Other</option>
+            <option value="car" data-vis="{{ V }}">Car</option>
+            <option value="van" data-vis="{{ V }}">Van</option>
+            <option value="truck" data-vis="{{ V }}">Truck</option>
+            <option value="bike" data-vis="{{ V }}">Bike</option>
+            <option value="auto" data-vis="{{ V }}">Auto</option>
+            <option value="other" data-vis="{{ V }}">Other</option>
           </select>
         </label>
         <label data-vis="{{ V }}">Assigned Driver
           <select name="assigned_driver_user_id" data-vis="{{ V }}">
-            <option value="">— None —</option>
+            <option value="" data-vis="{{ V }}">— None —</option>
             {% for u in all_users %}
             <option value="{{ u.id }}" data-vis="{{ V }}">{{ u.name }}</option>
             {% endfor %}

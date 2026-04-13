@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Submit Receipt</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("NEW RECEIPT", "Submit a bill or receipt for finance team review") }}
+    <form method="post" enctype="multipart/form-data" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label data-vis="{{ V }}">Vendor / Shop Name
+        <input type="text" name="vendor_name" required placeholder="e.g. Sagar Vegetables" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Amount (₹)
+        <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Date of Purchase
+        <input type="date" name="receipt_date" data-vis="{{ V }}">
+      </label>
+
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          {% for val, lbl in categories %}
+          <option value="{{ val }}" data-vis="{{ V }}">{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      {% if companies and companies|length > 1 %}
+      <label data-vis="{{ V }}">Company
+        <select name="company_id" data-vis="{{ V }}">
+          {% for co in companies %}
+          <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% elif companies and companies|length == 1 %}
+      <input type="hidden" name="company_id" value="{{ companies[0].id }}">
+      {% endif %}
+
+      <label data-vis="{{ V }}">Description
+        <textarea name="description" rows="2" placeholder="What was purchased? Quantities?" data-vis="{{ V }}"></textarea>
+      </label>
+
+      <div class="file-upload-area" id="uploadArea" data-vis="{{ V }}">
+        <input type="file" name="receipt_file" accept=".jpg,.jpeg,.png,.pdf" data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Photo of receipt / bill</strong> (optional)<br>JPG, PNG, or PDF</span>
+      </div>
+
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Receipt</button>
+    </form>
+  </article>
+
+  {# ── My Recent Submissions ── #}
+  {% if my_receipts %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MY SUBMISSIONS", "Recent receipts you submitted") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in my_receipts %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ r.receipt_date or r.created_at[:10] if r.created_at else '—' }}</td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.vendor_name }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ r.category }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if r.status == 'approved' %}
+            <span class="badge status-active" data-vis="{{ V }}">Approved</span>
+            {% elif r.status == 'rejected' %}
+            <span class="badge status-archived" data-vis="{{ V }}">Rejected</span>
+            {% else %}
+            <span class="badge status-queued" data-vis="{{ V }}">Pending</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  var area=document.getElementById('uploadArea');
+  if(!area)return;
+  ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
+  ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
+  var inp=area.querySelector('input[type="file"]');
+  if(inp) inp.addEventListener('change',function(){
+    var lbl=area.querySelector('.file-upload-label');
+    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+  });
+})();
+</script>
+{% endblock %}

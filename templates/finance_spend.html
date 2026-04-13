@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, empty_state with context %}
-{% block hover_back %}<a href="{{ url_for('finance_portal') }}" class="hover-back-btn" title="Back to Finance Portal">&larr;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('finance_portal') }}" class="hover-back-btn" title="Back to Finance Portal">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">&larr; Finance Portal</a>
+    <a class="text-link back-link" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">← Finance Portal</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Spend</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ entries|length }} entr{{ "ies" if entries|length != 1 else "y" }}</span>
   </div>
@@ -60,24 +60,24 @@
         <tbody data-vis="{{ V }}">
           {% for e in entries %}
           <tr class="{% if e.entry_type == 'expense' %}finance-spend-expense{% endif %}{% if e.entry_type == 'payment' and e.invoice_id %} clickable-row{% endif %}" {% if e.entry_type == 'payment' and e.invoice_id %}data-href="{{ url_for('finance_invoice_detail', invoice_id=e.invoice_id) }}"{% endif %} data-vis="{{ V }}">
-            <td data-vis="{{ V }}">{{ e.event_date[:10] if e.event_date else '&mdash;' }}</td>
+            <td data-vis="{{ V }}">{{ e.event_date[:10] if e.event_date else '—' }}</td>
             <td data-vis="{{ V }}">
               <span class="finance-type-badge finance-type-{{ e.entry_type }}" data-vis="{{ V }}">{{ e.entry_type|title }}</span>
             </td>
-            <td class="finance-num" data-vis="{{ V }}">&#8377;{{ "{:,.2f}".format(e.amount) }}</td>
+            <td class="finance-num" data-vis="{{ V }}">₹{{ "{:,.2f}".format(e.amount) }}</td>
             <td data-vis="{{ V }}">{{ e.method|replace('_', ' ')|title }}</td>
             <td data-vis="{{ V }}">
               {% if e.entry_type == 'payment' and e.invoice_number %}
               <code class="inline-code" data-vis="{{ V }}">{{ e.invoice_number }}</code>
-              {% if e.request_no %} &middot; {{ e.request_no }}{% endif %}
+              {% if e.request_no %} · {{ e.request_no }}{% endif %}
               {% elif e.entry_type == 'expense' %}
-              {{ e.request_no[:40] if e.request_no else '&mdash;' }}
+              {{ e.request_no[:40] if e.request_no else '—' }}
               {% else %}
-              &mdash;
+              —
               {% endif %}
             </td>
-            <td data-vis="{{ V }}">{{ e.grant_code or '&mdash;' }}</td>
-            <td data-vis="{{ V }}">{{ e.recorded_by_name or '&mdash;' }}</td>
+            <td data-vis="{{ V }}">{{ e.grant_code or '—' }}</td>
+            <td data-vis="{{ V }}">{{ e.recorded_by_name or '—' }}</td>
             <td class="finance-desc-cell" data-vis="{{ V }}">{{ e.notes[:40] if e.notes else '' }}</td>
           </tr>
           {% endfor %}

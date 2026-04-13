@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
-{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
@@ -18,6 +18,20 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
+  {# ── FOCUS · KPI Stats ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% set active_count = staff|selectattr('is_active', 'defined')|selectattr('is_active')|list|length if staff|first is mapping and 'is_active' in (staff|first).keys() else staff|length %}
+    {% set on_leave_count = staff|length - active_count %}
+    {% set total_payroll = staff|sum(attribute='monthly_salary', default=0) %}
+    {{ kpi_grid([
+      {"value": staff|length|string,                          "label": "Total Staff"},
+      {"value": active_count|string,                          "label": "Active",          "tone": "green"},
+      {"value": on_leave_count|string,                        "label": "On Leave",        "tone": "amber"},
+      {"value": "₹" ~ "{:,.0f}".format(total_payroll),       "label": "Monthly Payroll"},
+    ]) }}
+  </article>
+
+  {# ── ATTENTION · Staff Directory ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("STAFF", "Directory") }}
     <input type="text" id="staffSearch" class="table-search-input" placeholder="Search staff…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
@@ -39,9 +53,19 @@
       <tbody data-vis="{{ V }}">
         {% for s in staff %}
         <tr class="clickable-row" data-href="{{ url_for('personnel_detail', user_id=s.id) }}" data-vis="{{ V }}">
-          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.name }}</strong></td>
+          <td data-vis="{{ V }}">{{ person_chip(s.name, user_id=s.id, size='sm') }}</td>
           <td data-vis="{{ V }}">{{ s.email or "—" }}</td>
-          <td data-vis="{{ V }}"><span class="badge badge-role" data-vis="{{ V }}">{{ s.role or "—" }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if s.role == 'operator' %}
+            <span class="badge badge-role" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            {% elif s.role == 'admin' %}
+            <span class="badge badge-role" style="background:var(--tone-blue, #3b82f6);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            {% elif s.role == 'finance' %}
+            <span class="badge badge-role" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">{{ s.role }}</span>
+            {% else %}
+            <span class="badge badge-role" data-vis="{{ V }}">{{ s.role or "—" }}</span>
+            {% endif %}
+          </td>
           <td data-vis="{{ V }}">{{ s.designation or "—" }}</td>
           <td data-vis="{{ V }}">{{ s.department or "—" }}</td>
           {% if can_edit %}
@@ -53,7 +77,7 @@
       </tbody>
     </table>
     {% else %}
-    {{ empty_state("No staff found.") }}
+    {{ empty_state("No staff found.", hint="Add users from Settings to populate the directory.") }}
     {% endif %}
   </article>
 

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block hover_back %}<a href="{{ url_for('letters_list') }}" class="hover-back-btn" title="Back to Letters">&#8592;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('letters_list') }}" class="hover-back-btn" title="Back to Letters">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('letters_list') }}" data-vis="{{ V }}">&#8592; Letters</a>
+    <a class="text-link back-link" href="{{ url_for('letters_list') }}" data-vis="{{ V }}">← Letters</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">{% if letter %}Edit Letter{% else %}New Letter{% endif %}</h2>
   </div>
 </header>

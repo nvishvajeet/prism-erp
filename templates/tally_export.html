@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payment_filing') }}" class="hover-back-btn" title="Back to Filing">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">← Filing</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Tally Export</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ current_fy }}</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── How It Works ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TALLY INTEGRATION", "Export payment vouchers for Tally Prime / Tally ERP 9") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        Export all paid transactions as Tally-compatible files. Each purchase order becomes a Payment voucher entry
+        with the correct debit (expense ledger) and credit (bank/cash) legs. Import into Tally to avoid double-entry.
+      </p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.75rem;" data-vis="{{ V }}">
+        <div style="flex:1;min-width:12rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">CSV Format</strong>
+          <p class="hint" data-vis="{{ V }}">Open in Excel, review, then import via Tally's data import wizard. Best for first-time use.</p>
+        </div>
+        <div style="flex:1;min-width:12rem;background:var(--bg-secondary,#f5f5f5);padding:0.5rem;border-radius:4px;" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Tally XML Format</strong>
+          <p class="hint" data-vis="{{ V }}">Direct import into Tally Prime via Gateway > Import Data > Vouchers. Fastest for regular use.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  {# ── Export by Financial Year ── #}
+  {% if fys %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("EXPORT BY FINANCIAL YEAR", "Select FY and format") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Financial Year</th>
+          <th data-vis="{{ V }}">Transactions</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Value</th>
+          <th data-vis="{{ V }}">Export CSV</th>
+          <th data-vis="{{ V }}">Export XML</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for fy in fys %}
+        {% set fc = fy_counts.get(fy, {"count": 0, "total": 0}) %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ fy }}</strong></td>
+          <td data-vis="{{ V }}">{{ fc.count }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(fc.total) }}</td>
+          <td data-vis="{{ V }}">
+            {% if fc.count > 0 %}
+            <a href="{{ url_for('tally_export', fy=fy, format='csv') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">CSV</a>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if fc.count > 0 %}
+            <a href="{{ url_for('tally_export', fy=fy, format='tally_xml') }}" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.5rem;font-size:0.8rem;">XML</a>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {# ── Custom Export ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CUSTOM EXPORT", "Filter by company or month") }}
+    <form method="get" action="{{ url_for('tally_export') }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
+        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Financial Year
+          <select name="fy" data-vis="{{ V }}">
+            {% for fy in fys %}
+            <option value="{{ fy }}" data-vis="{{ V }}">{{ fy }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if companies and companies|length > 1 %}
+        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Company
+          <select name="company" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">All Companies</option>
+            {% for co in companies %}
+            <option value="{{ co.id }}" data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+          Format
+          <select name="format" data-vis="{{ V }}">
+            <option value="csv" data-vis="{{ V }}">CSV (Excel-friendly)</option>
+            <option value="tally_xml" data-vis="{{ V }}">Tally XML (direct import)</option>
+          </select>
+        </label>
+      </div>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Download Export</button>
+    </form>
+  </article>
+
+  {# ── Tally Setup Guide ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TALLY SETUP", "One-time ledger setup in Tally") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">Before importing, create these ledgers in Tally if they don't exist:</p>
+      <table class="data-table" data-vis="{{ V }}" style="margin-top:0.5rem;">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Ledger Name</th>
+            <th data-vis="{{ V }}">Group</th>
+            <th data-vis="{{ V }}">Purpose</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Bank Account</td><td data-vis="{{ V }}">Bank Accounts</td><td data-vis="{{ V }}">NEFT/UPI payments</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Cash</td><td data-vis="{{ V }}">Cash-in-Hand</td><td data-vis="{{ V }}">Cash payments</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Vegetables & Produce Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Perishable purchases</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Dairy & Milk Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Dairy purchases</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Provisions & Groceries Expenses</td><td data-vis="{{ V }}">Direct Expenses</td><td data-vis="{{ V }}">Bulk provisions</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Fuel & Transport Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Transport costs</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Equipment & Appliances Expenses</td><td data-vis="{{ V }}">Fixed Assets</td><td data-vis="{{ V }}">Capital purchases</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Maintenance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Repairs</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Salary Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Payroll</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Utilities Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Bills</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Insurance Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Compliance</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Services Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Professional fees</td></tr>
+          <tr data-vis="{{ V }}"><td data-vis="{{ V }}">General Expenses</td><td data-vis="{{ V }}">Indirect Expenses</td><td data-vis="{{ V }}">Miscellaneous</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+</section>
+{% endblock %}

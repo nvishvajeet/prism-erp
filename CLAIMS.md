@@ -66,7 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | cross-site-template-hygiene | 2026-04-13 22:33 CEST | `templates/attendance_team.html`, `templates/audit_log.html`, `templates/compute_detail.html`, `templates/compute_job_detail.html`, `templates/finance_grant_detail.html`, `templates/finance_grant_expenses.html`, `templates/finance_invoice_detail.html`, `templates/finance_invoice_form.html`, `templates/finance_spend.html`, `templates/letter_detail.html`, `templates/letter_form.html`, `templates/letters.html`, `templates/todos.html`, `static/styles.css`, `CLAIMS.md` | `fix: clean cross-site template hygiene drift` |
+| codex | cross-site-template-hygiene | 2026-04-13 22:33 CEST | `templates/attendance_team.html`, `templates/audit_log.html`, `templates/compute_detail.html`, `templates/compute_job_detail.html`, `templates/finance_grant_detail.html`, `templates/finance_grant_expenses.html`, `templates/finance_invoice_detail.html`, `templates/finance_invoice_form.html`, `templates/finance_spend.html`, `templates/letter_detail.html`, `templates/letter_form.html`, `templates/letters.html`, `templates/receipt_inbox.html`, `templates/todos.html`, `static/styles.css`, `CLAIMS.md` | `fix: clean cross-site template hygiene drift` |
 
 ## Stale-claim recovery
 
@@ -91,4 +91,3 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Claude-Main | Personnel+Vehicles+Attendance polish | templates/personnel*.html, templates/vehicle*.html, templates/payroll.html, templates/attendance*.html | 2026-04-13T22:00:00Z |

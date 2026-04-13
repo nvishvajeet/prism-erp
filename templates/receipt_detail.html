@@ -55,7 +55,7 @@
   {% if can_review and receipt.status == 'pending' %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Review") }}
-    <form method="post" action="{{ url_for('receipt_review', receipt_id=receipt.id) }}" class="form-grid" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('expense_receipt_review', receipt_id=receipt.id) }}" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Note<textarea name="reviewer_note" rows="2" placeholder="Optional reviewer note..." data-vis="{{ V }}"></textarea></label>
       <div class="form-controls" data-vis="{{ V }}">

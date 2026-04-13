@@ -1,21 +1,31 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid, metadata_grid with context %}
-{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel">←</a>{% endblock %}
+{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('personnel_list') }}" data-vis="{{ V }}">← Personnel</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">{{ employee.name }}</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ person_chip(employee.name, user_id=employee.id, size='lg') }}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ employee.email or "" }}</span>
   </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  {# ── Profile Tile ── #}
+  {# ── FOCUS · Attendance KPIs ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": "{:.1f}".format(days_worked),  "label": "Days Worked",  "tone": "green"},
+      {"value": "{:.0f}".format(present_days|default(days_worked, true)),  "label": "Present",  "tone": "green"},
+      {"value": "{:.0f}".format(absent_days|default(0)),   "label": "Absent",   "tone": "active"},
+      {"value": "{:.0f}".format(half_days|default(0)),     "label": "Half Day", "tone": "amber"},
+    ]) }}
+  </article>
+
+  {# ── ATTENTION · Profile ── #}
   <article class="card tile" data-vis="{{ V }}">
-    {{ card_heading("PROFILE", employee.name) }}
+    {{ card_heading("PROFILE", "Employee details") }}
     {{ metadata_grid([
       ("Name", employee.name),
       ("Username", employee.email or "—"),
@@ -36,7 +46,7 @@
   </article>
   {% endif %}
 
-  {# ── Salary Config Tile ── #}
+  {# ── ATTENTION · Salary Config ── #}
   <article class="card tile" data-vis="{{ V }}">
     {{ card_heading("SALARY CONFIG", "Compensation details") }}
     {% if salary_cfg %}
@@ -57,14 +67,6 @@
     {% else %}
     {{ empty_state("No salary configuration set.", hint="Set one below.") }}
     {% endif %}
-  </article>
-
-  {# ── Attendance Summary ── #}
-  <article class="card tile" data-vis="{{ V }}">
-    {{ card_heading("ATTENDANCE", "Current month") }}
-    {{ kpi_grid([
-      {"value": "{:.1f}".format(days_worked), "label": "Days Worked (this month)"},
-    ]) }}
   </article>
 
   {# ── Assigned Vehicles ── #}
@@ -105,7 +107,7 @@
   </article>
   {% endif %}
 
-  {# ── Payment History ── #}
+  {# ── ATTENTION · Payment History ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("PAYMENT HISTORY", payments|length|string ~ " records") }}
     {% if payments %}
@@ -132,7 +134,13 @@
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.deductions) }}</td>
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.bonus) }}</td>
           <td class="num" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(p.net_pay) }}</strong></td>
-          <td data-vis="{{ V }}"><span class="badge status-{{ p.status }}" data-vis="{{ V }}">{{ p.status|capitalize }}</span></td>
+          <td data-vis="{{ V }}">
+            {% if p.status == 'paid' %}
+            <span class="badge status-paid" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">Paid</span>
+            {% else %}
+            <span class="badge status-pending" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">Pending</span>
+            {% endif %}
+          </td>
           <td data-vis="{{ V }}">{{ p.paid_at[:10] if p.paid_at else "—" }}</td>
           <td data-vis="{{ V }}">{{ p.paid_by_name or "—" }}</td>
         </tr>

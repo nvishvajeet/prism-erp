@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, status_pills_row with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payment_filing') }}" class="hover-back-btn" title="Back to Filing">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">← Filing</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Receipt Inbox</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ pending_count }} pending</span>
+  </div>
+</header>
+
+{{ status_pills_row(
+  pills=[
+    ('pending', 'Pending', pending_count),
+    ('approved', 'Approved', None),
+    ('rejected', 'Rejected', None),
+    ('all', 'All', None),
+  ],
+  active=status_filter,
+  row_id='receiptPills'
+) }}
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {% if submissions %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SUBMITTED RECEIPTS", submissions|length|string ~ " receipts") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Date</th>
+          <th data-vis="{{ V }}">Submitted By</th>
+          <th data-vis="{{ V }}">Vendor</th>
+          <th class="col-amount" data-vis="{{ V }}">Amount</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Co.</th>
+          <th data-vis="{{ V }}">Status</th>
+          <th data-vis="{{ V }}">Actions</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for s in submissions %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ s.receipt_date or s.created_at[:10] if s.created_at else '—' }}</td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ s.submitted_by_name or '—' }}</strong></td>
+          <td data-vis="{{ V }}">{{ s.vendor_name }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(s.amount) }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ s.category }}</span></td>
+          <td data-vis="{{ V }}">{{ s.company_short or '—' }}</td>
+          <td data-vis="{{ V }}">
+            {% if s.status == 'approved' %}
+            <span class="badge status-active" data-vis="{{ V }}">Approved</span>
+            {% elif s.status == 'rejected' %}
+            <span class="badge status-archived" data-vis="{{ V }}">Rejected</span>
+            {% else %}
+            <span class="badge status-queued" data-vis="{{ V }}">Pending</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if s.status == 'pending' %}
+            <div class="inline-actions-row" data-vis="{{ V }}">
+              <form method="post" action="{{ url_for('receipt_review', sub_id=s.id) }}" class="inline-form inline-form-single" data-vis="{{ V }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="approve">
+                <button type="submit" class="btn btn-primary btn-sm" data-vis="{{ V }}">Approve</button>
+              </form>
+              <form method="post" action="{{ url_for('receipt_review', sub_id=s.id) }}" class="inline-form inline-form-single" data-vis="{{ V }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="reject">
+                <button type="submit" class="btn btn-danger btn-sm" data-vis="{{ V }}">Reject</button>
+              </form>
+            </div>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">{{ s.review_note or '—' }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% else %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ empty_state("No receipts to review.", "Staff can submit receipts via the Submit Receipt page.") }}
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  var pills=document.querySelectorAll('#receiptPills .filter-pill');
+  pills.forEach(function(p){
+    p.addEventListener('click',function(){
+      var status=p.dataset.bucket||'pending';
+      window.location='{{ url_for("receipt_inbox") }}?status='+status;
+    });
+  });
+})();
+</script>
+{% endblock %}

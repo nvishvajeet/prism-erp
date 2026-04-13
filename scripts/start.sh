@@ -46,6 +46,14 @@ case "$1" in
     export LAB_SCHEDULER_DEBUG=0
     export LAB_SCHEDULER_AUTORELOAD=0
 
+    # Kill any stale process on our port so launchd restarts don't fail
+    STALE_PIDS=$(lsof -ti "TCP:${BIND_PORT}" 2>/dev/null)
+    if [ -n "$STALE_PIDS" ]; then
+      echo "    killing stale PIDs on port ${BIND_PORT}: $STALE_PIDS"
+      echo "$STALE_PIDS" | xargs kill -9 2>/dev/null
+      sleep 1
+    fi
+
     # Install gunicorn if missing
     if [ ! -x ".venv/bin/gunicorn" ]; then
       echo "    Installing gunicorn..."

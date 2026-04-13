@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payment_filing') }}" class="hover-back-btn" title="Back to Filing">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">← Filing</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Retention Management</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ current_fy }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('filing_destroy_plan') }}" target="_blank" data-vis="{{ V }}">🖨 Destruction Plan</a>
+  </div>
+</header>
+
+{# ── KPIs ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": retention_plan|length|string,           "label": "Total File Groups"},
+      {"value": active_files|length|string,             "label": "Active (Within Retention)", "tone": "green"},
+      {"value": destroy_eligible|length|string,         "label": "Eligible for Destruction",  "tone": "amber"},
+    ]) }}
+  </article>
+</section>
+
+{# ── Files Eligible for Destruction ── #}
+{% if destroy_eligible %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--danger,#c44);">
+    {{ card_heading("ELIGIBLE FOR DESTRUCTION", "Retention period expired — review and approve destruction") }}
+    <p class="hint" style="padding:0.25rem 0.75rem 0.5rem;" data-vis="{{ V }}">
+      These folders have exceeded their retention period under Indian law.
+      You may archive (hide from views), mark for physical destruction, or keep them.
+    </p>
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Folder Code</th>
+          <th data-vis="{{ V }}">FY</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Items</th>
+          <th class="col-amount" data-vis="{{ V }}">Value</th>
+          <th data-vis="{{ V }}">Retain</th>
+          <th data-vis="{{ V }}">Age</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in destroy_eligible %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ r.folder_code }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.fy }}</strong></td>
+          <td data-vis="{{ V }}">{{ r.folder_name }}</td>
+          <td data-vis="{{ V }}">{{ r.po_count }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.total) }}</td>
+          <td data-vis="{{ V }}">{{ r.retention_years }}y</td>
+          <td data-vis="{{ V }}">
+            <span class="badge status-archived" data-vis="{{ V }}">{{ r.age_years }}y</span>
+          </td>
+          <td data-vis="{{ V }}">
+            {% if r.pf_id %}
+            <form method="post" action="{{ url_for('filing_archive_folder', pf_id=r.pf_id) }}" style="display:flex;gap:0.25rem;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" name="action" value="hide" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;">Hide</button>
+              <button type="submit" name="action" value="destroy" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;background:var(--danger);color:#fff;">Destroy</button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('filing_register_folder') }}" style="display:inline;" data-vis="{{ V }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="folder_code" value="{{ r.folder_code.split(' / ')[0] if ' / ' in r.folder_code else r.folder_code }}">
+              <input type="hidden" name="folder_name" value="{{ r.folder_name }}">
+              <input type="hidden" name="fiscal_year" value="{{ r.fy }}">
+              <input type="hidden" name="po_count" value="{{ r.po_count }}">
+              <input type="hidden" name="total_amount" value="{{ r.total }}">
+              <button type="submit" class="btn" data-vis="{{ V }}" style="padding:0.2rem 0.4rem;font-size:0.75rem;">Register</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Active Files (Within Retention) ── #}
+{% if active_files %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid var(--color-green,#34a853);">
+    {{ card_heading("ACTIVE FILES", "Within retention period — do not destroy") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Folder Code</th>
+          <th data-vis="{{ V }}">FY</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">Items</th>
+          <th class="col-amount" data-vis="{{ V }}">Value</th>
+          <th data-vis="{{ V }}">Retain</th>
+          <th data-vis="{{ V }}">Age</th>
+          <th data-vis="{{ V }}">Paper?</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for r in active_files %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ r.folder_code }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ r.fy }}</strong></td>
+          <td data-vis="{{ V }}">{{ r.folder_name }}</td>
+          <td data-vis="{{ V }}">{{ r.po_count }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(r.total) }}</td>
+          <td data-vis="{{ V }}">{{ r.retention_years }}y</td>
+          <td data-vis="{{ V }}">{{ r.age_years }}y</td>
+          <td data-vis="{{ V }}">
+            {% if r.paper_needed %}
+            <span class="badge status-queued" data-vis="{{ V }}">Paper</span>
+            {% else %}
+            <span class="badge status-active" data-vis="{{ V }}">Digital</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Physical File Registry ── #}
+{% if physical_files %}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PHYSICAL FILE REGISTRY", "Tracked folders in your cabinet") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Label</th>
+          <th data-vis="{{ V }}">FY</th>
+          <th data-vis="{{ V }}">Location</th>
+          <th data-vis="{{ V }}">Items</th>
+          <th class="col-amount" data-vis="{{ V }}">Value</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for pf in physical_files %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ pf.label or pf.folder_code }}</code></td>
+          <td data-vis="{{ V }}">{{ pf.fiscal_year }}</td>
+          <td data-vis="{{ V }}">{{ pf.location or '—' }}</td>
+          <td data-vis="{{ V }}">{{ pf.po_count }}</td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(pf.total_amount) }}</td>
+          <td data-vis="{{ V }}">
+            {% if pf.status == 'destroyed' %}
+            <span class="badge status-archived" data-vis="{{ V }}">Destroyed {{ pf.destroyed_at[:10] if pf.destroyed_at else '' }}</span>
+            {% elif pf.status == 'hidden' %}
+            <span class="badge" data-vis="{{ V }}">Hidden</span>
+            {% elif pf.status == 'archived' %}
+            <span class="badge status-queued" data-vis="{{ V }}">Archived</span>
+            {% else %}
+            <span class="badge status-active" data-vis="{{ V }}">Active</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endif %}
+
+{# ── Folder Numbering Reference ── #}
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("FOLDER NUMBERING SYSTEM", "Print this and paste on each folder spine") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">Each physical folder gets a spine label with the code below + fiscal year. Example: <code class="inline-code">PUR-PRSH / FY25-26</code></p>
+    </div>
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Code</th>
+          <th data-vis="{{ V }}">Folder Name</th>
+          <th data-vis="{{ V }}">Paper?</th>
+          <th data-vis="{{ V }}">Retain</th>
+          <th data-vis="{{ V }}">Spine Label ({{ current_fy }})</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% set folder_codes = {
+          "PURCHASES / PERISHABLE": "PUR-PRSH",
+          "PURCHASES / PROVISIONS": "PUR-PROV",
+          "EXPENSES / TRANSPORT": "EXP-TRNS",
+          "CAPITAL / EQUIPMENT": "CAP-EQUP",
+          "EXPENSES / MAINTENANCE": "EXP-MNTC",
+          "PAYROLL / SALARY": "PAY-SAL",
+          "EXPENSES / UTILITIES": "EXP-UTIL",
+          "EXPENSES / COMPLIANCE": "EXP-COMP",
+          "EXPENSES / SERVICES": "EXP-SRVC",
+          "EXPENSES / GENERAL": "EXP-GEN",
+        } %}
+        {% for name, code in folder_codes.items() %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ code }}</code></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ name }}</strong></td>
+          <td data-vis="{{ V }}">
+            {% for f in active_files if f.folder_name == name %}
+            {% if f.paper_needed %}<span class="badge status-queued" data-vis="{{ V }}">Paper</span>{% else %}<span class="badge status-active" data-vis="{{ V }}">Digital</span>{% endif %}
+            {% endfor %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% for f in active_files if f.folder_name == name %}{{ f.retention_years }}y{% endfor %}
+          </td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ code }} / {{ current_fy|replace("FY ", "FY") }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</section>
+{% endblock %}

@@ -280,6 +280,10 @@ MODULE_REGISTRY = {
             "ca_audit_upload_statement", "ca_audit_signoff",
             "ca_audit_print_signoff", "ca_audit_statement_review",
             "ca_audit_match_entry",
+            "receipt_submit", "receipt_inbox", "receipt_review",
+            "filing_retention", "filing_register_folder",
+            "filing_archive_folder", "filing_destroy_plan",
+            "tally_export", "tally_export_page",
         },
         "nav_badge_key": "pending_approvals",
         "nav_access": lambda ap, is_owner: (
@@ -4914,6 +4918,53 @@ def init_db() -> None:
                 FOREIGN KEY (company_id) REFERENCES companies(id),
                 FOREIGN KEY (signed_by_user_id) REFERENCES users(id)
             );
+        """)
+
+        # ── Physical file tracking + receipt submissions + retention ──
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS physical_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_code TEXT NOT NULL DEFAULT '',
+                folder_name TEXT NOT NULL DEFAULT '',
+                fiscal_year TEXT NOT NULL DEFAULT '',
+                company_id INTEGER,
+                label TEXT NOT NULL DEFAULT '',
+                po_count INTEGER NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                location TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT '',
+                archived_at TEXT,
+                destroyed_at TEXT,
+                destroyed_by_user_id INTEGER,
+                destruction_note TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (company_id) REFERENCES companies(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_pf_fy ON physical_files(fiscal_year);
+            CREATE INDEX IF NOT EXISTS idx_pf_status ON physical_files(status);
+            CREATE TABLE IF NOT EXISTS receipt_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                submitted_by_user_id INTEGER NOT NULL,
+                vendor_name TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL DEFAULT 0,
+                category TEXT NOT NULL DEFAULT 'general',
+                description TEXT NOT NULL DEFAULT '',
+                receipt_date TEXT NOT NULL DEFAULT '',
+                file_path TEXT NOT NULL DEFAULT '',
+                company_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reviewed_by_user_id INTEGER,
+                review_note TEXT NOT NULL DEFAULT '',
+                linked_po_id INTEGER,
+                reviewed_at TEXT,
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (submitted_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (company_id) REFERENCES companies(id),
+                FOREIGN KEY (linked_po_id) REFERENCES purchase_orders(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_rs_status ON receipt_submissions(status);
+            CREATE INDEX IF NOT EXISTS idx_rs_submitted_by ON receipt_submissions(submitted_by_user_id);
         """)
 
         # ── Compute / HPC Job Scheduler module ───────────────────
@@ -16868,9 +16919,10 @@ def vendor_payment_print(po_id):
     """, (po_id,))
     if not po:
         abort(404)
-    filing_cat, _, fiscal_year = _po_filing_info(po)
+    filing_cat, _, fiscal_year, folder_code = _po_filing_info(po)
     return render_template("_vendor_payment_print.html", po=po,
-                           filing_cat=filing_cat, fiscal_year=fiscal_year)
+                           filing_cat=filing_cat, fiscal_year=fiscal_year,
+                           folder_code=folder_code)
 
 
 @app.route("/payments/<int:po_id>/pay", methods=["POST"])
@@ -17072,19 +17124,83 @@ for _fn, _fi in FILING_CABINET.items():
         _CATEGORY_TO_FOLDER[_c] = _fn
 
 
+# ── Indian Financial Year helpers ─────────────────────────────
+# Indian FY runs April 1 to March 31. FY 2025-26 means Apr 2025 → Mar 2026.
+
+def indian_fy(date_str: str = "") -> str:
+    """Return Indian FY label like 'FY 2025-26' for a date string or today."""
+    from datetime import datetime as dt, date as _date
+    if date_str:
+        try:
+            d = dt.fromisoformat(date_str[:10]).date()
+        except (ValueError, TypeError):
+            d = _date.today()
+    else:
+        d = _date.today()
+    fy_start = d.year if d.month >= 4 else d.year - 1
+    return f"FY {fy_start}-{(fy_start + 1) % 100:02d}"
+
+
+def indian_fy_range(fy_label: str = ""):
+    """Parse 'FY 2025-26' into (start_date, end_date) as ISO strings."""
+    if not fy_label:
+        fy_label = indian_fy()
+    try:
+        parts = fy_label.replace("FY", "").strip().split("-")
+        start_year = int(parts[0].strip())
+        return f"{start_year}-04-01", f"{start_year + 1}-03-31"
+    except (ValueError, IndexError):
+        return "2025-04-01", "2026-03-31"
+
+
+def current_indian_fy() -> str:
+    """Return the current Indian FY label."""
+    return indian_fy()
+
+
+def fy_start_year(fy_label: str) -> int:
+    """Extract start year from 'FY 2025-26' → 2025."""
+    try:
+        return int(fy_label.replace("FY", "").strip().split("-")[0].strip())
+    except (ValueError, IndexError):
+        return 2025
+
+
+# ── Physical folder numbering ────────────────────────────────
+# Each filing folder gets a code: FOLDER_CODE / FY / sequence
+# e.g. PUR-PRSH/FY25-26 means Purchases-Perishable for FY 2025-26
+
+FOLDER_CODES = {
+    "PURCHASES / PERISHABLE":  "PUR-PRSH",
+    "PURCHASES / PROVISIONS":  "PUR-PROV",
+    "EXPENSES / TRANSPORT":    "EXP-TRNS",
+    "CAPITAL / EQUIPMENT":     "CAP-EQUP",
+    "EXPENSES / MAINTENANCE":  "EXP-MNTC",
+    "PAYROLL / SALARY":        "PAY-SAL",
+    "EXPENSES / UTILITIES":    "EXP-UTIL",
+    "EXPENSES / COMPLIANCE":   "EXP-COMP",
+    "EXPENSES / SERVICES":     "EXP-SRVC",
+    "EXPENSES / GENERAL":      "EXP-GEN",
+}
+
+
+def folder_label(folder_name: str, fy: str = "") -> str:
+    """Generate a physical folder spine label: PUR-PRSH / FY 25-26."""
+    code = FOLDER_CODES.get(folder_name, "MISC")
+    if not fy:
+        fy = current_indian_fy()
+    short_fy = fy.replace("FY ", "FY")
+    return f"{code} / {short_fy}"
+
+
 def _po_filing_info(po):
-    """Return (folder_name, folder_info, fiscal_year) for a PO."""
+    """Return (folder_name, folder_info, fiscal_year, folder_code) for a PO."""
     cat = po["category"] if hasattr(po, "__getitem__") else "general"
     folder_name = _CATEGORY_TO_FOLDER.get(cat, "EXPENSES / GENERAL")
     folder_info = FILING_CABINET.get(folder_name, FILING_CABINET["EXPENSES / GENERAL"])
-    fiscal_year = ""
-    created = po["created_at"] if po["created_at"] else None
-    if created:
-        from datetime import datetime as dt
-        d = dt.fromisoformat(created[:10])
-        fy_start = d.year if d.month >= 4 else d.year - 1
-        fiscal_year = f"FY {fy_start}-{(fy_start + 1) % 100:02d}"
-    return folder_name, folder_info, fiscal_year
+    fiscal_year = indian_fy(po["created_at"] if po["created_at"] else "")
+    code = folder_label(folder_name, fiscal_year)
+    return folder_name, folder_info, fiscal_year, code
 
 
 @app.route("/payments/filing")
@@ -17683,6 +17799,528 @@ def ca_audit_match_entry(entry_id):
     return redirect(url_for("ca_audit_statement_review", stmt_id=stmt_id))
 
 
+# ── Receipt Submission (staff → finance team) ──────────────────
+# Any staff member can snap a receipt photo and submit it.
+# Prashant's team reviews, links to a PO or creates a new one.
+
+@app.route("/receipts/submit", methods=["GET", "POST"])
+@login_required
+def receipt_submit():
+    """Staff submits a receipt/bill to the finance team."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    companies = _get_companies()
+    if request.method == "POST":
+        vendor_name = request.form.get("vendor_name", "").strip()
+        amount = float(request.form.get("amount", "0") or "0")
+        category = request.form.get("category", "general").strip()
+        description = request.form.get("description", "").strip()
+        receipt_date = request.form.get("receipt_date", "").strip() or now_iso()[:10]
+        company_id = int(request.form.get("company_id", "0") or "0") or None
+        if not vendor_name or amount <= 0:
+            flash("Vendor name and amount are required.", "error")
+            return redirect(url_for("receipt_submit"))
+        file_path = ""
+        uploaded = request.files.get("receipt_file")
+        if uploaded and uploaded.filename:
+            safe_name = secure_filename(uploaded.filename)
+            upload_dir = Path("data") / "receipt_submissions"
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            file_path = f"rcpt_{user['id']}_{ts}_{safe_name}"
+            uploaded.save(str(upload_dir / file_path))
+        execute("""
+            INSERT INTO receipt_submissions
+            (submitted_by_user_id, vendor_name, amount, category, description,
+             receipt_date, file_path, company_id, status, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (user["id"], vendor_name, amount, category, description,
+              receipt_date, file_path, company_id, "pending", now_iso()))
+        flash("Receipt submitted for review.", "success")
+        return redirect(url_for("receipt_submit"))
+    # Show user's recent submissions
+    my_receipts = query_all("""
+        SELECT rs.*, c.short_name AS company_short
+          FROM receipt_submissions rs
+          LEFT JOIN companies c ON c.id = rs.company_id
+         WHERE rs.submitted_by_user_id = ?
+         ORDER BY rs.created_at DESC LIMIT 20
+    """, (user["id"],))
+    return render_template("receipt_submit.html",
+                           my_receipts=my_receipts, companies=companies,
+                           categories=PO_CATEGORIES)
+
+
+@app.route("/receipts/inbox")
+@login_required
+def receipt_inbox():
+    """Finance team reviews submitted receipts."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    status_filter = request.args.get("status", "pending")
+    if status_filter == "all":
+        submissions = query_all("""
+            SELECT rs.*, u.name AS submitted_by_name, c.short_name AS company_short
+              FROM receipt_submissions rs
+              LEFT JOIN users u ON u.id = rs.submitted_by_user_id
+              LEFT JOIN companies c ON c.id = rs.company_id
+             ORDER BY rs.created_at DESC LIMIT 100
+        """)
+    else:
+        submissions = query_all("""
+            SELECT rs.*, u.name AS submitted_by_name, c.short_name AS company_short
+              FROM receipt_submissions rs
+              LEFT JOIN users u ON u.id = rs.submitted_by_user_id
+              LEFT JOIN companies c ON c.id = rs.company_id
+             WHERE rs.status = ?
+             ORDER BY rs.created_at DESC LIMIT 100
+        """, (status_filter,))
+    pending_count = query_one("SELECT COUNT(*) AS c FROM receipt_submissions WHERE status = 'pending'")
+    return render_template("receipt_inbox.html",
+                           submissions=submissions,
+                           pending_count=pending_count["c"] if pending_count else 0,
+                           status_filter=status_filter)
+
+
+@app.route("/receipts/review/<int:sub_id>", methods=["POST"])
+@login_required
+def receipt_review(sub_id):
+    """Finance team approves/rejects a receipt submission."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    action = request.form.get("action", "approve")
+    note = request.form.get("note", "").strip()
+    status = "approved" if action == "approve" else "rejected"
+    execute("""
+        UPDATE receipt_submissions
+        SET status = ?, reviewed_by_user_id = ?, review_note = ?, reviewed_at = ?
+        WHERE id = ?
+    """, (status, user["id"], note, now_iso(), sub_id))
+    if action == "approve":
+        sub = query_one("SELECT * FROM receipt_submissions WHERE id = ?", (sub_id,))
+        if sub:
+            flash(f"Receipt approved — ₹{sub['amount']:,.0f} from {sub['vendor_name']}.", "success")
+    else:
+        flash("Receipt rejected.", "info")
+    return redirect(url_for("receipt_inbox"))
+
+
+# ── Retention Management + Physical File Tracking ──────────────
+# Indian requirement: most records 7 years, capital 10 years.
+# In April each year, system shows what's eligible for destruction.
+# Prashant reviews and marks files for destruction.
+
+@app.route("/filing/retention")
+@login_required
+def filing_retention():
+    """Retention management — shows which FYs are eligible for destruction,
+    maps to physical folder codes, generates destruction schedule."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today()
+    current_fy = current_indian_fy()
+
+    # Build list of all FYs with transaction data
+    fy_rows = query_all("""
+        SELECT strftime('%Y', created_at) AS yr,
+               strftime('%m', created_at) AS mo,
+               COUNT(*) AS count,
+               SUM(amount) AS total
+          FROM purchase_orders
+         WHERE created_at IS NOT NULL
+         GROUP BY yr, mo ORDER BY yr, mo
+    """)
+    # Aggregate by Indian FY
+    fy_data = {}
+    for r in fy_rows:
+        yr, mo = int(r["yr"]), int(r["mo"])
+        fy_start = yr if mo >= 4 else yr - 1
+        fy_label = f"FY {fy_start}-{(fy_start + 1) % 100:02d}"
+        if fy_label not in fy_data:
+            fy_data[fy_label] = {"count": 0, "total": 0.0, "fy_start": fy_start}
+        fy_data[fy_label]["count"] += r["count"]
+        fy_data[fy_label]["total"] += r["total"]
+
+    # For each FY + folder, check retention status
+    retention_plan = []
+    for fy_label, data in sorted(fy_data.items(), key=lambda x: x[1]["fy_start"]):
+        fy_start = data["fy_start"]
+        fy_end_year = fy_start + 1  # FY ends March of this year
+        age_years = today.year - fy_end_year
+        if today.month < 4:
+            age_years -= 1  # Haven't completed this FY yet
+
+        for folder_name, info in FILING_CABINET.items():
+            cats = info["categories"]
+            ph = ",".join("?" for _ in cats)
+            fy_start_date, fy_end_date = indian_fy_range(fy_label)
+            count = query_one(f"""
+                SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
+                  FROM purchase_orders
+                 WHERE category IN ({ph})
+                   AND created_at >= ? AND created_at <= ?
+            """, tuple(cats) + (fy_start_date, fy_end_date + "T23:59:59"))
+            if count and count["c"] > 0:
+                eligible = age_years >= info["retention_years"]
+                code = folder_label(folder_name, fy_label)
+                # Check if already tracked as physical file
+                pf = query_one(
+                    "SELECT * FROM physical_files WHERE folder_code = ? AND fiscal_year = ?",
+                    (FOLDER_CODES.get(folder_name, "MISC"), fy_label))
+                retention_plan.append({
+                    "fy": fy_label,
+                    "folder_name": folder_name,
+                    "folder_code": code,
+                    "retention_years": info["retention_years"],
+                    "paper_needed": info["paper_needed"],
+                    "age_years": age_years,
+                    "eligible_destroy": eligible,
+                    "po_count": count["c"],
+                    "total": count["total"],
+                    "pf_status": pf["status"] if pf else "active",
+                    "pf_id": pf["id"] if pf else None,
+                })
+
+    # Separate into eligible for destruction vs active
+    destroy_eligible = [r for r in retention_plan if r["eligible_destroy"]]
+    active_files = [r for r in retention_plan if not r["eligible_destroy"]]
+
+    # Physical files tracked
+    physical_files = query_all("""
+        SELECT pf.*, c.short_name AS company_short,
+               u.name AS destroyed_by_name
+          FROM physical_files pf
+          LEFT JOIN companies c ON c.id = pf.company_id
+          LEFT JOIN users u ON u.id = pf.destroyed_by_user_id
+         ORDER BY pf.fiscal_year DESC, pf.folder_code
+    """)
+
+    return render_template("filing_retention.html",
+                           current_fy=current_fy,
+                           destroy_eligible=destroy_eligible,
+                           active_files=active_files,
+                           physical_files=physical_files,
+                           retention_plan=retention_plan)
+
+
+@app.route("/filing/register-folder", methods=["POST"])
+@login_required
+def filing_register_folder():
+    """Register a physical folder — marks it as existing in the cabinet."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    folder_code = request.form.get("folder_code", "").strip()
+    folder_name = request.form.get("folder_name", "").strip()
+    fiscal_year = request.form.get("fiscal_year", "").strip()
+    company_id = int(request.form.get("company_id", "0") or "0") or None
+    location = request.form.get("location", "").strip()
+    po_count = int(request.form.get("po_count", "0") or "0")
+    total_amount = float(request.form.get("total_amount", "0") or "0")
+    label = f"{folder_code} / {fiscal_year}"
+    execute("""
+        INSERT INTO physical_files
+        (folder_code, folder_name, fiscal_year, company_id, label,
+         po_count, total_amount, location, status, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    """, (folder_code, folder_name, fiscal_year, company_id, label,
+          po_count, total_amount, location, "active", now_iso()))
+    flash(f"Physical folder '{label}' registered at {location or 'default cabinet'}.", "success")
+    return redirect(url_for("filing_retention"))
+
+
+@app.route("/filing/archive/<int:pf_id>", methods=["POST"])
+@login_required
+def filing_archive_folder(pf_id):
+    """Archive (hide) a physical folder — moves to 'archived' status.
+    Records remain in DB but hidden from active views."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    action = request.form.get("action", "archive")
+    note = request.form.get("note", "").strip()
+    if action == "destroy":
+        execute("""
+            UPDATE physical_files
+            SET status = 'destroyed', destroyed_at = ?,
+                destroyed_by_user_id = ?, destruction_note = ?
+            WHERE id = ?
+        """, (now_iso(), user["id"], note, pf_id))
+        pf = query_one("SELECT * FROM physical_files WHERE id = ?", (pf_id,))
+        log_action(user["id"], "physical_file", pf_id, "file_destroyed",
+                   {"label": pf["label"] if pf else "", "note": note})
+        flash("Folder marked as DESTROYED. Physical file should be shredded/disposed.", "warning")
+    elif action == "hide":
+        execute("UPDATE physical_files SET status = 'hidden', archived_at = ? WHERE id = ?",
+                (now_iso(), pf_id))
+        flash("Folder hidden from active views.", "info")
+    else:
+        execute("UPDATE physical_files SET status = 'archived', archived_at = ? WHERE id = ?",
+                (now_iso(), pf_id))
+        flash("Folder archived.", "info")
+    return redirect(url_for("filing_retention"))
+
+
+@app.route("/filing/destroy-plan")
+@login_required
+def filing_destroy_plan():
+    """Printable destruction plan — lists all folders eligible for destruction
+    with physical location, contents summary, and signature blocks."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today()
+
+    destroy_list = []
+    for folder_name, info in FILING_CABINET.items():
+        cats = info["categories"]
+        ph = ",".join("?" for _ in cats)
+        # Find FYs where retention has expired
+        all_pos = query_all(f"""
+            SELECT id, created_at, amount, category FROM purchase_orders
+             WHERE category IN ({ph}) AND created_at IS NOT NULL
+             ORDER BY created_at
+        """, tuple(cats))
+        fy_groups = {}
+        for po in all_pos:
+            fy = indian_fy(po["created_at"])
+            if fy not in fy_groups:
+                fy_groups[fy] = {"count": 0, "total": 0.0, "fy_start": fy_start_year(fy)}
+            fy_groups[fy]["count"] += 1
+            fy_groups[fy]["total"] += po["amount"]
+        for fy_label, data in fy_groups.items():
+            fy_end_year = data["fy_start"] + 1
+            age = today.year - fy_end_year
+            if today.month < 4:
+                age -= 1
+            if age >= info["retention_years"]:
+                code = folder_label(folder_name, fy_label)
+                pf = query_one(
+                    "SELECT * FROM physical_files WHERE folder_code = ? AND fiscal_year = ?",
+                    (FOLDER_CODES.get(folder_name, "MISC"), fy_label))
+                destroy_list.append({
+                    "fy": fy_label,
+                    "folder_name": folder_name,
+                    "folder_code": code,
+                    "short_code": FOLDER_CODES.get(folder_name, "MISC"),
+                    "retention_years": info["retention_years"],
+                    "age_years": age,
+                    "po_count": data["count"],
+                    "total": data["total"],
+                    "location": pf["location"] if pf else "Not registered",
+                    "pf_status": pf["status"] if pf else "unknown",
+                })
+
+    return render_template("filing_destroy_plan.html",
+                           destroy_list=destroy_list,
+                           current_fy=current_indian_fy(),
+                           today=today.isoformat())
+
+
+# ── Tally Integration (Export) ─────────────────────────────────
+# Generate XML/CSV that can be imported into Tally ERP 9 / Tally Prime.
+# Tally uses its own XML format for voucher imports.
+
+@app.route("/payments/tally-export")
+@login_required
+def tally_export():
+    """Export transactions as Tally-compatible XML or CSV for import."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    fmt = request.args.get("format", "csv")  # csv or tally_xml
+    fy = request.args.get("fy", current_indian_fy())
+    company_filter = request.args.get("company", "")
+    month = request.args.get("month", "")
+
+    fy_start, fy_end = indian_fy_range(fy)
+    conditions = ["po.status IN ('paid','receipt_uploaded')"]
+    params = []
+    conditions.append("po.created_at >= ? AND po.created_at <= ?")
+    params.extend([fy_start, fy_end + "T23:59:59"])
+    if company_filter:
+        conditions.append("po.company_id = ?")
+        params.append(int(company_filter))
+    if month:
+        conditions.append("po.created_at LIKE ?")
+        params.append(f"{month}%")
+
+    orders = query_all("""
+        SELECT po.*, v.name AS vendor_name, v.gstin AS vendor_gstin,
+               c.name AS company_name, c.short_name AS company_short,
+               c.gstin AS company_gstin
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+         WHERE """ + " AND ".join(conditions) + """
+         ORDER BY po.created_at
+    """, tuple(params))
+
+    companies = _get_companies()
+
+    if fmt == "tally_xml":
+        # Generate Tally Prime XML voucher format
+        return _generate_tally_xml(orders, fy, company_filter), 200, {
+            "Content-Type": "application/xml",
+            "Content-Disposition": f"attachment; filename=tally_vouchers_{fy.replace(' ','_')}.xml"
+        }
+    elif fmt == "csv":
+        # Generate CSV for Tally import
+        return _generate_tally_csv(orders, fy), 200, {
+            "Content-Type": "text/csv",
+            "Content-Disposition": f"attachment; filename=tally_import_{fy.replace(' ','_')}.csv"
+        }
+    else:
+        # Show export page with options
+        return render_template("tally_export.html",
+                               fy=fy, companies=companies,
+                               company_filter=company_filter,
+                               order_count=len(orders),
+                               current_fy=current_indian_fy())
+
+
+@app.route("/payments/tally-export-page")
+@login_required
+def tally_export_page():
+    """Tally export configuration page."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    companies = _get_companies()
+    # List available FYs
+    fy_rows = query_all("""
+        SELECT DISTINCT strftime('%Y', created_at) AS yr,
+               strftime('%m', created_at) AS mo
+          FROM purchase_orders WHERE created_at IS NOT NULL
+         ORDER BY yr, mo
+    """)
+    fys = set()
+    for r in fy_rows:
+        yr, mo = int(r["yr"]), int(r["mo"])
+        fy_start = yr if mo >= 4 else yr - 1
+        fys.add(f"FY {fy_start}-{(fy_start + 1) % 100:02d}")
+    fys = sorted(fys, reverse=True)
+
+    # Count by FY for preview
+    fy_counts = {}
+    for fy in fys:
+        s, e = indian_fy_range(fy)
+        ct = query_one("""
+            SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
+              FROM purchase_orders
+             WHERE status IN ('paid','receipt_uploaded')
+               AND created_at >= ? AND created_at <= ?
+        """, (s, e + "T23:59:59"))
+        fy_counts[fy] = {"count": ct["c"] if ct else 0, "total": ct["total"] if ct else 0}
+
+    return render_template("tally_export.html",
+                           companies=companies, fys=fys, fy_counts=fy_counts,
+                           current_fy=current_indian_fy())
+
+
+def _generate_tally_xml(orders, fy, company_filter=""):
+    """Generate Tally Prime compatible XML voucher import."""
+    from xml.etree.ElementTree import Element, SubElement, tostring
+    envelope = Element("ENVELOPE")
+    header = SubElement(envelope, "HEADER")
+    SubElement(header, "TALLYREQUEST").text = "Import Data"
+    body = SubElement(envelope, "BODY")
+    import_data = SubElement(body, "IMPORTDATA")
+    req_desc = SubElement(import_data, "REQUESTDESC")
+    SubElement(req_desc, "REPORTNAME").text = "Vouchers"
+    req_data = SubElement(import_data, "REQUESTDATA")
+
+    for po in orders:
+        voucher = SubElement(req_data, "TALLYMESSAGE", xmlns_UDF="TallyUDF")
+        v = SubElement(voucher, "VOUCHER", VCHTYPE="Payment", ACTION="Create")
+        SubElement(v, "DATE").text = (po["paid_at"] or po["created_at"] or "")[:10].replace("-", "")
+        SubElement(v, "NARRATION").text = (
+            f"PO#{po['id']} - {po['title']} - {po['vendor_name'] or 'Unknown'}"
+            f" - {po['payment_method'] or 'Bank'}"
+            f" - Ref: {po['payment_reference'] or 'N/A'}"
+        )
+        SubElement(v, "VOUCHERTYPENAME").text = "Payment"
+        SubElement(v, "VOUCHERNUMBER").text = f"PO-{po['id']}"
+        SubElement(v, "EFFECTIVEDATE").text = (po["paid_at"] or po["created_at"] or "")[:10].replace("-", "")
+
+        # Debit: Expense ledger (vendor/category)
+        cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
+        alloc_dr = SubElement(v, "ALLLEDGERENTRIES.LIST")
+        SubElement(alloc_dr, "LEDGERNAME").text = f"{cat_label} Expenses"
+        SubElement(alloc_dr, "ISDEEMEDPOSITIVE").text = "Yes"
+        SubElement(alloc_dr, "AMOUNT").text = f"-{po['amount']:.2f}"
+
+        # Credit: Bank/Cash ledger
+        payment_ledger = "Cash" if po.get("payment_method") == "cash" else "Bank Account"
+        alloc_cr = SubElement(v, "ALLLEDGERENTRIES.LIST")
+        SubElement(alloc_cr, "LEDGERNAME").text = payment_ledger
+        SubElement(alloc_cr, "ISDEEMEDPOSITIVE").text = "No"
+        SubElement(alloc_cr, "AMOUNT").text = f"{po['amount']:.2f}"
+
+        # GST info if vendor has GSTIN
+        if po.get("vendor_gstin"):
+            SubElement(v, "PARTYGSTIN").text = po["vendor_gstin"]
+
+    return tostring(envelope, encoding="unicode", xml_declaration=True)
+
+
+def _generate_tally_csv(orders, fy):
+    """Generate CSV for Tally import — one row per voucher."""
+    import io, csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Date", "Voucher Type", "Voucher No", "Narration",
+        "Debit Ledger", "Credit Ledger", "Amount",
+        "Vendor Name", "Vendor GSTIN", "Category",
+        "Payment Method", "Payment Reference",
+        "Company", "Company GSTIN", "Fiscal Year"
+    ])
+    for po in orders:
+        cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
+        payment_ledger = "Cash" if po.get("payment_method") == "cash" else "Bank Account"
+        writer.writerow([
+            (po["paid_at"] or po["created_at"] or "")[:10],
+            "Payment",
+            f"PO-{po['id']}",
+            f"{po['title']} - {po['vendor_name'] or 'Unknown'}",
+            f"{cat_label} Expenses",
+            payment_ledger,
+            f"{po['amount']:.2f}",
+            po.get("vendor_name") or "",
+            po.get("vendor_gstin") or "",
+            po.get("category") or "general",
+            po.get("payment_method") or "",
+            po.get("payment_reference") or "",
+            po.get("company_short") or po.get("company_name") or "",
+            po.get("company_gstin") or "",
+            fy,
+        ])
+    return output.getvalue()
+
+
 # ── Compute / AI Job Submission module ──────────────────────────
 # Backend: Ollama (local, free) or Claude API (cloud, paid, better)
 # Set COMPUTE_BACKEND=claude in .env to use Claude API.
@@ -18005,7 +18643,7 @@ def receipt_detail(receipt_id):
 
 @app.route("/receipts/<int:receipt_id>/review", methods=["POST"])
 @login_required
-def receipt_review(receipt_id):
+def expense_receipt_review(receipt_id):
     user = current_user()
     if not _user_can_review_receipts(user):
         abort(403)

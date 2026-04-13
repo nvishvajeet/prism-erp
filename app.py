@@ -4331,6 +4331,19 @@ def init_db() -> None:
             except Exception:
                 pass
 
+        # Migrate: add open_source columns to compute_software
+        cs_cols = {col[1] for col in cur.execute("PRAGMA table_info(compute_software)").fetchall()}
+        for col_name, col_def in [
+            ("replaces", "TEXT NOT NULL DEFAULT ''"),
+            ("open_source_alt", "TEXT NOT NULL DEFAULT ''"),
+            ("license_cost_inr", "TEXT NOT NULL DEFAULT ''"),
+        ]:
+            if col_name not in cs_cols:
+                try:
+                    cur.execute(f"ALTER TABLE compute_software ADD COLUMN {col_name} {col_def}")
+                except Exception:
+                    pass
+
         # Migrate: add member_code column to users if it doesn't exist
         user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "member_code" not in user_columns:
@@ -4744,6 +4757,9 @@ def init_db() -> None:
                 command_template TEXT NOT NULL DEFAULT '',
                 description TEXT NOT NULL DEFAULT '',
                 category TEXT NOT NULL DEFAULT 'general',
+                replaces TEXT NOT NULL DEFAULT '',
+                open_source_alt TEXT NOT NULL DEFAULT '',
+                license_cost_inr TEXT NOT NULL DEFAULT '',
                 max_runtime_minutes INTEGER NOT NULL DEFAULT 60,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT ''
@@ -5619,6 +5635,42 @@ def seed_data() -> None:
         db.execute(
             "INSERT OR IGNORE INTO compute_software (name, version, category, command_template, max_runtime_minutes, description, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
             (name, ver, cat, cmd, maxrt, desc, now_iso()))
+    # Populate open-source alternative metadata
+    _sw_meta = [
+        # (name, replaces, open_source_alt, license_cost_inr)
+        ("GNU Octave",        "",                    "",                  "Free"),
+        ("Python 3",          "",                    "",                  "Free"),
+        ("R",                 "SPSS, Minitab",       "",                  "Free"),
+        ("Julia",             "",                    "",                  "Free"),
+        ("MATLAB",            "",                    "GNU Octave",        "~3 lakh/yr"),
+        ("ANSYS Mechanical",  "",                    "CalculiX + PrePoMax", "~8-15 lakh/yr"),
+        ("ANSYS Fluent",      "",                    "OpenFOAM",          "~8-15 lakh/yr"),
+        ("COMSOL",            "",                    "Elmer FEM",         "~8-15 lakh/yr"),
+        ("Abaqus",            "",                    "CalculiX",          "~10-20 lakh/yr"),
+        ("Gaussian",          "",                    "ORCA, NWChem",      "~5-10 lakh/yr"),
+        ("VASP",              "",                    "Quantum ESPRESSO",  "~5 lakh/yr"),
+        ("CalculiX",          "ANSYS, Abaqus",       "",                  "Free"),
+        ("Elmer FEM",         "COMSOL",              "",                  "Free"),
+        ("OpenFOAM",          "ANSYS Fluent, STAR-CCM+", "",             "Free"),
+        ("Gmsh",              "HyperMesh",           "",                  "Free"),
+        ("ParaView",          "ANSYS Post, Tecplot", "",                  "Free"),
+        ("ngspice",           "PSpice, LTspice",     "",                  "Free"),
+        ("Qucs-S",            "LTspice GUI",         "",                  "Free"),
+        ("KiCad",             "OrCAD, Altium",       "",                  "Free"),
+        ("ORCA",              "Gaussian",            "",                  "Free (academic)"),
+        ("Quantum ESPRESSO",  "VASP",                "",                  "Free"),
+        ("NWChem",            "Gaussian",            "",                  "Free"),
+        ("SageMath",          "Mathematica, Maple",  "",                  "Free"),
+        ("Maxima",            "Maple",               "",                  "Free"),
+        ("gnuplot",           "Origin",              "",                  "Free"),
+        ("Scilab",            "MATLAB/Simulink",     "",                  "Free"),
+        ("FreeCAD",           "SolidWorks, CATIA",   "",                  "Free"),
+        ("HyperSpy",          "Digital Micrograph",  "",                  "Free"),
+    ]
+    for sw_name, replaces, osa, cost in _sw_meta:
+        db.execute(
+            "UPDATE compute_software SET replaces=?, open_source_alt=?, license_cost_inr=? WHERE name=? AND replaces=''",
+            (replaces, osa, cost, sw_name))
     db.commit()
 
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
@@ -16173,8 +16225,38 @@ def compute_software_list():
              max_runtime, now_iso()))
         flash(f"{name} registered.", "success")
         return redirect(url_for("compute_software_list"))
-    software = query_all("SELECT * FROM compute_software ORDER BY category, name")
+    software = query_all("""
+        SELECT s.*,
+               COALESCE(jc.total_jobs, 0) AS total_jobs,
+               COALESCE(jc.completed_jobs, 0) AS completed_jobs,
+               COALESCE(jc.failed_jobs, 0) AS failed_jobs,
+               COALESCE(jc.running_jobs, 0) AS running_jobs
+          FROM compute_software s
+          LEFT JOIN (
+            SELECT software_id,
+                   COUNT(*) AS total_jobs,
+                   SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed_jobs,
+                   SUM(CASE WHEN status IN ('failed','needs_attention') THEN 1 ELSE 0 END) AS failed_jobs,
+                   SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) AS running_jobs
+              FROM compute_jobs GROUP BY software_id
+          ) jc ON jc.software_id = s.id
+         ORDER BY s.category, s.name
+    """)
+    # Group by category for the template
+    categories = {}
+    for s in software:
+        cat = s["category"] or "general"
+        categories.setdefault(cat, []).append(s)
+    # My job history (last 20 jobs for current user)
+    my_jobs = query_all("""
+        SELECT j.*, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN compute_software s ON s.id = j.software_id
+         WHERE j.user_id = ?
+         ORDER BY j.created_at DESC LIMIT 20
+    """, (user["id"],))
     return render_template("compute_software.html", software=software,
+                           categories=categories, my_jobs=my_jobs,
                            can_manage=can_manage)
 
 

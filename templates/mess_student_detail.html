@@ -29,13 +29,47 @@
     ]) }}
   </article>
 
-  {# ── QR Code ── #}
+  {# ── Monthly Pass & QR ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("MONTHLY PASS", current_month ~ " — rotating QR code") }}
+    <div style="padding:1rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" style="gap:1.5rem;" data-vis="{{ V }}">
+        <div style="text-align:center;" data-vis="{{ V }}">
+          <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+            <img src="{{ url_for('qr_code_svg', code=month_pass) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
+          </div>
+          <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">Month: {{ current_month }}</p>
+          <p style="font-family:monospace;font-size:0.7rem;" data-vis="{{ V }}">{{ month_pass }}</p>
+        </div>
+        <div style="text-align:center;" data-vis="{{ V }}">
+          <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
+            <img src="{{ url_for('qr_code_svg', code=sem_pass) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
+          </div>
+          <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">Semester: {{ current_sem }}</p>
+          <p style="font-family:monospace;font-size:0.7rem;" data-vis="{{ V }}">{{ sem_pass }}</p>
+        </div>
+      </div>
+      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--color-separator, #333);" data-vis="{{ V }}">
+        <p class="hint" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Student pass link</strong> (share with student — they bookmark it on their phone):
+        </p>
+        <code class="inline-code" style="word-break:break-all;font-size:0.75rem;" data-vis="{{ V }}">{{ pass_url }}</code>
+        <button onclick="navigator.clipboard.writeText('{{ pass_url }}');this.textContent='Copied!'" class="btn" style="margin-left:0.5rem;font-size:0.75rem;" data-vis="{{ V }}">Copy Link</button>
+      </div>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">
+        Codes rotate monthly (HMAC-SHA256 signed). Students see their current pass at the link above — no app install needed.
+        Scanner phones read the QR via camera at the mess entrance.
+      </p>
+    </div>
+  </article>
+
+  {# ── Static QR Token ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("QR TOKEN", student.qr_token) }}
+    {{ card_heading("STATIC QR TOKEN", "For printed ID cards (does not rotate)") }}
     <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
       <div style="display:inline-block;background:#fff;padding:1rem;border-radius:8px;" data-vis="{{ V }}">
-        <img src="{{ url_for('qr_code_svg', code=student.qr_token) }}" alt="QR" style="width:150px;height:150px;" data-vis="{{ V }}">
-        <p style="font-family:monospace;font-weight:700;margin-top:0.5rem;letter-spacing:0.1em;" data-vis="{{ V }}">{{ student.qr_token }}</p>
+        <img src="{{ url_for('qr_code_svg', code=student.qr_token) }}" alt="QR" style="width:120px;height:120px;" data-vis="{{ V }}">
+        <p style="font-family:monospace;font-weight:700;margin-top:0.5rem;letter-spacing:0.1em;font-size:0.8rem;" data-vis="{{ V }}">{{ student.qr_token }}</p>
       </div>
     </div>
   </article>

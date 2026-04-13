@@ -40,7 +40,15 @@ BASE_DIR = Path(__file__).resolve().parent
 # (fake users/requests for local dev) live under separate folders so
 # demo runs can never corrupt a real deployment. The mode is chosen at
 # boot by LAB_SCHEDULER_DEMO_MODE — "1"/"true" → demo; else operational.
-DATA_DIR = BASE_DIR / "data"
+#
+# CATALYST_DATA_DIR overrides the default data root, allowing the data
+# directory to live on an external SSD or a separate volume. When set,
+# the demo/operational subfolder structure is preserved under that path.
+# Example: CATALYST_DATA_DIR=/Volumes/DataSSD/catalyst → DB lives at
+#   /Volumes/DataSSD/catalyst/demo/lab_scheduler.db  (demo mode)
+#   /Volumes/DataSSD/catalyst/operational/lab_scheduler.db  (production)
+_DATA_DIR_OVERRIDE = os.environ.get("CATALYST_DATA_DIR", "").strip()
+DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else (BASE_DIR / "data")
 DATA_OPERATIONAL_DIR = DATA_DIR / "operational"
 DATA_DEMO_DIR = DATA_DIR / "demo"
 
@@ -301,7 +309,8 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {
             "mess_dashboard", "mess_scan", "mess_students_list",
             "mess_student_detail", "mess_student_new", "mess_reports",
-            "mess_student_qr",
+            "mess_student_qr", "mess_camera_scan", "mess_student_pass",
+            "mess_api_validate_scan",
         },
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
@@ -19254,6 +19263,120 @@ def audit_export():
     )
 
 
+# ── Feature: Data Storage Management ────────────────────────────────────
+
+@app.route("/admin/data-storage")
+@owner_required
+def admin_data_storage():
+    """Show current data storage info and migration controls."""
+    import shutil
+    active_path = str(_ACTIVE_DATA_DIR.resolve())
+    default_path = str((BASE_DIR / "data").resolve())
+    is_custom = active_path != str((BASE_DIR / "data" / ("demo" if DEMO_MODE else "operational")).resolve())
+
+    db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    upload_size = sum(f.stat().st_size for f in UPLOAD_DIR.rglob("*") if f.is_file()) if UPLOAD_DIR.exists() else 0
+    export_size = sum(f.stat().st_size for f in EXPORT_DIR.rglob("*") if f.is_file()) if EXPORT_DIR.exists() else 0
+
+    disk = shutil.disk_usage(active_path)
+
+    volumes = []
+    vol_dir = Path("/Volumes")
+    if vol_dir.exists():
+        for v in sorted(vol_dir.iterdir()):
+            if v.is_dir() and not v.name.startswith("."):
+                try:
+                    vu = shutil.disk_usage(str(v))
+                    volumes.append({
+                        "name": v.name, "path": str(v),
+                        "total_gb": round(vu.total / (1024**3), 1),
+                        "free_gb": round(vu.free / (1024**3), 1),
+                        "used_pct": round((vu.used / vu.total) * 100, 1) if vu.total else 0,
+                    })
+                except OSError:
+                    pass
+
+    return render_template("admin_data_storage.html",
+        active_path=active_path, default_path=default_path,
+        is_custom=is_custom, demo_mode=DEMO_MODE,
+        db_size_mb=round(db_size / (1024**2), 2),
+        upload_size_mb=round(upload_size / (1024**2), 2),
+        export_size_mb=round(export_size / (1024**2), 2),
+        total_size_mb=round((db_size + upload_size + export_size) / (1024**2), 2),
+        disk_total_gb=round(disk.total / (1024**3), 1),
+        disk_free_gb=round(disk.free / (1024**3), 1),
+        disk_used_pct=round((disk.used / disk.total) * 100, 1) if disk.total else 0,
+        volumes=volumes,
+    )
+
+
+@app.route("/admin/data-storage/migrate", methods=["POST"])
+@owner_required
+def admin_data_migrate():
+    """Migrate data to a new path. Copies DB + uploads + exports."""
+    import shutil
+    user = current_user()
+    target_base = request.form.get("target_path", "").strip()
+    if not target_base:
+        flash("No target path provided.", "error")
+        return redirect(url_for("admin_data_storage"))
+
+    target_dir = Path(target_base)
+    if not target_dir.exists():
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            flash(f"Cannot create target directory: {e}", "error")
+            return redirect(url_for("admin_data_storage"))
+
+    if not os.access(str(target_dir), os.W_OK):
+        flash("Target directory is not writable.", "error")
+        return redirect(url_for("admin_data_storage"))
+
+    sub = "demo" if DEMO_MODE else "operational"
+    new_data_dir = target_dir / sub
+    new_data_dir.mkdir(parents=True, exist_ok=True)
+
+    if new_data_dir.resolve() == _ACTIVE_DATA_DIR.resolve():
+        flash("Target is the same as the current data directory.", "error")
+        return redirect(url_for("admin_data_storage"))
+
+    if DB_PATH.exists():
+        shutil.copy2(str(DB_PATH), str(new_data_dir / "lab_scheduler.db"))
+    if UPLOAD_DIR.exists():
+        dst = new_data_dir / "uploads"
+        if dst.exists():
+            shutil.rmtree(str(dst))
+        shutil.copytree(str(UPLOAD_DIR), str(dst))
+    if EXPORT_DIR.exists():
+        dst = new_data_dir / "exports"
+        if dst.exists():
+            shutil.rmtree(str(dst))
+        shutil.copytree(str(EXPORT_DIR), str(dst))
+
+    # Persist in .env
+    env_path = BASE_DIR / ".env"
+    env_lines, found = [], False
+    if env_path.exists():
+        with open(env_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("CATALYST_DATA_DIR="):
+                    env_lines.append(f"CATALYST_DATA_DIR={target_base}\n")
+                    found = True
+                else:
+                    env_lines.append(line)
+    if not found:
+        env_lines.append(f"CATALYST_DATA_DIR={target_base}\n")
+    with open(env_path, "w") as f:
+        f.writelines(env_lines)
+
+    log_action(user["id"], "system", 0, "data_migrated", {
+        "from": str(_ACTIVE_DATA_DIR), "to": str(new_data_dir),
+    })
+    flash(f"Data copied to {new_data_dir}. Restart the server for the new path to take effect.", "success")
+    return redirect(url_for("admin_data_storage"))
+
+
 # ── Quick Entry — voice/text command queue ──────────────────────────────
 
 
@@ -19626,6 +19749,175 @@ def _mess_access(user) -> bool:
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
 
 
+# ── Monthly / Semester rotating pass tokens ──────────────────────
+def _mess_pass_secret() -> str:
+    """Server-side secret for HMAC-based pass tokens. Derived from
+    Flask SECRET_KEY so it's stable across restarts."""
+    return app.config.get("SECRET_KEY", "catalyst-mess-default-key")
+
+
+def _current_semester() -> str:
+    """Return current academic semester label: 'ODD-YYYY' (Jul-Dec)
+    or 'EVEN-YYYY' (Jan-Jun)."""
+    from datetime import date as _date
+    today = _date.today()
+    if today.month >= 7:
+        return f"ODD-{today.year}"
+    return f"EVEN-{today.year}"
+
+
+def _generate_mess_pass(student_id: int, roll_number: str, period: str) -> str:
+    """Generate an HMAC-based pass token for a student + period.
+    Period can be 'YYYY-MM' (monthly) or 'ODD-YYYY'/'EVEN-YYYY' (semester).
+    Returns a short hex token that's verifiable server-side."""
+    import hmac, hashlib
+    msg = f"{student_id}:{roll_number}:{period}"
+    h = hmac.new(_mess_pass_secret().encode(), msg.encode(), hashlib.sha256).hexdigest()[:12]
+    return f"MP-{roll_number}-{period}-{h}".upper()
+
+
+def _verify_mess_pass(token: str) -> dict | None:
+    """Verify a mess pass token. Returns student dict if valid, None if not.
+    Token format: MP-{ROLL}-{PERIOD}-{HMAC12}"""
+    if not token or not token.startswith("MP-"):
+        return None
+    parts = token.split("-")
+    # MP-MIT2024001-2026-04-abc123def456  →  parts varies based on period format
+    # Rebuild: roll is parts[1], period is everything between roll and last part (hmac)
+    if len(parts) < 4:
+        return None
+    hmac_part = parts[-1]
+    # Roll number is parts[1], period is parts[2:-1] joined
+    roll = parts[1]
+    period = "-".join(parts[2:-1])
+    # Find student
+    student = query_one(
+        "SELECT * FROM mess_students WHERE UPPER(roll_number) = ? AND is_active = 1",
+        (roll.upper(),),
+    )
+    if not student:
+        return None
+    # Verify HMAC
+    expected = _generate_mess_pass(student["id"], student["roll_number"], period)
+    if token.upper() != expected.upper():
+        return None
+    # Verify period is current
+    from datetime import date as _date
+    today = _date.today()
+    current_month = today.strftime("%Y-%m")
+    current_sem = _current_semester()
+    if period != current_month and period != current_sem:
+        return None  # expired token
+    return student
+
+
+@app.route("/mess/pass/<int:student_id>")
+def mess_student_pass(student_id: int):
+    """Public page — student bookmarks this on their phone.
+    Shows the current month's QR code. No login required.
+    Protected by a secret token in the URL to prevent enumeration."""
+    token = request.args.get("t", "")
+    student = query_one("SELECT * FROM mess_students WHERE id = ? AND is_active = 1", (student_id,))
+    if not student:
+        abort(404)
+    # Verify the access token (first 8 chars of the student's qr_token)
+    expected_t = (student["qr_token"] or "")[:8]
+    if token != expected_t:
+        abort(403)
+    from datetime import date as _date
+    today = _date.today()
+    current_month = today.strftime("%Y-%m")
+    current_sem = _current_semester()
+    month_pass = _generate_mess_pass(student["id"], student["roll_number"], current_month)
+    sem_pass = _generate_mess_pass(student["id"], student["roll_number"], current_sem)
+    return render_template(
+        "mess_student_pass.html",
+        student=student,
+        month_pass=month_pass,
+        sem_pass=sem_pass,
+        current_month=current_month,
+        current_sem=current_sem,
+    )
+
+
+@app.route("/mess/camera-scan")
+@login_required
+def mess_camera_scan():
+    """Phone camera scanner — uses html5-qrcode JS library to scan
+    student QR codes from their phone screen. No app install needed."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    current_meal = _current_meal()
+    return render_template(
+        "mess_camera_scan.html",
+        today=today,
+        current_meal=current_meal,
+        meal_types=MEAL_TYPES,
+    )
+
+
+@app.route("/mess/api/validate-scan", methods=["POST"])
+@login_required
+def mess_api_validate_scan():
+    """AJAX endpoint for the camera scanner. Accepts a scanned token,
+    validates it, records the entry, returns JSON."""
+    user = current_user()
+    if not _mess_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    from datetime import date as _date, datetime as _dt
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    meal = (data.get("meal_type") or _current_meal()).strip()
+    if meal not in MEAL_TYPES:
+        meal = _current_meal()
+    today = _date.today().isoformat()
+    if not token:
+        return jsonify({"ok": False, "error": "No token"})
+    # Try monthly/semester pass first
+    student = _verify_mess_pass(token)
+    if not student:
+        # Fall back to static QR token or roll number
+        student = query_one(
+            "SELECT * FROM mess_students WHERE (qr_token = ? OR UPPER(roll_number) = ?) AND is_active = 1",
+            (token, token.upper()),
+        )
+    if not student:
+        return jsonify({"ok": False, "error": f"Unknown code: {token}"})
+    # Duplicate check
+    existing = query_one(
+        "SELECT id FROM mess_entries WHERE student_id = ? AND meal_type = ? AND entry_date = ?",
+        (student["id"], meal, today),
+    )
+    if existing:
+        return jsonify({"ok": False, "error": f"{student['name']} already scanned for {meal}.", "duplicate": True})
+    # Meal plan check
+    if student["meal_plan"] == "lunch_only" and meal != "lunch":
+        return jsonify({"ok": False, "error": f"{student['name']} has lunch-only plan."})
+    if student["meal_plan"] == "no_breakfast" and meal == "breakfast":
+        return jsonify({"ok": False, "error": f"{student['name']}'s plan excludes breakfast."})
+    # Record
+    now_str = _dt.now().isoformat()
+    execute(
+        """
+        INSERT INTO mess_entries (student_id, meal_type, entry_date, entry_time, scanned_by_user_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (student["id"], meal, today, _dt.now().strftime("%H:%M:%S"), user["id"], now_str),
+    )
+    log_action(user["id"], "mess", student["id"], "mess_entry",
+               {"meal": meal, "roll": student["roll_number"], "method": "camera_scan"})
+    return jsonify({
+        "ok": True,
+        "name": student["name"],
+        "roll": student["roll_number"],
+        "meal": meal,
+        "department": student.get("department", ""),
+    })
+
+
 @app.route("/mess")
 @login_required
 def mess_dashboard():
@@ -19694,11 +19986,13 @@ def mess_scan():
         if not qr_token:
             flash("No code scanned.", "error")
             return redirect(url_for("mess_scan"))
-        # Find student by qr_token or roll_number
-        student = query_one(
-            "SELECT * FROM mess_students WHERE (qr_token = ? OR UPPER(roll_number) = ?) AND is_active = 1",
-            (qr_token, qr_token.upper()),
-        )
+        # Try monthly/semester pass first, then static token/roll
+        student = _verify_mess_pass(qr_token) if qr_token.startswith("MP-") else None
+        if not student:
+            student = query_one(
+                "SELECT * FROM mess_students WHERE (qr_token = ? OR UPPER(roll_number) = ?) AND is_active = 1",
+                (qr_token, qr_token.upper()),
+            )
         if not student:
             flash(f"Unknown student code: {qr_token}", "error")
             return redirect(url_for("mess_scan"))
@@ -19858,12 +20152,24 @@ def mess_student_detail(student_id: int):
         """,
         (student_id,),
     )
+    # Generate pass URL for this student
+    pass_token = (student["qr_token"] or "")[:8]
+    pass_url = url_for("mess_student_pass", student_id=student["id"], t=pass_token, _external=True)
+    from datetime import date as _date
+    current_month = _date.today().strftime("%Y-%m")
+    month_pass = _generate_mess_pass(student["id"], student["roll_number"], current_month)
+    sem_pass = _generate_mess_pass(student["id"], student["roll_number"], _current_semester())
     return render_template(
         "mess_student_detail.html",
         student=student,
         history=history,
         monthly=monthly,
         meal_types=MEAL_TYPES,
+        pass_url=pass_url,
+        month_pass=month_pass,
+        sem_pass=sem_pass,
+        current_month=current_month,
+        current_sem=_current_semester(),
     )
 
 

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mess Pass — {{ student.name }}</title>
+  <style>
+    :root { --bg: #000; --fg: #fff; --accent: #34c759; --muted: #888; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
+           background: var(--bg); color: var(--fg); min-height: 100vh;
+           display: flex; flex-direction: column; align-items: center;
+           padding: 1rem; padding-top: env(safe-area-inset-top, 1rem); }
+    .pass-card { background: #1c1c1e; border-radius: 16px; padding: 1.5rem;
+                 width: 100%; max-width: 380px; text-align: center;
+                 box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+    .pass-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em;
+                  color: var(--muted); margin-bottom: 0.25rem; }
+    .student-name { font-size: 1.5rem; font-weight: 700; margin: 0.25rem 0; }
+    .student-roll { font-family: 'SF Mono', 'Menlo', monospace; font-size: 1rem;
+                    color: var(--accent); letter-spacing: 0.1em; }
+    .student-dept { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+    .qr-container { background: #fff; border-radius: 12px; padding: 1rem;
+                    margin: 1.25rem auto; display: inline-block; }
+    .qr-container canvas { display: block; }
+    .pass-token { font-family: monospace; font-size: 0.7rem; color: var(--muted);
+                  word-break: break-all; margin-top: 0.5rem; }
+    .period-tabs { display: flex; gap: 0.5rem; margin: 1rem 0 0.5rem; justify-content: center; }
+    .period-tab { padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.8rem;
+                  border: 1px solid #333; background: transparent; color: var(--fg);
+                  cursor: pointer; transition: all 0.2s; }
+    .period-tab.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+    .status-bar { display: flex; justify-content: space-between; padding: 0.5rem 0;
+                  border-top: 1px solid #333; margin-top: 1rem; }
+    .status-item { text-align: center; flex: 1; }
+    .status-value { font-size: 0.9rem; font-weight: 600; }
+    .status-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; }
+    .validity { color: var(--accent); font-size: 0.75rem; margin-top: 0.75rem; }
+    .warn { color: #ff9500; }
+    @media print {
+      body { background: #fff; color: #000; }
+      .pass-card { background: #fff; border: 2px solid #000; box-shadow: none; }
+      .student-roll { color: #000; }
+      .period-tabs { display: none; }
+    }
+  </style>
+  <!-- QRCode.js — MIT license, open source, tiny (17KB) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<div class="pass-card">
+  <p class="pass-label">CATALYST Mess Entry Pass</p>
+  <h1 class="student-name">{{ student.name }}</h1>
+  <p class="student-roll">{{ student.roll_number }}</p>
+  <p class="student-dept">{{ student.department }} · Year {{ student.year_of_study }} · {{ student.meal_plan|title }} Plan</p>
+
+  <div class="period-tabs">
+    <button class="period-tab active" onclick="showPass('month')" id="tabMonth">Monthly</button>
+    <button class="period-tab" onclick="showPass('sem')" id="tabSem">Semester</button>
+  </div>
+
+  <div class="qr-container" id="qrContainer"></div>
+  <p class="pass-token" id="passTokenDisplay">{{ month_pass }}</p>
+
+  <p class="validity" id="validityLabel">Valid for {{ current_month }}</p>
+
+  <div class="status-bar">
+    <div class="status-item">
+      <p class="status-value">{{ student.hostel }}</p>
+      <p class="status-label">Hostel</p>
+    </div>
+    <div class="status-item">
+      <p class="status-value">{{ student.room_number }}</p>
+      <p class="status-label">Room</p>
+    </div>
+    <div class="status-item">
+      <p class="status-value">{{ student.meal_plan|title }}</p>
+      <p class="status-label">Plan</p>
+    </div>
+  </div>
+</div>
+
+<p style="color:#555;font-size:0.7rem;margin-top:1rem;text-align:center;">
+  Show this QR at the mess entrance scanner. Code rotates monthly for security.
+</p>
+
+<script>
+var monthPass = {{ month_pass|tojson }};
+var semPass = {{ sem_pass|tojson }};
+var currentMonth = {{ current_month|tojson }};
+var currentSem = {{ current_sem|tojson }};
+var qrInstance = null;
+
+function renderQR(text) {
+  var container = document.getElementById('qrContainer');
+  container.innerHTML = '';
+  qrInstance = new QRCode(container, {
+    text: text,
+    width: 200,
+    height: 200,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
+function showPass(type) {
+  document.getElementById('tabMonth').classList.toggle('active', type === 'month');
+  document.getElementById('tabSem').classList.toggle('active', type === 'sem');
+  if (type === 'month') {
+    renderQR(monthPass);
+    document.getElementById('passTokenDisplay').textContent = monthPass;
+    document.getElementById('validityLabel').textContent = 'Valid for ' + currentMonth;
+  } else {
+    renderQR(semPass);
+    document.getElementById('passTokenDisplay').textContent = semPass;
+    document.getElementById('validityLabel').textContent = 'Valid for ' + currentSem;
+  }
+}
+
+// Initial render
+renderQR(monthPass);
+</script>
+</body>
+</html>

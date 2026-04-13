@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Camera Scanner</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ current_meal|title }} · {{ today }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_scan') }}" class="btn" data-vis="{{ V }}">Manual Entry</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {# ── Camera Scanner ── #}
+  <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
+    {{ card_heading("PHONE CAMERA SCANNER", "Point at student's QR code on their phone") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div class="control-flex-wrap" style="margin-bottom:0.75rem;" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Meal
+          <select id="mealSelect" data-vis="{{ V }}">
+            {% for m in meal_types %}
+            <option value="{{ m }}"{% if m == current_meal %} selected{% endif %} data-vis="{{ V }}">{{ m|title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <div style="flex:1;" data-vis="{{ V }}"></div>
+        <span id="scanCount" style="font-size:1.5rem;font-weight:700;padding:0.5rem;color:var(--color-green,#34c759);" data-vis="{{ V }}">0</span>
+        <span class="hint" style="align-self:center;" data-vis="{{ V }}">scanned this session</span>
+      </div>
+
+      <div id="qrReader" style="width:100%;max-width:500px;margin:0 auto;" data-vis="{{ V }}"></div>
+
+      {# ── Result Banner ── #}
+      <div id="resultBanner" style="display:none;padding:1rem;border-radius:8px;margin-top:0.75rem;text-align:center;" data-vis="{{ V }}">
+        <p id="resultText" style="font-size:1.1rem;font-weight:600;" data-vis="{{ V }}"></p>
+        <p id="resultSub" class="hint" data-vis="{{ V }}"></p>
+      </div>
+    </div>
+  </article>
+
+  {# ── Scan Log ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SESSION LOG", "Entries scanned in this session") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">#</th>
+          <th data-vis="{{ V }}">Student</th>
+          <th data-vis="{{ V }}">Roll</th>
+          <th data-vis="{{ V }}">Meal</th>
+          <th data-vis="{{ V }}">Time</th>
+        </tr>
+      </thead>
+      <tbody id="logBody" data-vis="{{ V }}">
+        <tr id="emptyRow" data-vis="{{ V }}"><td colspan="5" style="text-align:center;color:#888;" data-vis="{{ V }}">No scans yet — point camera at a QR code</td></tr>
+      </tbody>
+    </table>
+  </article>
+
+  {# ── How It Works ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("HOW IT WORKS", "Open source, no app install") }}
+    <div style="padding:0.5rem 0.75rem;line-height:1.8;" data-vis="{{ V }}">
+      <ol style="padding-left:1.25rem;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Student opens their pass</strong> on their phone (bookmarked link, no app needed)</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Pass shows a QR code</strong> that rotates monthly — HMAC-SHA256 signed, can't be forged or shared</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">This scanner reads it</strong> using the phone camera via the <code data-vis="{{ V }}">html5-qrcode</code> library (open source, MIT license)</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Server validates</strong> the token cryptographically and records the entry</li>
+      </ol>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">
+        Algorithm: HMAC-SHA256(secret, "studentID:roll:period") truncated to 12 hex chars.
+        Period = YYYY-MM (monthly) or ODD/EVEN-YYYY (semester). Old tokens auto-expire.
+        QR generation: <a href="https://github.com/niclas-niclasen/qrcodejs" class="text-link" data-vis="{{ V }}">QRCode.js</a> (MIT).
+        QR scanning: <a href="https://github.com/niclas-niclasen/html5-qrcode" class="text-link" data-vis="{{ V }}">html5-qrcode</a> (Apache 2.0).
+      </p>
+    </div>
+  </article>
+</section>
+
+<!-- html5-qrcode — Apache 2.0, open source camera QR scanner -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+(function(){
+  var scanCount = 0;
+  var lastScan = '';
+  var lastScanTime = 0;
+  var COOLDOWN_MS = 3000; // 3s cooldown between same code
+
+  function showResult(ok, text, sub) {
+    var banner = document.getElementById('resultBanner');
+    var color = ok ? 'var(--color-green-bg, rgba(52,199,89,0.15))' : 'var(--color-red-bg, rgba(255,59,48,0.15))';
+    banner.style.background = color;
+    banner.style.display = 'block';
+    document.getElementById('resultText').textContent = text;
+    document.getElementById('resultSub').textContent = sub || '';
+    // Auto-hide after 4s
+    setTimeout(function(){ banner.style.display = 'none'; }, 4000);
+  }
+
+  function addToLog(name, roll, meal) {
+    var body = document.getElementById('logBody');
+    var empty = document.getElementById('emptyRow');
+    if(empty) empty.remove();
+    scanCount++;
+    document.getElementById('scanCount').textContent = scanCount;
+    var now = new Date();
+    var time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + scanCount + '</td><td><strong>' + name + '</strong></td><td><code class="inline-code">' + roll + '</code></td><td><span class="badge status-active">' + meal.charAt(0).toUpperCase() + meal.slice(1) + '</span></td><td>' + time + '</td>';
+    body.insertBefore(tr, body.firstChild);
+  }
+
+  function processToken(token) {
+    var now = Date.now();
+    // Debounce same code
+    if(token === lastScan && now - lastScanTime < COOLDOWN_MS) return;
+    lastScan = token;
+    lastScanTime = now;
+
+    var meal = document.getElementById('mealSelect').value;
+    // Play a beep sound for feedback
+    try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH+Jj4yHfnFkYXJ/iI+OioN5b2RjcH+IjY2Jg3pvZGRxf4iNjImDem9lZXF/').play(); } catch(e){}
+
+    fetch('{{ url_for("mess_api_validate_scan") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+      body: JSON.stringify({token: token, meal_type: meal})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(data.ok) {
+        showResult(true, '✓ ' + data.name, data.roll + ' — ' + data.meal.charAt(0).toUpperCase() + data.meal.slice(1));
+        addToLog(data.name, data.roll, data.meal);
+      } else {
+        showResult(false, '✗ ' + (data.error || 'Invalid code'), data.duplicate ? 'Already scanned' : '');
+      }
+    })
+    .catch(function(err){
+      showResult(false, 'Network error', err.message);
+    });
+  }
+
+  // Start camera scanner
+  var html5QrCode = new Html5Qrcode("qrReader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    function(decodedText) { processToken(decodedText); },
+    function(errorMessage) { /* ignore scan errors */ }
+  ).catch(function(err){
+    document.getElementById('qrReader').innerHTML =
+      '<p style="padding:2rem;text-align:center;color:#888;">Camera not available: ' + err +
+      '<br>Use <a href="{{ url_for("mess_scan") }}">manual entry</a> instead.</p>';
+  });
+})();
+</script>
+{% endblock %}

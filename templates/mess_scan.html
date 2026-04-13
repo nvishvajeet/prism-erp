@@ -9,6 +9,9 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">Meal Scanner</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ current_meal|title }} · {{ meal_count }} served</span>
   </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_camera_scan') }}" class="btn" data-vis="{{ V }}">Camera Scan</a>
+  </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">

@@ -283,15 +283,12 @@ MODULE_REGISTRY = {
     },
     "compute": {
         "label": "Compute",
-        "icon": "\U0001f5a5",
+        "icon": "\U0001f9e0",
         "nav_order": 11,
-        "description": "HPC job scheduler — submit & track compute jobs",
-        "nav_endpoint": "compute_dashboard",
-        "nav_active_endpoints": {
-            "compute_dashboard", "compute_submit", "compute_job_detail",
-            "compute_software_list", "compute_admin",
-        },
-        "nav_access": lambda ap, is_owner: True,  # everyone can submit jobs
+        "description": "AI job submission (Ollama)",
+        "nav_endpoint": "compute_list",
+        "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail"},
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "admin": {
         "label": "Admin",
@@ -4362,19 +4359,6 @@ def init_db() -> None:
             except Exception:
                 pass
 
-        # Migrate: add open_source columns to compute_software
-        cs_cols = {col[1] for col in cur.execute("PRAGMA table_info(compute_software)").fetchall()}
-        for col_name, col_def in [
-            ("replaces", "TEXT NOT NULL DEFAULT ''"),
-            ("open_source_alt", "TEXT NOT NULL DEFAULT ''"),
-            ("license_cost_inr", "TEXT NOT NULL DEFAULT ''"),
-        ]:
-            if col_name not in cs_cols:
-                try:
-                    cur.execute(f"ALTER TABLE compute_software ADD COLUMN {col_name} {col_def}")
-                except Exception:
-                    pass
-
         # Migrate: add member_code column to users if it doesn't exist
         user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
         if "member_code" not in user_columns:
@@ -4845,60 +4829,24 @@ def init_db() -> None:
 
         # ── Compute / HPC Job Scheduler module ───────────────────
         cur.executescript("""
-            CREATE TABLE IF NOT EXISTS compute_software (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                version TEXT NOT NULL DEFAULT '',
-                command_template TEXT NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT '',
-                category TEXT NOT NULL DEFAULT 'general',
-                replaces TEXT NOT NULL DEFAULT '',
-                open_source_alt TEXT NOT NULL DEFAULT '',
-                license_cost_inr TEXT NOT NULL DEFAULT '',
-                max_runtime_minutes INTEGER NOT NULL DEFAULT 60,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT ''
-            );
-
             CREATE TABLE IF NOT EXISTS compute_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                software_id INTEGER,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                command TEXT NOT NULL DEFAULT '',
-                input_filename TEXT NOT NULL DEFAULT '',
-                output_filename TEXT NOT NULL DEFAULT '',
-                estimated_minutes INTEGER NOT NULL DEFAULT 10,
-                priority TEXT NOT NULL DEFAULT 'normal',
+                submitted_by_user_id INTEGER NOT NULL,
+                model TEXT NOT NULL DEFAULT 'llama3:latest',
+                prompt TEXT NOT NULL,
+                context TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'queued',
-                queue_position INTEGER,
-                server_host TEXT NOT NULL DEFAULT '',
-                pid INTEGER,
+                result TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '',
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
                 started_at TEXT,
                 completed_at TEXT,
-                exit_code INTEGER,
-                stdout_log TEXT NOT NULL DEFAULT '',
-                stderr_log TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (software_id) REFERENCES compute_software(id)
+                FOREIGN KEY (submitted_by_user_id) REFERENCES users(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_compute_jobs_user ON compute_jobs(user_id);
+            CREATE INDEX IF NOT EXISTS idx_compute_jobs_user ON compute_jobs(submitted_by_user_id);
             CREATE INDEX IF NOT EXISTS idx_compute_jobs_status ON compute_jobs(status);
-            CREATE INDEX IF NOT EXISTS idx_compute_jobs_priority ON compute_jobs(priority, created_at);
-
-            CREATE TABLE IF NOT EXISTS compute_quotas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL UNIQUE,
-                max_concurrent_jobs INTEGER NOT NULL DEFAULT 2,
-                max_daily_jobs INTEGER NOT NULL DEFAULT 10,
-                max_runtime_minutes INTEGER NOT NULL DEFAULT 120,
-                priority_tier TEXT NOT NULL DEFAULT 'normal',
-                notes TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_compute_quotas_user ON compute_quotas(user_id);
         """)
 
         # Additive column migrations for v1.1.0
@@ -5735,119 +5683,6 @@ def seed_data() -> None:
     )
     db.commit()
 
-    # ── Compute software catalog (always upsert) ────────────────
-    compute_software = [
-        # (name, version, category, command_template, max_runtime_min, description)
-        ("Python 3",        "3.12",     "scripting",    "python3 {INPUT}",                          120,
-         "General-purpose scripting. Upload a .py script."),
-        ("MATLAB",          "R2024a",   "math",         "matlab -batch \"run('{INPUT}')\"",         240,
-         "University-wide license. Upload a .m script."),
-        ("GNU Octave",      "9.2",      "math",         "octave --no-gui {INPUT}",                  120,
-         "Open-source MATLAB alternative."),
-        ("R",               "4.4",      "analysis",     "Rscript {INPUT}",                          120,
-         "Statistical computing. Upload an .R script."),
-        ("Julia",           "1.11",     "analysis",     "julia {INPUT}",                            120,
-         "High-performance scientific computing."),
-        ("ANSYS Mechanical","2024 R1",  "simulation",   "ansys241 -b -i {INPUT} -o output.out",     480,
-         "Structural FEA. University license. Upload .inp file."),
-        ("ANSYS Fluent",    "2024 R1",  "cfd",          "fluent 3ddp -g -i {INPUT}",                480,
-         "CFD solver. University license. Upload journal file."),
-        ("COMSOL",          "6.2",      "simulation",   "comsol batch -inputfile {INPUT}",          480,
-         "Multi-physics simulation. Upload .mph file."),
-        ("Abaqus",          "2024",     "simulation",   "abaqus job={INPUT} interactive",           480,
-         "Advanced FEA. Upload .inp file."),
-        ("OpenFOAM",        "12",       "cfd",          "bash {INPUT}",                             360,
-         "Open-source CFD. Upload a run script."),
-        ("LAMMPS",          "2024.8",   "materials",    "lmp -in {INPUT}",                          360,
-         "Molecular dynamics. Upload input script."),
-        ("VASP",            "6.4",      "materials",    "mpirun -np 4 vasp_std",                    720,
-         "Ab-initio materials simulation. Upload INCAR/POSCAR set."),
-        ("Gaussian",        "16",       "materials",    "g16 {INPUT}",                              480,
-         "Quantum chemistry. Upload .gjf file."),
-        ("LaTeX",           "TeX Live", "typesetting",  "pdflatex -interaction=nonstopmode {INPUT}", 30,
-         "Document typesetting. Upload .tex file."),
-        ("Jupyter Notebook","7.x",      "scripting",    "jupyter nbconvert --to notebook --execute {INPUT}", 120,
-         "Execute a .ipynb notebook headlessly."),
-        ("ImageJ / Fiji",   "2.14",     "imaging",      "ImageJ-linux64 --headless --run {INPUT}",  60,
-         "Microscopy image analysis. Upload macro file."),
-        ("Custom Script",   "",         "general",      "",                                          120,
-         "Run any shell command. Specify the command manually."),
-        # Open-source alternatives to expensive proprietary tools
-        ("CalculiX",        "2.22",     "simulation",   "ccx {INPUT}",                              480,
-         "Open-source FEA — drop-in replacement for ANSYS/Abaqus. Reads .inp files directly."),
-        ("Elmer FEM",       "9.0",      "simulation",   "ElmerSolver {INPUT}",                      480,
-         "Open-source multi-physics FEM. Alternative to COMSOL."),
-        ("OpenFOAM",        "12",       "cfd",          "bash {INPUT}",                             360,
-         "Industry-standard open-source CFD. Alternative to ANSYS Fluent."),
-        ("Gmsh",            "4.13",     "simulation",   "gmsh {INPUT} -3 -o output.msh",           60,
-         "Open-source mesh generator for FEA/CFD. Pre-processing for CalculiX/OpenFOAM."),
-        ("ParaView",        "5.12",     "simulation",   "pvbatch {INPUT}",                          60,
-         "Open-source visualization — batch mode. Post-processing for any solver."),
-        ("ngspice",         "43",       "electronics",  "ngspice -b {INPUT}",                       120,
-         "Open-source SPICE simulator. Replacement for PSpice/LTspice."),
-        ("Qucs-S",          "24.3",     "electronics",  "qucs-s {INPUT}",                           60,
-         "GUI circuit simulator using ngspice backend."),
-        ("KiCad",           "8.0",      "electronics",  "kicad-cli pcb export {INPUT}",             30,
-         "Open-source PCB design. Replacement for OrCAD/Altium."),
-        ("ORCA",            "6.0",      "materials",    "orca {INPUT}",                             720,
-         "Free quantum chemistry for academics. Alternative to Gaussian."),
-        ("Quantum ESPRESSO","7.3",      "materials",    "pw.x < {INPUT}",                           720,
-         "Open-source DFT. Alternative to VASP."),
-        ("NWChem",          "7.2",      "materials",    "nwchem {INPUT}",                           720,
-         "Open-source computational chemistry. Alternative to Gaussian."),
-        ("SageMath",        "10.4",     "math",         "sage {INPUT}",                             120,
-         "Open-source computer algebra. Alternative to Mathematica/Maple."),
-        ("Maxima",          "5.47",     "math",         "maxima -b {INPUT}",                        60,
-         "Open-source symbolic math. Alternative to Maple."),
-        ("gnuplot",         "6.0",      "analysis",     "gnuplot {INPUT}",                          30,
-         "Publication-quality plotting. Alternative to Origin."),
-        ("Scilab",          "2024",     "math",         "scilab-cli -f {INPUT}",                    120,
-         "Open-source numerical computing. Alternative to MATLAB/Simulink."),
-        ("FreeCAD",         "0.22",     "simulation",   "freecadcmd {INPUT}",                       120,
-         "Open-source parametric CAD. Alternative to SolidWorks."),
-        ("HyperSpy",        "2.1",      "imaging",      "python3 -c \"import hyperspy.api as hs; hs.load('{INPUT}')\"", 60,
-         "Python electron microscopy analysis. Alternative to Digital Micrograph."),
-    ]
-    for name, ver, cat, cmd, maxrt, desc in compute_software:
-        db.execute(
-            "INSERT OR IGNORE INTO compute_software (name, version, category, command_template, max_runtime_minutes, description, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
-            (name, ver, cat, cmd, maxrt, desc, now_iso()))
-    # Populate open-source alternative metadata
-    _sw_meta = [
-        # (name, replaces, open_source_alt, license_cost_inr)
-        ("GNU Octave",        "",                    "",                  "Free"),
-        ("Python 3",          "",                    "",                  "Free"),
-        ("R",                 "SPSS, Minitab",       "",                  "Free"),
-        ("Julia",             "",                    "",                  "Free"),
-        ("MATLAB",            "",                    "GNU Octave",        "~3 lakh/yr"),
-        ("ANSYS Mechanical",  "",                    "CalculiX + PrePoMax", "~8-15 lakh/yr"),
-        ("ANSYS Fluent",      "",                    "OpenFOAM",          "~8-15 lakh/yr"),
-        ("COMSOL",            "",                    "Elmer FEM",         "~8-15 lakh/yr"),
-        ("Abaqus",            "",                    "CalculiX",          "~10-20 lakh/yr"),
-        ("Gaussian",          "",                    "ORCA, NWChem",      "~5-10 lakh/yr"),
-        ("VASP",              "",                    "Quantum ESPRESSO",  "~5 lakh/yr"),
-        ("CalculiX",          "ANSYS, Abaqus",       "",                  "Free"),
-        ("Elmer FEM",         "COMSOL",              "",                  "Free"),
-        ("OpenFOAM",          "ANSYS Fluent, STAR-CCM+", "",             "Free"),
-        ("Gmsh",              "HyperMesh",           "",                  "Free"),
-        ("ParaView",          "ANSYS Post, Tecplot", "",                  "Free"),
-        ("ngspice",           "PSpice, LTspice",     "",                  "Free"),
-        ("Qucs-S",            "LTspice GUI",         "",                  "Free"),
-        ("KiCad",             "OrCAD, Altium",       "",                  "Free"),
-        ("ORCA",              "Gaussian",            "",                  "Free (academic)"),
-        ("Quantum ESPRESSO",  "VASP",                "",                  "Free"),
-        ("NWChem",            "Gaussian",            "",                  "Free"),
-        ("SageMath",          "Mathematica, Maple",  "",                  "Free"),
-        ("Maxima",            "Maple",               "",                  "Free"),
-        ("gnuplot",           "Origin",              "",                  "Free"),
-        ("Scilab",            "MATLAB/Simulink",     "",                  "Free"),
-        ("FreeCAD",           "SolidWorks, CATIA",   "",                  "Free"),
-        ("HyperSpy",          "Digital Micrograph",  "",                  "Free"),
-    ]
-    for sw_name, replaces, osa, cost in _sw_meta:
-        db.execute(
-            "UPDATE compute_software SET replaces=?, open_source_alt=?, license_cost_inr=? WHERE name=? AND replaces=''",
-            (replaces, osa, cost, sw_name))
     db.commit()
 
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
@@ -6245,7 +6080,7 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
     if module_enabled("vehicles") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
         modules.append(("Fleet", "Track vehicles, running cost, and driver assignment."))
     if module_enabled("compute"):
-        modules.append(("Compute", "Submit jobs, inspect queue state, review failures, and coordinate with the worker-backed scheduler."))
+        modules.append(("Compute", "Send prompts to Ollama AI models, review results, and rerun jobs."))
     if module_enabled("inbox"):
         modules.append(("Inbox", "Use direct communication for follow-ups that should not live in a public workflow tile."))
     if module_enabled("notifications"):
@@ -6318,7 +6153,7 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
     if access.get("can_view_finance_stage"):
         pane_guides.append(("Finance panes", "Read grant health, invoice state, and payment progress together before changing financial state."))
     if module_enabled("compute"):
-        pane_guides.append(("Compute panes", "Use dashboard for queue state, submit for new work, detail for logs/output, and catalog/admin for software governance."))
+        pane_guides.append(("Compute panes", "Use the job list to see status, submit new AI prompts, and review results on the detail page."))
     if module_enabled("attendance") and access.get("_is_lab_staff"):
         pane_guides.append(("Attendance panes", "Use self-marking for everyday presence and the team/admin panes for leave and staffing visibility."))
 
@@ -16736,456 +16571,192 @@ def vendor_payment_reports():
                            categories=dict(PO_CATEGORIES))
 
 
-# ── Compute / HPC Job Scheduler module ─────────────────────────
+# ── Compute / AI Job Submission module (Ollama) ────────────────
 
-def _compute_scheduler_score(job):
-    """MLFQ scheduling score. Lower = runs first.
-    Algorithm:
-      - Priority tiers: high=0, normal=100, low=200
-      - Within tier: shortest estimated time first (SJF)
-      - Aging: subtract 5 points per minute waiting (so long-waiting
-        jobs eventually outrank short fresh ones)
-      - Fair share: penalize users with many running jobs (+50 per running)
-    """
-    tier_scores = {"high": 0, "normal": 100, "low": 200}
-    score = tier_scores.get(job["priority"], 100)
-    # SJF component
-    score += (job["estimated_minutes"] or 10) * 2
-    # Aging: reward waiting time
-    try:
-        wait_secs = (datetime.utcnow() - datetime.fromisoformat(job["created_at"])).total_seconds()
-        score -= (wait_secs / 60) * 5  # 5 points per minute waiting
-    except Exception:
-        pass
-    # Fair share penalty
-    running_count = query_one(
-        "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND status = 'running'",
-        (job["user_id"],))
-    score += (running_count["c"] if running_count else 0) * 50
-    return score
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+
+OLLAMA_MODELS = {
+    "llama3:latest":    {"label": "Llama 3",       "size": "4 GB",  "tone": "green",  "desc": "Fast general-purpose model"},
+    "qwen3-coder:30b":  {"label": "Qwen3 Coder",   "size": "18 GB", "tone": "blue",   "desc": "Code generation and analysis"},
+    "gpt-oss:120b":     {"label": "GPT-OSS 120B",  "size": "65 GB", "tone": "purple", "desc": "Large general model (slow)"},
+    "qwen3-vl:4b":      {"label": "Qwen3 VL",      "size": "3 GB",  "tone": "amber",  "desc": "Vision-language model"},
+}
 
 
-def _compute_next_job():
-    """Pick the best queued job to run next, using MLFQ scoring."""
-    queued = query_all(
-        "SELECT * FROM compute_jobs WHERE status = 'queued' ORDER BY created_at ASC")
-    if not queued:
-        return None
-    # Check per-user concurrent limits
-    eligible = []
-    for job in queued:
-        quota = query_one(
-            "SELECT max_concurrent_jobs FROM compute_quotas WHERE user_id = ?",
-            (job["user_id"],))
-        max_conc = quota["max_concurrent_jobs"] if quota else 2
-        running = query_one(
-            "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND status = 'running'",
-            (job["user_id"],))
-        if (running["c"] if running else 0) < max_conc:
-            eligible.append(job)
-    if not eligible:
-        return None
-    # Score and pick best
-    eligible.sort(key=_compute_scheduler_score)
-    return eligible[0]
-
-
-def _compute_update_queue_positions():
-    """Recalculate queue_position for all queued jobs (display order)."""
-    queued = query_all(
-        "SELECT * FROM compute_jobs WHERE status = 'queued' ORDER BY created_at ASC")
-    if not queued:
+def _run_compute_job(job_id):
+    """Run a queued job against Ollama. Called inline or in a thread."""
+    import urllib.request as _urllib_req
+    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    if not job or job["status"] != "queued":
         return
-    queued.sort(key=_compute_scheduler_score)
-    for i, job in enumerate(queued, 1):
-        execute("UPDATE compute_jobs SET queue_position = ? WHERE id = ?",
-                (i, job["id"]))
+    execute("UPDATE compute_jobs SET status='running', started_at=? WHERE id=?",
+            (now_iso(), job_id))
+
+    prompt = job["prompt"]
+    if job["context"]:
+        prompt = "Context:\n" + job["context"] + "\n\nQuestion:\n" + prompt
+
+    try:
+        payload = json.dumps({
+            "model": job["model"],
+            "prompt": prompt,
+            "stream": False,
+        }).encode()
+        req = _urllib_req.Request(
+            OLLAMA_URL + "/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        resp = _urllib_req.urlopen(req, timeout=300)
+        data = json.loads(resp.read())
+
+        result = data.get("response", "")
+        tokens = data.get("eval_count", 0)
+        duration = data.get("total_duration", 0) // 1_000_000  # ns to ms
+
+        execute(
+            """UPDATE compute_jobs
+               SET status='completed', result=?, tokens_used=?, duration_ms=?,
+                   completed_at=?
+               WHERE id=?""",
+            (result, tokens, duration, now_iso(), job_id),
+        )
+    except Exception as exc:
+        execute(
+            """UPDATE compute_jobs
+               SET status='failed', error=?, completed_at=?
+               WHERE id=?""",
+            (str(exc)[:500], now_iso(), job_id),
+        )
 
 
 @app.route("/compute")
 @login_required
-def compute_dashboard():
-    """Job queue dashboard — shows running, queued, and recent jobs."""
+def compute_list():
+    """AI job list — inbox style."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
-    # Running jobs
-    running = query_all("""
-        SELECT j.*, u.name AS user_name, s.name AS software_name
-          FROM compute_jobs j
-          LEFT JOIN users u ON u.id = j.user_id
-          LEFT JOIN compute_software s ON s.id = j.software_id
-         WHERE j.status = 'running'
-         ORDER BY j.started_at ASC
-    """)
-    # Queued jobs (in scheduler order)
-    _compute_update_queue_positions()
-    queued = query_all("""
-        SELECT j.*, u.name AS user_name, s.name AS software_name
-          FROM compute_jobs j
-          LEFT JOIN users u ON u.id = j.user_id
-          LEFT JOIN compute_software s ON s.id = j.software_id
-         WHERE j.status = 'queued'
-         ORDER BY j.queue_position ASC
-    """)
-    # Recent completed/failed (last 50)
-    recent = query_all("""
-        SELECT j.*, u.name AS user_name, s.name AS software_name
-          FROM compute_jobs j
-          LEFT JOIN users u ON u.id = j.user_id
-          LEFT JOIN compute_software s ON s.id = j.software_id
-         WHERE j.status IN ('completed', 'failed', 'cancelled')
-         ORDER BY j.completed_at DESC
-         LIMIT 50
-    """)
-    # Needs attention (dependency/license errors)
-    attention = query_all("""
-        SELECT j.*, u.name AS user_name, s.name AS software_name
-          FROM compute_jobs j
-          LEFT JOIN users u ON u.id = j.user_id
-          LEFT JOIN compute_software s ON s.id = j.software_id
-         WHERE j.status = 'needs_attention'
-         ORDER BY j.completed_at DESC
-    """)
-    # Stats
-    total_jobs = query_one("SELECT COUNT(*) AS c FROM compute_jobs")["c"]
-    my_running = sum(1 for j in running if j["user_id"] == user["id"])
-    my_queued = sum(1 for j in queued if j["user_id"] == user["id"])
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    software = query_all("SELECT * FROM compute_software WHERE is_active = 1 ORDER BY name")
+    status_filter = request.args.get("status", "all")
+    if can_manage:
+        base_where = "1=1"
+        params: list = []
+    else:
+        base_where = "j.submitted_by_user_id = ?"
+        params = [user["id"]]
+    if status_filter != "all":
+        base_where += " AND j.status = ?"
+        params.append(status_filter)
+    jobs = query_all(f"""
+        SELECT j.*, u.name AS user_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id = j.submitted_by_user_id
+         WHERE {base_where}
+         ORDER BY j.created_at DESC
+         LIMIT 200
+    """, tuple(params))
     return render_template("compute_dashboard.html",
-                           running=running, queued=queued, recent=recent,
-                           total_jobs=total_jobs, my_running=my_running,
-                           my_queued=my_queued, can_manage=can_manage,
-                           attention=attention, software=software)
+                           jobs=jobs, status_filter=status_filter,
+                           can_manage=can_manage, models=OLLAMA_MODELS)
 
 
-@app.route("/compute/submit", methods=["GET", "POST"])
+@app.route("/compute/new", methods=["GET", "POST"])
 @login_required
-def compute_submit():
-    """Submit a new compute job."""
+def compute_new():
+    """Submit a new AI job."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
-    software_list = query_all(
-        "SELECT * FROM compute_software WHERE is_active = 1 ORDER BY category, name")
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        if not title:
-            flash("Job title is required.", "error")
-            return redirect(url_for("compute_submit"))
-        software_id = request.form.get("software_id", "").strip() or None
-        if software_id:
-            software_id = int(software_id)
-        description = request.form.get("description", "").strip()
-        command = request.form.get("command", "").strip()
-        estimated_minutes = int(request.form.get("estimated_minutes", "10") or "10")
-        priority = request.form.get("priority", "normal").strip()
-        if priority not in ("high", "normal", "low"):
-            priority = "normal"
-        # Check daily quota
-        quota = query_one(
-            "SELECT max_daily_jobs FROM compute_quotas WHERE user_id = ?",
-            (user["id"],))
-        max_daily = quota["max_daily_jobs"] if quota else 10
-        today_count = query_one(
-            "SELECT COUNT(*) AS c FROM compute_jobs WHERE user_id = ? AND date(created_at) = date('now')",
-            (user["id"],))
-        if (today_count["c"] if today_count else 0) >= max_daily:
-            flash(f"Daily job limit reached ({max_daily}). Try again tomorrow.", "error")
-            return redirect(url_for("compute_dashboard"))
-        # Handle input file upload
-        input_filename = ""
-        uploaded = request.files.get("input_file")
-        if uploaded and uploaded.filename:
-            safe_name = secure_filename(uploaded.filename)
-            upload_dir = Path("data") / "compute_inputs"
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            input_filename = f"job_{user['id']}_{ts}_{safe_name}"
-            uploaded.save(str(upload_dir / input_filename))
-        # If software selected, use its command template
-        if software_id and not command:
-            sw = query_one("SELECT command_template FROM compute_software WHERE id = ?",
-                           (software_id,))
-            if sw and sw["command_template"]:
-                command = sw["command_template"].replace("{INPUT}", input_filename)
+        model = request.form.get("model", "llama3:latest").strip()
+        if model not in OLLAMA_MODELS:
+            model = "llama3:latest"
+        prompt = request.form.get("prompt", "").strip()
+        if not prompt:
+            flash("Prompt is required.", "error")
+            return redirect(url_for("compute_new"))
+        context = request.form.get("context", "").strip()
         job_id = execute(
             """INSERT INTO compute_jobs
-               (user_id, software_id, title, description, command,
-                input_filename, estimated_minutes, priority, status, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)""",
-            (user["id"], software_id, title, description, command,
-             input_filename, estimated_minutes, priority, now_iso()))
-        log_action(user["id"], "compute", job_id, "job_submitted",
-                   {"title": title, "priority": priority})
-        _compute_update_queue_positions()
-        flash(f"Job #{job_id} submitted — position in queue: "
-              f"{query_one('SELECT queue_position FROM compute_jobs WHERE id = ?', (job_id,))['queue_position'] or '?'}",
-              "success")
-        return redirect(url_for("compute_dashboard"))
-    return render_template("compute_submit.html", software=software_list)
+               (submitted_by_user_id, model, prompt, context, status, created_at)
+               VALUES (?, ?, ?, ?, 'queued', ?)""",
+            (user["id"], model, prompt, context, now_iso()))
+        log_action(user["id"], "compute", job_id, "ai_job_submitted",
+                   {"model": model})
+        # Run inline for small models, thread for large
+        if model in ("gpt-oss:120b",):
+            import threading
+            threading.Thread(target=_run_compute_job, args=(job_id,),
+                             daemon=True).start()
+            flash("Job queued — large model, may take a few minutes.", "success")
+        else:
+            _run_compute_job(job_id)
+            updated = query_one("SELECT status FROM compute_jobs WHERE id = ?",
+                                (job_id,))
+            if updated and updated["status"] == "completed":
+                flash("Job completed.", "success")
+            else:
+                flash("Job failed — check the detail page for errors.", "error")
+        return redirect(url_for("compute_detail", job_id=job_id))
+    return render_template("compute_form.html", models=OLLAMA_MODELS)
 
 
-@app.route("/compute/jobs/<int:job_id>")
+@app.route("/compute/<int:job_id>")
 @login_required
-def compute_job_detail(job_id: int):
-    """View job details, logs, and output."""
+def compute_detail(job_id: int):
+    """AI job detail — prompt, result, metadata."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
     job = query_one("""
-        SELECT j.*, u.name AS user_name, s.name AS software_name,
-               s.category AS software_category
+        SELECT j.*, u.name AS user_name
           FROM compute_jobs j
-          LEFT JOIN users u ON u.id = j.user_id
-          LEFT JOIN compute_software s ON s.id = j.software_id
+          LEFT JOIN users u ON u.id = j.submitted_by_user_id
          WHERE j.id = ?
     """, (job_id,))
     if not job:
         abort(404)
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    is_mine = job["user_id"] == user["id"]
+    is_mine = job["submitted_by_user_id"] == user["id"]
     if not (is_mine or can_manage):
         abort(403)
-    # Calculate wait time and run time
-    wait_time = None
-    run_time = None
-    if job["started_at"] and job["created_at"]:
-        try:
-            wait_time = (datetime.fromisoformat(job["started_at"]) -
-                         datetime.fromisoformat(job["created_at"])).total_seconds() / 60
-        except Exception:
-            pass
-    if job["completed_at"] and job["started_at"]:
-        try:
-            run_time = (datetime.fromisoformat(job["completed_at"]) -
-                        datetime.fromisoformat(job["started_at"])).total_seconds() / 60
-        except Exception:
-            pass
-    # Check for output file
-    output_path = Path("data") / "compute_outputs" / (job["output_filename"] or "")
-    has_output = output_path.is_file() if job["output_filename"] else False
-    return render_template("compute_job_detail.html", job=job,
+    model_info = OLLAMA_MODELS.get(job["model"], {})
+    return render_template("compute_detail.html", job=job,
                            can_manage=can_manage, is_mine=is_mine,
-                           wait_time=wait_time, run_time=run_time,
-                           has_output=has_output)
+                           model_info=model_info, models=OLLAMA_MODELS)
 
 
-@app.route("/compute/jobs/<int:job_id>/cancel", methods=["POST"])
+@app.route("/compute/<int:job_id>/rerun", methods=["POST"])
 @login_required
-def compute_job_cancel(job_id: int):
-    """Cancel a queued job."""
+def compute_rerun(job_id: int):
+    """Rerun an AI job — creates a new job with same prompt/model."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
-    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
-    if not job:
+    old = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    if not old:
         abort(404)
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    if job["user_id"] != user["id"] and not can_manage:
+    if old["submitted_by_user_id"] != user["id"] and not can_manage:
         abort(403)
-    if job["status"] not in ("queued",):
-        flash("Only queued jobs can be cancelled.", "error")
-        return redirect(url_for("compute_job_detail", job_id=job_id))
-    execute("UPDATE compute_jobs SET status = 'cancelled', completed_at = ? WHERE id = ?",
-            (now_iso(), job_id))
-    log_action(user["id"], "compute", job_id, "job_cancelled", {})
-    _compute_update_queue_positions()
-    flash(f"Job #{job_id} cancelled.", "success")
-    return redirect(url_for("compute_dashboard"))
-
-
-@app.route("/compute/jobs/<int:job_id>/requeue", methods=["POST"])
-@login_required
-def compute_job_requeue(job_id: int):
-    """Requeue a failed/needs_attention job (admin or job owner)."""
-    user = current_user()
-    if not module_enabled("compute"):
-        abort(404)
-    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
-    if not job:
-        abort(404)
-    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    if job["user_id"] != user["id"] and not can_manage:
-        abort(403)
-    if job["status"] not in ("failed", "needs_attention", "cancelled"):
-        flash("Only failed or cancelled jobs can be requeued.", "error")
-        return redirect(url_for("compute_job_detail", job_id=job_id))
-    execute("""UPDATE compute_jobs
-               SET status = 'queued', started_at = NULL, completed_at = NULL,
-                   exit_code = NULL, stdout_log = '', stderr_log = '',
-                   output_filename = '', created_at = ?
-               WHERE id = ?""",
-            (now_iso(), job_id))
-    log_action(user["id"], "compute", job_id, "job_requeued", {})
-    _compute_update_queue_positions()
-    flash(f"Job #{job_id} requeued.", "success")
-    return redirect(url_for("compute_dashboard"))
-
-
-@app.route("/compute/jobs/<int:job_id>/output")
-@login_required
-def compute_job_output(job_id: int):
-    """Download job output file."""
-    user = current_user()
-    job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
-    if not job:
-        abort(404)
-    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    if job["user_id"] != user["id"] and not can_manage:
-        abort(403)
-    if not job["output_filename"]:
-        abort(404)
-    output_dir = Path("data") / "compute_outputs"
-    return send_from_directory(str(output_dir), job["output_filename"],
-                               as_attachment=True)
-
-
-@app.route("/compute/software", methods=["GET", "POST"])
-@login_required
-def compute_software_list():
-    """Manage available software packages (admin only for POST)."""
-    user = current_user()
-    if not module_enabled("compute"):
-        abort(404)
-    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
-    if request.method == "POST":
-        if not can_manage:
-            abort(403)
-        name = request.form.get("name", "").strip()
-        version = request.form.get("version", "").strip()
-        category = request.form.get("category", "general").strip()
-        description = request.form.get("description", "").strip()
-        command_template = request.form.get("command_template", "").strip()
-        max_runtime = int(request.form.get("max_runtime_minutes", "60") or "60")
-        if not name:
-            flash("Software name is required.", "error")
-            return redirect(url_for("compute_software_list"))
-        execute(
-            """INSERT INTO compute_software
-               (name, version, category, description, command_template,
-                max_runtime_minutes, is_active, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
-            (name, version, category, description, command_template,
-             max_runtime, now_iso()))
-        flash(f"{name} registered.", "success")
-        return redirect(url_for("compute_software_list"))
-    software = query_all("""
-        SELECT s.*,
-               COALESCE(jc.total_jobs, 0) AS total_jobs,
-               COALESCE(jc.completed_jobs, 0) AS completed_jobs,
-               COALESCE(jc.failed_jobs, 0) AS failed_jobs,
-               COALESCE(jc.running_jobs, 0) AS running_jobs
-          FROM compute_software s
-          LEFT JOIN (
-            SELECT software_id,
-                   COUNT(*) AS total_jobs,
-                   SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed_jobs,
-                   SUM(CASE WHEN status IN ('failed','needs_attention') THEN 1 ELSE 0 END) AS failed_jobs,
-                   SUM(CASE WHEN status='running' THEN 1 ELSE 0 END) AS running_jobs
-              FROM compute_jobs GROUP BY software_id
-          ) jc ON jc.software_id = s.id
-         ORDER BY s.category, s.name
-    """)
-    # Group by category for the template
-    categories = {}
-    for s in software:
-        cat = s["category"] or "general"
-        categories.setdefault(cat, []).append(s)
-    # My job history (last 20 jobs for current user)
-    my_jobs = query_all("""
-        SELECT j.*, s.name AS software_name
-          FROM compute_jobs j
-          LEFT JOIN compute_software s ON s.id = j.software_id
-         WHERE j.user_id = ?
-         ORDER BY j.created_at DESC LIMIT 20
-    """, (user["id"],))
-    return render_template("compute_software.html", software=software,
-                           categories=categories, my_jobs=my_jobs,
-                           can_manage=can_manage)
-
-
-@app.route("/compute/api/next-job")
-def compute_api_next_job():
-    """API endpoint for the worker daemon to fetch the next job to run.
-    Returns JSON with job details or empty 204 if nothing queued."""
-    # Simple auth via shared secret header
-    secret = os.environ.get("COMPUTE_WORKER_SECRET", "catalyst-compute-2026")
-    if request.headers.get("X-Worker-Secret") != secret:
-        abort(403)
-    job = _compute_next_job()
-    if not job:
-        return "", 204
-    # Mark as running
-    execute("UPDATE compute_jobs SET status = 'running', started_at = ?, server_host = ? WHERE id = ?",
-            (now_iso(), request.remote_addr or "worker", job["id"]))
-    _compute_update_queue_positions()
-    return jsonify({
-        "job_id": job["id"],
-        "command": job["command"],
-        "input_filename": job["input_filename"],
-        "estimated_minutes": job["estimated_minutes"],
-        "title": job["title"],
-    })
-
-
-@app.route("/compute/api/complete-job", methods=["POST"])
-def compute_api_complete_job():
-    """API endpoint for worker to report job completion."""
-    secret = os.environ.get("COMPUTE_WORKER_SECRET", "catalyst-compute-2026")
-    if request.headers.get("X-Worker-Secret") != secret:
-        abort(403)
-    data = request.get_json(force=True)
-    job_id = data.get("job_id")
-    exit_code = data.get("exit_code", -1)
-    stdout_log = data.get("stdout", "")[:50000]  # cap at 50k chars
-    stderr_log = data.get("stderr", "")[:50000]
-    output_filename = data.get("output_filename", "")
-    # Detect dependency/license errors → "needs_attention" status
-    _dep_keywords = ("not found", "no such file", "command not found",
-                     "module not found", "import error", "license",
-                     "permission denied", "cannot find", "not installed",
-                     "No module named", "ModuleNotFoundError",
-                     "FileNotFoundError", "error while loading shared")
-    stderr_lower = stderr_log.lower()
-    is_dep_error = exit_code != 0 and any(kw.lower() in stderr_lower for kw in _dep_keywords)
-    if is_dep_error:
-        status = "needs_attention"
+    new_id = execute(
+        """INSERT INTO compute_jobs
+           (submitted_by_user_id, model, prompt, context, status, created_at)
+           VALUES (?, ?, ?, ?, 'queued', ?)""",
+        (user["id"], old["model"], old["prompt"], old["context"], now_iso()))
+    log_action(user["id"], "compute", new_id, "ai_job_rerun",
+               {"original_job_id": job_id})
+    if old["model"] in ("gpt-oss:120b",):
+        import threading
+        threading.Thread(target=_run_compute_job, args=(new_id,),
+                         daemon=True).start()
+        flash("Rerun queued — large model, may take a few minutes.", "success")
     else:
-        status = "completed" if exit_code == 0 else "failed"
-    execute("""UPDATE compute_jobs
-               SET status = ?, completed_at = ?, exit_code = ?,
-                   stdout_log = ?, stderr_log = ?, output_filename = ?
-               WHERE id = ?""",
-            (status, now_iso(), exit_code, stdout_log, stderr_log,
-             output_filename, job_id))
-    # Notify the user
-    job = query_one("SELECT user_id, title FROM compute_jobs WHERE id = ?", (job_id,))
-    if job:
-        if status == "needs_attention":
-            # Notify user that job needs admin help
-            notify(job["user_id"], "compute",
-                   f"Job needs attention: {job['title']}",
-                   f"Job #{job_id} failed — likely missing software or license. An admin has been notified.",
-                   href=url_for("compute_job_detail", job_id=job_id),
-                   source_type="compute_job", source_id=job_id)
-            # Notify all admins/owners
-            for admin in query_all("SELECT id FROM users WHERE role IN ('super_admin','site_admin')"):
-                notify(admin["id"], "compute",
-                       f"Compute: dependency issue — {job['title']}",
-                       f"Job #{job_id} failed with a missing dependency or license error. Check stderr for details.",
-                       href=url_for("compute_job_detail", job_id=job_id),
-                       source_type="compute_job", source_id=job_id)
-        else:
-            icon = "completed" if status == "completed" else "failed"
-            notify(job["user_id"], "compute",
-                   f"Job {icon}: {job['title']}",
-                   f"Job #{job_id} finished with exit code {exit_code}.",
-                   href=url_for("compute_job_detail", job_id=job_id),
-                   source_type="compute_job", source_id=job_id)
-    _compute_update_queue_positions()
-    return jsonify({"status": "ok"})
+        _run_compute_job(new_id)
+        flash("Rerun completed.", "success")
+    return redirect(url_for("compute_detail", job_id=new_id))
 
 
 # ── Receipts ERP module ─────────────────────────────────────────
@@ -17366,7 +16937,7 @@ def global_search():
         shortcuts.append({"label": "Queue", "hint": "Work the live request stream.", "url": url_for("schedule")})
     if has_instrument_area_access(user):
         shortcuts.append({"label": "Instruments", "hint": "Browse machine status and queues.", "url": url_for("instruments")})
-    if module_enabled("finance") and can_access_finance(user):
+    if module_enabled("finance") and _user_can_view_finance(user):
         shortcuts.append({"label": "Finance", "hint": "Grants, invoices, and spend.", "url": url_for("finance_portal")})
     if len(q) < 2:
         return render_template("search.html", query=q, results=[], sections=[], total_results=0, shortcuts=shortcuts, title="Search")
@@ -17386,7 +16957,7 @@ def global_search():
         for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 6", (like, like))
     ]
     grants_found = []
-    if module_enabled("finance") and can_access_finance(user):
+    if module_enabled("finance") and _user_can_view_finance(user):
         grants_found = [
             {"type": "Grant", "title": r["name"], "code": r["code"], "meta": "Grant", "url": url_for("finance_grant_detail", grant_id=r["id"])}
             for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))

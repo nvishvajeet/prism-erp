@@ -1585,6 +1585,12 @@ table td {
   align-items: center;
   margin: 0.2rem 0.2rem 0.2rem 0;
 }
+.inline-form-single {
+  margin: 0;
+}
+.inline-form-confirm [hidden] {
+  display: none !important;
+}
 /* Stack action forms vertically inside table cells */
 td .inline-form {
   display: flex;
@@ -6086,12 +6092,29 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dp-todo-mark { display: inline-block; width: 1.1rem; text-align: center; opacity: 0.7; }
 .dp-doc-wrap { max-height: 22rem; border: 1px solid var(--border, #d0d4dc); border-radius: 8px; background: var(--surface-2, #f6f7fa); }
 .dp-doc { margin: 0; padding: 0.7rem 0.9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 22rem; overflow-y: auto; }
+.code-scroll-block {
+  margin: 0;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 24rem;
+  overflow: auto;
+  border-radius: 0.5rem;
+  background: var(--bg-2, #f5f5f7);
+}
+.code-scroll-block-danger {
+  max-height: 16rem;
+  color: var(--danger, #b84a4a);
+}
 .dp-doc-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
 .dp-doc-tab { padding: 0.25rem 0.6rem; border: 1px solid var(--border, #d0d4dc); background: transparent; border-radius: 6px; cursor: pointer; font-size: 0.78rem; }
 .dp-doc-tab-active { background: var(--accent, #4c6ef5); color: #fff; border-color: var(--accent, #4c6ef5); }
 .dp-commit-list { list-style: none; padding: 0; margin: 0; }
 .dp-commit-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; font-size: 0.82rem; align-items: baseline; }
 .dp-metadata-row { display: flex; justify-content: space-between; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.85rem; }
+.dp-metadata-row-topgap { margin-top: 0.5rem; }
 .dp-bridge-detail { margin: 0.1rem 0 0.5rem; font-size: 0.75rem; }
 .dp-wave-list { list-style: none; padding: 0; margin: 0.25rem 0 0.25rem; }
 .dp-wave-row { display: grid; grid-template-columns: 1rem 4.5rem 1.2rem 5rem 1fr; align-items: baseline; gap: 0.45rem; padding: 0.18rem 0; font-size: 0.8rem; border-bottom: 1px dashed var(--border, #e4e6ec); }
@@ -8965,6 +8988,15 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 
 .todo-check-form { display: inline; }
 .todo-delete-form { display: inline; }
+.table-search-input-narrow {
+  margin-bottom: 0.5rem;
+  width: 100%;
+  max-width: 20rem;
+}
+.inbox-row-body-main {
+  flex: 1;
+  min-width: 0;
+}
 .todo-delete-btn {
   font-size: 0.85rem; opacity: 0.35; transition: opacity 0.15s;
   border: none; background: none; cursor: pointer; padding: 0.2rem;
@@ -8999,6 +9031,84 @@ form[action*="quick-present"] .primary-action { box-shadow: 0 2px 8px rgba(192, 
 
 /* Top gap utility */
 .top-gap { margin-top: 1rem; }
+.inline-actions-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.inline-actions-row-topgap {
+  margin-top: 0.75rem;
+}
+.inline-self-center {
+  align-self: center;
+}
+.centered-padded-block {
+  padding: 2rem;
+  text-align: center;
+}
+.queue-position-value {
+  font-size: 3rem;
+  font-weight: 700;
+}
+.body-copy-prewrap {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.panel-block {
+  padding: 0.75rem;
+}
+.tile-width-narrow {
+  max-width: 20rem;
+}
+.summary-empty-state {
+  padding: 2rem;
+  text-align: center;
+  opacity: 0.5;
+}
+.pagination-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0.75rem;
+}
+.pagination-label {
+  line-height: 2.2;
+  opacity: 0.6;
+}
+.audit-filter-form {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+}
+.audit-cell-id {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.5;
+}
+.audit-cell-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.audit-cell-details {
+  max-width: 30rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.expense-fx-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.expense-fx-row[hidden] {
+  display: none;
+}
+.util-fill {
+  width: var(--util-pct, 0%);
+}
 
 /* Muted badge */
 .badge-muted { opacity: 0.5; }

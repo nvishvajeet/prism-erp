@@ -130,10 +130,10 @@
   new Chart(document.getElementById('monthlyChart'), {
     type: 'bar',
     data: {
-      labels: {{ monthly|map(attribute='month')|list|reverse|tojson }},
+      labels: {{ monthly|map(attribute='month')|list|reverse|list|tojson }},
       datasets: [{
         label: 'Monthly Spend (₹)',
-        data: {{ monthly|map(attribute='total')|list|reverse|tojson }},
+        data: {{ monthly|map(attribute='total')|list|reverse|list|tojson }},
         backgroundColor: primary + '99',
         borderColor: primary,
         borderWidth: 1

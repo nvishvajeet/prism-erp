@@ -44,6 +44,8 @@ def main() -> None:
 
     app.init_db()
     populate_live_demo.main()
+    # Disable CSRF for smoke testing — test_client doesn't send tokens
+    app.app.config["WTF_CSRF_ENABLED"] = False
     client = app.app.test_client()
     issue_message = "The vial label is smudged and may need verification."
 

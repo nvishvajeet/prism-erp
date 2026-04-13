@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
+{% block hover_back %}<a href="{{ url_for('mess_dashboard') }}" class="hover-back-btn" title="Back to Mess">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Distribute Passes</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ current_month }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_batch_passes', format='csv') }}" class="btn btn-primary" data-vis="{{ V }}">Export CSV</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": student_count|string, "label": "Active Students", "tone": "green"},
+      {"value": current_month,        "label": "Current Month"},
+      {"value": current_sem,          "label": "Current Semester"},
+    ]) }}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("HOW TO DISTRIBUTE", "Send pass links to students") }}
+    <div style="padding:0.5rem 0.75rem;line-height:1.8;" data-vis="{{ V }}">
+      <ol style="padding-left:1.25rem;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Export CSV</strong> → open in Excel → use mail-merge or WhatsApp bulk sender</li>
+        <li data-vis="{{ V }}">Each student gets a <strong data-vis="{{ V }}">unique link</strong> they bookmark on their phone</li>
+        <li data-vis="{{ V }}">The link shows their QR code — <strong data-vis="{{ V }}">no app install, no login</strong></li>
+        <li data-vis="{{ V }}">QR codes rotate monthly. Old codes auto-expire.</li>
+        <li data-vis="{{ V }}">Links stay the same each month — the QR content changes automatically.</li>
+      </ol>
+    </div>
+  </article>
+
+  {% if passes %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("ALL PASSES", student_count|string ~ " students") }}
+    <input type="text" id="passSearch" class="table-search-input" placeholder="Search by name, roll, dept…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Roll</th>
+          <th data-vis="{{ V }}">Dept</th>
+          <th data-vis="{{ V }}">Phone</th>
+          <th data-vis="{{ V }}">Pass Link</th>
+          <th data-vis="{{ V }}">Month Code</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for p in passes %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ p.name }}</strong></td>
+          <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">{{ p.roll }}</code></td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ p.dept }}</span></td>
+          <td data-vis="{{ V }}">{{ p.phone or '—' }}</td>
+          <td data-vis="{{ V }}">
+            <button onclick="navigator.clipboard.writeText('{{ p.pass_url }}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" class="btn" style="font-size:0.7rem;padding:0.2rem 0.5rem;" data-vis="{{ V }}">Copy</button>
+          </td>
+          <td data-vis="{{ V }}"><code style="font-size:0.65rem;" data-vis="{{ V }}">{{ p.month_code }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  var searchInput=document.getElementById('passSearch');
+  if(searchInput){
+    var rows=document.querySelectorAll('tbody tr');
+    searchInput.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      rows.forEach(function(r){ r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none'; });
+    });
+  }
+})();
+</script>
+{% endblock %}

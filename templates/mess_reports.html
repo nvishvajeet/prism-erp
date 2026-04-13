@@ -8,12 +8,28 @@
     <a class="text-link back-link" href="{{ url_for('mess_dashboard') }}" data-vis="{{ V }}">← Mess</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Mess Reports</h2>
   </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a href="{{ url_for('mess_tally_export') }}" class="btn btn-primary" data-vis="{{ V }}">Export to Tally</a>
+  </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
-  {# ── Daily Report (7 days) ── #}
+  {# ── Meal Rates ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("DAILY REPORT", "Last 7 days") }}
+    {{ card_heading("MEAL RATES", "Per-plate cost for billing") }}
+    <div class="control-flex-wrap" style="padding:0.5rem 0.75rem;gap:1rem;" data-vis="{{ V }}">
+      {% for m in meal_types %}
+      <div style="text-align:center;flex:1;min-width:80px;" data-vis="{{ V }}">
+        <p style="font-size:1.25rem;font-weight:700;" data-vis="{{ V }}">₹{{ meal_rates.get(m, 0) }}</p>
+        <p class="hint" data-vis="{{ V }}">{{ m|title }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  {# ── Daily Report (7 days) with cost ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("DAILY REPORT", "Last 7 days — meals & cost") }}
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -22,6 +38,7 @@
           <th class="col-amount" data-vis="{{ V }}">{{ m|title }}</th>
           {% endfor %}
           <th class="col-amount" data-vis="{{ V }}">Total</th>
+          <th class="col-amount" data-vis="{{ V }}">Cost</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
@@ -32,9 +49,20 @@
           <td class="col-amount" data-vis="{{ V }}">{{ d.counts.get(m, 0) }}</td>
           {% endfor %}
           <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ d.total }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(d.cost) }}</strong></td>
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">7-day total</strong></td>
+          {% for m in meal_types %}
+          <td class="col-amount" data-vis="{{ V }}">{{ daily|sum(attribute='counts')|int if false else '' }}</td>
+          {% endfor %}
+          <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ daily|map(attribute='total')|sum }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}"><strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(daily|map(attribute='cost')|sum) }}</strong></td>
+        </tr>
+      </tfoot>
     </table>
   </article>
 
@@ -87,5 +115,21 @@
     </table>
   </article>
   {% endif %}
+
+  {# ── Tally Export Guide ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TALLY INTEGRATION", "Export mess data to Tally") }}
+    <div style="padding:0.5rem 0.75rem;line-height:1.8;" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">
+        The "Export to Tally" button generates a CSV with one journal entry per day:
+      </p>
+      <ul style="padding-left:1.25rem;margin-top:0.5rem;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Debit:</strong> Mess Expenses A/c (create under Indirect Expenses in Tally)</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Credit:</strong> Students Mess Fee Receivable A/c (under Current Assets > Sundry Debtors)</li>
+        <li data-vis="{{ V }}">Each row includes breakdown by meal type + total cost at configured rates</li>
+        <li data-vis="{{ V }}">Import the CSV into Tally using Gateway > Import Data > Journal Vouchers</li>
+      </ul>
+    </div>
+  </article>
 </section>
 {% endblock %}

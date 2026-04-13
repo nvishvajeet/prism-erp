@@ -112,7 +112,9 @@ app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 # the protected mode in a follow-up wave without forcing an all-or-nothing
 # flag day. The meta tag in base.html is always emitted; the JS shim
 # auto-injects tokens into forms and fetch() calls.
-app.config["WTF_CSRF_ENABLED"] = os.environ.get("LAB_SCHEDULER_CSRF", "").lower() in {"1", "true", "yes"}
+# Default ON (secure). Set LAB_SCHEDULER_CSRF=0 to disable for smoke tests.
+_csrf_env = os.environ.get("LAB_SCHEDULER_CSRF", "1").lower()
+app.config["WTF_CSRF_ENABLED"] = _csrf_env not in {"0", "false", "no"}
 app.config["WTF_CSRF_TIME_LIMIT"] = None  # Tokens valid for the session lifetime, not 1 hour
 app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
 
@@ -310,7 +312,8 @@ MODULE_REGISTRY = {
             "mess_dashboard", "mess_scan", "mess_students_list",
             "mess_student_detail", "mess_student_new", "mess_reports",
             "mess_student_qr", "mess_camera_scan", "mess_student_pass",
-            "mess_api_validate_scan",
+            "mess_api_validate_scan", "mess_batch_passes",
+            "mess_students_import",
         },
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
@@ -5131,7 +5134,7 @@ def init_db() -> None:
     _seed_demo_vehicles()
     _seed_demo_vendors()
     _seed_demo_companies()
-    # _seed_demo_mess_students()  # TODO: implement when mess student module is built
+    _seed_demo_mess_students()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -5883,7 +5886,8 @@ def _seed_demo_mess_students() -> None:
     """Seed demo mess students for the student mess entry system. Idempotent."""
     if not DEMO_MODE:
         return
-    db = get_db()
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
     try:
         existing = db.execute("SELECT COUNT(*) AS c FROM mess_students").fetchone()["c"]
         if existing > 0:
@@ -20236,6 +20240,56 @@ def mess_students_import():
     return redirect(url_for("mess_students_list"))
 
 
+@app.route("/mess/passes")
+@login_required
+def mess_batch_passes():
+    """Generate pass links for all active students. Admin can copy/share
+    or export as CSV for WhatsApp/SMS distribution."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today()
+    current_month = today.strftime("%Y-%m")
+    current_sem = _current_semester()
+    students = query_all(
+        "SELECT id, name, roll_number, department, qr_token, phone FROM mess_students WHERE is_active = 1 ORDER BY name",
+    )
+    passes = []
+    for s in students:
+        pass_token = (s["qr_token"] or "")[:8]
+        pass_url = url_for("mess_student_pass", student_id=s["id"], t=pass_token, _external=True)
+        month_code = _generate_mess_pass(s["id"], s["roll_number"], current_month)
+        passes.append({
+            "name": s["name"],
+            "roll": s["roll_number"],
+            "dept": s["department"],
+            "phone": s["phone"],
+            "pass_url": pass_url,
+            "month_code": month_code,
+        })
+    # CSV export
+    if request.args.get("format") == "csv":
+        import csv, io
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["Name", "Roll Number", "Department", "Phone", "Pass URL", "Month Code"])
+        for p in passes:
+            w.writerow([p["name"], p["roll"], p["dept"], p["phone"], p["pass_url"], p["month_code"]])
+        return app.response_class(
+            out.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=mess_passes_{current_month}.csv"},
+        )
+    return render_template(
+        "mess_batch_passes.html",
+        passes=passes,
+        current_month=current_month,
+        current_sem=current_sem,
+        student_count=len(passes),
+    )
+
+
 @app.route("/mess/reports")
 @login_required
 def mess_reports():
@@ -20278,12 +20332,74 @@ def mess_reports():
         """,
         (month_start,),
     )
+    # Meal rate config (per plate cost for billing/Tally)
+    MEAL_RATES = {"breakfast": 35, "lunch": 65, "snacks": 25, "dinner": 55}
+    # Calculate costs
+    for d in daily:
+        d["cost"] = sum(d["counts"].get(m, 0) * MEAL_RATES.get(m, 0) for m in MEAL_TYPES)
     return render_template(
         "mess_reports.html",
         daily=daily,
         monthly=monthly,
         by_dept=by_dept,
         meal_types=MEAL_TYPES,
+        meal_rates=MEAL_RATES,
+    )
+
+
+@app.route("/mess/export-tally")
+@login_required
+def mess_tally_export():
+    """Export monthly mess consumption as Tally-compatible CSV for journal entries.
+    Each day's total becomes a journal entry: debit Mess Expenses, credit Students' Mess Fee."""
+    user = current_user()
+    if not _mess_access(user):
+        abort(403)
+    from datetime import date as _date
+    month = request.args.get("month", _date.today().strftime("%Y-%m"))
+    MEAL_RATES = {"breakfast": 35, "lunch": 65, "snacks": 25, "dinner": 55}
+    # Daily totals for the month
+    rows = query_all(
+        """
+        SELECT entry_date, meal_type, COUNT(*) AS cnt
+        FROM mess_entries
+        WHERE substr(entry_date, 1, 7) = ?
+        GROUP BY entry_date, meal_type
+        ORDER BY entry_date
+        """,
+        (month,),
+    )
+    # Aggregate by date
+    daily = {}
+    for r in rows:
+        d = r["entry_date"]
+        if d not in daily:
+            daily[d] = {"date": d, "meals": {}, "total_cost": 0, "total_count": 0}
+        daily[d]["meals"][r["meal_type"]] = r["cnt"]
+        cost = r["cnt"] * MEAL_RATES.get(r["meal_type"], 0)
+        daily[d]["total_cost"] += cost
+        daily[d]["total_count"] += r["cnt"]
+    import csv, io
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["Date", "Voucher Type", "Narration", "Debit Ledger", "Credit Ledger",
+                "Amount", "Breakfast", "Lunch", "Snacks", "Dinner", "Total Meals"])
+    for d in sorted(daily.values(), key=lambda x: x["date"]):
+        narration = f"Mess consumption {d['date']}: {d['total_count']} meals"
+        w.writerow([
+            d["date"], "Journal", narration,
+            "Mess Expenses A/c", "Students Mess Fee Receivable A/c",
+            f"{d['total_cost']:.0f}",
+            d["meals"].get("breakfast", 0),
+            d["meals"].get("lunch", 0),
+            d["meals"].get("snacks", 0),
+            d["meals"].get("dinner", 0),
+            d["total_count"],
+        ])
+    return app.response_class(
+        out.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=mess_tally_{month}.csv"},
     )
 
 

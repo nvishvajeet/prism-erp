@@ -1,0 +1,196 @@
+  {# ── AI Hover Pane — available on every page ── #}
+  {% if current_user_obj %}
+  <button id="aiPaneToggle" title="AI Assistant" data-vis="{{ V }}"
+          style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;width:3.5rem;height:3.5rem;border-radius:50%;border:none;background:var(--tone-blue, #007AFF);color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:transform 0.2s;"
+          onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">
+    AI
+  </button>
+  <aside id="aiPane" data-vis="{{ V }}"
+         style="display:none;position:fixed;bottom:5.5rem;right:1.5rem;z-index:9998;width:24rem;max-height:70vh;border-radius:12px;background:var(--card-bg, #1c1c1e);border:1px solid var(--color-separator, rgba(255,255,255,0.1));box-shadow:0 8px 40px rgba(0,0,0,0.5);overflow:hidden;flex-direction:column;">
+    {# Header #}
+    <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
+      <div data-vis="{{ V }}">
+        <strong style="font-size:0.9rem;" data-vis="{{ V }}">CATALYST AI</strong>
+        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Claude Haiku</span>
+      </div>
+      <button id="aiPaneClose" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0.2rem;" data-vis="{{ V }}">✕</button>
+    </div>
+    {# Chat History #}
+    <div id="aiPaneChat" style="flex:1;overflow-y:auto;padding:0.75rem;max-height:40vh;min-height:8rem;" data-vis="{{ V }}">
+      <div class="hint" style="text-align:center;padding:1rem;font-size:0.8rem;" data-vis="{{ V }}">
+        Type anything — submit a request, mark attendance,<br>create a task, ask a question…
+      </div>
+    </div>
+    {# File Drop Zone #}
+    <div id="aiPaneDropZone" style="display:none;padding:0.5rem 0.75rem;border-top:1px solid var(--color-separator, rgba(255,255,255,0.1));font-size:0.8rem;" data-vis="{{ V }}">
+      <span id="aiPaneFileName" style="font-weight:600;" data-vis="{{ V }}"></span>
+      <button id="aiPaneFileRemove" style="background:none;border:none;color:var(--tone-red);cursor:pointer;margin-left:0.5rem;" data-vis="{{ V }}">✕</button>
+    </div>
+    {# Input #}
+    <div style="padding:0.5rem 0.75rem;border-top:1px solid var(--color-separator, rgba(255,255,255,0.1));" data-vis="{{ V }}">
+      <div style="display:flex;gap:0.4rem;align-items:flex-end;" data-vis="{{ V }}">
+        <label style="cursor:pointer;padding:0.4rem;font-size:1.1rem;color:var(--muted);" title="Attach file" data-vis="{{ V }}">
+          📎<input type="file" id="aiPaneFile" style="display:none;" data-vis="{{ V }}">
+        </label>
+        <textarea id="aiPaneInput" rows="2" placeholder="Ask AI anything…"
+                  style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
+                  data-vis="{{ V }}"></textarea>
+        <button id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:#fff;border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Send</button>
+      </div>
+      <p class="hint" style="margin-top:0.25rem;font-size:0.65rem;" data-vis="{{ V }}">
+        Drop files here • Shift+Enter for newline • Enter to send
+      </p>
+    </div>
+  </aside>
+  <script>
+  (function(){
+    var toggle = document.getElementById('aiPaneToggle');
+    var pane = document.getElementById('aiPane');
+    var closeBtn = document.getElementById('aiPaneClose');
+    var chat = document.getElementById('aiPaneChat');
+    var input = document.getElementById('aiPaneInput');
+    var sendBtn = document.getElementById('aiPaneSend');
+    var fileInput = document.getElementById('aiPaneFile');
+    var dropZone = document.getElementById('aiPaneDropZone');
+    var fileNameEl = document.getElementById('aiPaneFileName');
+    var fileRemove = document.getElementById('aiPaneFileRemove');
+    var pendingFile = null;
+    if(!toggle || !pane) return;
+
+    toggle.addEventListener('click', function(){
+      pane.style.display = pane.style.display === 'none' ? 'flex' : 'none';
+      if(pane.style.display === 'flex') input.focus();
+    });
+    closeBtn.addEventListener('click', function(){ pane.style.display = 'none'; });
+
+    // File handling
+    fileInput.addEventListener('change', function(){
+      if(fileInput.files.length){
+        pendingFile = fileInput.files[0];
+        fileNameEl.textContent = pendingFile.name;
+        dropZone.style.display = '';
+      }
+    });
+    fileRemove.addEventListener('click', function(){
+      pendingFile = null;
+      fileInput.value = '';
+      dropZone.style.display = 'none';
+    });
+
+    // Drag & drop on the pane
+    pane.addEventListener('dragover', function(e){ e.preventDefault(); e.stopPropagation(); });
+    pane.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(e.dataTransfer.files.length){
+        pendingFile = e.dataTransfer.files[0];
+        fileNameEl.textContent = pendingFile.name;
+        dropZone.style.display = '';
+      }
+    });
+
+    function addBubble(text, sender, tone){
+      var div = document.createElement('div');
+      div.style.cssText = 'margin-bottom:0.5rem;padding:0.5rem 0.75rem;border-radius:10px;font-size:0.8rem;max-width:90%;word-wrap:break-word;' +
+        (sender === 'user' ? 'margin-left:auto;background:var(--tone-blue, #007AFF);color:#fff;' :
+         tone === 'error' ? 'background:var(--color-red-bg, rgba(255,59,48,0.12));color:var(--tone-red);' :
+         'background:var(--color-separator, rgba(255,255,255,0.06));');
+      div.innerHTML = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    function send(){
+      var msg = input.value.trim();
+      if(!msg && !pendingFile) return;
+      var displayMsg = msg;
+      if(pendingFile) displayMsg += ' <span style="opacity:0.7;">📎 ' + pendingFile.name + '</span>';
+      addBubble(displayMsg, 'user');
+      input.value = '';
+
+      var thinking = addBubble('<span style="opacity:0.5;">Thinking…</span>', 'ai');
+      var pageContext = document.title + ' | ' + window.location.pathname;
+
+      var fd;
+      if(pendingFile){
+        fd = new FormData();
+        fd.append('message', msg);
+        fd.append('page_context', pageContext);
+        fd.append('file', pendingFile);
+        pendingFile = null;
+        fileInput.value = '';
+        dropZone.style.display = 'none';
+      }
+
+      var fetchOpts = pendingFile ? {} : {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+        body: JSON.stringify({message: msg, page_context: pageContext})
+      };
+      if(fd){
+        fetchOpts = {method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token() }}'}, body: fd};
+      }
+
+      fetch('{{ url_for("ai_pane_submit") }}', fetchOpts)
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        chat.removeChild(thinking);
+        if(data.ok){
+          var routeHtml = data.route_to ? ' <span style="opacity:0.6;font-size:0.7rem;">→ ' + data.route_to + '</span>' : '';
+          var actionBadge = data.entity_created ? ' <span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;background:var(--tone-green);color:var(--bg);font-size:0.65rem;font-weight:700;margin-left:0.3rem;">DONE</span>' :
+            (data.action !== 'unknown' && data.action !== 'general_query' ? ' <span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;background:var(--tone-amber);color:var(--bg);font-size:0.65rem;font-weight:700;margin-left:0.3rem;">QUEUED</span>' : '');
+          addBubble(data.summary + routeHtml + actionBadge, 'ai');
+        } else {
+          addBubble(data.error || 'Something went wrong', 'ai', 'error');
+        }
+      })
+      .catch(function(){
+        chat.removeChild(thinking);
+        addBubble('Network error — try again', 'ai', 'error');
+      });
+    }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+    });
+
+    // Load context summary + history on first open
+    var loaded = false;
+    toggle.addEventListener('click', function(){
+      if(loaded || pane.style.display === 'none') return;
+      loaded = true;
+      // Load context summary
+      fetch('{{ url_for("ai_pane_summary") }}?page=' + encodeURIComponent(document.title + ' | ' + window.location.pathname))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          chat.innerHTML = '';
+          // Greeting
+          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong>';
+          if(data.items.length){
+            greeting += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
+            data.items.forEach(function(it){
+              var icon = it.type === 'request' ? '📋' : it.type === 'messages' ? '✉️' : it.type === 'todo' ? '☑️' : it.type === 'approval' ? '⏳' : it.type === 'ai_review' ? '🤖' : '•';
+              greeting += '<div style="padding:0.15rem 0;">' + icon + ' ' + it.text + '</div>';
+            });
+            greeting += '</div>';
+          }
+          if(data.hints.length){
+            greeting += '<div style="margin-top:0.4rem;font-size:0.7rem;opacity:0.6;">' + data.hints[0] + '</div>';
+          }
+          addBubble(greeting, 'ai');
+        }).catch(function(){});
+      // Load history (last 5)
+      fetch('{{ url_for("ai_pane_history") }}')
+        .then(function(r){ return r.json(); })
+        .then(function(rows){
+          if(!rows.length) return;
+          rows.slice(0, 5).reverse().forEach(function(r){
+            addBubble(r.user_message.substring(0, 150), 'user');
+            if(r.ai_response) addBubble(r.ai_response, 'ai');
+          });
+        });
+    });
+  })();
+  </script>
+  {% endif %}

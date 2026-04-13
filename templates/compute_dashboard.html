@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% from "_page_macros.html" import card_heading, empty_state, stat_blob with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
@@ -7,21 +7,60 @@
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Compute</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">AI Jobs (Ollama)</span>
+    <span class="inst-header-code" data-vis="{{ V }}">HPC Jobs + AI Prompts</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('compute_software_list') }}" data-vis="{{ V }}">📚 Software</a>
     <a class="btn btn-primary" href="{{ url_for('compute_new') }}" data-vis="{{ V }}">+ New Job</a>
   </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  {# ── Status filter pills ── #}
+  {# ── KPI tiles ── #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    <div class="stat-row" data-vis="{{ V }}">
+      {% set running = jobs|selectattr('status','equalto','running')|list|length %}
+      {% set queued = jobs|selectattr('status','equalto','queued')|list|length %}
+      {% set completed = jobs|selectattr('status','equalto','completed')|list|length %}
+      {{ stat_blob(running, "Running", tone="active") }}
+      {{ stat_blob(queued, "Queued", tone="wait") }}
+      {{ stat_blob(completed, "Completed", tone="completed") }}
+    </div>
+  </article>
+
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    <div class="section-head" data-vis="{{ V }}">Storage</div>
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      {% set pct = ((storage_used_mb / storage_cap_mb) * 100) if storage_cap_mb > 0 else 0 %}
+      <div style="background:var(--bg-secondary);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
+        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--color-error){% elif pct > 50 %}var(--color-warning){% else %}var(--color-success){% endif %};border-radius:6px;transition:width 0.3s;" data-vis="{{ V }}"></div>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);" data-vis="{{ V }}">
+        {{ "%.1f"|format(storage_used_mb / 1024) }} GB / {{ "%.0f"|format(storage_cap_mb / 1024) }} GB used
+        ({{ "%.1f"|format(pct) }}%)
+      </div>
+    </div>
+    {% if can_manage %}
+    <div style="padding:0 0.75rem 0.75rem;" data-vis="{{ V }}">
+      <a href="{{ url_for('compute_admin_storage') }}" class="text-link" data-vis="{{ V }}">Manage storage →</a>
+    </div>
+    {% endif %}
+  </article>
+
+  {# ── Filter tabs ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.5rem 0;" data-vis="{{ V }}">
-      {% for val, label in [("all","All"),("queued","Queued"),("running","Running"),("completed","Completed"),("failed","Failed")] %}
-      <a href="{{ url_for('compute_list', status=val) }}"
+      {% for val, label in [("all","All"),("queued","Queued"),("running","Running"),("completed","Completed"),("failed","Failed"),("cancelled","Cancelled")] %}
+      <a href="{{ url_for('compute_list', status=val, type=job_type_filter) }}"
          class="badge {% if status_filter == val %}status-active{% endif %}"
+         style="text-decoration:none;padding:0.35rem 0.75rem;cursor:pointer;"
+         data-vis="{{ V }}">{{ label }}</a>
+      {% endfor %}
+      <span style="margin-left:1rem;color:var(--text-secondary);" data-vis="{{ V }}">|</span>
+      {% for val, label in [("all","All Types"),("hpc_job","HPC"),("ai_prompt","AI Prompt")] %}
+      <a href="{{ url_for('compute_list', status=status_filter, type=val) }}"
+         class="badge {% if job_type_filter == val %}status-active{% endif %}"
          style="text-decoration:none;padding:0.35rem 0.75rem;cursor:pointer;"
          data-vis="{{ V }}">{{ label }}</a>
       {% endfor %}
@@ -36,35 +75,50 @@
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">#</th>
-          <th data-vis="{{ V }}">Model</th>
-          <th data-vis="{{ V }}">Prompt</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">Software / Model</th>
+          <th data-vis="{{ V }}">Description</th>
           <th data-vis="{{ V }}">Status</th>
           <th data-vis="{{ V }}">Duration</th>
+          <th data-vis="{{ V }}">Output</th>
           <th data-vis="{{ V }}">Submitted</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
         {% for j in jobs %}
+        {% set jd = dict(j) %}
         {% set mi = models.get(j.model, {}) %}
         <tr class="clickable-row" data-href="{{ url_for('compute_detail', job_id=j.id) }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}"><code class="inline-code" data-vis="{{ V }}">#{{ j.id }}</code></td>
           <td data-vis="{{ V }}">
-            <span class="badge status-{{ mi.get('tone','') }}" data-vis="{{ V }}">{{ mi.get('label', j.model) }}</span>
+            <span class="badge {% if jd.get('job_type') == 'hpc_job' %}status-queued{% else %}status-completed{% endif %}" data-vis="{{ V }}">
+              {{ 'HPC' if jd.get('job_type') == 'hpc_job' else 'AI' }}
+            </span>
           </td>
-          <td data-vis="{{ V }}">{{ j.prompt[:80] }}{{ '...' if j.prompt|length > 80 else '' }}</td>
           <td data-vis="{{ V }}">
-            <span class="badge {% if j.status == 'completed' %}status-active{% elif j.status == 'failed' %}status-archived{% elif j.status == 'running' %}status-queued{% else %}{% endif %}" data-vis="{{ V }}">
+            {% if jd.get('software_name') %}
+              {{ jd.get('software_icon', '🖥️') }} {{ jd.get('software_name') }}
+            {% else %}
+              <span class="badge status-{{ mi.get('tone','') }}" data-vis="{{ V }}">{{ mi.get('label', j.model) }}</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">{{ (jd.get('user_instructions') or j.prompt or '')[:60] }}{{ '…' if (jd.get('user_instructions') or j.prompt or '')|length > 60 else '' }}</td>
+          <td data-vis="{{ V }}">
+            <span class="badge {% if j.status == 'completed' %}status-active{% elif j.status == 'failed' %}status-archived{% elif j.status == 'running' %}status-queued{% elif j.status == 'cancelled' %}status-archived{% endif %}" data-vis="{{ V }}">
               {{ j.status|upper }}
             </span>
           </td>
-          <td data-vis="{{ V }}">{% if j.duration_ms %}{{ "%.1f"|format(j.duration_ms / 1000) }}s{% else %}—{% endif %}</td>
+          <td data-vis="{{ V }}">
+            {% if jd.get('job_type') == 'hpc_job' %}{{ jd.get('duration_minutes', 30) }} min{% elif j.duration_ms %}{{ "%.1f"|format(j.duration_ms / 1000) }}s{% else %}—{% endif %}
+          </td>
+          <td data-vis="{{ V }}">{% if jd.get('actual_output_mb', 0) > 0 %}{{ jd.get('actual_output_mb') }} MB{% else %}—{% endif %}</td>
           <td data-vis="{{ V }}">{{ j.created_at[:16] if j.created_at else '—' }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    {{ empty_state("No jobs yet. Submit a prompt to get started.") }}
+    {{ empty_state("No jobs yet. Submit an AI prompt or HPC job to get started.") }}
     {% endif %}
   </article>
 

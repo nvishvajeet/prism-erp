@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, stat_blob with context %}
+{% block hover_back %}<a href="{{ url_for('compute_list') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_list') }}" data-vis="{{ V }}">← Compute</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Storage Management</h2>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {% set pct = ((storage_used_mb / storage_cap_mb) * 100) if storage_cap_mb > 0 else 0 %}
+    <div class="stat-row" data-vis="{{ V }}">
+      {{ stat_blob("%.1f"|format(storage_used_mb / 1024) ~ " GB", "Used", tone="active") }}
+      {{ stat_blob("%.0f"|format(storage_cap_mb / 1024) ~ " GB", "Capacity", tone="completed") }}
+      {{ stat_blob("%.1f"|format(pct) ~ "%", "Utilization", tone="wait" if pct > 50 else "completed") }}
+    </div>
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <div style="background:var(--bg-secondary);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
+        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--color-error){% elif pct > 50 %}var(--color-warning){% else %}var(--color-success){% endif %};border-radius:6px;" data-vis="{{ V }}"></div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("JOBS WITH OUTPUT", jobs|length|string ~ " jobs") }}
+    {% if jobs %}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Job #</th>
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">User</th>
+          <th data-vis="{{ V }}">Output MB</th>
+          <th data-vis="{{ V }}">Expires</th>
+          <th data-vis="{{ V }}">Status</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for j in jobs %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><a href="{{ url_for('compute_detail', job_id=j.id) }}" data-vis="{{ V }}">#{{ j.id }}</a></td>
+          <td data-vis="{{ V }}">{{ j.software_name or '—' }}</td>
+          <td data-vis="{{ V }}">{{ j.user_name or '—' }}</td>
+          <td data-vis="{{ V }}">{{ j.actual_output_mb }} MB</td>
+          <td data-vis="{{ V }}">{{ j.output_expires_at[:10] if j.output_expires_at else '—' }}</td>
+          <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ j.status }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:1rem;color:var(--text-secondary);" data-vis="{{ V }}">No jobs with output files.</div>
+    {% endif %}
+  </article>
+
+</section>
+{% endblock %}

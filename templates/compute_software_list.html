@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('compute_list') }}" class="hover-back-btn" title="Back to Compute">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_list') }}" data-vis="{{ V }}">← Compute</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Software Catalog</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ software|length }} packages available</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('compute_inventory') }}" data-vis="{{ V }}">📋 IT Inventory</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  {% for cat, items in categories.items() %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading(cat|upper|replace("_"," "), items|length|string ~ " package(s)") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for sw in items %}
+      <a href="{{ url_for('compute_software_detail', slug=sw.slug) }}" class="activity-entry" style="text-decoration:none;color:inherit;display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
+        <div data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>{{ sw.icon }} {{ sw.name }}</strong> <span class="hint" data-vis="{{ V }}">v{{ sw.version }}</span></div>
+          <div class="hint" data-vis="{{ V }}">{{ sw.description }}</div>
+          {% if sw.commercial_equivalent %}
+          <div data-vis="{{ V }}"><span class="badge status-active" data-vis="{{ V }}">Replaces {{ sw.commercial_equivalent }}</span>
+            {% if sw.can_convert_from != '[]' %}<span class="badge status-queued" data-vis="{{ V }}">AI auto-converts</span>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+        <div style="text-align:right;white-space:nowrap;" data-vis="{{ V }}">
+          <div class="hint" data-vis="{{ V }}">Max {{ sw.max_runtime_minutes }} min · {{ sw.max_memory_mb }} MB</div>
+          <span class="btn" style="margin-top:0.25rem;" data-vis="{{ V }}">View Tutorial →</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

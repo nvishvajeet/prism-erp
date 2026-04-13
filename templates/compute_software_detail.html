@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('compute_software_list') }}" class="hover-back-btn" title="Back to Catalog">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_software_list') }}" data-vis="{{ V }}">← Catalog</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ sw.icon }} {{ sw.name }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">v{{ sw.version }} · {{ sw.category }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-primary" href="{{ url_for('compute_new', software=sw.slug) }}" data-vis="{{ V }}">🚀 Start Job</a>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Quick specs ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div class="detail-grid" data-vis="{{ V }}">
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Runtime</span><br>{{ sw.max_runtime_minutes }} min</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Memory</span><br>{{ sw.max_memory_mb }} MB</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Cores</span><br>{{ sw.max_cores }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Output</span><br>{{ sw.max_output_mb }} MB</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Input Types</span><br>{{ sw.input_extensions }}</div>
+      {% if sw.commercial_equivalent %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Replaces</span><br><span class="badge status-active" data-vis="{{ V }}">{{ sw.commercial_equivalent }}</span></div>
+      {% endif %}
+      {% if sw.can_convert_from != '[]' %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">AI Converts From</span><br><span class="badge status-queued" data-vis="{{ V }}">{{ sw.can_convert_from }}</span></div>
+      {% endif %}
+    </div>
+  </article>
+
+  {# ── Tutorial ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("TUTORIAL", "") }}
+    <div class="markdown-body" style="padding:0.75rem;" data-vis="{{ V }}">
+      {{ sw.tutorial_md|replace("## ", "<h3>")|replace("\n### ", "</h3>\n<h4>")|replace("\n", "<br>")|safe }}
+    </div>
+  </article>
+
+  {% if sw.conversion_notes %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("CONVERSION NOTES", "") }}
+    <div style="padding:0.75rem;" data-vis="{{ V }}">{{ sw.conversion_notes }}</div>
+  </article>
+  {% endif %}
+
+</section>
+{% endblock %}

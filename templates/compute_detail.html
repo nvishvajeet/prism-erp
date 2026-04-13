@@ -1,93 +1,132 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% from "_page_macros.html" import card_heading, stat_blob with context %}
 {% block hover_back %}<a href="{{ url_for('compute_list') }}" class="hover-back-btn" title="Back to Jobs">←</a>{% endblock %}
-
 {% block content %}
+{% set jd = dict(job) %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('compute_list') }}" data-vis="{{ V }}">← Compute</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Job #{{ job.id }}</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">
-      <span class="badge {% if job.status == 'completed' %}status-active{% elif job.status == 'failed' %}status-archived{% elif job.status == 'running' %}status-queued{% endif %}" data-vis="{{ V }}">
-        {{ job.status|upper }}
-      </span>
-    </span>
+    <span class="badge {% if job.status == 'completed' %}status-active{% elif job.status == 'failed' %}status-archived{% elif job.status == 'running' %}status-queued{% elif job.status == 'cancelled' %}status-archived{% endif %}" data-vis="{{ V }}">{{ job.status|upper }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if job.status in ('running', 'queued') %}
+    <form method="post" action="{{ url_for('compute_cancel', job_id=job.id) }}" style="display:inline;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <button type="submit" class="btn" data-vis="{{ V }}">✕ Cancel</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('compute_rerun', job_id=job.id) }}" style="display:inline;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <button type="submit" class="btn" data-vis="{{ V }}">↻ Rerun</button>
+    </form>
   </div>
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  {# ── Metadata tile ── #}
+  {# ── Metadata ── #}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("DETAILS", "#" ~ job.id|string) }}
-    {{ metadata_grid([
-      ("Model", model_info.get('label', job.model)),
-      ("Status", job.status|upper),
-      ("Submitted by", job.user_name),
-      ("Submitted", job.created_at[:19] if job.created_at else "—"),
-      ("Started", job.started_at[:19] if job.started_at else "— waiting —"),
-      ("Completed", job.completed_at[:19] if job.completed_at else "— pending —"),
-      ("Tokens", job.tokens_used|string if job.tokens_used else "—"),
-      ("Duration", ("%.1f s"|format(job.duration_ms / 1000)) if job.duration_ms else "—"),
-    ]) }}
-
-    <div class="inline-actions-row inline-actions-row-topgap" data-vis="{{ V }}">
-      {% if is_mine or can_manage %}
-      <form method="post" action="{{ url_for('compute_rerun', job_id=job.id) }}" data-vis="{{ V }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Rerun</button>
-      </form>
+    {{ card_heading("METADATA", jd.get('job_type', 'ai_prompt')|upper) }}
+    <div class="detail-grid" data-vis="{{ V }}">
+      {% if jd.get('software_name') %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Software</span><br>{{ jd.get('software_icon', '') }} {{ jd.get('software_name') }}</div>
+      {% else %}
+      {% set mi = models.get(job.model, {}) %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Model</span><br><span class="badge status-{{ mi.get('tone','') }}" data-vis="{{ V }}">{{ mi.get('label', job.model) }}</span></div>
+      {% endif %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Submitter</span><br>{{ job.user_name or '—' }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Created</span><br>{{ job.created_at[:16] if job.created_at else '—' }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Started</span><br>{{ job.started_at[:16] if job.started_at else '—' }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Completed</span><br>{{ job.completed_at[:16] if job.completed_at else '—' }}</div>
+      {% if jd.get('job_type') == 'hpc_job' %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Duration</span><br>{{ jd.get('duration_minutes', 30) }} min</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Memory</span><br>{{ jd.get('estimated_memory_mb', 0) }} MB</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Cores</span><br>{{ jd.get('estimated_cores', 0) }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Output</span><br>{{ jd.get('actual_output_mb', 0) }} MB</div>
+      {% if jd.get('output_expires_at') %}<div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Expires</span><br>{{ jd.get('output_expires_at')[:10] }}</div>{% endif %}
+      {% else %}
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Tokens</span><br>{{ job.tokens_used or 0 }}</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Duration</span><br>{% if job.duration_ms %}{{ "%.1f"|format(job.duration_ms / 1000) }}s{% else %}—{% endif %}</div>
       {% endif %}
     </div>
   </article>
 
-  {# ── Prompt tile ── #}
+  {# ── AI Analysis ── #}
+  {% if jd.get('ai_analysis') or jd.get('conversion_log') %}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("PROMPT", "") }}
-    <pre class="code-block code-scroll-block" data-vis="{{ V }}">{{ job.prompt }}</pre>
-    {% if job.context %}
-    <div class="top-gap" data-vis="{{ V }}">
-      {{ card_heading("CONTEXT", "") }}
-      <pre class="code-block code-scroll-block" data-vis="{{ V }}">{{ job.context }}</pre>
+    {{ card_heading("✨ AI ANALYSIS", "") }}
+    {% if jd.get('ai_analysis') %}<pre class="code-scroll" data-vis="{{ V }}">{{ jd.get('ai_analysis') }}</pre>{% endif %}
+    {% if jd.get('conversion_log') %}
+    <div style="padding:0.5rem;background:var(--bg-secondary);border-radius:6px;margin-top:0.5rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Conversion:</span> {{ jd.get('conversion_log') }}
     </div>
     {% endif %}
   </article>
+  {% endif %}
 
-  {# ── Result tile ── #}
-  {% if job.status == 'completed' and job.result %}
+  {# ── Input files ── #}
+  {% if input_files %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("INPUT FILES", input_files|length|string ~ " file(s)") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for f in input_files %}
+      <div class="activity-entry" data-vis="{{ V }}">
+        <span data-vis="{{ V }}">📄 {{ f.original_filename }}</span>
+        <span class="hint" data-vis="{{ V }}">{{ "%.1f"|format(f.file_size / 1024) }} KB{% if f.is_converted %} · <span class="badge status-active">Converted from {{ f.converted_from }}</span>{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+
+  {# ── Output files ── #}
+  {% if output_files %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("OUTPUT FILES", output_files|length|string ~ " file(s)") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for f in output_files %}
+      <div class="activity-entry" style="display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
+        <div data-vis="{{ V }}">📦 {{ f.filename }} <span class="hint" data-vis="{{ V }}">{{ "%.1f"|format(f.file_size / 1024) }} KB · {{ f.download_count }} downloads</span></div>
+        <a class="btn" href="{{ url_for('compute_download', job_id=job.id, file_id=f.id) }}" data-vis="{{ V }}">⬇ Download</a>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="padding:0.75rem;" data-vis="{{ V }}">
+      <a class="btn btn-primary" href="{{ url_for('compute_download_all', job_id=job.id) }}" data-vis="{{ V }}">⬇ Download All (ZIP)</a>
+    </div>
+  </article>
+  {% endif %}
+
+  {# ── Prompt / Instructions ── #}
+  {% if jd.get('user_instructions') or job.prompt %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("INSTRUCTIONS", "") }}
+    <pre class="code-scroll" data-vis="{{ V }}">{{ jd.get('user_instructions') or job.prompt }}</pre>
+    {% if job.context %}<pre class="code-scroll" style="margin-top:0.5rem;" data-vis="{{ V }}">{{ job.context }}</pre>{% endif %}
+  </article>
+  {% endif %}
+
+  {# ── Result ── #}
+  {% if job.result %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("RESULT", "") }}
-    <div class="compute-result-shell" data-vis="{{ V }}">
-      <button onclick="navigator.clipboard.writeText(document.getElementById('resultText').textContent).then(function(){this.textContent='Copied!'}.bind(this))"
-              class="btn compute-copy-btn" data-vis="{{ V }}">Copy</button>
-      <pre id="resultText" class="code-block code-scroll-block compute-result-block" data-vis="{{ V }}">{{ job.result }}</pre>
-    </div>
+    <pre class="code-scroll" id="resultBlock" data-vis="{{ V }}">{{ job.result }}</pre>
+    <div style="padding:0.5rem;" data-vis="{{ V }}"><button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('resultBlock').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000);" data-vis="{{ V }}">Copy</button></div>
   </article>
   {% endif %}
 
-  {# ── Error tile ── #}
-  {% if job.status == 'failed' and job.error %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
+  {# ── Error ── #}
+  {% if job.error %}
+  <article class="card tile tile-full-width" style="border-left:3px solid var(--color-error);" data-vis="{{ V }}">
     {{ card_heading("ERROR", "") }}
-    <pre class="code-block code-scroll-block code-scroll-block-danger" data-vis="{{ V }}">{{ job.error }}</pre>
+    <pre class="code-scroll" style="color:var(--color-error);" data-vis="{{ V }}">{{ job.error }}</pre>
   </article>
   {% endif %}
-
-  {# ── Processing indicator ── #}
-  {% if job.status in ('queued', 'running') %}
-  <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("STATUS", "Auto-refreshes every 5 seconds") }}
-    <div class="centered-padded-block" data-vis="{{ V }}">
-      <div class="compute-processing-title" data-vis="{{ V }}">Processing...</div>
-      <div class="hint dp-metadata-row-topgap" data-vis="{{ V }}">This page refreshes automatically.</div>
-    </div>
-  </article>
-  {% endif %}
-
 </section>
 
 {% if job.status in ('queued', 'running') %}
-<script>setTimeout(function(){ window.location.reload(); }, 5000);</script>
+<script>setTimeout(function(){location.reload();}, 5000);</script>
 {% endif %}
 {% endblock %}

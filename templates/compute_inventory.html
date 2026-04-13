@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('compute_software_list') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('compute_list') }}" data-vis="{{ V }}">← Compute</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Software Inventory</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">For IT Department & Research Dean</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <button class="btn" onclick="window.print()" data-vis="{{ V }}">🖨️ Print</button>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── What We Have ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("AVAILABLE SOFTWARE", software|length|string ~ " packages installed") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Software</th>
+          <th data-vis="{{ V }}">Version</th>
+          <th data-vis="{{ V }}">Category</th>
+          <th data-vis="{{ V }}">License</th>
+          <th data-vis="{{ V }}">Replaces</th>
+          <th data-vis="{{ V }}">AI Conversion</th>
+          <th data-vis="{{ V }}">Max Runtime</th>
+          <th data-vis="{{ V }}">Max Memory</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for sw in software %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong>{{ sw.icon }} {{ sw.name }}</strong></td>
+          <td data-vis="{{ V }}">{{ sw.version }}</td>
+          <td data-vis="{{ V }}">{{ sw.category|replace("_"," ")|title }}</td>
+          <td data-vis="{{ V }}">{% if sw.is_open_source %}<span class="badge status-active" data-vis="{{ V }}">Open Source</span>{% else %}<span class="badge" data-vis="{{ V }}">Commercial</span>{% endif %}</td>
+          <td data-vis="{{ V }}">{{ sw.commercial_equivalent or '—' }}</td>
+          <td data-vis="{{ V }}">{% if sw.can_convert_from != '[]' %}<span class="badge status-queued" data-vis="{{ V }}">✓ Auto-convert</span>{% else %}—{% endif %}</td>
+          <td data-vis="{{ V }}">{{ sw.max_runtime_minutes }} min</td>
+          <td data-vis="{{ V }}">{{ sw.max_memory_mb }} MB</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+
+  {# ── Commercial Equivalents Mapping ── #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("COMMERCIAL → OPEN SOURCE MAP", "Cost savings") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      {% for sw in software if sw.commercial_equivalent %}
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>{{ sw.commercial_equivalent }}</strong> → <strong>{{ sw.name }}</strong></div>
+          <div class="hint" data-vis="{{ V }}">
+            {{ sw.conversion_notes or 'Direct replacement available.' }}
+            {% if sw.can_convert_from != '[]' %}<br>✨ AI auto-converts input files.{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  {# ── What We Need ── #}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("GAP ANALYSIS", "Software not yet available") }}
+    <div class="activity-feed" data-vis="{{ V }}">
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>ANSYS</strong> — Full FEA/CFD suite</div>
+          <div class="hint" data-vis="{{ V }}">Partial: CalculiX handles structural FEA, OpenFOAM handles CFD. No direct ANSYS input conversion.</div>
+        </div>
+      </div>
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>COMSOL Multiphysics</strong></div>
+          <div class="hint" data-vis="{{ V }}">Partial: Elmer FEM covers multiphysics. No auto-conversion from COMSOL input.</div>
+        </div>
+      </div>
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>LabVIEW</strong> — Instrument control + data acquisition</div>
+          <div class="hint" data-vis="{{ V }}">No open-source equivalent. Python + NI-DAQmx could partially replace for new projects.</div>
+        </div>
+      </div>
+      <div class="activity-entry" data-vis="{{ V }}">
+        <div class="activity-entry-body" data-vis="{{ V }}">
+          <div data-vis="{{ V }}"><strong>Origin Pro</strong> — Scientific plotting</div>
+          <div class="hint" data-vis="{{ V }}">Python + Matplotlib is the replacement. AI can convert Origin scripts to Python.</div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  {# ── Hardware ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("COMPUTE INFRASTRUCTURE", "") }}
+    <div class="detail-grid" data-vis="{{ V }}">
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Primary Server</span><br>Mac Mini M4, 24 GB RAM</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Location</span><br>MIT-WPU Campus</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Storage Cap</span><br>100 GB (output files, 7-day retention)</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Concurrent</span><br>2 jobs</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Max Job Duration</span><br>120 minutes</div>
+      <div data-vis="{{ V }}"><span class="hint" data-vis="{{ V }}">Access</span><br>Via Catalyst ERP (catalysterp.org)</div>
+    </div>
+  </article>
+
+  {# ── Department Usage ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("DEPARTMENT USAGE MATRIX", "") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Department</th>
+          <th data-vis="{{ V }}">Primary Software</th>
+          <th data-vis="{{ V }}">Use Cases</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Chemistry</td><td data-vis="{{ V }}">ORCA, NWChem, Psi4, GROMACS, LAMMPS</td><td data-vis="{{ V }}">Quantum chemistry, molecular dynamics, reaction modeling</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Physics</td><td data-vis="{{ V }}">Psi4, Elmer FEM, SageMath, Python</td><td data-vis="{{ V }}">Quantum mechanics, electromagnetics, symbolic computation</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Mechanical Eng.</td><td data-vis="{{ V }}">OpenFOAM, CalculiX, GNU Octave</td><td data-vis="{{ V }}">CFD, structural FEA, numerical analysis</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Civil Eng.</td><td data-vis="{{ V }}">CalculiX, GNU Octave, Python</td><td data-vis="{{ V }}">Structural analysis, geotechnical modeling</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Electrical Eng.</td><td data-vis="{{ V }}">Elmer FEM, GNU Octave, Python</td><td data-vis="{{ V }}">Electromagnetics, signal processing, control systems</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Biotechnology</td><td data-vis="{{ V }}">GROMACS, R, Python</td><td data-vis="{{ V }}">Protein simulations, biostatistics, genomics</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Pharma</td><td data-vis="{{ V }}">R, Python, GROMACS</td><td data-vis="{{ V }}">Drug discovery statistics, molecular docking</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Chemical Eng.</td><td data-vis="{{ V }}">OpenFOAM, Python</td><td data-vis="{{ V }}">Process simulation, reaction engineering</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Mathematics</td><td data-vis="{{ V }}">SageMath, Python, GNU Octave</td><td data-vis="{{ V }}">Symbolic math, number theory, optimization</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Materials Science</td><td data-vis="{{ V }}">LAMMPS, GROMACS, Python</td><td data-vis="{{ V }}">Molecular dynamics, materials modeling</td></tr>
+        <tr data-vis="{{ V }}"><td data-vis="{{ V }}">Computer Science</td><td data-vis="{{ V }}">Python, R</td><td data-vis="{{ V }}">ML training, data analysis, algorithm benchmarking</td></tr>
+      </tbody>
+    </table>
+  </article>
+
+</section>
+{% endblock %}

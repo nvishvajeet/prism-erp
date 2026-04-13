@@ -12,65 +12,179 @@
 
 <section class="inst-tiles" data-vis="{{ V }}">
 
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("SUBMIT", "Send a prompt to an AI model") }}
-    <form method="post" class="form-grid" data-vis="{{ V }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
-
-      <label data-vis="{{ V }}">Model
-        <select name="model" id="modelSelect" data-vis="{{ V }}">
-          {% for key, m in models.items() %}
-          <option value="{{ key }}" {% if key == 'llama3:latest' %}selected{% endif %} data-vis="{{ V }}">
-            {{ m.label }} ({{ m.size }})
-          </option>
-          {% endfor %}
-        </select>
-        <span class="hint" id="modelHint" data-vis="{{ V }}">Fast general-purpose model</span>
-      </label>
-
-      <label data-vis="{{ V }}">Prompt
-        <textarea name="prompt" rows="6" required placeholder="Ask anything..." data-vis="{{ V }}"></textarea>
-      </label>
-
-      <label data-vis="{{ V }}">Context (optional)
-        <textarea name="context" rows="4" placeholder="Paste text for the model to analyze..." data-vis="{{ V }}"></textarea>
-        <span class="hint" data-vis="{{ V }}">Additional context is prepended to your prompt.</span>
-      </label>
-
-      <div data-vis="{{ V }}">
-        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit</button>
-      </div>
-    </form>
-  </article>
-
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("MODELS", "Available on Ollama") }}
-    <div class="activity-feed" data-vis="{{ V }}">
-      {% for key, m in models.items() %}
-      <div class="activity-entry" data-vis="{{ V }}">
-        <div class="activity-entry-body" data-vis="{{ V }}">
-          <div class="activity-entry-meta" data-vis="{{ V }}">
-            <span class="badge status-{{ m.tone }}" data-vis="{{ V }}">{{ m.label }}</span>
-            <span class="hint" data-vis="{{ V }}">{{ m.size }}</span>
-          </div>
-          <div class="activity-entry-text" data-vis="{{ V }}">{{ m.desc }}</div>
-        </div>
-      </div>
-      {% endfor %}
+  {# ── Job type selector ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    <div style="display:flex;gap:1rem;padding:0.5rem 0;" data-vis="{{ V }}">
+      <button type="button" class="btn btn-primary" id="tabHPC" onclick="switchTab('hpc')" data-vis="{{ V }}">🖥️ HPC Job</button>
+      <button type="button" class="btn" id="tabAI" onclick="switchTab('ai')" data-vis="{{ V }}">🧠 AI Prompt</button>
     </div>
   </article>
+
+  {# ── HPC Job form ── #}
+  <div id="hpcForm" data-vis="{{ V }}">
+    <article class="card tile tile-span-3" data-vis="{{ V }}">
+      {{ card_heading("HPC JOB", "Upload code, pick software, run on compute cluster") }}
+      <form method="post" enctype="multipart/form-data" class="form-grid" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <input type="hidden" name="job_type" value="hpc_job" data-vis="{{ V }}">
+
+        <label data-vis="{{ V }}">Software
+          <select name="software_id" id="softwarePicker" data-vis="{{ V }}">
+            <option value="" data-vis="{{ V }}">— Select software —</option>
+            {% for sw in software_list %}
+            <option value="{{ sw.id }}" {% if pre_software == sw.slug %}selected{% endif %}
+              data-max-runtime="{{ sw.max_runtime_minutes }}"
+              data-max-memory="{{ sw.max_memory_mb }}"
+              data-max-cores="{{ sw.max_cores }}"
+              data-convert="{{ sw.can_convert_from }}"
+              data-equiv="{{ sw.commercial_equivalent }}"
+              data-vis="{{ V }}">{{ sw.icon }} {{ sw.name }} ({{ sw.version }}){% if sw.commercial_equivalent %} — replaces {{ sw.commercial_equivalent }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label data-vis="{{ V }}">Input Files
+          <input type="file" name="input_files" multiple accept="*" data-vis="{{ V }}">
+          <span class="hint" data-vis="{{ V }}">Upload scripts, data files, or archives (.zip/.tar.gz)</span>
+        </label>
+
+        <label data-vis="{{ V }}">Duration (minutes)
+          <select name="duration" data-vis="{{ V }}">
+            {% for d in durations %}
+            <option value="{{ d }}" {% if d == 30 %}selected{% endif %} data-vis="{{ V }}">{{ d }} min</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label data-vis="{{ V }}">Instructions
+          <textarea name="instructions" rows="4" placeholder="What should the job do? E.g., 'Run the simulation with default parameters and save output to ./output/'" data-vis="{{ V }}"></textarea>
+        </label>
+
+        <label data-vis="{{ V }}">Expected Output Size (MB)
+          <select name="estimated_output_mb" data-vis="{{ V }}">
+            {% for size, label in [(100, "100 MB"), (500, "500 MB"), (1024, "1 GB"), (5120, "5 GB"), (10240, "10 GB")] %}
+            <option value="{{ size }}" {% if size == 500 %}selected{% endif %} data-vis="{{ V }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <input type="hidden" name="estimated_memory_mb" id="estMemory" value="4096" data-vis="{{ V }}">
+        <input type="hidden" name="estimated_cores" id="estCores" value="4" data-vis="{{ V }}">
+
+        {# ── AI Estimate panel ── #}
+        <div id="estimatePanel" style="background:var(--bg-secondary);border-radius:8px;padding:1rem;display:none;" data-vis="{{ V }}">
+          <div class="section-head" data-vis="{{ V }}">✨ AI Resource Estimate</div>
+          <div id="estimateContent" data-vis="{{ V }}"></div>
+        </div>
+
+        <div style="display:flex;gap:1rem;" data-vis="{{ V }}">
+          <button type="button" class="btn" onclick="runEstimate()" data-vis="{{ V }}">✨ Analyze & Estimate</button>
+          <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Job</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="card tile tile-span-3" data-vis="{{ V }}">
+      {{ card_heading("SOFTWARE CATALOG", software_list|length|string ~ " packages") }}
+      <div class="activity-feed" data-vis="{{ V }}">
+        {% for sw in software_list %}
+        <a href="{{ url_for('compute_software_detail', slug=sw.slug) }}" class="activity-entry" style="text-decoration:none;color:inherit;" data-vis="{{ V }}">
+          <div class="activity-entry-body" data-vis="{{ V }}">
+            <div class="activity-entry-meta" data-vis="{{ V }}">
+              <span data-vis="{{ V }}">{{ sw.icon }} <strong>{{ sw.name }}</strong></span>
+              <span class="badge" data-vis="{{ V }}">{{ sw.category }}</span>
+            </div>
+            <div class="activity-entry-text hint" data-vis="{{ V }}">
+              {{ sw.description }}
+              {% if sw.commercial_equivalent %}<br>Replaces: <strong>{{ sw.commercial_equivalent }}</strong>{% endif %}
+            </div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
+
+  {# ── AI Prompt form (legacy) ── #}
+  <div id="aiForm" style="display:none;" data-vis="{{ V }}">
+    <article class="card tile tile-span-3" data-vis="{{ V }}">
+      {{ card_heading("AI PROMPT", "Send a prompt to an AI model") }}
+      <form method="post" class="form-grid" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+        <input type="hidden" name="job_type" value="ai_prompt" data-vis="{{ V }}">
+
+        <label data-vis="{{ V }}">Model
+          <select name="model" id="modelSelect" data-vis="{{ V }}">
+            {% for key, m in models.items() %}
+            <option value="{{ key }}" {% if key == 'llama3:latest' %}selected{% endif %} data-vis="{{ V }}">
+              {{ m.label }} ({{ m.size }})
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label data-vis="{{ V }}">Prompt
+          <textarea name="prompt" rows="6" required placeholder="Ask anything..." data-vis="{{ V }}"></textarea>
+        </label>
+
+        <label data-vis="{{ V }}">Context (optional)
+          <textarea name="context" rows="4" placeholder="Paste text for the model to analyze..." data-vis="{{ V }}"></textarea>
+        </label>
+
+        <div data-vis="{{ V }}"><button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit</button></div>
+      </form>
+    </article>
+
+    <article class="card tile tile-span-3" data-vis="{{ V }}">
+      {{ card_heading("MODELS", "Available AI models") }}
+      <div class="activity-feed" data-vis="{{ V }}">
+        {% for key, m in models.items() %}
+        <div class="activity-entry" data-vis="{{ V }}">
+          <div class="activity-entry-body" data-vis="{{ V }}">
+            <div class="activity-entry-meta" data-vis="{{ V }}">
+              <span class="badge status-{{ m.tone }}" data-vis="{{ V }}">{{ m.label }}</span>
+              <span class="hint" data-vis="{{ V }}">{{ m.size }}</span>
+            </div>
+            <div class="activity-entry-text" data-vis="{{ V }}">{{ m.desc }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
 
 </section>
 
 <script>
-(function(){
-  var hints = {{ models|tojson }};
-  var sel = document.getElementById('modelSelect');
-  var hint = document.getElementById('modelHint');
-  sel.addEventListener('change', function(){
-    var m = hints[sel.value];
-    hint.textContent = m ? m.desc : '';
-  });
-})();
+function switchTab(t) {
+  document.getElementById('hpcForm').style.display = t === 'hpc' ? '' : 'none';
+  document.getElementById('aiForm').style.display = t === 'ai' ? '' : 'none';
+  document.getElementById('tabHPC').className = t === 'hpc' ? 'btn btn-primary' : 'btn';
+  document.getElementById('tabAI').className = t === 'ai' ? 'btn btn-primary' : 'btn';
+}
+
+function runEstimate() {
+  var panel = document.getElementById('estimatePanel');
+  var content = document.getElementById('estimateContent');
+  var swId = document.querySelector('[name=software_id]').value;
+  var instructions = document.querySelector('[name=instructions]').value;
+  if (!swId) { alert('Please select software first.'); return; }
+  content.innerHTML = '<span class="hint">Analyzing...</span>';
+  panel.style.display = '';
+  fetch('{{ url_for("compute_estimate") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+    body: JSON.stringify({software_id: parseInt(swId), instructions: instructions, file_snippets: ''})
+  }).then(r => r.json()).then(data => {
+    document.getElementById('estMemory').value = data.memory_mb || 4096;
+    document.getElementById('estCores').value = data.cores || 4;
+    content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">'
+      + '<div><strong>Memory:</strong> ' + (data.memory_mb || '?') + ' MB</div>'
+      + '<div><strong>Cores:</strong> ' + (data.cores || '?') + '</div>'
+      + '<div><strong>Est. Time:</strong> ' + (data.estimated_minutes || '?') + ' min</div>'
+      + '<div><strong>Est. Output:</strong> ' + (data.estimated_output_mb || '?') + ' MB</div>'
+      + '</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">' + (data.reasoning || '') + '</div>';
+  }).catch(() => { content.innerHTML = '<span style="color:var(--color-error);">Estimate failed — submit anyway with defaults.</span>'; });
+}
 </script>
 {% endblock %}

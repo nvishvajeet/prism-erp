@@ -327,13 +327,27 @@ MODULE_REGISTRY = {
         "nav_endpoint": "qr_attendance_kiosk",
         "nav_active_endpoints": {"qr_attendance_kiosk", "qr_attendance_scan", "qr_my_code"},
     },
+    "tuck_shop": {
+        "label": "Tuck Shop",
+        "icon": "\U0001f6d2",
+        "nav_order": 13,
+        "description": "Tuck shop POS, token issue & redeem",
+        "nav_endpoint": "tuck_shop_dashboard",
+        "nav_active_endpoints": {
+            "tuck_shop_dashboard", "tuck_shop_terminal", "tuck_shop_items_manage",
+            "tuck_shop_token_issue", "tuck_shop_token_redeem",
+            "tuck_shop_daily_report", "tuck_shop_api_record_sale",
+            "tuck_shop_api_issue_token", "tuck_shop_api_redeem_token",
+        },
+        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+    },
     "compute": {
         "label": "Compute",
         "icon": "\U0001f9e0",
         "nav_order": 11,
         "description": "AI job submission (Ollama)",
         "nav_endpoint": "compute_list",
-        "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail"},
+        "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail", "compute_software_list", "compute_software_detail", "compute_inventory", "compute_admin_storage"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "admin": {
@@ -5145,6 +5159,66 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_mess_prep_date ON mess_prep_log(prep_date);
         """)
 
+        # ── Tuck Shop POS module ─────────────────────────────────
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS tuck_shop_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                price REAL NOT NULL DEFAULT 0,
+                category TEXT NOT NULL DEFAULT 'snack',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS tuck_shop_sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_date TEXT NOT NULL,
+                sale_time TEXT NOT NULL DEFAULT '',
+                payment_method TEXT NOT NULL DEFAULT 'cash',
+                student_id INTEGER,
+                cashier_user_id INTEGER,
+                total_amount REAL NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (student_id) REFERENCES mess_students(id),
+                FOREIGN KEY (cashier_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_tuck_sales_date ON tuck_shop_sales(sale_date);
+
+            CREATE TABLE IF NOT EXISTS tuck_shop_sale_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sale_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                qty INTEGER NOT NULL DEFAULT 1,
+                unit_price REAL NOT NULL DEFAULT 0,
+                line_total REAL NOT NULL DEFAULT 0,
+                FOREIGN KEY (sale_id) REFERENCES tuck_shop_sales(id) ON DELETE CASCADE,
+                FOREIGN KEY (item_id) REFERENCES tuck_shop_items(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_tuck_sale_items_sale ON tuck_shop_sale_items(sale_id);
+
+            CREATE TABLE IF NOT EXISTS tuck_shop_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_number INTEGER NOT NULL,
+                issue_date TEXT NOT NULL,
+                meal_type TEXT NOT NULL DEFAULT 'lunch',
+                student_id INTEGER,
+                payment_method TEXT NOT NULL DEFAULT 'cash',
+                amount_paid REAL NOT NULL DEFAULT 0,
+                issued_by_user_id INTEGER,
+                issued_at TEXT NOT NULL DEFAULT '',
+                redeemed_by_user_id INTEGER,
+                redeemed_at TEXT,
+                status TEXT NOT NULL DEFAULT 'issued',
+                FOREIGN KEY (student_id) REFERENCES mess_students(id),
+                FOREIGN KEY (issued_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (redeemed_by_user_id) REFERENCES users(id),
+                UNIQUE (token_number, issue_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_tuck_tokens_date ON tuck_shop_tokens(issue_date, status);
+        """)
+
         # ── Compute / HPC Job Scheduler module ───────────────────
         cur.executescript("""
             CREATE TABLE IF NOT EXISTS compute_jobs (
@@ -5293,6 +5367,11 @@ def init_db() -> None:
     _seed_demo_vendors()
     _seed_demo_companies()
     _seed_demo_mess_students()
+    # v2.1 — seed software catalog for compute scheduler
+    try:
+        _seed_software_catalog()
+    except Exception:
+        pass
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -19005,125 +19084,417 @@ def _generate_tally_csv_multi(vouchers, fy):
     return output.getvalue()
 
 
-# ── Compute / AI Job Submission module ──────────────────────────
-# Backend: Ollama (local, free) or Claude API (cloud, paid, better)
-# Set COMPUTE_BACKEND=claude in .env to use Claude API.
-# Jobs queue in compute_jobs table. Can batch-process daily via cron.
+# ── Compute / HPC Job Scheduler + AI Assistant ──────────────────
+# Dual-mode: (1) AI prompt jobs via Ollama/Claude, (2) HPC jobs —
+# upload code, pick software, timed execution on Mac Mini.
+# AI also: form filling, resource estimation, code conversion, dashboard advice.
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-COMPUTE_BACKEND = os.environ.get("COMPUTE_BACKEND", "ollama")  # "ollama" or "claude"
+COMPUTE_BACKEND = os.environ.get("COMPUTE_BACKEND", "ollama")
 
 COMPUTE_MODELS = {
-    # Ollama models (local)
     "llama3:latest":    {"label": "Llama 3",       "size": "4 GB",  "tone": "green",  "desc": "Fast local model (Ollama)", "backend": "ollama"},
     "qwen3-coder:30b":  {"label": "Qwen3 Coder",   "size": "18 GB", "tone": "blue",   "desc": "Code generation (Ollama)", "backend": "ollama"},
     "gpt-oss:120b":     {"label": "GPT-OSS 120B",  "size": "65 GB", "tone": "purple", "desc": "Large local model (Ollama)", "backend": "ollama"},
     "qwen3-vl:4b":      {"label": "Qwen3 VL",      "size": "3 GB",  "tone": "amber",  "desc": "Vision-language (Ollama)", "backend": "ollama"},
-    # Claude models (cloud)
     "claude-sonnet":    {"label": "Claude Sonnet",  "size": "cloud", "tone": "blue",   "desc": "Fast + smart (Anthropic API)", "backend": "claude"},
     "claude-haiku":     {"label": "Claude Haiku",   "size": "cloud", "tone": "green",  "desc": "Fastest + cheapest (Anthropic API)", "backend": "claude"},
 }
-
-# Alias for templates that reference OLLAMA_MODELS
 OLLAMA_MODELS = COMPUTE_MODELS
+
+# HPC constants
+COMPUTE_DURATIONS = [15, 30, 60, 120]
+COMPUTE_STORAGE_CAP_MB = 100 * 1024
+COMPUTE_OUTPUT_RETENTION_DAYS = 7
+COMPUTE_MAX_CONCURRENT_JOBS = 2
+COMPUTE_SSH_HOST = os.environ.get("COMPUTE_SSH_HOST", "vishwajeet@100.115.176.118")
+COMPUTE_REMOTE_WORKDIR = "/tmp/catalyst_jobs"
+COMPUTE_INPUT_DIR = Path(BASE_DIR) / "data" / "compute" / "inputs"
+COMPUTE_OUTPUT_DIR = Path(BASE_DIR) / "data" / "compute" / "outputs"
+COMPUTE_ALLOWED_INPUT_EXT = {".py", ".m", ".r", ".sh", ".jl", ".c", ".f90", ".f",
+                              ".inp", ".gjf", ".com", ".nw", ".wl", ".nb",
+                              ".zip", ".tar", ".gz", ".csv", ".txt", ".dat",
+                              ".json", ".yaml", ".toml", ".cfg", ".in", ".lmp",
+                              ".sif", ".sage", ".mdp", ".gro", ".top", ".oct"}
+
+
+def _seed_software_catalog():
+    """Seed open-source scientific software catalog. Idempotent."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    existing = db.execute("SELECT COUNT(*) FROM software_catalog").fetchone()[0]
+    if existing > 0:
+        return
+    _now = now_iso()
+    catalog = [
+        ("GNU Octave", "octave", "9.2", "numerical", "\U0001f522",
+         "MATLAB-compatible numerical computing", "## GNU Octave\n\nRuns most MATLAB .m files directly (~95% compatible).\n\n### Quick Start\n1. Upload .m file\n2. AI auto-converts incompatible MATLAB syntax\n\n### Departments\nMech, EE, Civil",
+         "octave --no-gui {input_file}", '[".m", ".oct"]', 120, 8192, 4, 10240, "mac_mini", 1, "MATLAB", '["matlab"]', "Most .m files run directly."),
+        ("Python 3 + SciPy", "python-scipy", "3.12", "general", "\U0001f40d",
+         "NumPy, SciPy, Matplotlib, Pandas, scikit-learn", "## Python Scientific Stack\n\n### Quick Start\n1. Upload .py script\n2. Output to ./output/ directory\n\n### Departments\nAll",
+         "python3 {input_file}", '[".py"]', 120, 16384, 8, 20480, "mac_mini", 1, "", '[]', ""),
+        ("R", "r-stats", "4.4", "statistics", "\U0001f4ca",
+         "Statistical computing (tidyverse, ggplot2)", "## R\n\n### Quick Start\n1. Upload .R script\n2. Save to ./output/\n\n### Departments\nBiotech, Pharma",
+         "Rscript {input_file}", '[".r", ".R"]', 60, 8192, 4, 5120, "mac_mini", 1, "", '[]', ""),
+        ("OpenFOAM", "openfoam", "12", "cfd", "\U0001f30a",
+         "Open-source CFD simulation", "## OpenFOAM\n\n### Quick Start\n1. Upload case as .zip (0/, constant/, system/)\n2. 60-120 min typical\n\n### Departments\nMechanical, Chemical Eng",
+         "cd {job_dir} && simpleFoam > ./output/log.txt 2>&1", '[".zip", ".tar", ".gz"]', 120, 16384, 8, 20480, "mac_mini", 1, "", '[]', ""),
+        ("CalculiX", "calculix", "2.21", "fea", "\U0001f527",
+         "FEA/structural analysis (Abaqus-format input)", "## CalculiX\n\n### Quick Start\n1. Upload .inp file\n2. Results: .frd and .dat files\n\n### Departments\nMech, Civil",
+         "ccx {input_file_stem}", '[".inp"]', 120, 8192, 4, 10240, "mac_mini", 1, "ANSYS / Abaqus", '[]', "Reads Abaqus .inp natively."),
+        ("ORCA", "orca", "6.0", "quantum_chem", "\u269b\ufe0f",
+         "Quantum chemistry \u2014 DFT, HF, MP2, CCSD(T)", "## ORCA\n\n### Quick Start\n1. Upload .inp OR Gaussian .gjf/.com (AI converts)\n2. DFT ~15 min; geom opt ~60 min\n\n### Departments\nChemistry, Physics",
+         "orca {input_file}", '[".inp", ".gjf", ".com"]', 120, 16384, 8, 10240, "mac_mini", 1, "Gaussian", '["gaussian"]', "AI converts .gjf/.com to ORCA .inp."),
+        ("NWChem", "nwchem", "7.2", "quantum_chem", "\U0001f9ea",
+         "Computational chemistry \u2014 DFT, MP2, MD", "## NWChem\n\n### Quick Start\n1. Upload .nw or Gaussian .gjf (AI converts)\n\n### Departments\nChemistry",
+         "nwchem {input_file}", '[".nw", ".gjf"]', 120, 16384, 4, 10240, "mac_mini", 1, "Gaussian", '["gaussian"]', "AI converts Gaussian to NWChem."),
+        ("Psi4", "psi4", "1.9", "quantum_chem", "\U0001f52c",
+         "Quantum chemistry with Python API", "## Psi4\n\n### Quick Start\n1. Upload .py Psi4 script or .dat input\n\n### Departments\nChemistry, Physics",
+         "psi4 {input_file}", '[".py", ".dat"]', 120, 16384, 4, 10240, "mac_mini", 1, "", '[]', ""),
+        ("Elmer FEM", "elmer", "9.0", "multiphysics", "\u26a1",
+         "Multiphysics simulation", "## Elmer FEM\n\nHeat, fluid, EM, structural.\n\n### Quick Start\n1. Upload .sif + mesh as .zip\n\n### Departments\nPhysics, EE",
+         "ElmerSolver {input_file}", '[".sif", ".zip"]', 120, 8192, 4, 10240, "mac_mini", 1, "COMSOL", '[]', "No auto COMSOL conversion."),
+        ("SageMath", "sagemath", "10.4", "symbolic", "\U0001f4d0",
+         "Symbolic math (Mathematica alternative)", "## SageMath\n\n### Quick Start\n1. Upload .sage/.py or .wl (AI converts from Mathematica)\n\n### Departments\nMath, Physics",
+         "sage {input_file}", '[".sage", ".py", ".wl"]', 60, 4096, 2, 5120, "mac_mini", 1, "Mathematica", '["mathematica"]', "Basic Wolfram Language converts."),
+        ("LAMMPS", "lammps", "2024.8", "molecular_dynamics", "\U0001f9ec",
+         "Molecular dynamics", "## LAMMPS\n\n### Quick Start\n1. Upload .in/.lmp + data as .zip\n2. 60-120 min typical\n\n### Departments\nChemistry, Materials",
+         "lmp -in {input_file}", '[".in", ".lmp", ".zip"]', 120, 16384, 8, 20480, "mac_mini", 1, "", '[]', ""),
+        ("GROMACS", "gromacs", "2024.4", "molecular_dynamics", "\U0001f9eb",
+         "Biomolecular simulations", "## GROMACS\n\nProteins, lipids, nucleic acids.\n\n### Quick Start\n1. Upload .mdp + topology as .zip\n\n### Departments\nBiotech, Chemistry",
+         "gmx mdrun -deffnm {input_file_stem}", '[".mdp", ".gro", ".top", ".zip"]', 120, 16384, 8, 20480, "mac_mini", 1, "", '[]', ""),
+    ]
+    for row in catalog:
+        db.execute("""INSERT INTO software_catalog
+            (name, slug, version, category, icon, description, tutorial_md,
+             executable_cmd, input_extensions, max_runtime_minutes, max_memory_mb,
+             max_cores, max_output_mb, backend, is_open_source, commercial_equivalent,
+             can_convert_from, conversion_notes, is_active, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)""",
+            (*row, _now, _now))
+    db.commit()
+    db.close()
+
+
+def _compute_total_output_mb():
+    """Total output storage used across all active compute jobs."""
+    row = query_one("SELECT COALESCE(SUM(actual_output_mb), 0) AS total FROM compute_jobs WHERE output_expires_at IS NOT NULL AND status != 'purged'")
+    return row["total"] if row else 0
+
+
+def _purge_compute_outputs():
+    """Delete expired compute outputs (>7 days). Callable from nightly_dev.sh."""
+    import shutil as _shutil
+    with app.app_context():
+        expired = query_all("SELECT id FROM compute_jobs WHERE output_expires_at IS NOT NULL AND output_expires_at < ? AND status NOT IN ('purged','queued','running')", (now_iso(),))
+        purged = 0
+        for job in expired:
+            for d in (COMPUTE_OUTPUT_DIR / str(job["id"]), COMPUTE_INPUT_DIR / str(job["id"])):
+                if d.exists():
+                    _shutil.rmtree(d, ignore_errors=True)
+            execute("UPDATE compute_jobs SET status='purged', actual_output_mb=0 WHERE id=?", (job["id"],))
+            execute("DELETE FROM job_output_files WHERE job_id=?", (job["id"],))
+            execute("DELETE FROM job_input_files WHERE job_id=?", (job["id"],))
+            purged += 1
+        return purged
+
+
+def _ai_call_haiku(prompt: str, max_tokens: int = 4096) -> str:
+    """Single Claude Haiku API call. Returns text or '' on failure."""
+    import urllib.request as _urllib_req
+    if not ANTHROPIC_API_KEY:
+        return ""
+    try:
+        payload = json.dumps({"model": "claude-haiku-4-20250414", "max_tokens": max_tokens,
+                              "messages": [{"role": "user", "content": prompt}]}).encode()
+        req = _urllib_req.Request("https://api.anthropic.com/v1/messages", data=payload,
+                                 headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
+        resp = _urllib_req.urlopen(req, timeout=30)
+        data = json.loads(resp.read())
+        return data.get("content", [{}])[0].get("text", "")
+    except Exception:
+        return ""
+
+
+def _ai_parse_json(raw: str) -> object:
+    """Strip markdown fences and parse JSON from AI response."""
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
+    return json.loads(cleaned)
+
+
+def _ai_estimate_resources(software_name: str, file_snippets: str, instructions: str) -> dict:
+    """AI analyzes code to estimate memory/cores/time/output size."""
+    prompt = f"""Analyze this compute job and estimate resources.
+Software: {software_name}
+Instructions: {instructions}
+Code (first 4000 chars per file):
+{file_snippets[:6000]}
+
+Respond in ONLY valid JSON: {{"memory_mb": <int>, "cores": <int>, "estimated_minutes": <int>, "estimated_output_mb": <int>, "reasoning": "<short>"}}"""
+    raw = _ai_call_haiku(prompt, max_tokens=500)
+    try:
+        return _ai_parse_json(raw)
+    except Exception:
+        return {"memory_mb": 2048, "cores": 2, "estimated_minutes": 30, "estimated_output_mb": 500, "reasoning": "Default estimate (AI unavailable)"}
+
+
+def _ai_convert_input(source_format: str, target_software: str, file_content: str, instructions: str) -> tuple:
+    """AI converts commercial software input to open-source. Returns (content, notes)."""
+    prompt = f"""Convert this {source_format} input to {target_software}.
+Preserve ALL scientific parameters and numerical precision.
+Source:
+{file_content[:8000]}
+Instructions: {instructions}
+Return ONLY the converted file content. No markdown fences. If impossible, start with "ERROR:"."""
+    result = _ai_call_haiku(prompt, max_tokens=4096)
+    if result.startswith("ERROR:"):
+        return "", result
+    return result, f"Auto-converted from {source_format} to {target_software} via AI."
+
+
+def _ai_fill_form(page_context: str, form_fields: list, user_text: str, user_role: str) -> dict:
+    """AI form-filling: natural language to field values."""
+    prompt = f"""You are a form assistant for Catalyst ERP (university research lab).
+Page: "{page_context}", Role: "{user_role}"
+Fields: {json.dumps(form_fields[:50])}
+User: "{user_text}"
+Return ONLY valid JSON mapping field names to values."""
+    raw = _ai_call_haiku(prompt, max_tokens=1000)
+    try:
+        return _ai_parse_json(raw)
+    except Exception:
+        return {}
+
+
+def _ai_dashboard_advice(user) -> list:
+    """Personalized AI dashboard recommendations."""
+    db = get_db()
+    roles = user_role_set(user)
+    ctx = {"name": user["name"], "role": user.get("role", "")}
+    try:
+        ctx["pending_requests"] = db.execute("SELECT COUNT(*) FROM sample_requests WHERE requester_id=? AND status NOT IN ('completed','cancelled','rejected')", (user["id"],)).fetchone()[0]
+    except Exception:
+        ctx["pending_requests"] = 0
+    if roles & {"instrument_admin", "operator"}:
+        try:
+            ctx["queue_depth"] = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status IN ('sample_received','scheduled','in_progress')").fetchone()[0]
+            ctx["maintenance_due"] = db.execute("SELECT COUNT(*) FROM instruments WHERE status='maintenance'").fetchone()[0]
+        except Exception:
+            pass
+    if "professor_approver" in roles:
+        try:
+            ctx["pending_approvals"] = db.execute("SELECT COUNT(*) FROM approval_steps aps JOIN sample_requests sr ON sr.id=aps.sample_request_id WHERE aps.approver_role='professor' AND aps.status='pending' AND sr.status='under_review'").fetchone()[0]
+        except Exception:
+            pass
+    if roles & {"finance_admin", "super_admin"} or is_owner(user):
+        try:
+            ctx["pending_invoices"] = db.execute("SELECT COUNT(*) FROM invoices WHERE status='pending'").fetchone()[0]
+        except Exception:
+            pass
+    try:
+        ctx["compute_ready"] = db.execute("SELECT COUNT(*) FROM compute_jobs WHERE submitted_by_user_id=? AND status='completed' AND output_expires_at>?", (user["id"], now_iso())).fetchone()[0]
+    except Exception:
+        pass
+    prompt = f"""You are an AI advisor for Catalyst ERP (university research facility).
+Give 3-5 short actionable recommendations. User context: {json.dumps(ctx)}
+Pages: / /instruments /schedule /finance /compute /notifications /inbox /attendance /todos /admin
+Return ONLY JSON: [{{"text":"...", "href":"/path", "priority":"high|medium|low"}}]"""
+    raw = _ai_call_haiku(prompt, max_tokens=800)
+    try:
+        result = _ai_parse_json(raw)
+        if isinstance(result, list):
+            return result[:5]
+    except Exception:
+        pass
+    advice = []
+    if ctx.get("pending_approvals", 0) > 0:
+        advice.append({"text": f"{ctx['pending_approvals']} request(s) awaiting approval", "href": "/schedule?pending_me=1", "priority": "high"})
+    if ctx.get("pending_requests", 0) > 0:
+        advice.append({"text": f"{ctx['pending_requests']} active request(s)", "href": "/schedule?mine=1", "priority": "medium"})
+    if ctx.get("compute_ready", 0) > 0:
+        advice.append({"text": f"{ctx['compute_ready']} compute job(s) ready to download", "href": "/compute?status=completed", "priority": "high"})
+    if ctx.get("queue_depth", 0) > 0:
+        advice.append({"text": f"{ctx['queue_depth']} samples in queue", "href": "/schedule", "priority": "medium"})
+    return advice or [{"text": "All caught up! Check inbox or browse instruments.", "href": "/instruments", "priority": "low"}]
 
 
 def _run_compute_job(job_id):
-    """Run a queued job against Ollama or Claude API. Called inline or in a thread."""
+    """Run a queued AI-prompt job against Ollama or Claude API (legacy mode)."""
     import urllib.request as _urllib_req
     job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
     if not job or job["status"] != "queued":
         return
-    execute("UPDATE compute_jobs SET status='running', started_at=? WHERE id=?",
-            (now_iso(), job_id))
-
+    execute("UPDATE compute_jobs SET status='running', started_at=? WHERE id=?", (now_iso(), job_id))
     prompt = job["prompt"]
     if job["context"]:
         prompt = "Context:\n" + job["context"] + "\n\nQuestion:\n" + prompt
-
     model_info = COMPUTE_MODELS.get(job["model"], {})
     backend = model_info.get("backend", "ollama")
-
     try:
         if backend == "claude" and ANTHROPIC_API_KEY:
-            # ── Claude API backend ──
             claude_model = "claude-sonnet-4-20250514" if "sonnet" in job["model"] else "claude-haiku-4-20250414"
-            payload = json.dumps({
-                "model": claude_model,
-                "max_tokens": 4096,
-                "messages": [{"role": "user", "content": prompt}],
-            }).encode()
-            req = _urllib_req.Request(
-                "https://api.anthropic.com/v1/messages",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                method="POST",
-            )
+            payload = json.dumps({"model": claude_model, "max_tokens": 4096, "messages": [{"role": "user", "content": prompt}]}).encode()
+            req = _urllib_req.Request("https://api.anthropic.com/v1/messages", data=payload,
+                                     headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
             resp = _urllib_req.urlopen(req, timeout=120)
             data = json.loads(resp.read())
             result = data.get("content", [{}])[0].get("text", "")
             tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
-            duration = 0  # Claude API doesn't return duration
+            duration = 0
         else:
-            # ── Ollama backend (local) ──
-            payload = json.dumps({
-                "model": job["model"],
-                "prompt": prompt,
-                "stream": False,
-            }).encode()
-            req = _urllib_req.Request(
-                OLLAMA_URL + "/api/generate",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
+            payload = json.dumps({"model": job["model"], "prompt": prompt, "stream": False}).encode()
+            req = _urllib_req.Request(OLLAMA_URL + "/api/generate", data=payload,
+                                     headers={"Content-Type": "application/json"}, method="POST")
             resp = _urllib_req.urlopen(req, timeout=300)
             data = json.loads(resp.read())
             result = data.get("response", "")
             tokens = data.get("eval_count", 0)
             duration = data.get("total_duration", 0) // 1_000_000
-
-        execute(
-            """UPDATE compute_jobs
-               SET status='completed', result=?, tokens_used=?, duration_ms=?,
-                   completed_at=?
-               WHERE id=?""",
-            (result, tokens, duration, now_iso(), job_id),
-        )
+        execute("UPDATE compute_jobs SET status='completed', result=?, tokens_used=?, duration_ms=?, completed_at=? WHERE id=?",
+                (result, tokens, duration, now_iso(), job_id))
     except Exception as exc:
-        execute(
-            """UPDATE compute_jobs
-               SET status='failed', error=?, completed_at=?
-               WHERE id=?""",
-            (str(exc)[:500], now_iso(), job_id),
-        )
+        execute("UPDATE compute_jobs SET status='failed', error=?, completed_at=? WHERE id=?",
+                (str(exc)[:500], now_iso(), job_id))
+
+
+def _run_hpc_job(job_id: int):
+    """Execute HPC job on remote backend via SSH. Runs in daemon thread."""
+    import subprocess as _sp
+    import shutil as _shutil
+    try:
+        with app.app_context():
+            job = query_one(
+                "SELECT j.*, s.executable_cmd, s.can_convert_from, s.name AS software_name "
+                "FROM compute_jobs j LEFT JOIN software_catalog s ON s.id=j.software_id WHERE j.id=?", (job_id,))
+            if not job or job["status"] != "queued":
+                return
+            execute("UPDATE compute_jobs SET status='running', started_at=? WHERE id=?", (now_iso(), job_id))
+            input_dir = COMPUTE_INPUT_DIR / str(job_id)
+            output_dir = COMPUTE_OUTPUT_DIR / str(job_id)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            input_files = query_all("SELECT * FROM job_input_files WHERE job_id=?", (job_id,))
+            if not input_files:
+                raise ValueError("No input files.")
+            main_file = input_files[0]
+            can_convert = json.loads(job.get("can_convert_from") or "[]") if job.get("can_convert_from") else []
+            ext = Path(main_file["original_filename"]).suffix.lower()
+            fmt_map = {(".m",): "matlab", (".gjf", ".com"): "gaussian", (".wl", ".nb"): "mathematica"}
+            source_format = ""
+            for exts, fmt in fmt_map.items():
+                if ext in exts and fmt in [c.lower() for c in can_convert]:
+                    source_format = fmt.title()
+                    break
+            main_path = str(Path(BASE_DIR) / main_file["relative_path"])
+            if source_format and Path(main_path).exists():
+                content = Path(main_path).read_text(encoding="utf-8", errors="replace")[:8000]
+                converted, notes = _ai_convert_input(source_format, job.get("software_name", ""), content, job.get("user_instructions", ""))
+                if converted:
+                    conv_name = Path(main_file["stored_filename"]).stem + "_converted" + ext
+                    conv_path = input_dir / conv_name
+                    conv_path.write_text(converted, encoding="utf-8")
+                    execute("INSERT INTO job_input_files (job_id,original_filename,stored_filename,relative_path,file_size,is_converted,converted_from,uploaded_at) VALUES (?,?,?,?,?,1,?,?)",
+                            (job_id, conv_name, conv_name, str(conv_path.relative_to(BASE_DIR)), len(converted.encode()), source_format, now_iso()))
+                    execute("UPDATE compute_jobs SET ai_converted=1, conversion_log=? WHERE id=?", (notes, job_id))
+                    main_path = str(conv_path)
+                else:
+                    execute("UPDATE compute_jobs SET conversion_log=? WHERE id=?", (f"Failed: {notes}", job_id))
+            ssh = COMPUTE_SSH_HOST
+            remote_dir = f"{COMPUTE_REMOTE_WORKDIR}/{job_id}"
+            dur = job.get("duration_minutes") or 30
+            mem = job.get("estimated_memory_mb") or 4096
+            _sp.run(f"ssh {ssh} 'mkdir -p {remote_dir}/output'", shell=True, timeout=30, check=True)
+            _sp.run(f"scp -r {input_dir}/* {ssh}:{remote_dir}/", shell=True, timeout=120, check=True)
+            cmd_t = job.get("executable_cmd") or "python3 {input_file}"
+            fname = Path(main_path).name
+            cmd = cmd_t.replace("{input_file}", fname).replace("{input_file_stem}", Path(fname).stem).replace("{job_dir}", remote_dir)
+            run_cmd = f"ssh {ssh} 'cd {remote_dir} && ulimit -v {mem * 1024} 2>/dev/null; timeout {dur}m {cmd} > output/stdout.log 2> output/stderr.log; echo $? > output/exit_code.txt'"
+            _sp.run(run_cmd, shell=True, timeout=(dur * 60 + 60), capture_output=True, text=True)
+            _sp.run(f"scp -r {ssh}:{remote_dir}/output/* {output_dir}/", shell=True, timeout=300)
+            total_size = 0
+            expires = (datetime.utcnow() + timedelta(days=COMPUTE_OUTPUT_RETENTION_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+            if output_dir.exists():
+                for f in output_dir.iterdir():
+                    if f.is_file():
+                        sz = f.stat().st_size
+                        total_size += sz
+                        execute("INSERT INTO job_output_files (job_id,filename,relative_path,file_size,download_count,created_at,expires_at) VALUES (?,?,?,?,0,?,?)",
+                                (job_id, f.name, str(f.relative_to(BASE_DIR)), sz, now_iso(), expires))
+            total_mb = total_size // (1024 * 1024)
+            ec = 0
+            ec_f = output_dir / "exit_code.txt"
+            if ec_f.exists():
+                try:
+                    ec = int(ec_f.read_text().strip())
+                except ValueError:
+                    ec = -1
+            if ec == 0:
+                execute("UPDATE compute_jobs SET status='completed', actual_output_mb=?, output_expires_at=?, completed_at=? WHERE id=?", (total_mb, expires, now_iso(), job_id))
+            else:
+                stderr = ""
+                sf = output_dir / "stderr.log"
+                if sf.exists():
+                    stderr = sf.read_text(encoding="utf-8", errors="replace")[:500]
+                execute("UPDATE compute_jobs SET status='failed', actual_output_mb=?, output_expires_at=?, error=?, completed_at=? WHERE id=?",
+                        (total_mb, expires, f"Exit {ec}: {stderr}", now_iso(), job_id))
+            _sp.run(f"ssh {ssh} 'rm -rf {remote_dir}'", shell=True, timeout=30)
+    except Exception as exc:
+        try:
+            with app.app_context():
+                execute("UPDATE compute_jobs SET status='failed', error=?, completed_at=? WHERE id=?", (str(exc)[:500], now_iso(), job_id))
+        except Exception:
+            pass
 
 
 def batch_process_compute_queue():
-    """Process all queued compute jobs. Run from cron on the mini daily.
-    Usage: python -c "import app; app.batch_process_compute_queue()"
-    """
+    """Process all queued compute jobs (AI prompt type). Cron-callable."""
     with app.app_context():
-        queued = query_all("SELECT id FROM compute_jobs WHERE status = 'queued' ORDER BY created_at")
+        queued = query_all("SELECT id FROM compute_jobs WHERE status = 'queued' AND (job_type = 'ai_prompt' OR job_type IS NULL) ORDER BY created_at")
         for job in queued:
             _run_compute_job(job["id"])
         return len(queued)
 
 
+_compute_queue_started = False
+
+def _start_compute_queue_manager():
+    """Background thread polling for queued HPC jobs."""
+    global _compute_queue_started
+    if _compute_queue_started:
+        return
+    _compute_queue_started = True
+    import threading as _thr
+    def _loop():
+        import time
+        while True:
+            time.sleep(10)
+            try:
+                with app.app_context():
+                    running = query_one("SELECT COUNT(*) AS c FROM compute_jobs WHERE status='running' AND job_type='hpc_job'")
+                    if running and running["c"] >= COMPUTE_MAX_CONCURRENT_JOBS:
+                        continue
+                    nxt = query_one("SELECT id FROM compute_jobs WHERE status='queued' AND job_type='hpc_job' ORDER BY created_at ASC LIMIT 1")
+                    if nxt:
+                        _thr.Thread(target=_run_hpc_job, args=(nxt["id"],), daemon=True).start()
+            except Exception:
+                pass
+    _thr.Thread(target=_loop, daemon=True).start()
+
+
+# ── Compute routes ─────────────────────────────────────────────
+
 @app.route("/compute")
 @login_required
 def compute_list():
-    """AI job list — inbox style."""
+    """Compute dashboard — AI prompts + HPC jobs."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     status_filter = request.args.get("status", "all")
+    job_type_filter = request.args.get("type", "all")
     if can_manage:
         base_where = "1=1"
         params: list = []
@@ -19133,71 +19504,132 @@ def compute_list():
     if status_filter != "all":
         base_where += " AND j.status = ?"
         params.append(status_filter)
+    if job_type_filter != "all":
+        base_where += " AND j.job_type = ?"
+        params.append(job_type_filter)
     jobs = query_all(f"""
-        SELECT j.*, u.name AS user_name
+        SELECT j.*, u.name AS user_name, s.name AS software_name, s.icon AS software_icon
           FROM compute_jobs j
           LEFT JOIN users u ON u.id = j.submitted_by_user_id
+          LEFT JOIN software_catalog s ON s.id = j.software_id
          WHERE {base_where}
-         ORDER BY j.created_at DESC
-         LIMIT 200
+         ORDER BY j.created_at DESC LIMIT 200
     """, tuple(params))
+    storage_used = _compute_total_output_mb()
+    software_list = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY name")
     return render_template("compute_dashboard.html",
-                           jobs=jobs, status_filter=status_filter,
-                           can_manage=can_manage, models=OLLAMA_MODELS)
+                           jobs=jobs, status_filter=status_filter, job_type_filter=job_type_filter,
+                           can_manage=can_manage, models=OLLAMA_MODELS,
+                           storage_used_mb=storage_used, storage_cap_mb=COMPUTE_STORAGE_CAP_MB,
+                           software_list=software_list, durations=COMPUTE_DURATIONS)
 
 
 @app.route("/compute/new", methods=["GET", "POST"])
 @login_required
 def compute_new():
-    """Submit a new AI job."""
+    """Submit a new compute job (AI prompt or HPC)."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
+    software_list = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY category, name")
     if request.method == "POST":
-        model = request.form.get("model", "llama3:latest").strip()
-        if model not in OLLAMA_MODELS:
-            model = "llama3:latest"
-        prompt = request.form.get("prompt", "").strip()
-        if not prompt:
-            flash("Prompt is required.", "error")
-            return redirect(url_for("compute_new"))
-        context = request.form.get("context", "").strip()
-        job_id = execute(
-            """INSERT INTO compute_jobs
-               (submitted_by_user_id, model, prompt, context, status, created_at)
-               VALUES (?, ?, ?, ?, 'queued', ?)""",
-            (user["id"], model, prompt, context, now_iso()))
-        log_action(user["id"], "compute", job_id, "ai_job_submitted",
-                   {"model": model})
-        # Run inline for small models, thread for large
-        if model in ("gpt-oss:120b",):
-            import threading
-            threading.Thread(target=_run_compute_job, args=(job_id,),
-                             daemon=True).start()
-            flash("Job queued — large model, may take a few minutes.", "success")
+        job_type = request.form.get("job_type", "ai_prompt")
+        if job_type == "hpc_job":
+            # ── HPC job submission ──
+            software_id = request.form.get("software_id", type=int)
+            sw = query_one("SELECT * FROM software_catalog WHERE id=?", (software_id,)) if software_id else None
+            if not sw:
+                flash("Please select a software package.", "error")
+                return redirect(url_for("compute_new"))
+            duration = int(request.form.get("duration", 30))
+            if duration not in COMPUTE_DURATIONS:
+                duration = 30
+            duration = min(duration, sw["max_runtime_minutes"])
+            instructions = request.form.get("instructions", "").strip()
+            est_output = int(request.form.get("estimated_output_mb", 500))
+            est_memory = int(request.form.get("estimated_memory_mb", sw["max_memory_mb"]))
+            est_cores = int(request.form.get("estimated_cores", sw["max_cores"]))
+            # Storage cap check
+            current_storage = _compute_total_output_mb()
+            if current_storage + est_output > COMPUTE_STORAGE_CAP_MB:
+                flash(f"Storage cap reached ({current_storage:,} / {COMPUTE_STORAGE_CAP_MB:,} MB). Cannot submit.", "error")
+                return redirect(url_for("compute_new"))
+            job_id = execute(
+                """INSERT INTO compute_jobs
+                   (submitted_by_user_id, job_type, software_id, model, prompt, status,
+                    duration_minutes, estimated_memory_mb, estimated_cores, estimated_output_mb,
+                    user_instructions, backend, created_at)
+                   VALUES (?, 'hpc_job', ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)""",
+                (user["id"], software_id, sw["name"], instructions or f"Run {sw['name']} job",
+                 duration, est_memory, est_cores, est_output, instructions, sw["backend"], now_iso()))
+            # Save uploaded files
+            COMPUTE_INPUT_DIR.mkdir(parents=True, exist_ok=True)
+            job_input_dir = COMPUTE_INPUT_DIR / str(job_id)
+            job_input_dir.mkdir(parents=True, exist_ok=True)
+            files = request.files.getlist("input_files")
+            for f in files:
+                if not f or not f.filename:
+                    continue
+                safe = secure_filename(f.filename)
+                ext_check = Path(safe).suffix.lower()
+                if ext_check not in COMPUTE_ALLOWED_INPUT_EXT:
+                    continue
+                stored = f"{int(datetime.utcnow().timestamp())}_{safe}"
+                dest = job_input_dir / stored
+                f.save(str(dest))
+                size = dest.stat().st_size
+                execute("INSERT INTO job_input_files (job_id,original_filename,stored_filename,relative_path,file_size,uploaded_at) VALUES (?,?,?,?,?,?)",
+                        (job_id, f.filename, stored, str(dest.relative_to(BASE_DIR)), size, now_iso()))
+            log_action(user["id"], "compute", job_id, "hpc_job_submitted",
+                       {"software": sw["name"], "duration": duration})
+            flash(f"HPC job queued — {sw['name']}, {duration} min. You'll be notified when complete.", "success")
+            return redirect(url_for("compute_detail", job_id=job_id))
         else:
-            _run_compute_job(job_id)
-            updated = query_one("SELECT status FROM compute_jobs WHERE id = ?",
-                                (job_id,))
-            if updated and updated["status"] == "completed":
-                flash("Job completed.", "success")
+            # ── Legacy AI prompt job ──
+            model = request.form.get("model", "llama3:latest").strip()
+            if model not in OLLAMA_MODELS:
+                model = "llama3:latest"
+            prompt = request.form.get("prompt", "").strip()
+            if not prompt:
+                flash("Prompt is required.", "error")
+                return redirect(url_for("compute_new"))
+            context = request.form.get("context", "").strip()
+            job_id = execute(
+                """INSERT INTO compute_jobs
+                   (submitted_by_user_id, job_type, model, prompt, context, status, created_at)
+                   VALUES (?, 'ai_prompt', ?, ?, ?, 'queued', ?)""",
+                (user["id"], model, prompt, context, now_iso()))
+            log_action(user["id"], "compute", job_id, "ai_job_submitted", {"model": model})
+            if model in ("gpt-oss:120b",):
+                import threading
+                threading.Thread(target=_run_compute_job, args=(job_id,), daemon=True).start()
+                flash("Job queued — large model, may take minutes.", "success")
             else:
-                flash("Job failed — check the detail page for errors.", "error")
-        return redirect(url_for("compute_detail", job_id=job_id))
-    return render_template("compute_form.html", models=OLLAMA_MODELS)
+                _run_compute_job(job_id)
+                updated = query_one("SELECT status FROM compute_jobs WHERE id=?", (job_id,))
+                if updated and updated["status"] == "completed":
+                    flash("Job completed.", "success")
+                else:
+                    flash("Job failed — check detail page.", "error")
+            return redirect(url_for("compute_detail", job_id=job_id))
+    pre_software = request.args.get("software")
+    return render_template("compute_form.html", models=OLLAMA_MODELS,
+                           software_list=software_list, durations=COMPUTE_DURATIONS,
+                           pre_software=pre_software)
 
 
 @app.route("/compute/<int:job_id>")
 @login_required
 def compute_detail(job_id: int):
-    """AI job detail — prompt, result, metadata."""
+    """Job detail — metadata, files, downloads."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
     job = query_one("""
-        SELECT j.*, u.name AS user_name
+        SELECT j.*, u.name AS user_name, s.name AS software_name, s.icon AS software_icon, s.tutorial_md
           FROM compute_jobs j
           LEFT JOIN users u ON u.id = j.submitted_by_user_id
+          LEFT JOIN software_catalog s ON s.id = j.software_id
          WHERE j.id = ?
     """, (job_id,))
     if not job:
@@ -19206,41 +19638,224 @@ def compute_detail(job_id: int):
     is_mine = job["submitted_by_user_id"] == user["id"]
     if not (is_mine or can_manage):
         abort(403)
+    input_files = query_all("SELECT * FROM job_input_files WHERE job_id=? ORDER BY id", (job_id,))
+    output_files = query_all("SELECT * FROM job_output_files WHERE job_id=? ORDER BY filename", (job_id,))
     model_info = OLLAMA_MODELS.get(job["model"], {})
     return render_template("compute_detail.html", job=job,
                            can_manage=can_manage, is_mine=is_mine,
-                           model_info=model_info, models=OLLAMA_MODELS)
+                           model_info=model_info, models=OLLAMA_MODELS,
+                           input_files=input_files, output_files=output_files)
+
+
+@app.route("/compute/<int:job_id>/download/<int:file_id>")
+@login_required
+def compute_download(job_id: int, file_id: int):
+    """Stream a single output file."""
+    user = current_user()
+    job = query_one("SELECT * FROM compute_jobs WHERE id=?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["submitted_by_user_id"] != user["id"] and not can_manage:
+        abort(403)
+    f = query_one("SELECT * FROM job_output_files WHERE id=? AND job_id=?", (file_id, job_id))
+    if not f:
+        abort(404)
+    fpath = Path(BASE_DIR) / f["relative_path"]
+    if not fpath.exists():
+        abort(404)
+    execute("UPDATE job_output_files SET download_count=download_count+1 WHERE id=?", (file_id,))
+    return send_file(str(fpath), as_attachment=True, download_name=f["filename"])
+
+
+@app.route("/compute/<int:job_id>/download-all")
+@login_required
+def compute_download_all(job_id: int):
+    """Zip and stream all output files."""
+    import zipfile as _zipfile, io as _io
+    user = current_user()
+    job = query_one("SELECT * FROM compute_jobs WHERE id=?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["submitted_by_user_id"] != user["id"] and not can_manage:
+        abort(403)
+    files = query_all("SELECT * FROM job_output_files WHERE job_id=?", (job_id,))
+    buf = _io.BytesIO()
+    with _zipfile.ZipFile(buf, "w", _zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            fpath = Path(BASE_DIR) / f["relative_path"]
+            if fpath.exists():
+                zf.write(str(fpath), f["filename"])
+    buf.seek(0)
+    return send_file(buf, mimetype="application/zip", as_attachment=True,
+                     download_name=f"job_{job_id}_output.zip")
+
+
+@app.route("/compute/<int:job_id>/cancel", methods=["POST"])
+@login_required
+def compute_cancel(job_id: int):
+    """Cancel a running job."""
+    import subprocess as _sp
+    user = current_user()
+    job = query_one("SELECT * FROM compute_jobs WHERE id=?", (job_id,))
+    if not job:
+        abort(404)
+    can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
+    if job["submitted_by_user_id"] != user["id"] and not can_manage:
+        abort(403)
+    if job["status"] in ("running", "queued"):
+        if job["status"] == "running" and job.get("pid_remote"):
+            try:
+                pid = job["pid_remote"]
+                _sp.run(f"ssh {COMPUTE_SSH_HOST} 'kill {pid}'", shell=True, timeout=10)
+            except Exception:
+                pass
+        try:
+            _sp.run(f"ssh {COMPUTE_SSH_HOST} 'rm -rf {COMPUTE_REMOTE_WORKDIR}/{job_id}'", shell=True, timeout=10)
+        except Exception:
+            pass
+        execute("UPDATE compute_jobs SET status='cancelled', completed_at=? WHERE id=?", (now_iso(), job_id))
+        flash("Job cancelled.", "success")
+    return redirect(url_for("compute_detail", job_id=job_id))
 
 
 @app.route("/compute/<int:job_id>/rerun", methods=["POST"])
 @login_required
 def compute_rerun(job_id: int):
-    """Rerun an AI job — creates a new job with same prompt/model."""
+    """Rerun a job — creates a new job with same params."""
     user = current_user()
     if not module_enabled("compute"):
         abort(404)
-    old = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
+    old = query_one("SELECT * FROM compute_jobs WHERE id=?", (job_id,))
     if not old:
         abort(404)
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     if old["submitted_by_user_id"] != user["id"] and not can_manage:
         abort(403)
-    new_id = execute(
-        """INSERT INTO compute_jobs
-           (submitted_by_user_id, model, prompt, context, status, created_at)
-           VALUES (?, ?, ?, ?, 'queued', ?)""",
-        (user["id"], old["model"], old["prompt"], old["context"], now_iso()))
-    log_action(user["id"], "compute", new_id, "ai_job_rerun",
-               {"original_job_id": job_id})
-    if old["model"] in ("gpt-oss:120b",):
-        import threading
-        threading.Thread(target=_run_compute_job, args=(new_id,),
-                         daemon=True).start()
-        flash("Rerun queued — large model, may take a few minutes.", "success")
+    if old.get("job_type") == "hpc_job":
+        new_id = execute(
+            """INSERT INTO compute_jobs (submitted_by_user_id, job_type, software_id, model, prompt, status,
+               duration_minutes, estimated_memory_mb, estimated_cores, estimated_output_mb, user_instructions, backend, created_at)
+               VALUES (?, 'hpc_job', ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)""",
+            (user["id"], old["software_id"], old["model"], old["prompt"],
+             old.get("duration_minutes", 30), old.get("estimated_memory_mb", 4096),
+             old.get("estimated_cores", 2), old.get("estimated_output_mb", 500),
+             old.get("user_instructions", ""), old.get("backend", "mac_mini"), now_iso()))
+        flash("HPC job rerun queued.", "success")
     else:
-        _run_compute_job(new_id)
-        flash("Rerun completed.", "success")
+        new_id = execute(
+            """INSERT INTO compute_jobs (submitted_by_user_id, job_type, model, prompt, context, status, created_at)
+               VALUES (?, 'ai_prompt', ?, ?, ?, 'queued', ?)""",
+            (user["id"], old["model"], old["prompt"], old["context"], now_iso()))
+        log_action(user["id"], "compute", new_id, "ai_job_rerun", {"original": job_id})
+        if old["model"] in ("gpt-oss:120b",):
+            import threading
+            threading.Thread(target=_run_compute_job, args=(new_id,), daemon=True).start()
+            flash("Rerun queued — large model.", "success")
+        else:
+            _run_compute_job(new_id)
+            flash("Rerun completed.", "success")
     return redirect(url_for("compute_detail", job_id=new_id))
+
+
+@app.route("/compute/estimate", methods=["POST"])
+@login_required
+def compute_estimate():
+    """AJAX: AI analyzes code and estimates resources."""
+    data = request.get_json(silent=True) or {}
+    sw_id = data.get("software_id")
+    sw = query_one("SELECT * FROM software_catalog WHERE id=?", (sw_id,)) if sw_id else None
+    sw_name = sw["name"] if sw else "Unknown"
+    snippets = data.get("file_snippets", "")
+    instructions = data.get("instructions", "")
+    est = _ai_estimate_resources(sw_name, snippets, instructions)
+    # Clamp to software limits
+    if sw:
+        est["memory_mb"] = min(est.get("memory_mb", 2048), sw["max_memory_mb"])
+        est["cores"] = min(est.get("cores", 2), sw["max_cores"])
+        est["estimated_minutes"] = min(est.get("estimated_minutes", 30), sw["max_runtime_minutes"])
+        est["estimated_output_mb"] = min(est.get("estimated_output_mb", 500), sw["max_output_mb"])
+    return jsonify(est)
+
+
+@app.route("/compute/software")
+@login_required
+def compute_software_list():
+    """Software catalog — available packages and tutorials."""
+    if not module_enabled("compute"):
+        abort(404)
+    software = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY category, name")
+    categories = {}
+    for sw in software:
+        cat = sw["category"]
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(sw)
+    return render_template("compute_software_list.html", categories=categories, software=software)
+
+
+@app.route("/compute/software/<slug>")
+@login_required
+def compute_software_detail(slug: str):
+    """Software tutorial page."""
+    if not module_enabled("compute"):
+        abort(404)
+    sw = query_one("SELECT * FROM software_catalog WHERE slug=?", (slug,))
+    if not sw:
+        abort(404)
+    return render_template("compute_software_detail.html", sw=sw)
+
+
+@app.route("/compute/inventory")
+@login_required
+def compute_inventory():
+    """Software inventory page — shareable with IT/Dean."""
+    software = query_all("SELECT * FROM software_catalog ORDER BY category, name")
+    categories = {}
+    for sw in software:
+        cat = sw["category"]
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(sw)
+    return render_template("compute_inventory.html", categories=categories, software=software)
+
+
+@app.route("/compute/admin/storage")
+@login_required
+def compute_admin_storage():
+    """Admin: storage usage dashboard."""
+    user = current_user()
+    if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
+        abort(403)
+    jobs_with_output = query_all("""
+        SELECT j.id, j.status, j.actual_output_mb, j.output_expires_at, j.created_at,
+               u.name AS user_name, s.name AS software_name
+          FROM compute_jobs j
+          LEFT JOIN users u ON u.id=j.submitted_by_user_id
+          LEFT JOIN software_catalog s ON s.id=j.software_id
+         WHERE j.actual_output_mb > 0 ORDER BY j.actual_output_mb DESC
+    """)
+    return render_template("compute_admin_storage.html",
+                           jobs=jobs_with_output,
+                           storage_used_mb=_compute_total_output_mb(),
+                           storage_cap_mb=COMPUTE_STORAGE_CAP_MB)
+
+
+@app.route("/api/ai-fill", methods=["POST"])
+@login_required
+def api_ai_fill():
+    """AJAX: AI form-filling assistant."""
+    data = request.get_json(silent=True) or {}
+    page = data.get("page", "")
+    fields = data.get("fields", [])
+    text = data.get("text", "").strip()
+    user = current_user()
+    if not text:
+        return jsonify({})
+    result = _ai_fill_form(page, fields, text, user.get("role", ""))
+    log_action(user["id"], "ai_assistant", None, "form_fill", {"page": page})
+    return jsonify(result)
 
 
 # ── Receipts ERP module ─────────────────────────────────────────
@@ -20898,6 +21513,373 @@ def mess_tally_export():
     )
 
 
+# ─── Tuck Shop POS ─────────────────────────────────────────────────────
+# Two-counter model: Payment counter issues a numbered token (cash or QR),
+# Serving counter redeems the token before handing food. Tuck shop items
+# are a separate item catalog for snack / beverage / stationery sales.
+
+def _tuck_shop_access(user) -> bool:
+    return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
+
+
+def _next_token_number(issue_date: str) -> int:
+    """Return the next token number for a given date (resets daily)."""
+    row = query_one(
+        "SELECT MAX(token_number) AS mx FROM tuck_shop_tokens WHERE issue_date = ?",
+        (issue_date,),
+    )
+    return (row["mx"] or 0) + 1 if row else 1
+
+
+@app.route("/tuck-shop")
+@login_required
+def tuck_shop_dashboard():
+    """Tuck shop overview: today's sales, tokens, quick links."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    # Today's sales summary
+    sales_summary = query_one(
+        """SELECT COUNT(*) AS sale_count,
+                  COALESCE(SUM(total_amount), 0) AS total_revenue,
+                  COALESCE(SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END), 0) AS cash_total,
+                  COALESCE(SUM(CASE WHEN payment_method='qr' THEN total_amount ELSE 0 END), 0) AS qr_total
+           FROM tuck_shop_sales WHERE sale_date = ?""",
+        (today,),
+    )
+    # Today's token stats
+    token_stats = query_one(
+        """SELECT COUNT(*) AS total_issued,
+                  SUM(CASE WHEN status='issued' THEN 1 ELSE 0 END) AS pending,
+                  SUM(CASE WHEN status='redeemed' THEN 1 ELSE 0 END) AS redeemed
+           FROM tuck_shop_tokens WHERE issue_date = ?""",
+        (today,),
+    )
+    # Recent sales
+    recent_sales = query_all(
+        """SELECT ts.*, u.name AS cashier_name
+           FROM tuck_shop_sales ts
+           LEFT JOIN users u ON u.id = ts.cashier_user_id
+           WHERE ts.sale_date = ?
+           ORDER BY ts.created_at DESC LIMIT 20""",
+        (today,),
+    )
+    # Recent tokens
+    recent_tokens = query_all(
+        """SELECT t.*, ms.name AS student_name, ms.roll_number,
+                  u1.name AS issued_by_name, u2.name AS redeemed_by_name
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           LEFT JOIN users u1 ON u1.id = t.issued_by_user_id
+           LEFT JOIN users u2 ON u2.id = t.redeemed_by_user_id
+           WHERE t.issue_date = ?
+           ORDER BY t.token_number DESC LIMIT 30""",
+        (today,),
+    )
+    items = query_all("SELECT * FROM tuck_shop_items WHERE is_active = 1 ORDER BY sort_order, name")
+    return render_template("tuck_shop_dashboard.html",
+                           today=today, sales_summary=sales_summary,
+                           token_stats=token_stats, recent_sales=recent_sales,
+                           recent_tokens=recent_tokens, items=items)
+
+
+@app.route("/tuck-shop/terminal")
+@login_required
+def tuck_shop_terminal():
+    """POS terminal — tap items, record sale."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    items = query_all(
+        "SELECT * FROM tuck_shop_items WHERE is_active = 1 ORDER BY category, sort_order, name"
+    )
+    categories = sorted(set(i["category"] for i in items))
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    return render_template("tuck_shop_terminal.html", items=items, categories=categories, today=today)
+
+
+@app.route("/tuck-shop/items", methods=["GET", "POST"])
+@login_required
+def tuck_shop_items_manage():
+    """Manage tuck shop item catalog."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        price = float(request.form.get("price", 0))
+        category = request.form.get("category", "snack").strip()
+        sort_order = int(request.form.get("sort_order", 0))
+        if name:
+            execute(
+                "INSERT INTO tuck_shop_items (name, price, category, sort_order, created_at) VALUES (?, ?, ?, ?, ?)",
+                (name, price, category, sort_order, now_iso()),
+            )
+            flash(f"Added {name} at ₹{price:.0f}", "success")
+        return redirect(url_for("tuck_shop_items_manage"))
+    items = query_all("SELECT * FROM tuck_shop_items ORDER BY category, sort_order, name")
+    return render_template("tuck_shop_items.html", items=items)
+
+
+@app.route("/tuck-shop/items/<int:item_id>/toggle", methods=["POST"])
+@login_required
+def tuck_shop_item_toggle(item_id: int):
+    """Toggle active/inactive for a tuck shop item."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        abort(403)
+    item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
+    if not item:
+        abort(404)
+    new_active = 0 if item["is_active"] else 1
+    execute("UPDATE tuck_shop_items SET is_active = ? WHERE id = ?", (new_active, item_id))
+    flash(f"{'Activated' if new_active else 'Deactivated'} {item['name']}", "success")
+    return redirect(url_for("tuck_shop_items_manage"))
+
+
+@app.route("/tuck-shop/api/sale", methods=["POST"])
+@login_required
+def tuck_shop_api_record_sale():
+    """AJAX: Record a POS sale with line items. JSON in, JSON out."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(force=True)
+    items = data.get("items", [])
+    payment = data.get("payment_method", "cash")
+    student_id = data.get("student_id")
+    notes = data.get("notes", "")
+    if not items:
+        return jsonify({"ok": False, "error": "No items in cart"})
+    from datetime import date as _date, datetime as _dt
+    today = _date.today().isoformat()
+    time_now = _dt.now().strftime("%H:%M:%S")
+    total = 0
+    line_items = []
+    for it in items:
+        item_id = it.get("id")
+        qty = int(it.get("qty", 1))
+        db_item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
+        if not db_item:
+            continue
+        line_total = db_item["price"] * qty
+        total += line_total
+        line_items.append((item_id, qty, db_item["price"], line_total))
+    if not line_items:
+        return jsonify({"ok": False, "error": "No valid items"})
+    db = get_db()
+    cur = db.cursor()
+    cur.execute(
+        """INSERT INTO tuck_shop_sales (sale_date, sale_time, payment_method, student_id,
+           cashier_user_id, total_amount, notes, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (today, time_now, payment, student_id, user["id"], total, notes, now_iso()),
+    )
+    sale_id = cur.lastrowid
+    for item_id, qty, unit_price, line_total in line_items:
+        cur.execute(
+            "INSERT INTO tuck_shop_sale_items (sale_id, item_id, qty, unit_price, line_total) VALUES (?, ?, ?, ?, ?)",
+            (sale_id, item_id, qty, unit_price, line_total),
+        )
+    db.commit()
+    return jsonify({"ok": True, "sale_id": sale_id, "total": total, "payment": payment})
+
+
+@app.route("/tuck-shop/token/issue")
+@login_required
+def tuck_shop_token_issue():
+    """Payment counter screen — issue tokens."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    MEAL_RATES = {"breakfast": 35, "lunch": 65, "snacks": 25, "dinner": 55}
+    # Determine current meal
+    from datetime import datetime as _dt
+    h = _dt.now().hour
+    MEAL_WINDOWS = {"breakfast": (6, 10), "lunch": (11, 15), "snacks": (15, 18), "dinner": (18, 23)}
+    current_meal = "lunch"
+    for m, (lo, hi) in MEAL_WINDOWS.items():
+        if lo <= h < hi:
+            current_meal = m
+            break
+    # Pending tokens
+    pending = query_all(
+        """SELECT t.*, ms.name AS student_name, ms.roll_number
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           WHERE t.issue_date = ? AND t.status = 'issued'
+           ORDER BY t.token_number DESC""",
+        (today,),
+    )
+    next_num = _next_token_number(today)
+    return render_template("tuck_shop_token_issue.html",
+                           today=today, current_meal=current_meal,
+                           meal_rates=MEAL_RATES, pending=pending,
+                           next_num=next_num)
+
+
+@app.route("/tuck-shop/api/token/issue", methods=["POST"])
+@login_required
+def tuck_shop_api_issue_token():
+    """AJAX: Issue a new token at the payment counter."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(force=True)
+    meal_type = data.get("meal_type", "lunch")
+    payment_method = data.get("payment_method", "cash")
+    student_id = data.get("student_id")
+    amount = float(data.get("amount", 0))
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    token_num = _next_token_number(today)
+    execute(
+        """INSERT INTO tuck_shop_tokens
+           (token_number, issue_date, meal_type, student_id, payment_method,
+            amount_paid, issued_by_user_id, issued_at, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'issued')""",
+        (token_num, today, meal_type, student_id, payment_method,
+         amount, user["id"], now_iso()),
+    )
+    student_name = None
+    if student_id:
+        s = query_one("SELECT name FROM mess_students WHERE id = ?", (student_id,))
+        if s:
+            student_name = s["name"]
+    return jsonify({
+        "ok": True, "token_number": token_num,
+        "meal_type": meal_type, "payment": payment_method,
+        "amount": amount, "student_name": student_name,
+    })
+
+
+@app.route("/tuck-shop/token/redeem")
+@login_required
+def tuck_shop_token_redeem():
+    """Serving counter screen — redeem tokens."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    pending = query_all(
+        """SELECT t.*, ms.name AS student_name, ms.roll_number
+           FROM tuck_shop_tokens t
+           LEFT JOIN mess_students ms ON ms.id = t.student_id
+           WHERE t.issue_date = ? AND t.status = 'issued'
+           ORDER BY t.token_number ASC""",
+        (today,),
+    )
+    redeemed_count = query_one(
+        "SELECT COUNT(*) AS c FROM tuck_shop_tokens WHERE issue_date = ? AND status = 'redeemed'",
+        (today,),
+    )
+    return render_template("tuck_shop_token_redeem.html",
+                           today=today, pending=pending,
+                           redeemed_count=redeemed_count["c"] if redeemed_count else 0)
+
+
+@app.route("/tuck-shop/api/token/redeem", methods=["POST"])
+@login_required
+def tuck_shop_api_redeem_token():
+    """AJAX: Redeem a token at the serving counter."""
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(force=True)
+    token_number = int(data.get("token_number", 0))
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    token = query_one(
+        "SELECT * FROM tuck_shop_tokens WHERE token_number = ? AND issue_date = ?",
+        (token_number, today),
+    )
+    if not token:
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} not found today"})
+    if token["status"] == "redeemed":
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} already redeemed"})
+    if token["status"] == "void":
+        return jsonify({"ok": False, "error": f"Token #{token_number:03d} has been voided"})
+    execute(
+        "UPDATE tuck_shop_tokens SET status = 'redeemed', redeemed_by_user_id = ?, redeemed_at = ? WHERE id = ?",
+        (user["id"], now_iso(), token["id"]),
+    )
+    student_name = None
+    if token["student_id"]:
+        s = query_one("SELECT name FROM mess_students WHERE id = ?", (token["student_id"],))
+        if s:
+            student_name = s["name"]
+    return jsonify({
+        "ok": True, "token_number": token_number,
+        "meal_type": token["meal_type"],
+        "student_name": student_name,
+        "amount": token["amount_paid"],
+    })
+
+
+@app.route("/tuck-shop/report")
+@login_required
+def tuck_shop_daily_report():
+    """Daily sales & token reconciliation report."""
+    user = current_user()
+    if not module_enabled("tuck_shop"):
+        abort(404)
+    if not _tuck_shop_access(user):
+        abort(403)
+    from datetime import date as _date
+    report_date = request.args.get("date", _date.today().isoformat())
+    # Sales breakdown
+    sales_summary = query_one(
+        """SELECT COUNT(*) AS sale_count,
+                  COALESCE(SUM(total_amount), 0) AS total_revenue,
+                  COALESCE(SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END), 0) AS cash_total,
+                  COALESCE(SUM(CASE WHEN payment_method='qr' THEN total_amount ELSE 0 END), 0) AS qr_total
+           FROM tuck_shop_sales WHERE sale_date = ?""",
+        (report_date,),
+    )
+    # Token reconciliation
+    token_summary = query_one(
+        """SELECT COUNT(*) AS total_issued,
+                  SUM(CASE WHEN status='issued' THEN 1 ELSE 0 END) AS unredeemed,
+                  SUM(CASE WHEN status='redeemed' THEN 1 ELSE 0 END) AS redeemed,
+                  SUM(CASE WHEN status='void' THEN 1 ELSE 0 END) AS voided,
+                  COALESCE(SUM(amount_paid), 0) AS total_collected,
+                  COALESCE(SUM(CASE WHEN payment_method='cash' THEN amount_paid ELSE 0 END), 0) AS token_cash,
+                  COALESCE(SUM(CASE WHEN payment_method='qr' THEN amount_paid ELSE 0 END), 0) AS token_qr
+           FROM tuck_shop_tokens WHERE issue_date = ?""",
+        (report_date,),
+    )
+    # Top selling items
+    top_items = query_all(
+        """SELECT ti.name, ti.category, SUM(si.qty) AS total_qty, SUM(si.line_total) AS total_revenue
+           FROM tuck_shop_sale_items si
+           JOIN tuck_shop_items ti ON ti.id = si.item_id
+           JOIN tuck_shop_sales ts ON ts.id = si.sale_id
+           WHERE ts.sale_date = ?
+           GROUP BY si.item_id
+           ORDER BY total_revenue DESC LIMIT 15""",
+        (report_date,),
+    )
+    return render_template("tuck_shop_report.html",
+                           report_date=report_date, sales_summary=sales_summary,
+                           token_summary=token_summary, top_items=top_items)
+
+
 @app.route("/quickentry", methods=["GET", "POST"])
 @login_required
 def quick_entry():
@@ -20946,6 +21928,7 @@ def quick_entry():
 
 if __name__ == "__main__":
     init_db()
+    _start_compute_queue_manager()
     # Always auto-reload templates so changes appear without server restart
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.jinja_env.auto_reload = True

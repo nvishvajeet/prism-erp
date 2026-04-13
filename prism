@@ -1,0 +1,99 @@
+#!/bin/bash
+# PRISM CLI — unified command interface
+# Usage: ./prism [command]
+#   start       Start the server (default)
+#   init        Initialize database + .env
+#   test        Run smoke test
+#   crawl       Run sanity wave
+#   search      Global search from terminal
+#   module      Create new module
+#   update      Pull latest + zero-downtime reload
+#   status      Show system status
+set -e
+
+PRISM_HOME="${PRISM_HOME:-$(cd "$(dirname "$0")" && pwd)}"
+cd "$PRISM_HOME"
+
+# Find Python
+if [ -x ".venv/bin/python" ]; then PY=".venv/bin/python"
+elif [ -x "venv/bin/python" ]; then PY="venv/bin/python"
+else PY="python3"; fi
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
+
+case "${1:-start}" in
+  start)
+    echo -e "${BOLD}PRISM${NC} starting on ${GREEN}https://localhost:5055${NC}"
+    if [ -f cert.pem ]; then
+      exec $PY -c "import app; app.app.run(host='0.0.0.0', port=5055, ssl_context=('cert.pem', 'key.pem'))"
+    else
+      exec $PY -c "import app; app.app.run(host='0.0.0.0', port=5055)"
+    fi
+    ;;
+  init)
+    echo -e "${BOLD}PRISM${NC} initializing..."
+    mkdir -p data/demo data/operational logs
+    if [ ! -f ".env" ]; then
+      SECRET=$($PY -c "import secrets; print(secrets.token_hex(32))")
+      cat > .env << EOF
+LAB_SCHEDULER_SECRET_KEY=$SECRET
+LAB_SCHEDULER_DEMO_MODE=1
+LAB_SCHEDULER_CSRF=1
+OWNER_EMAILS=owner@prism.local
+PRISM_MODULES=instruments,finance,inbox,notifications,attendance,queue,calendar,stats,admin,receipts,todos
+EOF
+      echo -e "  ${GREEN}✓${NC} .env created"
+    fi
+    $PY -c "import app; app.init_db(); print('  ✓ Database ready')"
+    echo -e "\n${GREEN}Done.${NC} Run ${BOLD}./prism start${NC} to launch."
+    ;;
+  test)
+    echo -e "${BOLD}PRISM${NC} smoke test"
+    exec $PY scripts/smoke_test.py
+    ;;
+  crawl)
+    echo -e "${BOLD}PRISM${NC} sanity wave"
+    exec $PY -m crawlers wave sanity
+    ;;
+  module)
+    shift
+    exec bash scripts/new_module.sh "$@"
+    ;;
+  update)
+    exec bash scripts/update.sh
+    ;;
+  search)
+    shift
+    $PY -c "
+import app, sys
+q = ' '.join(sys.argv[1:]) or input('Search: ')
+with app.app.app_context():
+    for t in ['instruments','sample_requests','users','grants']:
+        col = 'name' if t != 'sample_requests' else 'title'
+        rows = app.query_all(f'SELECT * FROM {t} WHERE {col} LIKE ?', ('%'+q+'%',))
+        if rows: print(f'\n  {t} ({len(rows)}):')
+        for r in rows[:5]: print(f'    {dict(r)}')
+" "$@"
+    ;;
+  status)
+    echo -e "${BOLD}PRISM${NC} Status"
+    echo -e "  Home:     $PRISM_HOME"
+    echo -e "  Python:   $($PY --version 2>&1)"
+    echo -e "  DB:       $(ls -lh data/demo/lab_scheduler.db 2>/dev/null | awk '{print $5}' || echo 'not found')"
+    $PY -c "
+import app
+with app.app.app_context():
+    u = app.query_one('SELECT COUNT(*) AS c FROM users')
+    i = app.query_one('SELECT COUNT(*) AS c FROM instruments WHERE status=\"active\"')
+    r = app.query_one('SELECT COUNT(*) AS c FROM sample_requests')
+    print(f'  Users:    {u[\"c\"]}')
+    print(f'  Instruments: {i[\"c\"]}')
+    print(f'  Requests: {r[\"c\"]}')
+    print(f'  Modules:  {len(app.MODULE_REGISTRY)}')
+    print(f'  Routes:   {len([r for r in app.app.url_map.iter_rules() if r.endpoint != \"static\"])}')
+" 2>/dev/null
+    ;;
+  *)
+    echo "Usage: ./prism [start|init|test|crawl|module|update|search|status]"
+    ;;
+esac

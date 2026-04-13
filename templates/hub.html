@@ -3,217 +3,227 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>goje.local — Dev Hub</title>
+  <title>Dev Hub — Project Starter Pack</title>
   <style>
     :root {
-      --bg: #111116;
-      --card: #1a1a22;
-      --border: #2a2a35;
-      --text: #e0e0e6;
-      --muted: #888899;
-      --accent: #5b8af5;
-      --green: #3aa86b;
-      --amber: #d4a843;
-      --red: #c85a5a;
-      --mono: "SF Mono", "Menlo", "Consolas", monospace;
+      --bg: #111116; --card: #1a1a22; --border: #2a2a35; --text: #e0e0e6;
+      --muted: #888899; --accent: #5b8af5; --green: #3aa86b; --amber: #d4a843;
+      --red: #c85a5a; --mono: "SF Mono","Menlo","Consolas",monospace;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      padding: 40px 24px;
-      max-width: 960px;
-      margin: 0 auto;
-    }
-    h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-    h1 span { color: var(--accent); }
-    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 40px; }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 20px;
-      text-decoration: none;
-      color: var(--text);
-      transition: border-color 0.15s, transform 0.15s;
-      display: block;
-    }
-    a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
-    .card-kicker {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .card h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
-    .card p { font-size: 13px; color: var(--muted); line-height: 1.5; }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 700;
-      color: #fff;
-      margin-left: 6px;
-      vertical-align: middle;
-    }
-    .badge-live { background: var(--green); }
-    .badge-local { background: var(--accent); }
-    .badge-mini { background: var(--amber); }
-
-    /* Infrastructure section */
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 14px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--border);
-    }
-    .infra-table {
-      width: 100%;
-      font-size: 13px;
-      border-collapse: collapse;
-      margin-bottom: 24px;
-    }
-    .infra-table th {
-      text-align: left;
-      padding: 6px 10px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-    }
-    .infra-table td {
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
-      font-variant-numeric: tabular-nums;
-    }
-    .infra-table code {
-      font-family: var(--mono);
-      font-size: 12px;
-      background: rgba(91,138,245,0.1);
-      padding: 1px 5px;
-      border-radius: 3px;
-    }
-    .rule-list {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 24px;
-    }
-    .rule-list li {
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
-    .rule-list li:last-child { border-bottom: none; }
-    .rule-num {
-      display: inline-block;
-      width: 22px;
-      height: 22px;
-      line-height: 22px;
-      text-align: center;
-      border-radius: 50%;
-      background: var(--accent);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      margin-right: 8px;
-      flex-shrink: 0;
-    }
-    details { margin-bottom: 16px; }
-    details summary {
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--accent);
-      padding: 8px 0;
-    }
-    details[open] summary { margin-bottom: 8px; }
-    details .inner {
-      background: rgba(91,138,245,0.05);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 14px;
-      font-size: 12px;
-      line-height: 1.7;
-    }
-    details .inner code {
-      font-family: var(--mono);
-      font-size: 11px;
-      background: rgba(91,138,245,0.1);
-      padding: 1px 4px;
-      border-radius: 3px;
-    }
-    .topology-box {
-      background: rgba(91,138,245,0.05);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
-      margin-bottom: 24px;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.8;
-      white-space: pre-wrap;
-      color: var(--muted);
-    }
-    .topology-box strong { color: var(--text); }
-    .footer {
-      margin-top: 40px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-      font-size: 11px;
-      color: var(--muted);
-      text-align: center;
-    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:40px 24px; max-width:1020px; margin:0 auto; }
+    h1 { font-size:28px; font-weight:700; margin-bottom:4px; } h1 span { color:var(--accent); }
+    .subtitle { color:var(--muted); font-size:14px; margin-bottom:32px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:32px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; text-decoration:none; color:var(--text); transition:border-color .15s,transform .15s; display:block; }
+    a.card:hover { border-color:var(--accent); transform:translateY(-2px); }
+    .card-kicker { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+    .card h3 { font-size:17px; font-weight:700; margin-bottom:4px; }
+    .card p { font-size:13px; color:var(--muted); line-height:1.5; }
+    .card .reuse-tags { margin-top:8px; display:flex; flex-wrap:wrap; gap:4px; }
+    .tag { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:600; }
+    .tag-ui { background:rgba(91,138,245,.15); color:var(--accent); }
+    .tag-data { background:rgba(58,168,107,.15); color:var(--green); }
+    .tag-infra { background:rgba(212,168,67,.15); color:var(--amber); }
+    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; color:#fff; margin-left:6px; vertical-align:middle; }
+    .badge-live { background:var(--green); } .badge-local { background:var(--accent); } .badge-ext { background:var(--amber); }
+    .section-title { font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:32px 0 14px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+    .section-title:first-of-type { margin-top:0; }
+    table.t { width:100%; font-size:13px; border-collapse:collapse; margin-bottom:20px; }
+    table.t th { text-align:left; padding:6px 10px; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); }
+    table.t td { padding:8px 10px; border-bottom:1px solid var(--border); }
+    code { font-family:var(--mono); font-size:12px; background:rgba(91,138,245,.1); padding:1px 5px; border-radius:3px; }
+    details { margin-bottom:12px; }
+    details summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--accent); padding:8px 0; }
+    details[open] summary { margin-bottom:8px; }
+    .inner { background:rgba(91,138,245,.05); border:1px solid var(--border); border-radius:6px; padding:14px; font-size:12px; line-height:1.7; }
+    .inner code { font-size:11px; }
+    .inner ul, .inner ol { padding-left:18px; margin:0; }
+    .inner li { margin-bottom:4px; }
+    .topo { background:rgba(91,138,245,.05); border:1px solid var(--border); border-radius:6px; padding:16px; margin-bottom:20px; font-family:var(--mono); font-size:12px; line-height:1.8; white-space:pre-wrap; color:var(--muted); }
+    .topo strong { color:var(--text); }
+    .macro-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px; margin:10px 0; }
+    .macro-chip { background:var(--card); border:1px solid var(--border); border-radius:6px; padding:8px 10px; }
+    .macro-chip strong { font-size:12px; display:block; margin-bottom:2px; }
+    .macro-chip span { font-size:10px; color:var(--muted); }
+    .footer { margin-top:40px; padding-top:16px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); text-align:center; }
   </style>
 </head>
 <body>
 
-<h1><span>goje</span>.local</h1>
-<p class="subtitle">Development hub — MacBook Pro (M1 Pro, 32 GB) &nbsp;·&nbsp; {{ machine_time }}</p>
+<h1><span>Dev Hub</span> — Starter Pack</h1>
+<p class="subtitle">MacBook Pro (M1 Pro, 32 GB) + Mac mini (M4, 24 GB) &nbsp;·&nbsp; {{ machine_time }}</p>
 
-<!-- ─── Project cards ─── -->
-<div class="section-title">Projects</div>
+<!-- ═══════════════ PROJECTS ═══════════════ -->
+<div class="section-title">Projects — click to open, tags show reusable patterns</div>
 <div class="grid">
-  <a class="card" href="/admin/portfolio">
-    <div class="card-kicker">Portfolio Plan <span class="badge badge-local">local only</span></div>
-    <h3>Portfolio Dashboard</h3>
-    <p>Daily mutual fund buy recommendations, Nifty horizon, peer rankings, macro conviction.</p>
-  </a>
 
   <a class="card" href="/">
     <div class="card-kicker">PRISM Lab Scheduler <span class="badge badge-live">live on mini</span></div>
-    <h3>Lab Scheduler</h3>
-    <p>Sample request workflow, queue management, instrument scheduling, SHA-256 audit chain.</p>
+    <h3>Lab Scheduler (ERP)</h3>
+    <p>Flask ERP: sample requests, 9 roles, approval chains, SHA-256 audit, tile architecture, 15 Jinja macros, 14 crawler strategies.</p>
+    <div class="reuse-tags">
+      <span class="tag tag-ui">15 UI macros</span>
+      <span class="tag tag-ui">tile grid</span>
+      <span class="tag tag-ui">dark mode CSS</span>
+      <span class="tag tag-data">state machine</span>
+      <span class="tag tag-data">audit chain</span>
+      <span class="tag tag-infra">role auth</span>
+      <span class="tag tag-infra">crawler suite</span>
+    </div>
+  </a>
+
+  <a class="card" href="/admin/portfolio">
+    <div class="card-kicker">Portfolio Plan <span class="badge badge-local">local only</span></div>
+    <h3>Portfolio Dashboard</h3>
+    <p>9-step data pipeline: fetch → compute → analyze → recommend. YAML config, JSON state files, Flask integration. Daily buy recs, Monte Carlo, peer rankings.</p>
+    <div class="reuse-tags">
+      <span class="tag tag-data">pipeline pattern</span>
+      <span class="tag tag-data">YAML config</span>
+      <span class="tag tag-data">state files</span>
+      <span class="tag tag-ui">Chart.js</span>
+      <span class="tag tag-infra">CLI subcommands</span>
+    </div>
   </a>
 
   <a class="card" href="https://nvishvajeet.github.io" target="_blank">
-    <div class="card-kicker">Personal Website <span class="badge badge-mini">github pages</span></div>
+    <div class="card-kicker">Personal Website <span class="badge badge-ext">github pages</span></div>
     <h3>nvishvajeet.github.io</h3>
-    <p>Personal site. Manual publish to GitHub Pages.</p>
+    <p>Jekyll static site. Manual publish to GitHub Pages.</p>
+    <div class="reuse-tags">
+      <span class="tag tag-ui">Jekyll templates</span>
+      <span class="tag tag-infra">GitHub Pages deploy</span>
+    </div>
   </a>
 
   <div class="card" style="border-style:dashed;opacity:0.6">
     <div class="card-kicker">Parallel Greedy Matching <span class="badge badge-local">local only</span></div>
     <h3>FOCS 2026 Paper</h3>
-    <p>Research project. No web interface.</p>
+    <p>Research algorithms project. No web interface.</p>
+    <div class="reuse-tags">
+      <span class="tag tag-data">Python algorithms</span>
+    </div>
   </div>
+
 </div>
 
-<!-- ─── Infrastructure for AI agents ─── -->
-<div class="section-title">Infrastructure — AI Agent Reference</div>
+<!-- ═══════════════ STARTER PACK: UI TOOLKIT ═══════════════ -->
+<div class="section-title">Starter Pack — UI Toolkit (from Lab Scheduler)</div>
 
-<div class="topology-box"><strong>Two-level git topology</strong>
+<p style="font-size:13px;color:var(--muted);margin-bottom:14px">
+  These components are battle-tested across the scheduler. New projects should compose from them rather than inventing new HTML.
+  Source: <code>templates/_page_macros.html</code> + <code>static/styles.css</code>
+</p>
+
+<details>
+  <summary>15 Jinja Macros — the widget library</summary>
+  <div class="inner">
+    <div class="macro-grid">
+      <div class="macro-chip"><strong>paginated_pane</strong><span>Scrollable list + pagination controls. Activity feeds, queues.</span></div>
+      <div class="macro-chip"><strong>page_intro</strong><span>Section header with kicker + CTA slot.</span></div>
+      <div class="macro-chip"><strong>stat_blob</strong><span>Clickable KPI counter. 8 tone variants.</span></div>
+      <div class="macro-chip"><strong>chart_bar</strong><span>Horizontal bar row for charts.</span></div>
+      <div class="macro-chip"><strong>input_dialog</strong><span>Universal comment/message form with file upload.</span></div>
+      <div class="macro-chip"><strong>card_heading</strong><span>Uniform tile header (kicker + title + hint).</span></div>
+      <div class="macro-chip"><strong>status_pills_row</strong><span>Filter pill bar with counts.</span></div>
+      <div class="macro-chip"><strong>person_chip</strong><span>Avatar + name chip (sm/md/lg).</span></div>
+      <div class="macro-chip"><strong>metadata_grid</strong><span>Label/value pairs in a dl grid.</span></div>
+      <div class="macro-chip"><strong>kpi_grid</strong><span>Counter cluster (card/bare/dense).</span></div>
+      <div class="macro-chip"><strong>approval_action_form</strong><span>Approve/reject inline form.</span></div>
+      <div class="macro-chip"><strong>queue_action_stack</strong><span>Accept + Quick Assign forms.</span></div>
+      <div class="macro-chip"><strong>activity_feed</strong><span>Timeline of entries. Threaded option.</span></div>
+      <div class="macro-chip"><strong>empty_state</strong><span>Placeholder for empty lists/tables.</span></div>
+      <div class="macro-chip"><strong>toggleable_form</strong><span>Disclosure pattern (details/summary).</span></div>
+    </div>
+  </div>
+</details>
+
+<details>
+  <summary>Tile Grid Layout System (6-column fluid)</summary>
+  <div class="inner">
+    <strong>Pattern:</strong> All content pages use a 6-column fluid grid with semantic tile regions.<br><br>
+    <code>display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem;</code><br><br>
+    <strong>Three live implementations:</strong>
+    <ul>
+      <li><code>.inst-tiles</code> — 10 tiles (instrument detail). Reference implementation.</li>
+      <li><code>.request-tiles</code> — 8 tiles (request detail). Adds 4-col breakpoint at 1100px.</li>
+      <li><code>.new-request-tiles</code> — 2 tiles (new request form). Full-width.</li>
+    </ul>
+    <strong>Rule:</strong> Any page with &gt;1 semantic region gets a tile grid. Single forms exempt.<br>
+    <strong>CSS:</strong> <code>static/styles.css:3395–3500</code>
+  </div>
+</details>
+
+<details>
+  <summary>CSS Design System (light + dark mode)</summary>
+  <div class="inner">
+    <strong>Colors:</strong> <code>--bg</code>, <code>--panel</code>, <code>--ink</code>, <code>--muted</code>, <code>--accent</code>, <code>--warm</code>, <code>--danger</code><br>
+    <strong>14 status tones:</strong> Each has 3 vars (bg, border, ink) — <code>--tone-open-*</code>, <code>--tone-completed-*</code>, <code>--tone-wait-*</code>, <code>--tone-active-*</code>, etc.<br>
+    <strong>Spacing:</strong> xs (0.3rem), sm (0.5rem), md (0.75rem), lg (1rem), xl (1.25rem)<br>
+    <strong>Radius:</strong> sm (8px), md (12px), lg (16px), full (999px)<br>
+    <strong>Typography:</strong> System font stack, 14.5px base, line-height 1.48<br>
+    <strong>Dark mode:</strong> <code>:root[data-theme="dark"]</code> selector<br><br>
+    <strong>Key classes:</strong> <code>.card</code>, <code>.tile</code>, <code>.stat</code>, <code>.chart-row</code>, <code>.activity-entry</code>, <code>.filter-pill</code>, <code>.person-chip</code>, <code>.meta-grid</code>, <code>.empty-state</code><br><br>
+    <strong>File:</strong> <code>static/styles.css</code> (~8000 lines, CSS variables in first 200 lines)
+  </div>
+</details>
+
+<details>
+  <summary>Backend Patterns to Reuse</summary>
+  <div class="inner">
+    <strong>Auth decorators:</strong> <code>@login_required</code>, <code>@role_required(*roles)</code>, <code>@owner_required</code>, <code>@instrument_access_required(level)</code>, <code>@rate_limit(max, window)</code><br><br>
+    <strong>Scope SQL:</strong> <code>request_scope_sql(user, alias)</code> — role-aware WHERE clause generator. Every list query uses this.<br><br>
+    <strong>State machine:</strong> <code>REQUEST_STATUS_TRANSITIONS</code> dict + <code>assert_status_transition(current, target)</code> enforcer.<br><br>
+    <strong>Audit chain:</strong> <code>log_action(actor, entity_type, entity_id, action, payload)</code> — SHA-256 linked, immutable.<br><br>
+    <strong>Card policy:</strong> <code>request_card_policy(user, request)</code> → returns <code>fields</code> and <code>actions</code> sets per (user, request) combination.<br><br>
+    <strong>Visibility:</strong> Two-layer — server-side (card_policy) + client-side (<code>data-vis="{{ "{{ V }}" }}"</code> on every element).
+  </div>
+</details>
+
+<!-- ═══════════════ STARTER PACK: DATA PIPELINE ═══════════════ -->
+<div class="section-title">Starter Pack — Data Pipeline Pattern (from Portfolio Plan)</div>
+
+<details>
+  <summary>Linear Pipeline Architecture</summary>
+  <div class="inner">
+    <strong>Pattern:</strong> Each script reads inputs (YAML config + prior JSON), computes, writes one <code>*_state.json</code>. No circular dependencies. Shell script enforces ordering.<br><br>
+    <strong>9 steps in portfolio-plan:</strong>
+    <ol>
+      <li><code>fetch_nav.py</code> → raw data (fund NAVs, FX, indices)</li>
+      <li><code>market.py</code> → z-scores, 200DMA, breadth signals</li>
+      <li><code>macro.py</code> → CPI, repo rate, GSec yields</li>
+      <li><code>news.py</code> → RSS sentiment (optional)</li>
+      <li><code>analyze.py</code> → portfolio state, drift, rebalance</li>
+      <li><code>simulate.py</code> → Monte Carlo (28y wealth projection)</li>
+      <li><code>horizon.py</code> → monthly outlook + conviction score</li>
+      <li><code>daily.py</code> → today's buy recommendation</li>
+      <li><code>peer_compare.py</code> → fund rankings vs peers</li>
+    </ol>
+    <strong>Orchestrator:</strong> <code>run.sh</code> (~15–30s total)<br>
+    <strong>Config:</strong> <code>portfolio.yaml</code> — single source of truth for holdings, weights, rates, settlement rules<br>
+    <strong>Flask integration:</strong> app.py reads JSON state files directly — no database layer needed
+  </div>
+</details>
+
+<details>
+  <summary>State File Contract</summary>
+  <div class="inner">
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <tr><td style="padding:3px 0"><code>market_snapshot.json</code></td><td style="color:var(--muted);padding:3px 6px">NAVs, z-scores, 200DMA, FX</td><td style="color:var(--muted)">fetch_nav + market</td></tr>
+      <tr><td style="padding:3px 0"><code>macro_state.json</code></td><td style="color:var(--muted);padding:3px 6px">CPI, repo, GSec, HDFC FD</td><td style="color:var(--muted)">macro</td></tr>
+      <tr><td style="padding:3px 0"><code>analysis_state.json</code></td><td style="color:var(--muted);padding:3px 6px">Portfolio value, equity/debt, drift</td><td style="color:var(--muted)">analyze</td></tr>
+      <tr><td style="padding:3px 0"><code>simulation_results.json</code></td><td style="color:var(--muted);padding:3px 6px">MC P10/P50/P90, drawdown, CAGR</td><td style="color:var(--muted)">simulate</td></tr>
+      <tr><td style="padding:3px 0"><code>horizon_state.json</code></td><td style="color:var(--muted);padding:3px 6px">Monthly buy zones, conviction</td><td style="color:var(--muted)">horizon</td></tr>
+      <tr><td style="padding:3px 0"><code>daily_state.json</code></td><td style="color:var(--muted);padding:3px 6px">Today's per-fund amounts, forecast</td><td style="color:var(--muted)">daily</td></tr>
+      <tr><td style="padding:3px 0"><code>peer_compare_state.json</code></td><td style="color:var(--muted);padding:3px 6px">Rankings, Sharpe, manager tenure</td><td style="color:var(--muted)">peer_compare</td></tr>
+    </table>
+  </div>
+</details>
+
+<!-- ═══════════════ INFRASTRUCTURE ═══════════════ -->
+<div class="section-title">Infrastructure — Machines, Git, SSH</div>
+
+<div class="topo"><strong>Two-level git topology</strong>
 
 <strong>Level 1 — LOCAL central git server (every project)</strong>
   ~/Claude/&lt;project&gt;/                  working copy
@@ -225,145 +235,106 @@
   nvishvajeet.github.io   → github.com (manual publish)
   portfolio-plan, etc.    → no Level-2 upstream</div>
 
-<table class="infra-table">
-  <thead>
-    <tr>
-      <th>Project</th>
-      <th>Working copy</th>
-      <th>Branch</th>
-      <th>Level-2</th>
-    </tr>
-  </thead>
+<table class="t">
+  <thead><tr><th>Project</th><th>Working copy</th><th>Branch</th><th>Level-2</th></tr></thead>
   <tbody>
-    <tr>
-      <td><strong>lab-scheduler</strong></td>
-      <td><code>~/Documents/Scheduler/Main/</code></td>
-      <td><code>v1.3.0-stable-release</code></td>
-      <td>mini (auto-mirror)</td>
-    </tr>
-    <tr>
-      <td><strong>portfolio-plan</strong></td>
-      <td><code>~/Claude/portfolio-plan/</code></td>
-      <td><code>main</code></td>
-      <td>none</td>
-    </tr>
-    <tr>
-      <td><strong>parallel-greedy-matching</strong></td>
-      <td><code>~/Claude/parallel-greedy-matching/</code></td>
-      <td><code>main</code></td>
-      <td>none</td>
-    </tr>
-    <tr>
-      <td><strong>nvishvajeet.github.io</strong></td>
-      <td><code>~/Claude/nvishvajeet.github.io/</code></td>
-      <td><code>main</code></td>
-      <td>github (manual)</td>
-    </tr>
+    <tr><td><strong>lab-scheduler</strong></td><td><code>~/Documents/Scheduler/Main/</code></td><td><code>v1.3.0-stable-release</code></td><td>mini (auto-mirror)</td></tr>
+    <tr><td><strong>portfolio-plan</strong></td><td><code>~/Claude/portfolio-plan/</code></td><td><code>main</code></td><td>none</td></tr>
+    <tr><td><strong>parallel-greedy-matching</strong></td><td><code>~/Claude/parallel-greedy-matching/</code></td><td><code>main</code></td><td>none</td></tr>
+    <tr><td><strong>nvishvajeet.github.io</strong></td><td><code>~/Claude/nvishvajeet.github.io/</code></td><td><code>main</code></td><td>github (manual)</td></tr>
   </tbody>
 </table>
 
-<table class="infra-table">
-  <thead>
-    <tr>
-      <th>Machine</th>
-      <th>Specs</th>
-      <th>Access</th>
-      <th>Role</th>
-    </tr>
-  </thead>
+<table class="t">
+  <thead><tr><th>Machine</th><th>Specs</th><th>Access</th><th>Role</th></tr></thead>
   <tbody>
-    <tr>
-      <td><strong>MacBook Pro</strong> (this)</td>
-      <td>M1 Pro, 32 GB</td>
-      <td>local</td>
-      <td>Development, Level-1 git server, AI agent host</td>
-    </tr>
-    <tr>
-      <td><strong>Mac mini</strong></td>
-      <td>M4, 24 GB</td>
-      <td><code>vishwajeet@100.115.176.118</code> (Tailscale)</td>
-      <td>Production deploy (PRISM), warm backup, parallel compute</td>
-    </tr>
+    <tr><td><strong>MacBook Pro</strong></td><td>M1 Pro, 32 GB</td><td>local</td><td>Development, Level-1 git server, AI agent host</td></tr>
+    <tr><td><strong>Mac mini</strong></td><td>M4, 24 GB</td><td><code>vishwajeet@100.115.176.118</code> (Tailscale)</td><td>Production deploy, warm backup, parallel compute</td></tr>
   </tbody>
 </table>
 
-<!-- Three-engine model -->
 <details>
   <summary>Three-Engine Development Model</summary>
   <div class="inner">
     <strong>Engine 1:</strong> LLM (Claude) — reads code, designs, writes patches, orchestrates both machines.<br>
     <strong>Engine 2:</strong> MacBook Pro — local tests, crawlers, smoke_test.py.<br>
     <strong>Engine 3:</strong> Mac Mini — SSH remote verification, production deploy, parallel compute.<br><br>
-    <strong>Pattern:</strong> Fire local + mini verification jobs in background <em>simultaneously</em>, then LLM works while machines grind. Zero idle compute. Every verification task that a machine can do saves ~3M tokens of LLM reasoning per session.<br><br>
-    <strong>SSH:</strong> Single unified ED25519 key at <code>~/.ssh/id_ed25519</code>. Alias: <code>prism-mini</code> in <code>~/.ssh/config</code>. Works for GitHub, Bitbucket, GitLab, and the mini.
+    <strong>Pattern:</strong> Fire local + mini verification jobs in background <em>simultaneously</em>, then LLM works while machines grind. Zero idle compute.<br><br>
+    <strong>SSH:</strong> Single unified ED25519 key at <code>~/.ssh/id_ed25519</code>. Alias: <code>prism-mini</code>.
   </div>
 </details>
 
-<!-- Agent workflow -->
-<details>
-  <summary>AI Agent Workflow Rules (12 rules)</summary>
+<!-- ═══════════════ AGENT RULES ═══════════════ -->
+<div class="section-title">AI Agent Rules — Read Before Starting Any Project</div>
+
+<details open>
+  <summary>12 Workflow Rules</summary>
   <div class="inner">
-    <ol style="padding-left:18px;margin:0">
-      <li><strong>Read what you need, not everything.</strong> <code>CLAUDE.md</code> auto-loads. Read <code>AGENT_POLICY.md</code> and <code>git-server/README.md</code> only when you need a specific recipe.</li>
-      <li><strong>Pull → work → test → commit → push.</strong> No local-only commits. Every push triggers the mirror hook.</li>
-      <li><strong>Run pre-commit gate before every commit.</strong> PRISM: <code>smoke_test.py</code> (~5s mandatory). Other projects: whatever their WORKFLOW.md specifies.</li>
+    <ol>
+      <li><strong>Read what you need, not everything.</strong> <code>CLAUDE.md</code> auto-loads. Read policy files only when needed.</li>
+      <li><strong>Pull → work → test → commit → push.</strong> No local-only commits.</li>
+      <li><strong>Run pre-commit gate before every commit.</strong> Each project defines its own gate in WORKFLOW.md.</li>
       <li><strong>Fix root causes, verify state before acting.</strong></li>
-      <li><strong>Commit frequently but not excessively.</strong> One commit per meaningful unit of work — a unit a future reader could reference, revert, or cherry-pick.</li>
+      <li><strong>Commit frequently but not excessively.</strong> One commit per meaningful unit of work.</li>
       <li><strong>Batch terminal permissions, front-load shell operations.</strong></li>
-      <li><strong>Full gates only at release boundaries.</strong> Mid-flight gate is smoke/sanity only.</li>
+      <li><strong>Full gates only at release boundaries.</strong> Mid-flight = smoke/sanity only.</li>
       <li><strong>Read project's reusable abstractions before adding code.</strong></li>
-      <li><strong>Hard attributes locked.</strong> Changes to hard attributes require major version bump.</li>
-      <li><strong>Website stays up.</strong> Atomic deploys. Never interrupt live users, never force-push stable branch.</li>
-      <li><strong>Log rare, git-invisible actions with <code>ai-log</code>.</strong> Credential changes, infra changes outside git, cross-project actions.</li>
-      <li><strong>Cross-project auto-tasks — one check per local day, not per session.</strong></li>
+      <li><strong>Hard attributes locked.</strong> Changes require major version bump.</li>
+      <li><strong>Website stays up.</strong> Atomic deploys. Never force-push stable branch.</li>
+      <li><strong>Log rare actions with <code>ai-log</code>.</strong> Credential changes, infra changes, cross-project actions only.</li>
+      <li><strong>Cross-project auto-tasks — one check per local day.</strong></li>
     </ol>
   </div>
 </details>
 
-<!-- Git rules -->
 <details>
   <summary>Git Hard Rules</summary>
   <div class="inner">
-    <ul style="padding-left:18px;margin:0">
+    <ul>
       <li>NEVER open a bare repo in Sourcetree or any GUI client.</li>
-      <li>ONE bare per project, exactly one, under <code>~/.claude/git-server/</code>.</li>
+      <li>ONE bare per project under <code>~/.claude/git-server/</code>.</li>
       <li>Clone from Level 1 LOCAL bare, never from Level 2 upstream.</li>
       <li>Bares MUST NOT be in Dropbox, iCloud, or any synced folder.</li>
-      <li>Push to <code>origin</code> (Level 1) always. Level 2 push requires a concrete reason.</li>
+      <li>Push to <code>origin</code> (Level 1) always. Level 2 push needs a reason.</li>
       <li>Never force-push or rewrite history on a release branch.</li>
-      <li>Imperative commit subject ≤ 70 chars, body explains <em>why</em> not <em>what</em>.</li>
+      <li>Imperative commit subject ≤ 70 chars, body explains <em>why</em>.</li>
     </ul>
   </div>
 </details>
 
-<!-- Onboarding -->
 <details>
   <summary>Onboard a New Project</summary>
   <div class="inner">
     <strong>Requires explicit user approval.</strong> The registry is the gate.<br><br>
     <code>~/.claude/git-server/bin/new-project.sh &lt;name&gt; [existing-working-copy]</code><br><br>
-    This creates the Level-1 bare, installs the post-receive hook, resets origin, and seeds a <code>WORKFLOW.md</code> stub. For Level-2 (mini mirror), add <code>--mirror-to-mini</code> flag.<br><br>
-    After onboarding, update the registry in both <code>AGENT_POLICY.md §1</code> and <code>git-server/README.md §3</code>.
+    Creates Level-1 bare, installs hook, resets origin, seeds <code>WORKFLOW.md</code> stub.<br>
+    For Level-2 (mini mirror): <code>--mirror-to-mini</code> flag.<br>
+    After: update registry in <code>AGENT_POLICY.md §1</code> and <code>git-server/README.md §3</code>.
   </div>
 </details>
 
-<!-- Key files -->
 <details>
   <summary>Key Files for AI Agents</summary>
   <div class="inner">
     <table style="width:100%;font-size:12px;border-collapse:collapse">
-      <tr><td style="padding:4px 0"><code>~/.claude/CLAUDE.md</code></td><td style="padding:4px 8px;color:var(--muted)">Auto-loaded every session. The 60-second orientation.</td></tr>
-      <tr><td style="padding:4px 0"><code>~/.claude/AGENT_POLICY.md</code></td><td style="padding:4px 8px;color:var(--muted)">Full agent policy. Consult for onboarding, SSH, mini recipes.</td></tr>
-      <tr><td style="padding:4px 0"><code>~/.claude/git-server/README.md</code></td><td style="padding:4px 8px;color:var(--muted)">Operator manual. Bare repo management, troubleshooting.</td></tr>
-      <tr><td style="padding:4px 0"><code>&lt;project&gt;/WORKFLOW.md</code></td><td style="padding:4px 8px;color:var(--muted)">Level-2 project-specific rules. Read on first session.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/CLAUDE.md</code></td><td style="padding:4px 8px;color:var(--muted)">Auto-loaded every session. 60-second orientation.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/AGENT_POLICY.md</code></td><td style="padding:4px 8px;color:var(--muted)">Full agent policy. Onboarding, SSH, mini recipes.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.claude/git-server/README.md</code></td><td style="padding:4px 8px;color:var(--muted)">Operator manual. Bare repos, troubleshooting.</td></tr>
+      <tr><td style="padding:4px 0"><code>&lt;project&gt;/WORKFLOW.md</code></td><td style="padding:4px 8px;color:var(--muted)">Level-2 project-specific rules.</td></tr>
       <tr><td style="padding:4px 0"><code>~/.claude/bin/ai-log</code></td><td style="padding:4px 8px;color:var(--muted)">Audit logger for non-commit actions.</td></tr>
-      <tr><td style="padding:4px 0"><code>~/.ssh/id_ed25519</code></td><td style="padding:4px 8px;color:var(--muted)">Unified SSH key. Works for all remotes.</td></tr>
+      <tr><td style="padding:4px 0"><code>~/.ssh/id_ed25519</code></td><td style="padding:4px 8px;color:var(--muted)">Unified SSH key. All remotes.</td></tr>
+      <tr><td style="padding:4px 0;border-bottom:none"><code>templates/_page_macros.html</code></td><td style="padding:4px 8px;color:var(--muted);border-bottom:none">15 UI macros. Copy for new projects.</td></tr>
+      <tr><td style="padding:4px 0;border-bottom:none"><code>static/styles.css</code></td><td style="padding:4px 8px;color:var(--muted);border-bottom:none">CSS design system (~8k lines). Variables in first 200 lines.</td></tr>
+      <tr><td style="padding:4px 0;border-bottom:none"><code>docs/PROJECT.md §11</code></td><td style="padding:4px 8px;color:var(--muted);border-bottom:none">Reusable abstractions catalog.</td></tr>
+      <tr><td style="padding:4px 0;border-bottom:none"><code>docs/PHILOSOPHY.md</code></td><td style="padding:4px 8px;color:var(--muted);border-bottom:none">Hard/soft attribute contract. Read before any UI change.</td></tr>
+      <tr><td style="padding:4px 0;border-bottom:none"><code>docs/MODULES.md</code></td><td style="padding:4px 8px;color:var(--muted);border-bottom:none">13 engine map. Single-writer rule. Composition recipes.</td></tr>
     </table>
   </div>
 </details>
 
 <div class="footer">
-  Served by Gunicorn + mkcert on 127.0.0.1:5055 &nbsp;·&nbsp; MacBook Pro &nbsp;·&nbsp; {{ machine_time }}
+  Gunicorn + mkcert HTTPS on 127.0.0.1:5055 &nbsp;·&nbsp; MacBook Pro &nbsp;·&nbsp; {{ machine_time }}<br>
+  <span style="color:#555">AI agents: read <code>~/.claude/CLAUDE.md</code> first, then this page, then the project's <code>WORKFLOW.md</code>.</span>
 </div>
 
 </body>

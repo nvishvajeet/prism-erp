@@ -12062,6 +12062,11 @@ def schedule_actions():
         return redirect(url_for("schedule", bucket="scheduled"))
 
     def redirect_to_queue(bucket_override: str | None = None, focus_request: bool = False):
+        # If a back URL was provided (e.g. from dashboard quick intake),
+        # redirect there instead of the schedule page.
+        back_url = (request.form.get("back") or "").strip()
+        if back_url and back_url.startswith("/"):
+            return redirect(back_url)
         params: dict[str, str] = {
             "bucket": bucket_override or (request.form.get("bucket") or "all"),
         }
@@ -12069,9 +12074,6 @@ def schedule_actions():
             value = (request.form.get(key) or "").strip()
             if value:
                 params[key] = value
-        back_value = (request.form.get("back") or "").strip()
-        if back_value:
-            params["back"] = back_value
         if focus_request:
             params["focus_request_id"] = str(request_id)
         return redirect(url_for("schedule", **params))

@@ -207,11 +207,13 @@
           <form method="post" action="{{ url_for('schedule_actions') }}" data-vis="{{ V }}">
             <input type="hidden" name="action" value="mark_received">
             <input type="hidden" name="request_id" value="{{ row['id'] }}">
+            <input type="hidden" name="back" value="{{ url_for('index') }}">
             <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">Accept</button>
           </form>
           <form method="post" action="{{ url_for('schedule_actions') }}" data-vis="{{ V }}">
             <input type="hidden" name="action" value="decline">
             <input type="hidden" name="request_id" value="{{ row['id'] }}">
+            <input type="hidden" name="back" value="{{ url_for('index') }}">
             <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">Decline</button>
           </form>
           {% else %}

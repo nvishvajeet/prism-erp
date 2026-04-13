@@ -235,6 +235,29 @@ That order gives you:
 - where `v2.0` is going
 - what quality bar the product must meet
 
+## 8. Onboarding mode should be modular
+
+If you choose onboarding mode in Claude, it should not arrive as one
+giant wall of text.
+
+The best format is:
+
+- Module 1: what this system is
+- Module 2: machines and agents
+- Module 3: terminal basics
+- Module 4: basic git operations
+- Module 5: what agents can do for CATALYST
+- Module 6: what agents can do for mathematics / TCS
+- Module 7: your first safe task
+
+Each module should take about `5-10 minutes`.
+
+At the end of each module, the agent should explicitly tell you:
+
+- you can pause here
+- you can continue to the next module
+- you can switch to direct work mode at any time
+
 ## 8. What decisions you can make safely
 
 You can usually decide these yourself:
@@ -254,7 +277,26 @@ Pause and ask before doing these:
 - deciding to widen scope into hot shared files
 - promoting a "maybe" into a major-version promise
 
-## 9. Basic technical primer
+## 9. What decisions you can make safely
+
+You can usually decide these yourself:
+
+- which ready-now task to claim from `docs/NEXT_WAVES.md`
+- whether to use a local crawler or the Mac mini verifier
+- whether a task is read-only or write work
+- whether to run smoke only or also run a stronger crawler wave
+- whether a UI/copy/layout change is a soft-attribute refinement
+
+Pause and ask before doing these:
+
+- changing roles, route shapes, core schema, or audit semantics
+- changing deploy topology
+- changing production behavior on the mini
+- editing files already claimed by another agent
+- deciding to widen scope into hot shared files
+- promoting a "maybe" into a major-version promise
+
+## 10. Basic technical primer
 
 This section is for the case where terminal commands are still new.
 
@@ -404,7 +446,120 @@ it means:
 
 That keeps dependencies stable.
 
-## 10. What technical things you can ask agents to do
+## 11. Basic git operations only
+
+This section is intentionally simple. It is the git knowledge you need
+for normal collaboration, including writing a paper with a coauthor.
+
+### 11.1 `git status`
+
+```bash
+git status
+```
+
+Meaning:
+
+- show what changed
+- show which files are not yet staged
+- show whether your branch is clean
+
+Use it when you want to understand the current situation.
+
+### 11.2 `git pull`
+
+```bash
+git pull origin v1.3.0-stable-release
+```
+
+Meaning:
+
+- get the latest changes from the shared branch
+- bring your local copy up to date
+
+For a paper with a coauthor, think:
+
+- your coauthor pushed updates
+- `git pull` brings those updates onto your machine
+
+### 11.3 `git add`
+
+```bash
+git add file.tex
+git add README.md
+```
+
+Meaning:
+
+- mark a file as ready to be included in the next commit
+
+Simple mental model:
+
+- you edited something
+- `git add` says "yes, include this version"
+
+### 11.4 `git commit`
+
+```bash
+git commit -m "clarify theorem statement"
+```
+
+Meaning:
+
+- save a meaningful version in history
+
+For a paper, a commit could be:
+
+- "rewrite introduction"
+- "add proof of lemma 3"
+- "clean bibliography"
+
+### 11.5 `git push`
+
+```bash
+git push origin v1.3.0-stable-release
+```
+
+Meaning:
+
+- send your committed work to the shared remote
+
+For a coauthored paper:
+
+- `commit` saves your version locally
+- `push` shares it with your coauthor through the remote repo
+
+### 11.6 What a merge means
+
+You do not need advanced git theory at first.
+
+Simple version:
+
+- if two people changed different things, git often combines them cleanly
+- if two people changed the same part, git may ask for help resolving it
+
+That situation is called a merge conflict.
+
+In plain English:
+
+- git is saying "I see two versions and I need a human or agent to pick
+  the right combined one"
+
+That is enough understanding for now.
+
+### 11.7 The five-command paper workflow
+
+For a collaborative paper, the basic cycle is:
+
+1. `git status`
+2. `git pull`
+3. edit your files
+4. `git add`
+5. `git commit`
+6. `git push`
+
+That alone is enough for a lot of useful academic collaboration.
+
+## 12. What technical things you can ask agents to do
 
 Even if you do not know the commands yourself, you can still direct
 agents very effectively.
@@ -457,7 +612,7 @@ Better:
 - say whether you want explanation
 - say whether the Mac mini should be used
 
-## 11. Using agents for mathematics and theoretical computer science
+## 13. Using agents for mathematics and theoretical computer science
 
 The same system is useful outside CATALYST too.
 
@@ -505,7 +660,7 @@ Weak prompts look like:
 
 The better the task is bounded, the better the result.
 
-## 12. What the philosophy means in practice
+## 14. What the philosophy means in practice
 
 CATALYST follows an Apple / Jony Ive / Ferrari design discipline.
 
@@ -526,7 +681,7 @@ When you watch an agent work, ask:
 
 That is the correct review lens.
 
-## 13. What the current big program is
+## 15. What the current big program is
 
 The active larger initiative is `v2.0`.
 
@@ -548,7 +703,7 @@ The first `v2.0` waves are:
 
 Read `docs/V2_GAP_MAP.md` for the full shape.
 
-## 14. If you want to understand the system by watching prompts
+## 16. If you want to understand the system by watching prompts
 
 When you watch an experienced session for 20 minutes, look for this
 loop:
@@ -569,7 +724,7 @@ That loop is the operating system.
 If the session does not show ownership, verification, and a clean git
 exit, it is not a good session no matter how clever the code sounds.
 
-## 15. Your first safe session
+## 17. Your first safe session
 
 If this is your first hands-on session, do this:
 
@@ -584,7 +739,7 @@ If this is your first hands-on session, do this:
 
 That sequence teaches the system without risking the branch.
 
-## 16. The shortest verbal summary
+## 18. The shortest verbal summary
 
 If you had to explain this setup in 30 seconds:
 

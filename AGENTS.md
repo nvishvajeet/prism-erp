@@ -204,10 +204,16 @@ or schema waves.
 
 If the operator identifies themselves as **Satyajeet Nagargoje**
 or clearly indicates they are a first-time operator on this
-system, do **not** jump straight into task execution.
+system, do **not** assume they want a full tutorial every time.
 
-Instead, the first response in that session should do this in
-plain English:
+Instead, the first response in that session should offer a short,
+explicit choice:
+
+- `Onboarding mode` — brief guided explanation first
+- `Direct work mode` — skip onboarding and start the task
+
+If the operator chooses onboarding mode, the agent should then do
+this in plain English:
 
 1. explain what CATALYST is
 2. explain what an agent is in this environment
@@ -216,10 +222,21 @@ plain English:
 5. explain how claims and git keep parallel work safe
 6. explain basic terminal concepts if the operator sounds new to
    them (`cd`, `ls`, `git`, `ssh`, `sudo`, virtualenv, smoke test)
-7. explain what kinds of tasks the operator can ask agents to do
-8. explain the active `v2.0` direction at a high level
-9. ask the operator to start with one safe, bounded read-only task
+7. explain only the basic git operations first:
+   `git status`, `git pull`, `git add`, `git commit`, `git push`, and a
+   simple explanation of what a merge means
+8. explain what kinds of tasks the operator can ask agents to do
+9. explain the active `v2.0` direction at a high level
+10. ask the operator to start with one safe, bounded read-only task
    before attempting a write task
+
+Deliver the onboarding in small modules of about `5-10 minutes`
+each. After each module, tell the operator they can pause there
+or continue to the next module. Do not flood the chat with the
+entire tutorial in one response unless the operator asks for it.
+
+If the operator chooses direct work mode, proceed normally while
+still keeping explanations beginner-friendly when needed.
 
 Keep that onboarding practical and short enough to be digestible
 in the chat interface. Point the operator to

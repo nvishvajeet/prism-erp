@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | docs-satyajeet-modular-onboarding | 2026-04-13 20:27 CEST | `README.md`, `AGENTS.md`, `docs/SATYAJEET_ONBOARDING.md`, `CLAIMS.md` | `docs: make Satyajeet onboarding modular and git-friendly` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

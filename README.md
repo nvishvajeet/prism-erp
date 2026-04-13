@@ -26,8 +26,22 @@ A single-file Flask ERP that runs research facilities, food service companies, a
 ## New Operator Start Here
 
 If the operator is **Satyajeet Nagargoje** or any new user joining this
-system through Claude, the agent should treat this section as the
-default onboarding demo and explain it in chat before doing task work.
+system through Claude, the agent should begin by offering a simple
+startup choice:
+
+- `Onboarding mode` — explain the system in plain English first
+- `Direct work mode` — skip the tutorial and go straight to the task
+
+If the operator chooses onboarding mode, the agent should treat this
+section as the default onboarding demo and explain it in chat before
+doing task work.
+
+The onboarding should be modular:
+
+- each module should take about `5-10 minutes`
+- the operator should be told they can pause after any module
+- the agent should ask whether to continue to the next module
+- the agent should not dump everything at once unless asked
 
 The first guided response should cover these steps in plain English:
 
@@ -43,10 +57,13 @@ The first guided response should cover these steps in plain English:
    MacBook = editing/verification machine, Mac mini = production-serving
    verifier, extra MacBooks = more supervised local verification.
 5. Explain the git safety model:
-   `CLAIMS.md` + `git pull --rebase` + pre-receive smoke/sanity checks.
+   `CLAIMS.md` + `git pull`/sync + pre-receive smoke/sanity checks.
 6. Explain the terminal basics if needed:
    what `cd`, `ls`, `git`, `ssh`, `sudo`, Homebrew, virtualenv, smoke
    tests, HTTPS, and domains mean.
+7. Explain only the basic git operations first:
+   `git status`, `git pull`, `git add`, `git commit`, `git push`, and in
+   simple terms what a merge means when two people changed related work.
 7. Explain what tasks agents can do:
    docs reading, crawler audits, code explanation, safe implementation,
    testing, deploy verification, and reporting.
@@ -65,6 +82,9 @@ computer science:
   example generation
 - write agents for clean notes, LaTeX drafts, experiments, scripts, and
   bounded code work
+- the same basic git operations help for coauthored papers too:
+  `pull` = get coauthor changes, `add` = mark your edits, `commit` =
+  save a meaningful version, `push` = share it back
 
 Full walkthrough:
 [docs/SATYAJEET_ONBOARDING.md](docs/SATYAJEET_ONBOARDING.md)

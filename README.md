@@ -132,6 +132,7 @@ Full matrix: [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md)
 Any AI agent (Claude, GPT, Gemini, Codex) can build new modules:
 
 - [AGENTS.md](AGENTS.md) — vendor-neutral onboarding
+- [docs/SATYAJEET_ONBOARDING.md](docs/SATYAJEET_ONBOARDING.md) — practical 20-minute operator walkthrough for a new Claude user joining the system
 - [docs/ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) — 15-minute module recipe
 - [docs/ARCHITECTURE_SUMMARY.md](docs/ARCHITECTURE_SUMMARY.md) — full UI/CSS/pattern reference
 - [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md) — cross-module wiring guide

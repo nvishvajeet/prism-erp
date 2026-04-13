@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | docs-satyajeet-onboarding | 2026-04-13 20:02 CEST | `docs/SATYAJEET_ONBOARDING.md`, `README.md`, `CLAIMS.md` | `docs: add Satyajeet operator onboarding` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

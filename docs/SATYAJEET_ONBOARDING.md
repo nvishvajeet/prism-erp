@@ -457,7 +457,55 @@ Better:
 - say whether you want explanation
 - say whether the Mac mini should be used
 
-## 11. What the philosophy means in practice
+## 11. Using agents for mathematics and theoretical computer science
+
+The same system is useful outside CATALYST too.
+
+If you are working in mathematics or theoretical computer science, think
+of agents like this:
+
+- read agents = research assistants
+- write agents = bounded executors
+
+Good uses in mathematics:
+
+- summarize a paper section by section
+- restate a proof in simpler language
+- check whether notation is consistent
+- generate examples and counterexamples
+- compare two definitions
+- turn handwritten ideas into clean notes or LaTeX
+
+Good uses in theoretical computer science:
+
+- review proof sketches for missing cases
+- expand a reduction step by step
+- generate small test instances for a construction
+- summarize an algorithm from a paper
+- compare complexity statements across sources
+- turn pseudocode into runnable experiments
+
+The same rule still holds:
+
+- use read agents for exploration and understanding
+- use write agents for bounded deliverables
+
+Very good prompts in research work look like:
+
+- "Read-only task. Summarize section 3 of this paper and list the key lemmas."
+- "Read-only task. Check this proof sketch for hidden assumptions."
+- "Write task. Turn these notes into a clean LaTeX outline."
+- "Generate three simple examples and one counterexample for this definition."
+
+Weak prompts look like:
+
+- "solve this whole field"
+- "do my research"
+- "prove this somehow"
+
+The better the task is bounded, the better the result.
+
+## 12. What the philosophy means in practice
 
 CATALYST follows an Apple / Jony Ive / Ferrari design discipline.
 
@@ -478,7 +526,7 @@ When you watch an agent work, ask:
 
 That is the correct review lens.
 
-## 12. What the current big program is
+## 13. What the current big program is
 
 The active larger initiative is `v2.0`.
 
@@ -500,7 +548,7 @@ The first `v2.0` waves are:
 
 Read `docs/V2_GAP_MAP.md` for the full shape.
 
-## 13. If you want to understand the system by watching prompts
+## 14. If you want to understand the system by watching prompts
 
 When you watch an experienced session for 20 minutes, look for this
 loop:
@@ -521,7 +569,7 @@ That loop is the operating system.
 If the session does not show ownership, verification, and a clean git
 exit, it is not a good session no matter how clever the code sounds.
 
-## 14. Your first safe session
+## 15. Your first safe session
 
 If this is your first hands-on session, do this:
 
@@ -536,7 +584,7 @@ If this is your first hands-on session, do this:
 
 That sequence teaches the system without risking the branch.
 
-## 15. The shortest verbal summary
+## 16. The shortest verbal summary
 
 If you had to explain this setup in 30 seconds:
 

@@ -23,6 +23,52 @@ A single-file Flask ERP that runs research facilities, food service companies, a
 - **MIT-WPU CRF** — 21 instruments, 8 roles, sample request workflow
 - **Ravikiran Services** — food/hospitality at MIT ADT University, 16 staff, 3 business units
 
+## New Operator Start Here
+
+If the operator is **Satyajeet Nagargoje** or any new user joining this
+system through Claude, the agent should treat this section as the
+default onboarding demo and explain it in chat before doing task work.
+
+The first guided response should cover these steps in plain English:
+
+1. Explain what CATALYST is:
+   one product with a public shell, an operational app, an ERP spine,
+   and a machine-verification loop.
+2. Explain what an agent is:
+   a supervised AI worker that can either read/analyze or claim/edit.
+3. Explain the two agent types:
+   read agents explore and report; write agents claim files, edit,
+   verify, commit, and push.
+4. Explain the machine model:
+   MacBook = editing/verification machine, Mac mini = production-serving
+   verifier, extra MacBooks = more supervised local verification.
+5. Explain the git safety model:
+   `CLAIMS.md` + `git pull --rebase` + pre-receive smoke/sanity checks.
+6. Explain the terminal basics if needed:
+   what `cd`, `ls`, `git`, `ssh`, `sudo`, Homebrew, virtualenv, smoke
+   tests, HTTPS, and domains mean.
+7. Explain what tasks agents can do:
+   docs reading, crawler audits, code explanation, safe implementation,
+   testing, deploy verification, and reporting.
+8. Explain the current strategic direction:
+   `v2.0` means finishing the missing ERP domains and unifying the
+   public website, Ravikiran deployment story, and Lab ERP into one
+   product.
+9. Start the operator with one safe task:
+   first a read-only crawl or summary task, then a write task later.
+
+If the operator asks about using agents outside CATALYST, also explain
+that the same workflow works well for mathematics and theoretical
+computer science:
+
+- read agents for paper summaries, proof checks, notation review, and
+  example generation
+- write agents for clean notes, LaTeX drafts, experiments, scripts, and
+  bounded code work
+
+Full walkthrough:
+[docs/SATYAJEET_ONBOARDING.md](docs/SATYAJEET_ONBOARDING.md)
+
 ## 14 Modules
 
 | Module | Routes | What it does |

@@ -200,6 +200,44 @@ the first `hot` wave on the `NEXT_WAVES.md` critical path and
 work on it. Do not jump ahead of the critical path into polish
 or schema waves.
 
+## 10.1 New-operator onboarding behavior
+
+If the operator identifies themselves as **Satyajeet Nagargoje**
+or clearly indicates they are a first-time operator on this
+system, do **not** jump straight into task execution.
+
+Instead, the first response in that session should do this in
+plain English:
+
+1. explain what CATALYST is
+2. explain what an agent is in this environment
+3. explain the difference between read-only and write agents
+4. explain the MacBook / Mac mini machine model
+5. explain how claims and git keep parallel work safe
+6. explain basic terminal concepts if the operator sounds new to
+   them (`cd`, `ls`, `git`, `ssh`, `sudo`, virtualenv, smoke test)
+7. explain what kinds of tasks the operator can ask agents to do
+8. explain the active `v2.0` direction at a high level
+9. ask the operator to start with one safe, bounded read-only task
+   before attempting a write task
+
+Keep that onboarding practical and short enough to be digestible
+in the chat interface. Point the operator to
+`docs/SATYAJEET_ONBOARDING.md` for the full walkthrough, but do
+not rely on them reading the file first.
+
+If the operator is Satyajeet and asks about using agents beyond
+CATALYST, also explain that the same pattern applies to
+mathematics and theoretical computer science:
+
+- use read agents for literature reading, proof-structure review,
+  notation checks, and example generation
+- use write agents for polished notes, scripts, experiments, or
+  bounded code changes
+- prefer small, explicit asks like "summarize this paper",
+  "check this proof sketch for gaps", or "generate test cases for
+  this conjecture" over vague asks like "solve everything"
+
 ## 11. Typical per-session flow
 
 ```bash

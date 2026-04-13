@@ -16683,20 +16683,32 @@ def vendor_payment_reports():
                            categories=dict(PO_CATEGORIES))
 
 
-# ── Compute / AI Job Submission module (Ollama) ────────────────
+# ── Compute / AI Job Submission module ──────────────────────────
+# Backend: Ollama (local, free) or Claude API (cloud, paid, better)
+# Set COMPUTE_BACKEND=claude in .env to use Claude API.
+# Jobs queue in compute_jobs table. Can batch-process daily via cron.
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+COMPUTE_BACKEND = os.environ.get("COMPUTE_BACKEND", "ollama")  # "ollama" or "claude"
 
-OLLAMA_MODELS = {
-    "llama3:latest":    {"label": "Llama 3",       "size": "4 GB",  "tone": "green",  "desc": "Fast general-purpose model"},
-    "qwen3-coder:30b":  {"label": "Qwen3 Coder",   "size": "18 GB", "tone": "blue",   "desc": "Code generation and analysis"},
-    "gpt-oss:120b":     {"label": "GPT-OSS 120B",  "size": "65 GB", "tone": "purple", "desc": "Large general model (slow)"},
-    "qwen3-vl:4b":      {"label": "Qwen3 VL",      "size": "3 GB",  "tone": "amber",  "desc": "Vision-language model"},
+COMPUTE_MODELS = {
+    # Ollama models (local)
+    "llama3:latest":    {"label": "Llama 3",       "size": "4 GB",  "tone": "green",  "desc": "Fast local model (Ollama)", "backend": "ollama"},
+    "qwen3-coder:30b":  {"label": "Qwen3 Coder",   "size": "18 GB", "tone": "blue",   "desc": "Code generation (Ollama)", "backend": "ollama"},
+    "gpt-oss:120b":     {"label": "GPT-OSS 120B",  "size": "65 GB", "tone": "purple", "desc": "Large local model (Ollama)", "backend": "ollama"},
+    "qwen3-vl:4b":      {"label": "Qwen3 VL",      "size": "3 GB",  "tone": "amber",  "desc": "Vision-language (Ollama)", "backend": "ollama"},
+    # Claude models (cloud)
+    "claude-sonnet":    {"label": "Claude Sonnet",  "size": "cloud", "tone": "blue",   "desc": "Fast + smart (Anthropic API)", "backend": "claude"},
+    "claude-haiku":     {"label": "Claude Haiku",   "size": "cloud", "tone": "green",  "desc": "Fastest + cheapest (Anthropic API)", "backend": "claude"},
 }
+
+# Alias for templates that reference OLLAMA_MODELS
+OLLAMA_MODELS = COMPUTE_MODELS
 
 
 def _run_compute_job(job_id):
-    """Run a queued job against Ollama. Called inline or in a thread."""
+    """Run a queued job against Ollama or Claude API. Called inline or in a thread."""
     import urllib.request as _urllib_req
     job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
     if not job or job["status"] != "queued":
@@ -16708,24 +16720,51 @@ def _run_compute_job(job_id):
     if job["context"]:
         prompt = "Context:\n" + job["context"] + "\n\nQuestion:\n" + prompt
 
-    try:
-        payload = json.dumps({
-            "model": job["model"],
-            "prompt": prompt,
-            "stream": False,
-        }).encode()
-        req = _urllib_req.Request(
-            OLLAMA_URL + "/api/generate",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        resp = _urllib_req.urlopen(req, timeout=300)
-        data = json.loads(resp.read())
+    model_info = COMPUTE_MODELS.get(job["model"], {})
+    backend = model_info.get("backend", "ollama")
 
-        result = data.get("response", "")
-        tokens = data.get("eval_count", 0)
-        duration = data.get("total_duration", 0) // 1_000_000  # ns to ms
+    try:
+        if backend == "claude" and ANTHROPIC_API_KEY:
+            # ── Claude API backend ──
+            claude_model = "claude-sonnet-4-20250514" if "sonnet" in job["model"] else "claude-haiku-4-20250414"
+            payload = json.dumps({
+                "model": claude_model,
+                "max_tokens": 4096,
+                "messages": [{"role": "user", "content": prompt}],
+            }).encode()
+            req = _urllib_req.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                },
+                method="POST",
+            )
+            resp = _urllib_req.urlopen(req, timeout=120)
+            data = json.loads(resp.read())
+            result = data.get("content", [{}])[0].get("text", "")
+            tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
+            duration = 0  # Claude API doesn't return duration
+        else:
+            # ── Ollama backend (local) ──
+            payload = json.dumps({
+                "model": job["model"],
+                "prompt": prompt,
+                "stream": False,
+            }).encode()
+            req = _urllib_req.Request(
+                OLLAMA_URL + "/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            resp = _urllib_req.urlopen(req, timeout=300)
+            data = json.loads(resp.read())
+            result = data.get("response", "")
+            tokens = data.get("eval_count", 0)
+            duration = data.get("total_duration", 0) // 1_000_000
 
         execute(
             """UPDATE compute_jobs
@@ -16741,6 +16780,17 @@ def _run_compute_job(job_id):
                WHERE id=?""",
             (str(exc)[:500], now_iso(), job_id),
         )
+
+
+def batch_process_compute_queue():
+    """Process all queued compute jobs. Run from cron on the mini daily.
+    Usage: python -c "import app; app.batch_process_compute_queue()"
+    """
+    with app.app_context():
+        queued = query_all("SELECT id FROM compute_jobs WHERE status = 'queued' ORDER BY created_at")
+        for job in queued:
+            _run_compute_job(job["id"])
+        return len(queued)
 
 
 @app.route("/compute")

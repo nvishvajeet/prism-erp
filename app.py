@@ -647,6 +647,45 @@ def generate_member_code(name: str, role: str) -> str:
     return f"{name_prefix}{role_abbr}{seq_num:03d}"
 
 
+def _generate_short_codes_if_needed(cur) -> None:
+    """Auto-assign 3-letter uppercase short codes to users who lack one.
+    Uses first 3 letters of name; appends a digit on collision.
+    Called during init_db migration."""
+    try:
+        users_without = cur.execute(
+            "SELECT id, name FROM users WHERE short_code IS NULL OR short_code = ''"
+        ).fetchall()
+    except Exception:
+        return  # Column might not exist yet
+    if not users_without:
+        return
+    # Get existing codes
+    existing = set()
+    try:
+        rows = cur.execute("SELECT short_code FROM users WHERE short_code IS NOT NULL AND short_code != ''").fetchall()
+        existing = {r[0].upper() for r in rows}
+    except Exception:
+        pass
+    for u in users_without:
+        name = u[1] if isinstance(u, (tuple, list)) else u["name"]
+        uid = u[0] if isinstance(u, (tuple, list)) else u["id"]
+        # Strip non-alpha, take first 3 uppercase letters
+        letters = "".join(c for c in name.upper() if c.isalpha())
+        base = letters[:3] if len(letters) >= 3 else (letters + "X" * 3)[:3]
+        code = base
+        suffix = 2
+        while code in existing:
+            code = base[:2] + str(suffix)
+            suffix += 1
+            if suffix > 9:
+                code = base[0] + str(suffix)
+        existing.add(code)
+        try:
+            cur.execute("UPDATE users SET short_code = ? WHERE id = ?", (code, uid))
+        except Exception:
+            pass
+
+
 def generate_temp_password() -> str:
     """Generate a short random temporary password for admin-issued resets.
 
@@ -4436,6 +4475,15 @@ def init_db() -> None:
             except:
                 pass  # Column already exists or other issue, skip
 
+        # Quick attendance short codes — 3 uppercase letters per user
+        if "short_code" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN short_code TEXT DEFAULT NULL")
+            except:
+                pass
+        # Auto-generate short_codes for users who don't have one
+        _generate_short_codes_if_needed(cur)
+
         # W1.3.8 — Password hygiene. Admin-created / admin-reset
         # users must change their password on first login. Flag
         # defaults to 0 so existing seed rows keep working; only
@@ -5103,7 +5151,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 submitted_by_user_id INTEGER NOT NULL,
                 model TEXT NOT NULL DEFAULT 'llama3:latest',
-                prompt TEXT NOT NULL,
+                prompt TEXT NOT NULL DEFAULT '',
                 context TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'queued',
                 result TEXT NOT NULL DEFAULT '',
@@ -5117,6 +5165,59 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_compute_jobs_user ON compute_jobs(submitted_by_user_id);
             CREATE INDEX IF NOT EXISTS idx_compute_jobs_status ON compute_jobs(status);
+
+            -- Software catalog: admin-managed registry of available software
+            CREATE TABLE IF NOT EXISTS software_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                version TEXT NOT NULL DEFAULT '',
+                category TEXT NOT NULL DEFAULT 'general',
+                icon TEXT NOT NULL DEFAULT '🖥️',
+                description TEXT NOT NULL DEFAULT '',
+                tutorial_md TEXT NOT NULL DEFAULT '',
+                executable_cmd TEXT NOT NULL DEFAULT '',
+                input_extensions TEXT NOT NULL DEFAULT '[]',
+                max_runtime_minutes INTEGER NOT NULL DEFAULT 60,
+                max_memory_mb INTEGER NOT NULL DEFAULT 4096,
+                max_cores INTEGER NOT NULL DEFAULT 4,
+                max_output_mb INTEGER NOT NULL DEFAULT 5120,
+                backend TEXT NOT NULL DEFAULT 'mac_mini',
+                is_open_source INTEGER NOT NULL DEFAULT 1,
+                commercial_equivalent TEXT NOT NULL DEFAULT '',
+                can_convert_from TEXT NOT NULL DEFAULT '[]',
+                conversion_notes TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT ''
+            );
+
+            -- Job input files: uploaded scripts/data per job
+            CREATE TABLE IF NOT EXISTS job_input_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL REFERENCES compute_jobs(id),
+                original_filename TEXT NOT NULL,
+                stored_filename TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                is_converted INTEGER NOT NULL DEFAULT 0,
+                converted_from TEXT NOT NULL DEFAULT '',
+                uploaded_at TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_job_input_files_job ON job_input_files(job_id);
+
+            -- Job output files: generated results per job
+            CREATE TABLE IF NOT EXISTS job_output_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL REFERENCES compute_jobs(id),
+                filename TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL DEFAULT 0,
+                download_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                expires_at TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_job_output_files_job ON job_output_files(job_id);
         """)
 
         # ── Quick Entry / Command Queue ──────────────────────────
@@ -5148,6 +5249,21 @@ def init_db() -> None:
             "ALTER TABLE invoices ADD COLUMN grant_id INTEGER REFERENCES grants(id)",
             "ALTER TABLE users ADD COLUMN google_id TEXT",
             "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
+            # v2.1 compute scheduler columns
+            "ALTER TABLE compute_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'ai_prompt'",
+            "ALTER TABLE compute_jobs ADD COLUMN software_id INTEGER",
+            "ALTER TABLE compute_jobs ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 30",
+            "ALTER TABLE compute_jobs ADD COLUMN estimated_memory_mb INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE compute_jobs ADD COLUMN estimated_cores INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE compute_jobs ADD COLUMN estimated_output_mb INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE compute_jobs ADD COLUMN actual_output_mb INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE compute_jobs ADD COLUMN user_instructions TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE compute_jobs ADD COLUMN ai_analysis TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE compute_jobs ADD COLUMN ai_converted INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE compute_jobs ADD COLUMN conversion_log TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE compute_jobs ADD COLUMN output_expires_at TEXT",
+            "ALTER TABLE compute_jobs ADD COLUMN backend TEXT NOT NULL DEFAULT 'mac_mini'",
+            "ALTER TABLE compute_jobs ADD COLUMN pid_remote INTEGER",
         ]:
             try:
                 cur.execute(col_sql)
@@ -20297,7 +20413,7 @@ def mess_student_qr(student_id: int):
     student = query_one("SELECT * FROM mess_students WHERE id = ?", (student_id,))
     if not student:
         abort(404)
-    return render_template("mess_student_qr.html", student=student)
+    return render_template("_mess_student_qr.html", student=student)
 
 
 @app.route("/mess/students/<int:student_id>/toggle", methods=["POST"])

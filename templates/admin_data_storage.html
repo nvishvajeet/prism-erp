@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, kpi_grid with context %}
-{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&#8592;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">&larr;</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&#8592; Home</a>
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&larr; Home</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Data Storage</h2>
   </div>
 </header>

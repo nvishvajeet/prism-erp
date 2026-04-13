@@ -42,14 +42,14 @@
           <span class="quick-intake-requester hint" data-vis="{{ V }}">{{ m.role|replace('_',' ')|title }}</span>
           {# ── Prominent status indicator ── #}
           {% if m.today_status == 'present' %}
-          <span style="font-size:1.8rem;color:var(--tone-green);line-height:1;" data-vis="{{ V }}">&#10003;</span>
-          <span class="badge status-present" style="background:var(--tone-green);color:#fff;" data-vis="{{ V }}">PRESENT</span>
+          <span style="font-size:1.8rem;color:var(--tone-green);line-height:1;" data-vis="{{ V }}">✓</span>
+          <span class="badge status-present" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">PRESENT</span>
           {% elif m.today_status == 'absent' %}
-          <span style="font-size:1.8rem;color:var(--tone-red, #ef4444);line-height:1;" data-vis="{{ V }}">&#10007;</span>
-          <span class="badge status-absent" style="background:var(--tone-red, #ef4444);color:#fff;" data-vis="{{ V }}">ABSENT</span>
+          <span style="font-size:1.8rem;color:var(--tone-red);line-height:1;" data-vis="{{ V }}">✗</span>
+          <span class="badge status-absent" style="background:var(--tone-red);color:var(--bg);" data-vis="{{ V }}">ABSENT</span>
           {% elif m.today_status == 'half' %}
-          <span style="font-size:1.8rem;color:var(--tone-amber, #f59e0b);line-height:1;" data-vis="{{ V }}">&#189;</span>
-          <span class="badge status-half" style="background:var(--tone-amber, #f59e0b);color:#fff;" data-vis="{{ V }}">HALF DAY</span>
+          <span style="font-size:1.8rem;color:var(--tone-amber);line-height:1;" data-vis="{{ V }}">&frac12;</span>
+          <span class="badge status-half" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">HALF DAY</span>
           {% else %}
           <span style="font-size:1.8rem;color:var(--muted);line-height:1;" data-vis="{{ V }}">—</span>
           <span class="badge" data-vis="{{ V }}">NOT MARKED</span>
@@ -60,19 +60,19 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="present">
-            <button type="submit" class="qi-btn qi-btn-accept" title="Present" data-vis="{{ V }}">&#10003;</button>
+            <button type="submit" class="qi-btn qi-btn-accept" title="Present" data-vis="{{ V }}">✓</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="absent">
-            <button type="submit" class="qi-btn qi-btn-decline" title="Absent" data-vis="{{ V }}">&#10007;</button>
+            <button type="submit" class="qi-btn qi-btn-decline" title="Absent" data-vis="{{ V }}">✗</button>
           </form>
           <form method="post" action="{{ url_for('attendance_team_mark') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="user_id" value="{{ m.id }}">
             <input type="hidden" name="status" value="half">
-            <button type="submit" class="qi-btn qi-btn-view" title="Half Day" data-vis="{{ V }}">&#189;</button>
+            <button type="submit" class="qi-btn qi-btn-view" title="Half Day" data-vis="{{ V }}">&frac12;</button>
           </form>
         </div>
       </div>

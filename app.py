@@ -111,27 +111,139 @@ app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
 DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "true", "yes"}
 
 # ── ERP Module System ────────────────────────────────────────────
-# Deployment-level toggle: which ERP modules are available.
-# Set PRISM_MODULES in .env as a comma-separated list.
-# Default: all modules enabled (backward compatible).
+# Plug-and-play module registry.  To add a new module an AI agent
+# only needs to:
+#   1. Add a row to MODULE_REGISTRY below
+#   2. Add its route(s) in app.py
+#   3. Create the template(s)
+#   4. (optional) run  scripts/new_module.sh <name>  to scaffold
+#
+# Set PRISM_MODULES in .env as a comma-separated list to restrict
+# which modules are active.  Default: all modules enabled.
 # Example: PRISM_MODULES=instruments,finance,inbox
 #
-# Module registry:
-#   instruments  — Instrument Portal (list, detail, form control)
-#   finance      — Finance Portal (grants, budgets, invoices)
-#   inbox        — Email/Inbox System
-#   notifications — Notification System (notices, noticeboard)
-#   attendance   — Attendance Portal
-#   queue        — Queue/Schedule (request workflow)
-#   calendar     — Calendar views
-#   stats        — Statistics/Analytics
-#   admin        — Admin panels (users, dev panel)
+# Each entry carries everything the nav bar and tooling need:
+#   label       — human-readable nav text
+#   icon        — emoji shown in nav and admin panels
+#   nav_order   — sort key (lower = further left); 0 = hidden from nav
+#   description — one-liner for admin / docs
+#   nav_endpoint — Flask endpoint name for the primary route
+#   nav_active_endpoints — set of endpoints that highlight this nav item
+#   nav_badge_key — optional key into nav_pending_counts / inject_globals
+#   nav_access   — callable(access_profile, is_owner) -> bool  (access gate)
+#   nav_type     — "link" (default), "dropdown" (instruments), "panel" (notifications)
+#   children     — list of sub-items for dropdown type (optional)
 
-ALL_MODULES = {
-    "instruments", "finance", "inbox", "notifications",
-    "attendance", "queue", "calendar", "stats", "admin",
-    "receipts",
+MODULE_REGISTRY = {
+    "instruments": {
+        "label": "Instruments",
+        "icon": "\U0001f52c",
+        "nav_order": 1,
+        "description": "Instrument portal",
+        "nav_endpoint": "instruments",
+        "nav_active_endpoints": {
+            "instruments", "instrument_detail", "instrument_history",
+            "instrument_calendar", "schedule", "schedule_actions",
+            "request_detail", "calendar", "calendar_events", "stats",
+            "visualizations", "instrument_visualization", "group_visualization",
+        },
+        "nav_type": "dropdown",
+        "nav_access": lambda ap, is_owner: ap["can_access_instruments"],
+    },
+    "finance": {
+        "label": "Finance",
+        "icon": "\U0001f4b0",
+        "nav_order": 2,
+        "description": "Grants, invoices, payments",
+        "nav_endpoint": "finance_portal",
+        "nav_active_endpoints": {"finance_portal", "finance_grants_list", "finance_grant_detail"},
+        "nav_access": lambda ap, is_owner: ap.get("can_view_finance_stage") or is_owner,
+    },
+    "receipts": {
+        "label": "Receipts",
+        "icon": "\U0001f9fe",
+        "nav_order": 3,
+        "description": "Expense receipt submission",
+        "nav_endpoint": "receipts_list",
+        "nav_active_endpoints": {"receipts_list", "receipt_new", "receipt_detail", "receipt_review"},
+    },
+    "inbox": {
+        "label": "Inbox",
+        "icon": "\U0001f4e8",
+        "nav_order": 4,
+        "description": "Internal messaging",
+        "nav_endpoint": "inbox",
+        "nav_active_endpoints": {"inbox"},
+        "nav_badge_key": "inbox_unread",
+    },
+    "notifications": {
+        "label": "Notifications",
+        "icon": "\U0001f514",
+        "nav_order": 5,
+        "description": "System notifications",
+        "nav_endpoint": "notifications_page",
+        "nav_active_endpoints": {"notifications_page"},
+        "nav_type": "panel",
+        "nav_badge_key": "notice_count",
+    },
+    "attendance": {
+        "label": "Attendance",
+        "icon": "\U0001f4cb",
+        "nav_order": 6,
+        "description": "Daily attendance + leave",
+        "nav_endpoint": "attendance_page",
+        "nav_active_endpoints": {
+            "attendance_page", "leave_request_new",
+            "admin_leave_queue", "admin_attendance_calendar",
+        },
+        "nav_access": lambda ap, is_owner: ap["can_access_instruments"] or is_owner,
+    },
+    "todos": {
+        "label": "Tasks",
+        "icon": "\u2705",
+        "nav_order": 7,
+        "description": "Assignable task list",
+        "nav_endpoint": None,
+        "nav_active_endpoints": set(),
+        "nav_order": 0,  # hidden from nav until route exists
+    },
+    "queue": {
+        "label": "Queue",
+        "icon": "\U0001f4ca",
+        "nav_order": 0,
+        "description": "Sample request queue (sub-item of Instruments)",
+        "nav_endpoint": "schedule",
+        "nav_active_endpoints": {"schedule", "schedule_actions"},
+    },
+    "calendar": {
+        "label": "Calendar",
+        "icon": "\U0001f4c5",
+        "nav_order": 0,
+        "description": "Schedule calendar (sub-item of Instruments)",
+        "nav_endpoint": "calendar",
+        "nav_active_endpoints": {"calendar", "calendar_events"},
+    },
+    "stats": {
+        "label": "Stats",
+        "icon": "\U0001f4c8",
+        "nav_order": 0,
+        "description": "Analytics dashboard (sub-item of Instruments)",
+        "nav_endpoint": "stats",
+        "nav_active_endpoints": {"stats", "visualizations", "instrument_visualization", "group_visualization"},
+    },
+    "admin": {
+        "label": "Admin",
+        "icon": "\u2699\ufe0f",
+        "nav_order": 99,
+        "description": "User management + dev tools",
+        "nav_endpoint": "dev_panel",
+        "nav_active_endpoints": {"dev_panel"},
+        "nav_access": lambda ap, is_owner: is_owner,
+    },
 }
+
+ALL_MODULES = set(MODULE_REGISTRY.keys())
+
 _modules_env = os.environ.get("PRISM_MODULES", "").strip()
 ENABLED_MODULES: set[str] = (
     {m.strip().lower() for m in _modules_env.split(",") if m.strip()}
@@ -143,6 +255,42 @@ ENABLED_MODULES: set[str] = (
 def module_enabled(name: str) -> bool:
     """Check if an ERP module is enabled for this deployment."""
     return name in ENABLED_MODULES
+
+
+def build_nav_items(user, access_profile, is_owner):
+    """Build sorted list of nav item dicts from MODULE_REGISTRY.
+
+    Each item: {key, label, icon, url, active, badge, nav_type, meta}
+    Only includes modules that are enabled, have nav_order > 0,
+    and pass their access gate.
+    """
+    from flask import request as _req, url_for as _url_for
+    endpoint = _req.endpoint or ""
+    items = []
+    for key, meta in sorted(MODULE_REGISTRY.items(), key=lambda kv: kv[1].get("nav_order", 50)):
+        if meta.get("nav_order", 0) <= 0:
+            continue
+        if not module_enabled(key):
+            continue
+        access_fn = meta.get("nav_access")
+        if access_fn and not access_fn(access_profile, is_owner):
+            continue
+        ep = meta.get("nav_endpoint")
+        try:
+            url = _url_for(ep) if ep else "#"
+        except Exception:
+            continue  # route not registered yet — skip silently
+        items.append({
+            "key": key,
+            "label": meta["label"],
+            "icon": meta["icon"],
+            "url": url,
+            "active": endpoint in meta.get("nav_active_endpoints", set()),
+            "nav_type": meta.get("nav_type", "link"),
+            "badge_key": meta.get("nav_badge_key"),
+            "meta": meta,
+        })
+    return items
 
 
 csrf = CSRFProtect(app)
@@ -5592,6 +5740,8 @@ def inject_globals():
         "nav_notice_count": (unread_notice_count(user) + unread_system_notification_count(user)) if user else 0,
         "recent_notices": _recent_combined_notifications(user),
         "nav_inbox_unread": unread_message_count(user) if user else 0,
+        "enabled_modules_nav": build_nav_items(user, access_profile, is_owner(user)),
+        "MODULE_REGISTRY": MODULE_REGISTRY,
         "google_oauth_enabled": bool(_oauth),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),

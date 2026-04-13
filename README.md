@@ -1,199 +1,73 @@
 # PRISM
 
-**Lab Scheduler for shared instrument facilities.**
-Finance → professor → operator sequential approvals.
-Queue, attachments, SHA-256 audit chain.
-Single binary. SQLite. No build step.
+> Open-source ERP for research facilities. One file. Any institution.
 
-Current stable tag: **`v1.5.0`** — multi-role users graduated as a
-first-class hard attribute. [CHANGELOG](CHANGELOG.md) ·
-[Philosophy](docs/PHILOSOPHY.md) ·
-[Architecture](docs/PROJECT.md) ·
-[ERP Primitives](docs/ERP_PRIMITIVES.md) ·
-[Live demo](https://nvishvajeet.github.io/demo.html) <!-- update URL for your deployment -->
-
-### Fast mode
-
-PRISM uses a two-speed pre-push gate:
-
-- **Fast** (default, ~1s): every branch push runs `smoke` only —
-  33 routes × 3 roles. Catches critical regressions instantly.
-- **Full** (~20s): every tag push runs the complete `sanity` wave
-  (11 strategies, 190+ checks). Force it on any push with
-  `PRISM_FULL_GATE=1 git push origin ...`.
-
-AI agents and human developers get the same gate. The hook lives
-at `ops/git-hooks/pre-receive` and auto-installs via
-`./scripts/install_launchd.sh`. See `docs/ERP_PRIMITIVES.md` for
-the "add a new portal in 30 minutes" recipe.
-
----
-
-## What it does
-
-One instrument. One request form. Three sequential approvals
-(finance, professor-approver, operator). Each request carries
-its own attachments, message history, issue thread, and an
-immutable SHA-256 audit chain any admin can verify end-to-end.
-Every page is a fluid grid of self-contained tiles — not a
-bespoke layout per route — so the UI stays legible across 9
-roles and 48 routes without per-page design work.
-
-## Design creed
-
-Apple / Jony Ive / Ferrari on a lab workflow tool. Every pixel
-earns its place. Every tile is a canonical macro from the
-shared widget library. Every route respects the hard-attribute
-contract in [`docs/PHILOSOPHY.md §2`](docs/PHILOSOPHY.md).
-**Hard** = data model, route shapes, roles, audit chain, tile
-architecture, event stream. Changes to hard attributes only
-through major version bumps with a `### Changed (BREAKING)`
-CHANGELOG entry. **Soft** = copy, colour, placement, hover
-state — drift freely between patch releases.
-
-Release cadence is **iOS-style** (see PHILOSOPHY §3.1): every
-commit that passes the pre-receive sanity wave is a candidate
-for a tag, and tags are cut deliberately and often. Patch
-releases in this project are minutes apart, not weeks.
-
-## Quickstart — clone to live server in five lines
+## Install
 
 ```bash
-git clone <repo> lab-scheduler
-cd lab-scheduler
+curl -fsSL https://raw.githubusercontent.com/YOUR-ORG/prism-erp/main/install.sh | bash
+```
+
+## What is PRISM?
+
+PRISM is a modular ERP system for shared laboratory facilities. It manages
+instrument booking, sample requests with sequential approvals (finance,
+professor, operator), grant tracking, attendance, and internal messaging --
+all from a single Flask application backed by SQLite.
+
+## Modules
+
+| Module | What it does |
+|--------|-------------|
+| Instruments | Book shared lab instruments, manage samples, track usage |
+| Finance | Grants, budgets, invoices, payment approvals |
+| Receipts | Attachment-backed receipt chain with SHA-256 audit trail |
+| Notifications | Broadcast notices, system alerts, noticeboard |
+| Inbox | Internal messaging with reply threads, attachments, folders |
+| Attendance | Time tracking, leave requests, operator schedules |
+| Todos | Per-user task lists tied to requests and instruments |
+| Calendar | Calendar views for bookings, deadlines, maintenance windows |
+| Stats | Usage analytics, instrument utilisation, approval throughput |
+
+Enable selectively via `PRISM_MODULES` in `.env`.
+
+## Quick Start
+
+```bash
+git clone https://github.com/YOUR-ORG/prism-erp.git prism
+cd prism
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python app.py
-open http://127.0.0.1:5055/login
+# Open http://127.0.0.1:5055 -- login: admin@lab.local / 12345
 ```
 
-Demo-mode credentials: `admin@lab.local` / `12345` (and
-role-named aliases `operator@lab.local`, `requester@lab.local`,
-`approver@lab.local`, `finance@lab.local`,
-`instrument_admin@lab.local`, `site_admin@lab.local`, all with
-the same password). See [`docs/DEPLOY.md`](docs/DEPLOY.md) for
-production deployment on the Mac mini via launchd + Tailscale
-Serve.
+## For AI Agents
 
-## The live demo
+See [AGENTS.md](AGENTS.md) for vendor-neutral onboarding.
+See [docs/ERP_MODULE_BUILDER.md](docs/ERP_MODULE_BUILDER.md) to build new modules.
 
-Public HTTPS demo is proxied from the dev machine via a Cloudflare
-quick tunnel — any browser on the internet, no tailnet required.
-The `/login?demo=1` query param pre-fills the admin credentials so
-visitors land signed in with one button press. Seven deep-link
-cards below the CTA jump straight into Dashboard, Instruments,
-Instrument detail, Queue, New request form, Dev panel, and Sitemap.
+## Architecture
 
-## Architecture in 30 seconds
+- Single-file Flask app (`app.py`)
+- SQLite database
+- Jinja2 templates with canonical widget macros
+- Role-based access (8 roles)
+- Module toggle via `PRISM_MODULES` env var
+- Google OAuth ready
+- 26 automated crawlers across 11 waves
+- Immutable SHA-256 audit chain
+- CSRF protection on by default
 
-**Backend.** Single Flask binary. `app.py` is ~8,000 lines of
-deliberate monolith — no microservices, no build step, no
-background workers, one SQLite file. See
-[`docs/PROJECT.md`](docs/PROJECT.md) for the engine map and
-[`docs/MODULES.md`](docs/MODULES.md) for the 13-engine + 2
-tool-package decomposition with file:line handles for every
-engine.
+## Docs
 
-**Database.** 15 tables + 22 hot-path indexes + the
-`user_roles` junction (v1.5.0) + `instrument_group` membership.
-Foreign keys enforced. Immutable audit chain. Request status
-state machine (`REQUEST_STATUS_TRANSITIONS`) validated on every
-write via `assert_status_transition()`.
+| File | Purpose |
+|------|---------|
+| [PHILOSOPHY.md](docs/PHILOSOPHY.md) | Hard/soft attribute contract, design creed |
+| [PROJECT.md](docs/PROJECT.md) | Architecture, schema, page map, security model |
+| [MODULES.md](docs/MODULES.md) | Engine map with file:line handles |
+| [DEPLOY.md](docs/DEPLOY.md) | Production deployment on Mac mini |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
 
-**Frontend.** No build step. No framework. Vanilla Jinja
-templates extending a single `base.html`, composed from 9
-canonical widget macros in
-[`templates/_page_macros.html`](templates/_page_macros.html).
-The tile architecture is the hard constraint: every page is a
-`.*-tiles` grid of `.tile`-family articles. The
-`philosophy_propagation` crawler rejects any template that
-drifts away from this contract at push time.
+## License
 
-**Crawlers.** 22 strategies across 11 waves. `wave sanity`
-(~17 s, 11 strategies) is the pre-receive gate on the central
-bare — no commit lands without it going green. `wave all`
-(~15 min, every registered strategy) is the release-boundary
-stress test. See [`docs/NEXT_WAVES.md`](docs/NEXT_WAVES.md) for
-the active plan and [`docs/PARALLEL.md`](docs/PARALLEL.md) for
-the multi-agent work protocol.
-
-## Mission Control — the dev panel
-
-`/admin/dev_panel` is the operator's cockpit. Sign in as
-`admin@lab.local`, visit the page, and see:
-
-- **STABLE RELEASE** — latest semver tag with short SHA,
-  tagged-at date, tag subject, and the commits-since-tag depth
-  hint ("N commits on trunk since this tag — candidates for the
-  next patch")
-- **LATEST SHIPPED** — HEAD commit headline, author, date, and a
-  cross-reference to the stable tag depth
-- **v1.5.0 PRE-SEED** — remaining `# TODO [v1.5.0 multi-role]`
-  markers in `app.py` (count decrements as each call site retires
-  on the v1.5.x patch stream)
-- **PROJECT TIMELINE** — every shipped tag grouped by minor-line
-  (`v1.3.x`, `v1.4.x`, `v1.5.x`) with the latest tagged entry
-  highlighted as **LATEST** — the full iOS-cadence history at
-  a glance
-- **NOW SHIPPING hero** — 4-cell release / hot-wave / commits-today
-  / crawlers-last-ran at-a-glance
-- **PROGRESS + HISTORY + DEPLOY + ROADMAP** — git state (ahead /
-  behind / dirty), the last 6 commits, production host info,
-  version-scoped progress meters
-
-## Docs manifest
-
-| File | Role |
-|---|---|
-| [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) | **Load-bearing.** Hard/soft contract, stable-release discipline, iOS cadence, demo/operational separation. Read before any non-trivial change. |
-| [`docs/PROJECT.md`](docs/PROJECT.md) | Architecture spec — schema, page map, reusable abstractions (tile-family pattern), state machine, security model |
-| [`docs/MODULES.md`](docs/MODULES.md) | Engine map — 13 engines + 2 tool packages with file:line handles |
-| [`docs/NEXT_WAVES.md`](docs/NEXT_WAVES.md) | Forward plan — parallel task board, future technology bets, wave history |
-| [`docs/PARALLEL.md`](docs/PARALLEL.md) | Multi-agent work protocol — read vs write agents, claim board, git hygiene, 5% merge budget, failure mode recovery |
-| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Mac mini deploy recipe + launchd + Tailscale Serve + disaster checklist |
-| [`docs/ERP_VISION.md`](docs/ERP_VISION.md) | v2.0 direction — PRISM as the first portal of an internal ERP |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release history, every tag on the v1.x line |
-| [`CLAIMS.md`](CLAIMS.md) | Live advisory lock board for concurrent agent work |
-| [`AGENTS.md`](AGENTS.md) | Vendor-neutral entry point for any AI coding agent (Claude, Codex, Gemini, Cursor, Aider, Copilot) |
-
-## Tests + crawlers
-
-```bash
-.venv/bin/python scripts/smoke_test.py            # ~5s pre-commit gate
-.venv/bin/python -m crawlers wave sanity          # ~17s pre-push gate, 11 strategies
-.venv/bin/python -m crawlers wave behavioral      # per-role signature actions + ui_uniformity + future_fixes
-.venv/bin/python -m crawlers wave all             # ~15min release-boundary stress
-.venv/bin/python tests/test_multi_role.py         # v1.5.0 helper contract (13 assertions)
-.venv/bin/python tests/test_time_ago.py           # .row-time-hint humanisation
-.venv/bin/python tests/test_status_transitions.py # state machine invariants (101 cases)
-.venv/bin/python tests/test_seed_fixes.py         # v1.5.0 pre-seed TODO marker behaviour
-```
-
-`reports/` and `logs/` are gitignored — crawlers write private
-per-run artifacts there. See `docs/PARALLEL.md` for why tracking
-them in git would break the read-agent parallelism story.
-
-## The ship helper
-
-```bash
-scripts/ship.sh "subject line" [file ...]
-```
-
-One command: `git add → smoke_test → git commit → git pull
---rebase → git push`. Refuses to run if untracked files are
-present without explicit file arguments (the anti-absorption
-rule from `v1.4.7`). Designed for 5-minute ship blocks in
-single-operator sessions.
-
-## License + credits
-
-Python 3.14 + Flask 3. No
-telemetry. No external services on the happy path (Tailscale /
-Cloudflare tunnels are opt-in for public demo access only).
-Demo data and operational data are physically separated per
-[`docs/PHILOSOPHY.md §4`](docs/PHILOSOPHY.md).
-
----
-
-**iOS-cadence tag stream to `v1.5.0`:**
-`v1.3.8 → v1.4.1 → v1.4.2 → v1.4.3 → v1.4.4 → v1.4.5 →
-v1.4.6 → v1.4.7 → v1.4.8 → v1.4.9 → v1.4.10 → v1.5.0`
+Python 3 + Flask 3. No telemetry. No external services on the happy path.

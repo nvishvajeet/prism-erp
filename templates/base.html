@@ -90,104 +90,89 @@
     {# Home — always first #}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
 
-    {# Instruments — dropdown with Queue/Calendar/Stats inside.
-       Primary app for operators/admins. Visible to anyone with instrument access. #}
-    {% if module_enabled('instruments') and access_profile_user.can_access_instruments %}
-    <div class="nav-dropdown" data-vis="{{ V }}">
-      <a class="nav-trigger {% if endpoint in ['instruments', 'instrument_detail', 'instrument_history', 'instrument_calendar', 'schedule', 'schedule_actions', 'request_detail', 'calendar', 'calendar_events', 'stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}"
-         href="{{ url_for('instruments') }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}">Instruments</a>
-      <div class="nav-menu" role="menu" aria-label="Instruments" data-vis="{{ V }}">
-        <a href="{{ url_for('instruments') }}" data-vis="{{ V }}"><strong>All Instruments</strong></a>
-        {% if module_enabled('queue') and can_access_schedule_user %}
-        <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %} ({{ nav_pending_counts.queue }}){% endif %}</a>
-        {% endif %}
-        {% if module_enabled('calendar') and can_access_calendar_user %}
-        <a href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
-        {% endif %}
-        {% if module_enabled('stats') and can_access_stats_user %}
-        <a href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
-        {% endif %}
-        <a href="{{ url_for('new_request') }}" data-vis="{{ V }}">New Request</a>
-        {% if nav_instruments %}
-        <hr style="border:none;border-top:1px solid var(--line);margin:0.3rem 0" data-vis="{{ V }}">
-        {% for inst in nav_instruments[:8] %}
-        <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" data-vis="{{ V }}">
-          <span class="nav-inst-code" data-vis="{{ V }}">{{ inst['code'] }}</span>
-          <span class="nav-inst-name" data-vis="{{ V }}">{{ inst['name'] }}</span>
-          <span class="nav-inst-dot {% if inst['accepting_requests'] %}dot-accepting{% elif inst['soft_accept_enabled'] %}dot-soft{% else %}dot-maintenance{% endif %}" data-vis="{{ V }}"></span>
-        </a>
-        {% endfor %}
-        {% if nav_instruments|length > 8 %}
-        <a href="{{ url_for('instruments') }}" class="nav-menu-footer" data-vis="{{ V }}">All {{ nav_instruments|length }} instruments →</a>
-        {% endif %}
-        {% endif %}
-      </div>
-    </div>
-    {% endif %}
+    {# ── Dynamic nav generated from MODULE_REGISTRY ── #}
+    {% for nav in enabled_modules_nav %}
 
-    {# Finance — prominent for finance_admin/site_admin/super_admin/owner.
-       Their PRIMARY app. Flat link (no dropdown needed yet). #}
-    {% if module_enabled('finance') and (access_profile_user.can_view_finance_stage or is_owner_user) %}
-    <a class="{% if endpoint in ['finance_portal','finance_grants_list','finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
-    {% endif %}
-
-    {# Inbox — universal, everyone sees it #}
-    {% if module_enabled('inbox') %}
-    <a class="{% if endpoint == 'inbox' %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif %}</a>
-    {% endif %}
-
-    {# Notifications — universal, with dropdown panel #}
-    {% if module_enabled('notifications') %}
-    <div class="nav-dropdown notif-dropdown" data-vis="{{ V }}">
-      <a class="nav-trigger {% if endpoint == 'notifications_page' %}nav-active{% endif %}"
-         href="{{ url_for('notifications_page') }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}"
-         data-notif-trigger>Notifications{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
-      <div class="notif-panel" role="menu" aria-label="Recent notifications" data-vis="{{ V }}">
-        <div class="notif-panel-header" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">Notifications</strong>
-          {% if nav_notice_count %}<span class="notif-panel-count" data-vis="{{ V }}">{{ nav_notice_count }} unread</span>{% endif %}
-        </div>
-        {% if recent_notices %}
-        <div class="notif-panel-list" data-vis="{{ V }}">
-          {% for n in recent_notices %}
-          <a href="{{ n.href or url_for('notifications_page') }}" class="notif-panel-item{% if not n.is_read %} notif-unread{% endif %}" data-vis="{{ V }}">
-            {% if n.kind == 'system' %}
-            <span class="notif-cat-icon notif-cat-{{ n.scope_label }}" data-vis="{{ V }}"></span>
-            {% else %}
-            <span class="notif-severity-dot notif-sev-{{ n.severity }}" data-vis="{{ V }}"></span>
-            {% endif %}
-            <span class="notif-item-body" data-vis="{{ V }}">
-              <span class="notif-item-subject" data-vis="{{ V }}">{{ n.subject }}</span>
-              <span class="notif-item-meta" data-vis="{{ V }}">{{ time_ago(n.created_at) }} · {{ n.scope_label }}</span>
-            </span>
+      {# ── Instruments dropdown (special: sub-items + instrument list) ── #}
+      {% if nav.nav_type == 'dropdown' and nav.key == 'instruments' %}
+      <div class="nav-dropdown" data-vis="{{ V }}">
+        <a class="nav-trigger {% if nav.active %}nav-active{% endif %}"
+           href="{{ nav.url }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}">{{ nav.label }}</a>
+        <div class="nav-menu" role="menu" aria-label="{{ nav.label }}" data-vis="{{ V }}">
+          <a href="{{ nav.url }}" data-vis="{{ V }}"><strong>All Instruments</strong></a>
+          {% if module_enabled('queue') and can_access_schedule_user %}
+          <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %} ({{ nav_pending_counts.queue }}){% endif %}</a>
+          {% endif %}
+          {% if module_enabled('calendar') and can_access_calendar_user %}
+          <a href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
+          {% endif %}
+          {% if module_enabled('stats') and can_access_stats_user %}
+          <a href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
+          {% endif %}
+          <a href="{{ url_for('new_request') }}" data-vis="{{ V }}">New Request</a>
+          {% if nav_instruments %}
+          <hr style="border:none;border-top:1px solid var(--line);margin:0.3rem 0" data-vis="{{ V }}">
+          {% for inst in nav_instruments[:8] %}
+          <a href="{{ url_for('instrument_detail', instrument_id=inst['id']) }}" data-vis="{{ V }}">
+            <span class="nav-inst-code" data-vis="{{ V }}">{{ inst['code'] }}</span>
+            <span class="nav-inst-name" data-vis="{{ V }}">{{ inst['name'] }}</span>
+            <span class="nav-inst-dot {% if inst['accepting_requests'] %}dot-accepting{% elif inst['soft_accept_enabled'] %}dot-soft{% else %}dot-maintenance{% endif %}" data-vis="{{ V }}"></span>
           </a>
           {% endfor %}
+          {% if nav_instruments|length > 8 %}
+          <a href="{{ nav.url }}" class="nav-menu-footer" data-vis="{{ V }}">All {{ nav_instruments|length }} instruments →</a>
+          {% endif %}
+          {% endif %}
         </div>
-        {% else %}
-        <div class="notif-panel-empty" data-vis="{{ V }}">No recent notifications</div>
-        {% endif %}
-        <a href="{{ url_for('notifications_page') }}" class="notif-panel-footer" data-vis="{{ V }}">View all notifications</a>
       </div>
-    </div>
-    {% endif %}
 
-    {# Attendance — operators + admins only (not requesters/faculty) #}
-    {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
-    <a class="{% if endpoint in ['attendance_page','leave_request_new','admin_leave_queue','admin_attendance_calendar'] %}nav-active{% endif %}" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">Attendance</a>
-    {% endif %}
+      {# ── Notifications panel (special: inline notification preview) ── #}
+      {% elif nav.nav_type == 'panel' and nav.key == 'notifications' %}
+      <div class="nav-dropdown notif-dropdown" data-vis="{{ V }}">
+        <a class="nav-trigger {% if nav.active %}nav-active{% endif %}"
+           href="{{ nav.url }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}"
+           data-notif-trigger>{{ nav.label }}{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>
+        <div class="notif-panel" role="menu" aria-label="Recent notifications" data-vis="{{ V }}">
+          <div class="notif-panel-header" data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">Notifications</strong>
+            {% if nav_notice_count %}<span class="notif-panel-count" data-vis="{{ V }}">{{ nav_notice_count }} unread</span>{% endif %}
+          </div>
+          {% if recent_notices %}
+          <div class="notif-panel-list" data-vis="{{ V }}">
+            {% for n in recent_notices %}
+            <a href="{{ n.href or nav.url }}" class="notif-panel-item{% if not n.is_read %} notif-unread{% endif %}" data-vis="{{ V }}">
+              {% if n.kind == 'system' %}
+              <span class="notif-cat-icon notif-cat-{{ n.scope_label }}" data-vis="{{ V }}"></span>
+              {% else %}
+              <span class="notif-severity-dot notif-sev-{{ n.severity }}" data-vis="{{ V }}"></span>
+              {% endif %}
+              <span class="notif-item-body" data-vis="{{ V }}">
+                <span class="notif-item-subject" data-vis="{{ V }}">{{ n.subject }}</span>
+                <span class="notif-item-meta" data-vis="{{ V }}">{{ time_ago(n.created_at) }} · {{ n.scope_label }}</span>
+              </span>
+            </a>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="notif-panel-empty" data-vis="{{ V }}">No recent notifications</div>
+          {% endif %}
+          <a href="{{ nav.url }}" class="notif-panel-footer" data-vis="{{ V }}">View all notifications</a>
+        </div>
+      </div>
 
-    {# Receipts — everyone with module access #}
-    {% if module_enabled('receipts') %}
-    <a class="{% if endpoint in ['receipts_list','receipt_new','receipt_detail','receipt_review'] %}nav-active{% endif %}" href="{{ url_for('receipts_list') }}" data-vis="{{ V }}">Receipts</a>
-    {% endif %}
+      {# ── Generic link (inbox, finance, attendance, receipts, admin, future modules) ── #}
+      {% else %}
+      <a class="{% if nav.active %}nav-active{% endif %}" href="{{ nav.url }}" data-vis="{{ V }}"
+         {% if nav.key == 'admin' %}title="Dev panel"{% endif %}>
+        {{- nav.label -}}
+        {%- if nav.badge_key == 'inbox_unread' and nav_inbox_unread %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_inbox_unread }}</span>{% endif -%}
+      </a>
+      {% endif %}
+
+    {% endfor %}
 
     {# Settings — always #}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
-
-    {# Dev — owner only #}
-    {% if module_enabled('admin') and is_owner_user %}
-    <a class="{% if endpoint == 'dev_panel' %}nav-active{% endif %}" href="{{ url_for('dev_panel') }}" data-vis="{{ V }}" title="Dev panel">Dev</a>
-    {% endif %}
 
     {# New Request shortcut — for users without instrument dropdown #}
     {% if not access_profile_user.can_access_instruments %}

@@ -9628,6 +9628,12 @@ def new_request():
             finance_status=finance_status,
             receipt_number=receipt_number,
         )
+        # Auto-link to instrument's default grant if set
+        default_grant = row_value(instrument, "default_grant_id", None)
+        if default_grant:
+            invoice = query_one("SELECT id FROM invoices WHERE request_id = ?", (request_id,))
+            if invoice:
+                execute("UPDATE invoices SET grant_id = ? WHERE id = ?", (default_grant, invoice["id"]))
         get_db().commit()
         created_request = query_one(
             """

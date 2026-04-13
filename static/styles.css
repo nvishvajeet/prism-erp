@@ -9665,3 +9665,10 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .notif-hover-dropdown .notif-panel { display: none; }
 .notif-hover-dropdown:hover .notif-panel { display: block; }
 .notif-hover-dropdown .nav-trigger { cursor: pointer; }
+
+/* Grant detail: larger click targets */
+.finance-tiles .mc-meta-cell { padding: 0.6rem 0.75rem; }
+.finance-tiles .text-link { padding: 0.4rem 0.6rem; display: inline-block; }
+.finance-tiles .toggleable-form summary { padding: 0.6rem 0.75rem; }
+.finance-tiles .card { min-height: 3rem; }
+.finance-tiles .hint { padding: 0.3rem 0; }

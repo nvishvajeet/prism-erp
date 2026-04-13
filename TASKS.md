@@ -1,4 +1,4 @@
-# PRISM Task List — Remote Developer Tasks
+# Catalyst Task List — Remote Developer Tasks
 
 > **Owner:** Vishvajeet (global owner, sole decision-maker)
 > **Worker:** Satyajeet's Claude/Codex agents

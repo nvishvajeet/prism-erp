@@ -1,4 +1,4 @@
-# Developer Onboarding — PRISM / Catalyst ERP
+# Developer Onboarding — Catalyst ERP
 
 Welcome to the project. This guide gets you from a **brand-new Mac** (factory fresh, nothing installed) to a fully working development environment.
 
@@ -27,7 +27,7 @@ Copy this entire block. Paste it into Terminal. Press Enter. It will ask for you
   && git config --global user.name "Satyajeet Nagargoje" \
   && git config --global user.email "satyajeet@catalyst.local" \
   && mkdir -p ~/Documents/Scheduler \
-  && git clone https://github.com/nvishvajeet/prism-erp.git ~/Documents/Scheduler/Main \
+  && git clone https://github.com/nvishvajeet/catalyst-erp.git ~/Documents/Scheduler/Main \
   && cd ~/Documents/Scheduler/Main \
   && git checkout v1.3.0-stable-release \
   && echo "" \

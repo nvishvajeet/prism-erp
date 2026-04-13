@@ -12,9 +12,36 @@
        severity accent on critical, amber on warning, ink on
        info. Each notice is a terminal-style card with a
        monospaced SCOPE eyebrow + severity badge. ── #}
+  {% if quick_actions %}
+  <article class="card tile tile-full-width tile-dash-quick-actions tile-dash-hero" data-vis="{{ V }}">
+    {% call card_heading("FOCUS", "What matters now") %}
+      <span class="dash-hero-status" data-vis="{{ V }}">
+        {% if dash_action_items %}{{ dash_action_items|length }} active item{% if dash_action_items|length != 1 %}s{% endif %}{% else %}Clear runway{% endif %}
+      </span>
+    {% endcall %}
+    <p class="dash-hero-copy" data-vis="{{ V }}">
+      Move the system forward with one deliberate next step. Everything here is
+      chosen to reduce decisions, not add them.
+    </p>
+    <div class="dash-hero-meta" data-vis="{{ V }}">
+      <span class="dash-hero-chip" data-vis="{{ V }}">Queue{% if quick_intake_total %} · {{ quick_intake_total }} intake{% endif %}</span>
+      <span class="dash-hero-chip" data-vis="{{ V }}">Noticeboard · {{ active_notices|length if active_notices else 0 }}</span>
+      <span class="dash-hero-chip" data-vis="{{ V }}">Precision first</span>
+    </div>
+    <div class="qa-grid" data-vis="{{ V }}">
+      {% for a in quick_actions %}
+      <a class="qa-card qa-card-{{ a.accent }}{% if loop.first %} qa-card-primary{% endif %}" href="{{ a.href }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">{{ a.eyebrow }}</span>
+        <span class="qa-label" data-vis="{{ V }}">{{ a.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
+
   {% if module_enabled('notifications') %}
-  <article class="card tile tile-span-3 tile-dash-noticeboard" data-vis="{{ V }}">
-    {{ card_heading("NOTICEBOARD", (active_notices|length|string ~ " active") if active_notices else "All caught up") }}
+  <article class="card tile tile-span-3 tile-dash-noticeboard tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("ATTENTION", (active_notices|length|string ~ " active") if active_notices else "All caught up") }}
     {% if active_notices %}
     <ul class="notice-list" data-vis="{{ V }}">
       {% for n in active_notices %}
@@ -37,16 +64,16 @@
 
   {# ── TILE: AT A GLANCE — role-scoped summary stats ── #}
   {% if dash_at_a_glance %}
-  <article class="card tile tile-span-3 tile-dash-at-a-glance" data-vis="{{ V }}">
-    {{ card_heading("", "At a Glance") }}
+  <article class="card tile tile-span-3 tile-dash-at-a-glance tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("SYSTEM", "Pulse") }}
     {{ kpi_grid(dash_at_a_glance, variant='dense') }}
   </article>
   {% endif %}
 
   {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
   {% if dash_action_items %}
-  <article class="card tile tile-full-width tile-dash-action-items" data-vis="{{ V }}">
-    {% call card_heading("", "Your Action Items") %}
+  <article class="card tile tile-full-width tile-dash-action-items tile-dash-operational" data-vis="{{ V }}">
+    {% call card_heading("NEXT", "Action Items") %}
       <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">View all &rarr;</a>
     {% endcall %}
     <ul class="action-items-list" data-vis="{{ V }}">
@@ -71,28 +98,10 @@
   </article>
   {% endif %}
 
-  {# ── TILE: QUICK ACTIONS — "why are you here, what's your next
-       two clicks?" Per-role action set computed in quick_actions_for_user.
-       Primary action gets the Ferrari-red accent; ghost actions are
-       outlined-only. Never more than 4 actions — that's the point. ── #}
-  {% if quick_actions %}
-  <article class="card tile tile-full-width tile-dash-quick-actions" data-vis="{{ V }}">
-    {{ card_heading("", "Quick Actions") }}
-    <div class="qa-grid" data-vis="{{ V }}">
-      {% for a in quick_actions %}
-      <a class="qa-card qa-card-{{ a.accent }}" href="{{ a.href }}" data-vis="{{ V }}">
-        <span class="qa-eyebrow" data-vis="{{ V }}">{{ a.eyebrow }}</span>
-        <span class="qa-label" data-vis="{{ V }}">{{ a.label }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </article>
-  {% endif %}
-
   {# ── TILE: Quick Attendance — moved up from bottom ── #}
   {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
-  <article class="card tile tile-span-3 tile-dash-attendance" data-vis="{{ V }}">
-    {{ card_heading("", "Attendance") }}
+  <article class="card tile tile-span-3 tile-dash-attendance tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("TODAY", "Attendance") }}
     <div class="attendance-quick-row" data-vis="{{ V }}">
       <form method="post" action="{{ url_for('attendance_quick_present') }}" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
@@ -111,8 +120,8 @@
 
   {# ── TILE: Fleet Status — active vehicles, fuel, insurance ── #}
   {% if dash_fleet_status %}
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("", "Fleet Status") }}
+  <article class="card tile tile-span-3 tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("OPS", "Fleet Status") }}
     {{ kpi_grid([
       {"value": dash_fleet_status.active_vehicles, "label": "Active Vehicles", "href": url_for('vehicles_list'), "tone": "active"},
       {"value": "₹" ~ "{:,.0f}".format(dash_fleet_status.fuel_this_month), "label": "Fuel This Month", "href": url_for('vehicles_list'), "tone": "samples"},
@@ -123,8 +132,8 @@
 
   {# ── TILE: Payroll Due — unpaid staff, pending amount ── #}
   {% if dash_payroll_due %}
-  <article class="card tile tile-span-3" data-vis="{{ V }}">
-    {{ card_heading("", "Payroll Due") }}
+  <article class="card tile tile-span-3 tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("OPS", "Payroll Due") }}
     {{ kpi_grid([
       {"value": dash_payroll_due.unpaid_count, "label": "Unpaid Staff", "href": url_for('payroll_view'), "tone": "wait" if dash_payroll_due.unpaid_count > 0 else "completed"},
       {"value": "₹" ~ "{:,.0f}".format(dash_payroll_due.pending_amount), "label": "Pending Amount", "href": url_for('payroll_view'), "tone": "amber"},
@@ -134,7 +143,7 @@
 
   {# ── TILE: Requester pulse — "state of my samples right now" ── #}
   {% if req_pulse %}
-  <article class="card tile tile-span-3 tile-req-pulse" data-vis="{{ V }}">
+  <article class="card tile tile-span-3 tile-req-pulse tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("PULSE", "My samples right now") }}
     <div class="req-pulse-grid" data-vis="{{ V }}">
       <div class="req-pulse-cell" data-vis="{{ V }}">
@@ -159,8 +168,8 @@
 
   {# ── TILE 1: This Week — KPIs + weekly chart ── #}
   {% if dashboard_metrics %}
-  <article class="card tile tile-span-3 tile-dash-week" data-vis="{{ V }}">
-    {% call card_heading("", "This Week") %}
+  <article class="card tile tile-span-3 tile-dash-week tile-dash-operational" data-vis="{{ V }}">
+    {% call card_heading("WEEK", "This Week") %}
       <button class="section-collapse-btn" data-collapse-id="dash-week" data-vis="{{ V }}">Hide</button>
     {% endcall %}
     <div class="collapsible-body" data-vis="{{ V }}">
@@ -184,8 +193,8 @@
   </article>
 
   {# ── TILE 2: This Month — KPIs + monthly chart ── #}
-  <article class="card tile tile-span-3 tile-dash-month" data-vis="{{ V }}">
-    {% call card_heading("", "This Month") %}
+  <article class="card tile tile-span-3 tile-dash-month tile-dash-operational" data-vis="{{ V }}">
+    {% call card_heading("MONTH", "This Month") %}
       <button class="section-collapse-btn" data-collapse-id="dash-month" data-vis="{{ V }}">Hide</button>
     {% endcall %}
     <div class="collapsible-body" data-vis="{{ V }}">
@@ -205,10 +214,13 @@
 
   {# ── TILE 3: Quick Intake — card-based view of active samples ── #}
   {% if module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
-  <article class="card tile tile-full-width tile-dash-quick-intake" data-vis="{{ V }}">
-    {% call card_heading("", "Quick Intake") %}
+  <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
+    {% call card_heading("INTAKE", "Quick Intake") %}
       <a class="text-link" href="{{ url_for('schedule', bucket='sample_submitted') }}" data-vis="{{ V }}">Open Queue</a>
     {% endcall %}
+    <p class="dash-section-note hint" data-vis="{{ V }}">
+      Receive what just arrived. Keep the deck moving without leaving the dashboard.
+    </p>
     <label class="quick-intake-search" data-vis="{{ V }}">
       <input type="text" id="quickIntakeSearch" placeholder="Search by number, name, or requester…" data-vis="{{ V }}">
     </label>
@@ -232,7 +244,7 @@
             <input type="hidden" name="action" value="mark_received">
             <input type="hidden" name="request_id" value="{{ row['id'] }}">
             <input type="hidden" name="back" value="{{ url_for('index') }}">
-            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">Accept</button>
+            <button type="submit" class="qi-btn qi-btn-accept" data-vis="{{ V }}">Receive sample</button>
           </form>
           <form method="post" action="{{ url_for('schedule_actions') }}" data-vis="{{ V }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -242,7 +254,7 @@
             <button type="submit" class="qi-btn qi-btn-decline" data-vis="{{ V }}">Decline</button>
           </form>
           {% else %}
-          <a href="{{ url_for('request_detail', request_id=row['id']) }}" class="qi-btn qi-btn-view" data-vis="{{ V }}">View</a>
+          <a href="{{ url_for('request_detail', request_id=row['id']) }}" class="qi-btn qi-btn-view" data-vis="{{ V }}">Open request</a>
           {% endif %}
         </div>
       </div>
@@ -255,16 +267,16 @@
     {% endif %}
   </article>
   {% elif module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
-  <article class="card tile tile-full-width tile-dash-quick-intake" data-vis="{{ V }}">
-    {{ card_heading("", "Quick Intake") }}
+  <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
+    {{ card_heading("INTAKE", "Quick Intake") }}
     <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">All caught up — no samples awaiting action</p>
   </article>
   {% endif %}
 
   {# ── TILE 4: Instrument Queues — inline grid of up to 9 instrument mini-queues ── #}
   {% if module_enabled('queue') and has_instrument_area_access_user and not instrument_fifo_queue %}
-  <article class="card tile tile-full-width tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
-    {% call card_heading("", "Instrument Queues") %}
+  <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
+    {% call card_heading("FLOW", "Instrument Queues") %}
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
     {% endcall %}
     {{ empty_state("No queued work across any instrument.",
@@ -273,8 +285,8 @@
   </article>
   {% endif %}
   {% if module_enabled('queue') and has_instrument_area_access_user and instrument_fifo_queue %}
-  <article class="card tile tile-full-width tile-dash-instrument-queues" id="instrument-fifo-pane" data-vis="{{ V }}">
-    {% call card_heading("", "Instrument Queues") %}
+  <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
+    {% call card_heading("FLOW", "Instrument Queues") %}
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
     {% endcall %}
     <div class="dash-instrument-grid" data-vis="{{ V }}">
@@ -320,8 +332,8 @@
 
   {# ── TILE 5: Upcoming Downtime ── #}
   {% if upcoming_downtime %}
-  <article class="card tile tile-span-3 tile-dash-downtime" data-vis="{{ V }}">
-    {% call card_heading("", "Upcoming Downtime") %}
+  <article class="card tile tile-span-3 tile-dash-downtime tile-dash-support" data-vis="{{ V }}">
+    {% call card_heading("CALENDAR", "Upcoming Downtime") %}
       <a class="text-link" href="{{ url_for('calendar', show_maintenance='1') }}" data-vis="{{ V }}">Calendar</a>
     {% endcall %}
     <div class="downtime-list" data-vis="{{ V }}">
@@ -342,8 +354,8 @@
 
   {# ── TILE 6: Your Jobs — requester / non-admin landing shortcut ── #}
   {% if module_enabled('queue') and not has_instrument_area_access_user %}
-  <article class="card tile tile-span-3 tile-dash-your-jobs" data-vis="{{ V }}">
-    {{ card_heading("", "Your Jobs") }}
+  <article class="card tile tile-span-3 tile-dash-your-jobs tile-dash-support" data-vis="{{ V }}">
+    {{ card_heading("QUEUE", "Your Jobs") }}
     <div class="link-row" data-vis="{{ V }}">
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Open Queue</a>
       <a class="text-link" href="{{ url_for('new_request') }}" data-vis="{{ V }}">Submit Request</a>

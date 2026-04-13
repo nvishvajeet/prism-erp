@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | request-detail-readmodel-refactor | 2026-04-13 20:47 CEST | `app.py`, `CLAIMS.md` | `refactor: extract request detail view model` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

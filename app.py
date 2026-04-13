@@ -4595,6 +4595,13 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN short_code TEXT DEFAULT NULL")
             except:
                 pass
+
+        # Phone number for escalation — tel:/sms: links from dispatch console
+        if "phone" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+            except:
+                pass
         # Auto-generate short_codes for users who don't have one
         _generate_short_codes_if_needed(cur)
 
@@ -19946,6 +19953,71 @@ def ai_advisor_log():
         "SELECT * FROM ai_advisor_queue WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
         (user["id"],))
     return render_template("ai_advisor_log.html", entries=entries)
+
+
+@app.route("/dispatch")
+@login_required
+def dispatch_console():
+    """Mobile-first dispatch console — approve drafts, fire commands,
+    see what needs attention. Designed to be used from a phone."""
+    user = current_user()
+    roles = user_role_set(user)
+    is_op = bool(roles & {"operator", "instrument_admin", "super_admin", "site_admin"}) or is_owner(user)
+    is_fin = bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+    # Collect pending items across modules
+    ai_drafts = query_all(
+        """SELECT sr.id, sr.request_no, sr.title, sr.sample_name, sr.status,
+                  sr.created_at, u.name AS requester_name, i.name AS instrument_name
+           FROM sample_requests sr
+           LEFT JOIN users u ON u.id = sr.requester_id
+           LEFT JOIN instruments i ON i.id = sr.instrument_id
+           WHERE sr.status IN ('draft_ai', 'results_pending_approval')
+           ORDER BY sr.created_at DESC LIMIT 30"""
+    ) if is_op else []
+
+    pending_requests = query_all(
+        """SELECT sr.id, sr.request_no, sr.title, sr.status, sr.created_at,
+                  u.name AS requester_name, i.name AS instrument_name
+           FROM sample_requests sr
+           LEFT JOIN users u ON u.id = sr.requester_id
+           LEFT JOIN instruments i ON i.id = sr.instrument_id
+           WHERE sr.status IN ('submitted', 'under_review')
+           ORDER BY sr.created_at DESC LIMIT 20"""
+    ) if is_op else []
+
+    pending_receipts = query_all(
+        """SELECT er.id, er.title, er.amount, er.category, er.status, er.created_at,
+                  u.name AS submitter_name
+           FROM expense_receipts er
+           LEFT JOIN users u ON u.id = er.submitted_by_user_id
+           WHERE er.status = 'pending' ORDER BY er.created_at DESC LIMIT 20"""
+    ) if is_fin else []
+
+    my_todos = query_all(
+        """SELECT id, title, priority, status, created_at
+           FROM user_todos WHERE user_id = ? AND status = 'open'
+           ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
+                    created_at DESC LIMIT 15""",
+        (user["id"],),
+    )
+
+    recent_ai = query_all(
+        """SELECT id, user_message, ai_response, action_taken, created_at
+           FROM ai_pane_log WHERE user_id = ? ORDER BY id DESC LIMIT 10""",
+        (user["id"],),
+    )
+
+    return render_template(
+        "dispatch.html",
+        ai_drafts=ai_drafts,
+        pending_requests=pending_requests,
+        pending_receipts=pending_receipts,
+        my_todos=my_todos,
+        recent_ai=recent_ai,
+        is_op=is_op,
+        is_fin=is_fin,
+    )
 
 
 @app.route("/ai/process", methods=["POST"])

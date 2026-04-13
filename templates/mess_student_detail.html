@@ -133,8 +133,14 @@
   {# ── Edit Student ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("EDIT STUDENT", "Update details") }}
-    <form method="post" action="{{ url_for('mess_student_edit', student_id=student.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('mess_student_edit', student_id=student.id) }}" class="form-grid" style="padding:0.75rem;" enctype="multipart/form-data" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Photo
+        {% if student.photo_path %}
+        <img src="{{ url_for('mess_student_photo', student_id=student.id) }}" alt="Photo" style="width:80px;height:80px;object-fit:cover;border-radius:8px;display:block;margin-bottom:0.25rem;" data-vis="{{ V }}">
+        {% endif %}
+        <input type="file" name="photo" accept="image/*" data-vis="{{ V }}">
+      </label>
       <label data-vis="{{ V }}">Name
         <input type="text" name="name" value="{{ student.name }}" required data-vis="{{ V }}">
       </label>

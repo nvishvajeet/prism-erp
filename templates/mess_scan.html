@@ -15,32 +15,42 @@
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
-  {# ── Scanner ── #}
+  {# ── Scanner with Photo Preview ── #}
   <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("SCAN STUDENT ENTRY", current_meal|title ~ " service") }}
-    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}" id="scanForm">
-      <div class="control-flex-wrap" data-vis="{{ V }}">
-        <label class="control-flex-fill-wide" data-vis="{{ V }}">
-          Student QR / Roll Number
-          <input type="text" name="qr_token" id="qrInput" placeholder="Scan QR code or type roll number" autofocus autocomplete="off" required data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.1em;">
-        </label>
-        <label data-vis="{{ V }}">
-          Meal
-          <select name="meal_type" data-vis="{{ V }}">
-            {% for m in meal_types %}
-            <option value="{{ m }}"{% if m == current_meal %} selected{% endif %} data-vis="{{ V }}">{{ m|title }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}" style="align-self:flex-end;">
-          Record Entry
-        </button>
+    <div style="display:flex;gap:1rem;padding:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
+      {# Left: scan form #}
+      <form method="post" class="form-grid" style="flex:1;min-width:280px;" data-vis="{{ V }}" id="scanForm">
+        <div class="control-flex-wrap" data-vis="{{ V }}">
+          <label class="control-flex-fill-wide" data-vis="{{ V }}">
+            Student ID / QR / Roll Number
+            <input type="text" name="qr_token" id="qrInput" placeholder="Type 3-digit ID or scan QR" autofocus autocomplete="off" required data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.1em;">
+          </label>
+          <label data-vis="{{ V }}">
+            Meal
+            <select name="meal_type" data-vis="{{ V }}">
+              {% for m in meal_types %}
+              <option value="{{ m }}"{% if m == current_meal %} selected{% endif %} data-vis="{{ V }}">{{ m|title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}" style="align-self:flex-end;">
+            Record Entry
+          </button>
+        </div>
+        <p class="hint" data-vis="{{ V }}">
+          Type the 3-digit number, roll number, or scan QR. Photo shows for verification.
+          Scanner auto-submits on Enter.
+        </p>
+      </form>
+      {# Right: photo preview panel #}
+      <div id="photoPreview" style="min-width:180px;text-align:center;padding:0.5rem;border-radius:8px;background:var(--bg-secondary);display:none;" data-vis="{{ V }}">
+        <img id="previewImg" src="" alt="Student Photo" style="width:150px;height:150px;object-fit:cover;border-radius:8px;border:2px solid var(--color-separator);" data-vis="{{ V }}">
+        <p id="previewName" style="font-weight:700;margin-top:0.5rem;font-size:1.1rem;" data-vis="{{ V }}"></p>
+        <p id="previewRoll" style="font-family:monospace;color:var(--muted);font-size:0.85rem;" data-vis="{{ V }}"></p>
+        <p id="previewInfo" class="hint" style="font-size:0.75rem;" data-vis="{{ V }}"></p>
       </div>
-      <p class="hint" data-vis="{{ V }}">
-        Meal type auto-selects based on time. Scanner auto-submits on Enter.
-        Duplicate entries for the same meal are blocked.
-      </p>
-    </form>
+    </div>
   </article>
 
   {# ── Live Count ── #}
@@ -91,7 +101,41 @@
 <script>
 (function(){
   var input = document.getElementById('qrInput');
+  var preview = document.getElementById('photoPreview');
+  var previewImg = document.getElementById('previewImg');
+  var previewName = document.getElementById('previewName');
+  var previewRoll = document.getElementById('previewRoll');
+  var previewInfo = document.getElementById('previewInfo');
+  var lookupTimer;
+
+  function showPreview(data) {
+    if (!data.found) { preview.style.display = 'none'; return; }
+    previewName.textContent = data.name;
+    previewRoll.textContent = data.roll_number;
+    previewInfo.textContent = (data.department || '') + (data.hostel ? ' · ' + data.hostel + ' ' + (data.room_number || '') : '');
+    if (data.photo_url) {
+      previewImg.src = data.photo_url;
+      previewImg.style.display = 'block';
+    } else {
+      previewImg.style.display = 'none';
+    }
+    preview.style.display = 'block';
+  }
+
   if(input){
+    // Live photo lookup as user types
+    input.addEventListener('input', function(){
+      clearTimeout(lookupTimer);
+      var code = this.value.trim();
+      if(code.length < 2){ preview.style.display = 'none'; return; }
+      lookupTimer = setTimeout(function(){
+        fetch('{{ url_for("mess_api_lookup", code="__CODE__") }}'.replace('__CODE__', encodeURIComponent(code)))
+          .then(function(r){ return r.json(); })
+          .then(showPreview)
+          .catch(function(){ preview.style.display = 'none'; });
+      }, 400);
+    });
+    // Auto-submit on Enter (for QR/barcode scanners)
     input.addEventListener('keypress', function(e){
       if(e.key === 'Enter') {
         e.preventDefault();
@@ -101,23 +145,25 @@
     // Re-focus after page load for continuous scanning
     setTimeout(function(){ input.focus(); }, 300);
   }
+
   // Name search with AJAX
   var nameSearch = document.getElementById('nameSearch');
-  var results = document.getElementById('searchResults');
+  var searchResults = document.getElementById('searchResults');
   if(nameSearch){
     var debounce;
     nameSearch.addEventListener('input', function(){
       clearTimeout(debounce);
       var q = this.value.trim();
-      if(q.length < 2){ results.innerHTML = ''; return; }
+      if(q.length < 2){ searchResults.innerHTML = ''; return; }
       debounce = setTimeout(function(){
         fetch('{{ url_for("mess_api_search_student") }}?q=' + encodeURIComponent(q))
           .then(function(r){ return r.json(); })
           .then(function(data){
-            if(!data.length){ results.innerHTML = '<p class="hint">No matches</p>'; return; }
-            results.innerHTML = data.map(function(s){
-              return '<div style="padding:0.4rem;border-bottom:1px solid var(--color-separator,#333);display:flex;justify-content:space-between;align-items:center;">' +
-                '<span><strong>' + s.name + '</strong> <code class="inline-code">' + s.roll_number + '</code> <span class="badge">' + s.department + '</span></span>' +
+            if(!data.length){ searchResults.innerHTML = '<p class="hint">No matches</p>'; return; }
+            searchResults.innerHTML = data.map(function(s){
+              var photoHtml = s.photo_url ? '<img src="' + s.photo_url + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:0.5rem;">' : '';
+              return '<div style="padding:0.4rem;border-bottom:1px solid var(--color-separator);display:flex;justify-content:space-between;align-items:center;">' +
+                '<span style="display:flex;align-items:center;">' + photoHtml + '<strong>' + s.name + '</strong>&nbsp;<code class="inline-code">' + s.roll_number + '</code>&nbsp;<span class="badge">' + s.department + '</span></span>' +
                 '<button onclick="document.getElementById(\'qrInput\').value=\'' + s.roll_number + '\';document.getElementById(\'scanForm\').submit();" class="btn btn-primary" style="font-size:0.75rem;padding:0.2rem 0.6rem;">Scan In</button>' +
                 '</div>';
             }).join('');

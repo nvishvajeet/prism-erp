@@ -21232,13 +21232,24 @@ def mess_student_new():
             return redirect(url_for("mess_student_new"))
         # Generate unique QR token
         qr_token = f"MESS-{roll}-{secrets.token_hex(3).upper()}"
+        # Handle photo upload
+        photo_path = ""
+        photo_file = request.files.get("photo")
+        if photo_file and photo_file.filename:
+            safe_name = secure_filename(photo_file.filename)
+            photo_dir = DATA_DIR / "mess_photos"
+            photo_dir.mkdir(parents=True, exist_ok=True)
+            ext = Path(safe_name).suffix or ".jpg"
+            photo_dest = photo_dir / f"{roll}{ext}"
+            photo_file.save(str(photo_dest))
+            photo_path = f"mess_photos/{roll}{ext}"
         execute(
             """
             INSERT INTO mess_students (name, roll_number, department, year_of_study, hostel,
-                room_number, meal_plan, phone, qr_token, company_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                room_number, meal_plan, phone, qr_token, company_id, photo_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, roll, dept, year, hostel, room, meal_plan, phone, qr_token, company_id, now_iso()),
+            (name, roll, dept, year, hostel, room, meal_plan, phone, qr_token, company_id, photo_path, now_iso()),
         )
         log_action(user["id"], "mess", 0, "student_registered", {"name": name, "roll": roll})
         flash(f"Student {name} ({roll}) registered. QR token: {qr_token}", "success")
@@ -21355,6 +21366,19 @@ def mess_student_edit(student_id: int):
     meal_plan = request.form.get("meal_plan", "full").strip()
     phone = request.form.get("phone", "").strip()
     if name:
+        # Handle photo upload
+        photo_file = request.files.get("photo")
+        if photo_file and photo_file.filename:
+            s = query_one("SELECT roll_number FROM mess_students WHERE id=?", (student_id,))
+            roll = s["roll_number"] if s else str(student_id)
+            safe_name = secure_filename(photo_file.filename)
+            photo_dir = DATA_DIR / "mess_photos"
+            photo_dir.mkdir(parents=True, exist_ok=True)
+            ext = Path(safe_name).suffix or ".jpg"
+            photo_dest = photo_dir / f"{roll}{ext}"
+            photo_file.save(str(photo_dest))
+            execute("UPDATE mess_students SET photo_path=? WHERE id=?",
+                    (f"mess_photos/{roll}{ext}", student_id))
         execute(
             """
             UPDATE mess_students SET name=?, department=?, year_of_study=?,
@@ -21380,7 +21404,7 @@ def mess_api_search_student():
     like = f"%{q}%"
     results = query_all(
         """
-        SELECT id, name, roll_number, department, meal_plan, is_active
+        SELECT id, name, roll_number, department, meal_plan, is_active, photo_path
         FROM mess_students
         WHERE (name LIKE ? OR roll_number LIKE ? OR department LIKE ?)
         AND is_active = 1
@@ -21388,7 +21412,53 @@ def mess_api_search_student():
         """,
         (like, like, like),
     )
-    return jsonify([dict(r) for r in results])
+    out = []
+    for r in results:
+        d = dict(r)
+        d["photo_url"] = url_for("mess_student_photo", student_id=r["id"]) if r["photo_path"] else ""
+        out.append(d)
+    return jsonify(out)
+
+
+@app.route("/mess/api/lookup/<code>")
+@login_required
+def mess_api_lookup(code: str):
+    """Quick lookup by roll number, QR token, or short numeric ID. Returns student info + photo for security gate."""
+    user = current_user()
+    if not _mess_access(user):
+        return jsonify({"error": "access denied"}), 403
+    code = code.strip().upper()
+    # Try roll number, QR token, or numeric suffix match
+    student = query_one(
+        "SELECT id, name, roll_number, department, year_of_study, hostel, room_number, meal_plan, photo_path, is_active FROM mess_students WHERE (UPPER(roll_number) = ? OR qr_token = ? OR roll_number LIKE ?) AND is_active = 1",
+        (code, code, f"%{code}"),
+    )
+    if not student:
+        # Try as pure numeric — match last N digits of roll number
+        if code.isdigit():
+            student = query_one(
+                "SELECT id, name, roll_number, department, year_of_study, hostel, room_number, meal_plan, photo_path, is_active FROM mess_students WHERE roll_number LIKE ? AND is_active = 1",
+                (f"%{code}",),
+            )
+    if not student:
+        return jsonify({"found": False})
+    d = dict(student)
+    d["found"] = True
+    d["photo_url"] = url_for("mess_student_photo", student_id=student["id"]) if student["photo_path"] else ""
+    return jsonify(d)
+
+
+@app.route("/mess/students/<int:student_id>/photo")
+@login_required
+def mess_student_photo(student_id: int):
+    """Serve student photo from data directory."""
+    student = query_one("SELECT photo_path FROM mess_students WHERE id=?", (student_id,))
+    if not student or not student["photo_path"]:
+        abort(404)
+    photo_file = DATA_DIR / student["photo_path"]
+    if not photo_file.exists():
+        abort(404)
+    return send_file(str(photo_file))
 
 
 @app.route("/mess/students/import", methods=["POST"])

@@ -9698,3 +9698,7 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 
 /* Larger + button on instruments page */
 .mini-icon-button { min-width: 2rem; min-height: 2rem; font-size: 1.2rem; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Noticeboard: ensure <li> doesn't absorb clicks from <a> */
+.tile-dash-noticeboard .notice { padding: 0; }
+.tile-dash-noticeboard .notice-link { display: flex; width: 100%; }

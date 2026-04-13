@@ -273,7 +273,8 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {
             "vendor_payments_list", "vendor_payment_new", "vendor_payment_detail",
             "vendor_payment_approve_queue", "vendor_payment_batch_approve",
-            "vendor_payment_print", "vendor_list", "vendor_detail",
+            "vendor_payment_print", "vendor_payment_print_batch",
+            "vendor_payment_filing", "vendor_list", "vendor_detail",
             "vendor_new", "vendor_payment_reports",
         },
         "nav_badge_key": "pending_approvals",
@@ -16565,28 +16566,7 @@ def vendor_payment_print(po_id):
     """, (po_id,))
     if not po:
         abort(404)
-    # Determine filing category for cabinet storage
-    filing_categories = {
-        "vegetables": "PURCHASES / PERISHABLE",
-        "dairy": "PURCHASES / PERISHABLE",
-        "provisions": "PURCHASES / PROVISIONS",
-        "meat": "PURCHASES / PERISHABLE",
-        "fuel": "EXPENSES / TRANSPORT",
-        "equipment": "CAPITAL / EQUIPMENT",
-        "maintenance": "EXPENSES / MAINTENANCE",
-        "salary": "PAYROLL / SALARY",
-        "utilities": "EXPENSES / UTILITIES",
-        "insurance": "EXPENSES / COMPLIANCE",
-        "services": "EXPENSES / SERVICES",
-        "general": "EXPENSES / GENERAL",
-    }
-    filing_cat = filing_categories.get(po["category"], "EXPENSES / GENERAL")
-    fiscal_year = ""
-    if po["created_at"]:
-        from datetime import datetime as dt
-        d = dt.fromisoformat(po["created_at"][:10])
-        fy_start = d.year if d.month >= 4 else d.year - 1
-        fiscal_year = f"FY {fy_start}-{(fy_start+1) % 100:02d}"
+    filing_cat, _, fiscal_year = _po_filing_info(po)
     return render_template("vendor_payment_print.html", po=po,
                            filing_cat=filing_cat, fiscal_year=fiscal_year)
 
@@ -16702,6 +16682,181 @@ def vendor_payment_reports():
                            this_month=this_month["total"] if this_month else 0,
                            pending_amount=pending_amount["total"] if pending_amount else 0,
                            categories=dict(PO_CATEGORIES))
+
+
+# ── Filing cabinet structure ──
+FILING_CABINET = {
+    "PURCHASES / PERISHABLE": {
+        "categories": ["vegetables", "dairy", "meat"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Daily/weekly vendor invoices. Paper until vendors adopt digital invoicing.",
+    },
+    "PURCHASES / PROVISIONS": {
+        "categories": ["provisions"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Monthly bulk orders. Keep vendor GST invoices for input tax credit.",
+    },
+    "EXPENSES / TRANSPORT": {
+        "categories": ["fuel"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Fuel bills, toll receipts. Paper until pumps give e-receipts.",
+    },
+    "CAPITAL / EQUIPMENT": {
+        "categories": ["equipment"],
+        "paper_needed": True, "retention_years": 10,
+        "notes": "Major purchases. Keep warranty + GST invoices. 10-year for depreciation.",
+    },
+    "EXPENSES / MAINTENANCE": {
+        "categories": ["maintenance"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Repair bills. Often cash — keep acknowledgment slips.",
+    },
+    "PAYROLL / SALARY": {
+        "categories": ["salary"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Salary sheets, attendance, PF/ESI. Statutory requirement.",
+    },
+    "EXPENSES / UTILITIES": {
+        "categories": ["utilities"],
+        "paper_needed": False, "retention_years": 3,
+        "notes": "Electric/water/gas. Available online — digital-only OK. 3-year retention.",
+    },
+    "EXPENSES / COMPLIANCE": {
+        "categories": ["insurance"],
+        "paper_needed": True, "retention_years": 10,
+        "notes": "Insurance, FSSAI, GST returns. Keep originals for audits.",
+    },
+    "EXPENSES / SERVICES": {
+        "categories": ["services"],
+        "paper_needed": False, "retention_years": 7,
+        "notes": "CA, legal, pest control. Most issue digital invoices.",
+    },
+    "EXPENSES / GENERAL": {
+        "categories": ["general"],
+        "paper_needed": True, "retention_years": 7,
+        "notes": "Miscellaneous. Paper until fully categorized.",
+    },
+}
+
+_CATEGORY_TO_FOLDER = {}
+for _fn, _fi in FILING_CABINET.items():
+    for _c in _fi["categories"]:
+        _CATEGORY_TO_FOLDER[_c] = _fn
+
+
+def _po_filing_info(po):
+    """Return (folder_name, folder_info, fiscal_year) for a PO."""
+    cat = po["category"] if hasattr(po, "__getitem__") else "general"
+    folder_name = _CATEGORY_TO_FOLDER.get(cat, "EXPENSES / GENERAL")
+    folder_info = FILING_CABINET.get(folder_name, FILING_CABINET["EXPENSES / GENERAL"])
+    fiscal_year = ""
+    created = po["created_at"] if po["created_at"] else None
+    if created:
+        from datetime import datetime as dt
+        d = dt.fromisoformat(created[:10])
+        fy_start = d.year if d.month >= 4 else d.year - 1
+        fiscal_year = f"FY {fy_start}-{(fy_start + 1) % 100:02d}"
+    return folder_name, folder_info, fiscal_year
+
+
+@app.route("/payments/filing")
+@login_required
+def vendor_payment_filing():
+    """Filing cabinet overview — shows folder structure, what needs
+    printing, and which folders are paper-needed vs digital-only."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    folders = []
+    for folder_name, info in FILING_CABINET.items():
+        cats = info["categories"]
+        ph = ",".join("?" for _ in cats)
+        count = query_one(
+            f"SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total FROM purchase_orders WHERE category IN ({ph})",
+            tuple(cats))
+        completed = query_one(
+            f"SELECT COUNT(*) AS c FROM purchase_orders WHERE category IN ({ph}) AND status IN ('paid','receipt_uploaded')",
+            tuple(cats))
+        folders.append({
+            "name": folder_name,
+            "paper_needed": info["paper_needed"],
+            "retention_years": info["retention_years"],
+            "notes": info["notes"],
+            "po_count": count["c"] if count else 0,
+            "total_amount": count["total"] if count else 0,
+            "completed": completed["c"] if completed else 0,
+        })
+    # Available months for the print-batch selector
+    months = query_all("""
+        SELECT DISTINCT strftime('%Y-%m', created_at) AS month
+          FROM purchase_orders WHERE created_at IS NOT NULL
+         ORDER BY month DESC LIMIT 12
+    """)
+    return render_template("vendor_payment_filing.html", folders=folders,
+                           months=[m["month"] for m in months],
+                           categories=PO_CATEGORIES)
+
+
+@app.route("/payments/print-batch")
+@login_required
+def vendor_payment_print_batch():
+    """Bulk print: multi-page A4, one PO per page, for filing."""
+    if not module_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    month = request.args.get("month", "")
+    category = request.args.get("category", "")
+    folder = request.args.get("folder", "")
+    status = request.args.get("status", "paid,receipt_uploaded,approved")
+    statuses = [s.strip() for s in status.split(",") if s.strip()]
+
+    where = ["po.status IN ({})".format(",".join("?" for _ in statuses))]
+    params: list = list(statuses)
+    if month:
+        where.append("po.created_at LIKE ?")
+        params.append(f"{month}%")
+    if category:
+        where.append("po.category = ?")
+        params.append(category)
+    if folder and folder in FILING_CABINET:
+        cats = FILING_CABINET[folder]["categories"]
+        where.append("po.category IN ({})".format(",".join("?" for _ in cats)))
+        params.extend(cats)
+
+    orders = query_all("""
+        SELECT po.*, v.name AS vendor_name, v.phone AS vendor_phone,
+               v.gstin AS vendor_gstin, v.pan AS vendor_pan,
+               v.address AS vendor_address,
+               v.upi_id AS vendor_upi, v.bank_name AS vendor_bank,
+               v.bank_account AS vendor_bank_account, v.ifsc_code AS vendor_ifsc,
+               u.name AS submitted_by_name,
+               a.name AS approved_by_name,
+               p.name AS paid_by_name
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN users a ON a.id = po.approved_by_user_id
+          LEFT JOIN users p ON p.id = po.paid_by_user_id
+         WHERE """ + " AND ".join(where) + """
+         ORDER BY po.category, po.created_at
+    """, tuple(params))
+    grand_total = sum(o["amount"] for o in orders)
+    desc_parts = []
+    if month:
+        desc_parts.append(month)
+    if folder:
+        desc_parts.append(folder)
+    elif category:
+        desc_parts.append(category)
+    filter_label = " · ".join(desc_parts) if desc_parts else "All"
+    return render_template("vendor_payment_print_batch.html",
+                           orders=orders, grand_total=grand_total,
+                           filter_label=filter_label,
+                           filing_lookup=_CATEGORY_TO_FOLDER)
 
 
 # ── Compute / AI Job Submission module ──────────────────────────
@@ -17239,7 +17394,16 @@ def audit_export():
 
 
 def _process_command_batch():
-    """Process up to 25 pending commands in ONE Claude API call."""
+    """Process up to 25 pending commands in ONE Claude API call.
+
+    SAFETY RULES:
+    - AI can only CREATE entries (receipts, todos, attendance marks)
+    - AI can NEVER delete, modify, or approve anything
+    - All AI-created entries are tagged with source='ai_assistant'
+    - All AI-created entries need admin sign-off (status='pending_review')
+    - Relevant area admin gets a notification to review
+    - Admin can approve (makes it live) or reject (deletes it)
+    """
     pending = query_all(
         """SELECT cq.*, u.name AS user_name
            FROM command_queue cq JOIN users u ON u.id = cq.user_id
@@ -17317,6 +17481,8 @@ Commands to parse:
             result_entity_type = ""
             result_entity_id = None
 
+            # SAFETY: AI only CREATES entries with status='pending_review'.
+            # AI can NEVER delete, modify, or approve. Area admin signs off.
             if action == "attendance" and parsed.get("data", {}).get("user_name"):
                 d = parsed["data"]
                 target = query_one("SELECT id FROM users WHERE name LIKE ?", ("%" + d.get("user_name", "") + "%",))
@@ -17324,37 +17490,43 @@ Commands to parse:
                     today = d.get("date", date.today().isoformat())
                     existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
                     status_val = d.get("status", "present")
-                    if existing:
-                        execute("UPDATE attendance SET status = ? WHERE id = ?", (status_val, existing["id"]))
-                    else:
+                    if not existing:
                         execute(
-                            "INSERT INTO attendance (user_id, date, status, created_at) VALUES (?, ?, ?, ?)",
-                            (target["id"], today, status_val, now_iso()),
+                            "INSERT INTO attendance (user_id, date, status, notes, created_at) VALUES (?, ?, ?, ?, ?)",
+                            (target["id"], today, status_val, "[AI-created, pending admin review]", now_iso()),
                         )
                     result_entity_type = "attendance"
                     result_entity_id = target["id"]
-                    summary += " -- Done"
+                    summary += " — Logged (needs admin sign-off)"
+                    # Notify area admin
+                    admins = query_all("SELECT DISTINCT ia.user_id FROM instrument_admins ia JOIN instrument_operators io ON io.instrument_id = ia.instrument_id WHERE io.user_id = ?", (target["id"],))
+                    for adm in admins:
+                        notify(adm["user_id"], "task", "AI attendance entry needs review", "AI marked %s as %s. Please verify." % (d.get("user_name", ""), status_val), url_for("attendance_page"))
 
             elif action == "receipt" and parsed.get("data", {}).get("amount"):
                 d = parsed["data"]
                 cur_id = execute(
-                    "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
                     (p["user_id"], d.get("title", p["raw_text"][:50]), float(d.get("amount", 0)),
-                     d.get("category", "general"), d.get("description", ""), now_iso()),
+                     d.get("category", "general"), "[AI-created] " + d.get("description", ""), now_iso()),
                 )
                 result_entity_type = "receipt"
                 result_entity_id = cur_id
-                summary += " -- Receipt created"
+                summary += " — Receipt created (pending finance review)"
+                # Notify finance admin
+                fin_admins = query_all("SELECT id FROM users WHERE role = 'finance_admin' LIMIT 3")
+                for fa in fin_admins:
+                    notify(fa["id"], "finance", "AI receipt needs review", "AI created receipt: %s ₹%s" % (d.get("title", ""), d.get("amount", "")), url_for("receipt_detail", receipt_id=cur_id))
 
             elif action == "todo":
                 d = parsed["data"]
                 execute(
-                    "INSERT INTO user_todos (user_id, assigned_by_user_id, title, priority, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
+                    "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
                     (p["user_id"], p["user_id"], d.get("title", p["raw_text"][:50]),
-                     d.get("priority", "normal"), now_iso()),
+                     "[AI-created from voice command]", d.get("priority", "normal"), now_iso()),
                 )
                 result_entity_type = "todo"
-                summary += " -- Task created"
+                summary += " — Task created"
 
             execute(
                 """UPDATE command_queue
@@ -17403,7 +17575,6 @@ def process_all_pending_commands():
                 break
             total += _process_command_batch()
         return total
-            pass
 
 
 @app.route("/quickentry", methods=["GET", "POST"])

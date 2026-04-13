@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state, kpi_grid, metadata_grid with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Filing Cabinet</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ folders|length }} folders</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  {# ── Summary KPIs ── #}
+  {% set total_pos = folders|sum(attribute='po_count') %}
+  {% set total_amt = folders|sum(attribute='total_amount') %}
+  {% set paper_folders = folders|selectattr('paper_needed')|list|length %}
+  {% set digital_folders = folders|length - paper_folders %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": total_pos|string,                        "label": "Total Transactions"},
+      {"value": "₹" ~ "{:,.0f}".format(total_amt),      "label": "Total Value"},
+      {"value": paper_folders|string,                    "label": "Paper Folders",  "tone": "amber"},
+      {"value": digital_folders|string,                  "label": "Digital-Only",   "tone": "green"},
+    ]) }}
+  </article>
+
+  {# ── Print Batch Selector ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BATCH PRINT", "Print all transactions for filing") }}
+    <form method="get" action="{{ url_for('vendor_payment_print_batch') }}" style="padding:0.5rem 0.75rem 0.75rem;display:flex;gap:0.75rem;align-items:end;flex-wrap:wrap;" data-vis="{{ V }}">
+      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        Month
+        <select name="month" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All months</option>
+          {% for m in months %}
+          <option value="{{ m }}" data-vis="{{ V }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        Folder
+        <select name="folder" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">All folders</option>
+          {% for f in folders %}
+          {% if f.po_count > 0 %}
+          <option value="{{ f.name }}" data-vis="{{ V }}">{{ f.name }} ({{ f.po_count }})</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}" style="flex:1;min-width:8rem;">
+        Status
+        <select name="status" data-vis="{{ V }}">
+          <option value="paid,receipt_uploaded,approved" data-vis="{{ V }}">Paid + Approved</option>
+          <option value="paid,receipt_uploaded" data-vis="{{ V }}">Paid only</option>
+          <option value="approved" data-vis="{{ V }}">Approved only</option>
+          <option value="paid,receipt_uploaded,approved,pending_approval,rejected,draft" data-vis="{{ V }}">Everything</option>
+        </select>
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}" style="min-width:8rem;">🖨 Print Batch</button>
+    </form>
+  </article>
+
+  {# ── Folder Cards ── #}
+  {% for f in folders %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="border-left:3px solid {% if f.paper_needed %}var(--color-amber,#e6a800){% else %}var(--color-green,#34a853){% endif %};">
+    <div class="section-head" data-vis="{{ V }}">
+      <div data-vis="{{ V }}">
+        <p class="section-kicker" data-vis="{{ V }}">
+          {% if f.paper_needed %}📁 PAPER{% else %}💾 DIGITAL-ONLY{% endif %}
+          · {{ f.retention_years }}-year retention
+        </p>
+        <h2 data-vis="{{ V }}">{{ f.name }}</h2>
+        <p class="hint" data-vis="{{ V }}">{{ f.notes }}</p>
+      </div>
+      <div class="section-actions" data-vis="{{ V }}">
+        {% if f.po_count > 0 %}
+        <a href="{{ url_for('vendor_payment_print_batch', folder=f.name) }}" class="btn" data-vis="{{ V }}">🖨 Print All ({{ f.po_count }})</a>
+        {% endif %}
+      </div>
+    </div>
+    {% if f.po_count > 0 %}
+    {{ metadata_grid([
+      ("Transactions", f.po_count|string),
+      ("Total Value", "₹" ~ "{:,.0f}".format(f.total_amount)),
+      ("Completed (paid/receipted)", f.completed|string),
+      ("Retention", f.retention_years|string ~ " years"),
+      ("Paper Filing", "Required" if f.paper_needed else "Not needed — digital records sufficient"),
+    ], compact=True) }}
+    {% else %}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">No transactions in this folder yet.</span>
+    </div>
+    {% endif %}
+  </article>
+  {% endfor %}
+
+  {# ── Recommendations ── #}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("FILING RECOMMENDATIONS", "Which folders can go digital?") }}
+    <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
+      <table class="data-table" data-vis="{{ V }}">
+        <thead data-vis="{{ V }}">
+          <tr data-vis="{{ V }}">
+            <th data-vis="{{ V }}">Folder</th>
+            <th data-vis="{{ V }}">Paper?</th>
+            <th data-vis="{{ V }}">Retain</th>
+            <th data-vis="{{ V }}">Recommendation</th>
+          </tr>
+        </thead>
+        <tbody data-vis="{{ V }}">
+          {% for f in folders %}
+          <tr data-vis="{{ V }}">
+            <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ f.name }}</strong></td>
+            <td data-vis="{{ V }}">
+              {% if f.paper_needed %}
+              <span class="badge status-queued" data-vis="{{ V }}">Paper</span>
+              {% else %}
+              <span class="badge status-active" data-vis="{{ V }}">Digital</span>
+              {% endif %}
+            </td>
+            <td data-vis="{{ V }}">{{ f.retention_years }}y</td>
+            <td data-vis="{{ V }}">
+              {% if not f.paper_needed %}
+              Save paper — receipts available online. Print only if auditor requests.
+              {% elif f.retention_years >= 10 %}
+              Keep originals. Scan and store digitally as backup.
+              {% else %}
+              Print monthly. File chronologically. Destroy after {{ f.retention_years }} years.
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+</section>
+{% endblock %}

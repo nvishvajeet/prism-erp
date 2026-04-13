@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Batch Print — {{ filter_label }} — {{ orders|length }} transactions</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.4; color: #111; }
+
+    /* ── Cover page ── */
+    .cover { page-break-after: always; padding-top: 3cm; }
+    .cover h1 { font-size: 22pt; border-bottom: 3px solid #111; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    .cover table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    .cover td, .cover th { padding: 0.3rem 0.5rem; text-align: left; border-bottom: 1px solid #ddd; font-size: 10pt; }
+    .cover th { background: #f5f5f5; font-weight: 600; }
+    .cover .total-row td { border-top: 2px solid #111; font-weight: 700; font-size: 11pt; }
+
+    /* ── Per-PO page ── */
+    .po-page { page-break-after: always; }
+    .po-page:last-child { page-break-after: auto; }
+    .filing-strip { background: #222; color: #fff; padding: 0.25rem 0.5rem; font-size: 9pt; font-weight: 700; display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .po-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 0.4rem; margin-bottom: 0.5rem; }
+    .po-header h2 { font-size: 13pt; }
+    .po-header .meta { text-align: right; font-size: 9pt; color: #444; }
+    .status-badge { display: inline-block; padding: 0.1rem 0.4rem; font-size: 8pt; font-weight: 600; border-radius: 2px; text-transform: uppercase; }
+    .status-approved { background: #d4edda; color: #155724; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .status-paid { background: #cce5ff; color: #004085; }
+    .status-pending_approval { background: #fff3cd; color: #856404; }
+    .status-receipt_uploaded { background: #d1e7dd; color: #0f5132; }
+    .status-draft { background: #e2e3e5; color: #383d41; }
+    .section { margin-bottom: 0.4rem; }
+    .section h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: 0.04em; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 0.1rem; margin-bottom: 0.2rem; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 0.15rem 0.4rem; font-size: 9pt; border-bottom: 1px solid #eee; }
+    td:first-child { width: 28%; color: #555; font-weight: 500; }
+    .amount-large { font-size: 16pt; font-weight: 700; }
+    .timeline { border-left: 2px solid #ddd; margin-left: 0.4rem; padding-left: 0.5rem; font-size: 9pt; }
+    .timeline-entry { margin-bottom: 0.2rem; }
+    .timeline-entry .time { font-size: 7pt; color: #888; }
+    .sign-block { display: flex; justify-content: space-between; margin-top: 1rem; padding-top: 0.3rem; border-top: 1px solid #ddd; }
+    .sign-slot { width: 28%; text-align: center; }
+    .sign-slot .sign-line { border-bottom: 1px solid #111; height: 1.5rem; margin-bottom: 0.15rem; }
+    .sign-slot .sign-label { font-size: 7pt; color: #555; }
+    .retention { font-size: 7pt; color: #666; margin-top: 0.3rem; text-align: center; }
+
+    @media screen {
+      body { max-width: 210mm; margin: 1rem auto; padding: 1cm; }
+      .no-print { display: flex; gap: 0.5rem; margin-bottom: 1rem; justify-content: center; position: sticky; top: 0; background: #fff; padding: 0.5rem; border-bottom: 1px solid #ddd; z-index: 10; }
+      .no-print button { padding: 0.5rem 1.5rem; font-size: 12pt; cursor: pointer; }
+      .po-page { border: 1px solid #eee; padding: 1cm; margin-bottom: 1rem; }
+    }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button onclick="window.print()">🖨 Print All ({{ orders|length }} pages)</button>
+    <button onclick="window.history.back()">← Back</button>
+    <span style="font-size:10pt;color:#666;align-self:center;">{{ filter_label }} · ₹{{ "{:,.0f}".format(grand_total) }}</span>
+  </div>
+
+  {# ══ Cover / Summary Page ══ #}
+  <div class="cover">
+    <h1>Payment Records — {{ filter_label }}</h1>
+    <p style="font-size:11pt;margin-bottom:0.5rem;">{{ orders|length }} transactions · Total: <strong>₹{{ "{:,.2f}".format(grand_total) }}</strong></p>
+    <p style="font-size:9pt;color:#555;">Printed for filing. Each transaction on a separate page after this summary.</p>
+
+    <table style="margin-top:1rem;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Title</th>
+          <th>Vendor</th>
+          <th>Category</th>
+          <th style="text-align:right;">Amount</th>
+          <th>Status</th>
+          <th>File Under</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for po in orders %}
+        <tr>
+          <td>{{ po.id }}</td>
+          <td>{{ po.created_at[:10] if po.created_at else '—' }}</td>
+          <td>{{ po.title }}</td>
+          <td>{{ po.vendor_name }}</td>
+          <td>{{ po.category|title }}</td>
+          <td style="text-align:right;">₹{{ "{:,.0f}".format(po.amount) }}</td>
+          <td><span class="status-badge status-{{ po.status }}">{{ po.status|replace('_',' ') }}</span></td>
+          <td style="font-size:8pt;">{{ filing_lookup.get(po.category, 'GENERAL') }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td colspan="5">Total ({{ orders|length }} transactions)</td>
+          <td style="text-align:right;">₹{{ "{:,.2f}".format(grand_total) }}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="margin-top:2rem;">
+      <div class="sign-block">
+        <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Prepared by</div></div>
+        <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Reviewed by</div></div>
+        <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Approved by (Owner)</div></div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ Individual PO Pages ══ #}
+  {% for po in orders %}
+  {% set folder = filing_lookup.get(po.category, 'EXPENSES / GENERAL') %}
+  {% set fy = '' %}
+  <div class="po-page">
+    <div class="filing-strip">
+      <span>FILE: {{ folder }}</span>
+      <span>PO #{{ po.id }}</span>
+      <span>{{ po.created_at[:7] if po.created_at else '' }}</span>
+    </div>
+
+    <div class="po-header">
+      <div>
+        <h2>PO #{{ po.id }} — {{ po.title }}</h2>
+        <p style="font-size:9pt;color:#555;">{{ po.vendor_name }}{% if po.vendor_phone %} · {{ po.vendor_phone }}{% endif %}</p>
+      </div>
+      <div class="meta">
+        <span class="status-badge status-{{ po.status }}">{{ po.status|replace('_',' ')|upper }}</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Order</h3>
+      <table>
+        <tr><td>Amount</td><td><span class="amount-large">₹{{ "{:,.2f}".format(po.amount) }}</span></td></tr>
+        <tr><td>Category</td><td>{{ po.category|title }}</td></tr>
+        <tr><td>Priority</td><td>{{ po.priority|title }}</td></tr>
+        <tr><td>Created</td><td>{{ po.created_at[:16] if po.created_at else '—' }}</td></tr>
+        {% if po.due_date %}<tr><td>Due</td><td>{{ po.due_date[:10] }}</td></tr>{% endif %}
+        {% if po.description %}<tr><td>Description</td><td>{{ po.description[:200] }}</td></tr>{% endif %}
+      </table>
+    </div>
+
+    <div class="section">
+      <h3>Vendor</h3>
+      <table>
+        <tr><td>Name</td><td><strong>{{ po.vendor_name }}</strong></td></tr>
+        {% if po.vendor_gstin %}<tr><td>GSTIN</td><td>{{ po.vendor_gstin }}</td></tr>{% endif %}
+        {% if po.vendor_pan %}<tr><td>PAN</td><td>{{ po.vendor_pan }}</td></tr>{% endif %}
+        {% if po.vendor_address %}<tr><td>Address</td><td>{{ po.vendor_address }}</td></tr>{% endif %}
+        {% if po.vendor_upi %}<tr><td>UPI</td><td>{{ po.vendor_upi }}</td></tr>{% endif %}
+        {% if po.vendor_bank %}<tr><td>Bank</td><td>{{ po.vendor_bank }}{% if po.vendor_bank_account %} — {{ po.vendor_bank_account }}{% endif %}</td></tr>{% endif %}
+        {% if po.vendor_ifsc %}<tr><td>IFSC</td><td>{{ po.vendor_ifsc }}</td></tr>{% endif %}
+      </table>
+    </div>
+
+    <div class="section">
+      <h3>Trail</h3>
+      <div class="timeline">
+        <div class="timeline-entry">
+          <strong>Submitted</strong> — {{ po.submitted_by_name or '—' }}
+          <span class="time">{{ po.created_at[:16] if po.created_at else '' }}</span>
+        </div>
+        {% if po.approved_at %}
+        <div class="timeline-entry">
+          <strong>{% if po.status == 'rejected' %}Rejected{% elif po.auto_approved %}Auto-approved{% else %}Approved{% endif %}</strong>
+          — {{ po.approved_by_name or 'System' }}
+          <span class="time">{{ po.approved_at[:16] }}</span>
+          {% if po.approval_note %}<br><em style="font-size:8pt;color:#555;">{{ po.approval_note }}</em>{% endif %}
+        </div>
+        {% endif %}
+        {% if po.paid_at %}
+        <div class="timeline-entry">
+          <strong>Paid</strong>{% if po.payment_method %} via {{ po.payment_method }}{% endif %}
+          — {{ po.paid_by_name or '—' }}
+          <span class="time">{{ po.paid_at[:16] }}</span>
+          {% if po.payment_reference %}<br><em style="font-size:8pt;color:#555;">Ref: {{ po.payment_reference }}</em>{% endif %}
+        </div>
+        {% endif %}
+        {% if po.receipt_path %}
+        <div class="timeline-entry"><strong>Receipt:</strong> {{ po.receipt_path }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Payment</h3>
+      <table>
+        <tr><td>Method</td><td>{{ po.payment_method or 'Not yet paid' }}</td></tr>
+        <tr><td>Reference</td><td>{{ po.payment_reference or '—' }}</td></tr>
+        <tr><td>Invoice</td><td>{{ po.invoice_path or 'None' }}</td></tr>
+        <tr><td>Receipt</td><td>{{ po.receipt_path or 'None' }}</td></tr>
+      </table>
+    </div>
+
+    <div class="sign-block">
+      <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Prepared<br>{{ po.submitted_by_name or '____' }}</div></div>
+      <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Approved<br>{{ po.approved_by_name or '____' }}</div></div>
+      <div class="sign-slot"><div class="sign-line"></div><div class="sign-label">Received<br>____</div></div>
+    </div>
+    <p class="retention">RETENTION: 7 years · FILE: {{ folder }} · PO-{{ po.id }}</p>
+  </div>
+  {% endfor %}
+
+  {% if not orders %}
+  <div style="text-align:center;padding:3rem;font-size:14pt;color:#888;">
+    No transactions match the selected filters.
+  </div>
+  {% endif %}
+</body>
+</html>

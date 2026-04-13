@@ -1785,7 +1785,9 @@ th {
   color: var(--tone-completed-ink);
 }
 
-.status-attention {
+.status-attention,
+.status-draft_ai,
+.status-results_pending_approval {
   background: var(--tone-wait-bg);
   color: var(--tone-wait-ink);
 }

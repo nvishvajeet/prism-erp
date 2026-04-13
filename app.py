@@ -896,6 +896,8 @@ def request_display_status(status: str) -> str:
         "sample_received": "Sample Received",
         "scheduled": "Scheduled",
         "in_progress": "In Progress",
+        "draft_ai": "AI Draft",
+        "results_pending_approval": "Results Pending",
     }
     return labels.get(status, status.replace("_", " ").title())
 
@@ -14143,10 +14145,11 @@ def schedule():
     schedule_query_filters = {"sort": "created_desc"}  # always fetch newest-first from DB
     base_sql, base_params = request_history_query(clauses, params, schedule_query_filters)
     rows_all = query_all(base_sql, tuple(base_params))
-    live_statuses = {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "in_progress"}
+    live_statuses = {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "in_progress", "draft_ai", "results_pending_approval"}
     live_rows = [row for row in rows_all if row["status"] in live_statuses]
     completed_rows = [row for row in rows_all if row["status"] == "completed"]
     rejected_rows = [row for row in rows_all if row["status"] == "rejected"]
+    ai_draft_rows = [row for row in live_rows if row["status"] in ("draft_ai", "results_pending_approval")]
     soft_wait_rows = [row for row in live_rows if row["status"] == "submitted"]
     approval_rows = [row for row in live_rows if row["status"] == "under_review"]
     awaiting_sample_rows = [row for row in live_rows if row["status"] == "awaiting_sample_submission"]
@@ -14176,6 +14179,7 @@ def schedule():
         completed_rows=completed_rows,
         rejected_rows=rejected_rows,
         soft_wait_rows=soft_wait_rows,
+        ai_draft_rows=ai_draft_rows,
         approval_rows=approval_rows,
         awaiting_sample_rows=awaiting_sample_rows,
         pending_receipt_rows=pending_receipt_rows,
@@ -22547,9 +22551,12 @@ def tuck_shop_api_today_stats():
 AI_PANE_SYSTEM_PROMPT = """You are CATALYST AI, the assistant for an ERP system at a university lab and hostel services company.
 
 Parse the user's message into a structured action. The user's role and current page give you context.
+All data-modifying actions create DRAFTS that require human approval before becoming live.
 
 Available actions (return ONE):
-- submit_request: {instrument, sample_description, num_samples, urgency} — lab user wants to submit a sample for analysis
+- submit_request: {instrument, requester_name, title, sample_name, sample_count, description, priority, sample_origin} — create a draft sample request for an instrument. Operator says "new FESEM request for Priya" → draft request created → appears in operator approval queue.
+- bulk_sample_intake: {instrument, samples: [{name, description}], requester_name} — intake multiple samples at once. "Take samples A, B, C for XRD" → creates draft requests for each.
+- attach_results: {request_id_or_title, result_notes} — operator attaches results file and notes to a request. AI extracts metadata from the file, marks request as completed pending approval.
 - mark_attendance: {target_name, status (present/absent/half), date} — admin marks someone's attendance
 - create_receipt: {amount, category (fuel/travel/equipment/consumables/general), title, description} — submit expense
 - create_todo: {title, assign_to, priority (normal/high/urgent)} — create a task
@@ -22572,7 +22579,9 @@ AI_PANE_MODEL = "claude-haiku-4-20250414"
 def _ai_pane_route_label(action: str) -> str:
     """Human-readable routing label for the action."""
     labels = {
-        "submit_request": "Lab Admin",
+        "submit_request": "Operator Approval",
+        "bulk_sample_intake": "Operator Approval",
+        "attach_results": "Operator Approval",
         "mark_attendance": "HR / Personnel",
         "create_receipt": "Finance",
         "create_todo": "You",
@@ -22738,6 +22747,129 @@ def ai_pane_submit():
             notify(fa["id"], "finance", "AI receipt needs review",
                    f"{user['name']} submitted ₹{d['amount']} via AI Pane", url_for("receipts_list"))
 
+    elif action == "submit_request" and action_data.get("instrument"):
+        # AI-created draft request — needs operator approval before becoming live
+        d = action_data
+        inst_name = d["instrument"]
+        inst = query_one("SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'",
+                         ("%" + inst_name + "%",))
+        if inst:
+            # Resolve requester by name (or default to the operator themselves)
+            requester = user
+            req_name = d.get("requester_name", "")
+            if req_name:
+                found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1",
+                                  ("%" + req_name + "%",))
+                if found:
+                    requester = found
+            title = d.get("title", f"AI request — {inst['name']}")
+            sample_name = d.get("sample_name", d.get("description", "Sample")[:100])
+            sample_count = int(d.get("sample_count", d.get("num_samples", 1)))
+            sample_origin = d.get("sample_origin", "internal")
+            request_no = generate_job_reference(sample_origin)
+            sample_ref = generate_sample_reference(inst["name"], sample_origin)
+            req_id = execute(
+                """INSERT INTO sample_requests
+                   (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
+                    instrument_id, title, sample_name, sample_count, description, sample_origin,
+                    priority, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (request_no, sample_ref, requester["id"], user["id"],
+                 f"[AI Pane draft — needs approval]",
+                 inst["id"], title, sample_name, sample_count,
+                 d.get("description", ""), sample_origin,
+                 d.get("priority", "normal"), "draft_ai", now_iso(), now_iso()),
+            )
+            entity_created = "draft_request"
+            summary = f"Draft request #{request_no} created for {requester['name']} on {inst['name']} — awaiting your approval"
+            execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                    (req_id, summary, now_iso(), cmd_id))
+            # Notify operators for approval
+            for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+                notify(op["id"], "task", "AI draft request needs approval",
+                       f"{user['name']}: {title} for {requester['name']} on {inst['name']}", url_for("request_detail", id=req_id))
+        else:
+            summary += f" — Could not find instrument '{inst_name}'"
+
+    elif action == "bulk_sample_intake" and action_data.get("samples"):
+        # Bulk intake: create multiple draft requests at once
+        d = action_data
+        inst_name = d.get("instrument", "")
+        inst = query_one("SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'",
+                         ("%" + inst_name + "%",)) if inst_name else None
+        if not inst:
+            # Try first active instrument as fallback
+            inst = query_one("SELECT * FROM instruments WHERE status = 'active' ORDER BY name LIMIT 1")
+        requester = user
+        req_name = d.get("requester_name", "")
+        if req_name:
+            found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1",
+                              ("%" + req_name + "%",))
+            if found:
+                requester = found
+        samples = d["samples"]
+        created_ids = []
+        sample_origin = "internal"
+        for s in samples[:20]:  # cap at 20
+            s_name = s.get("name", "Sample")
+            s_desc = s.get("description", "")
+            request_no = generate_job_reference(sample_origin)
+            sample_ref = generate_sample_reference(inst["name"] if inst else None, sample_origin)
+            req_id = execute(
+                """INSERT INTO sample_requests
+                   (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
+                    instrument_id, title, sample_name, sample_count, description, sample_origin,
+                    priority, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (request_no, sample_ref, requester["id"], user["id"],
+                 "[AI bulk intake — needs approval]",
+                 inst["id"] if inst else None, f"Bulk intake — {s_name}",
+                 s_name, 1, s_desc, sample_origin,
+                 "normal", "draft_ai", now_iso(), now_iso()),
+            )
+            created_ids.append(req_id)
+        entity_created = "bulk_draft"
+        count = len(created_ids)
+        inst_label = inst["name"] if inst else "unassigned"
+        summary = f"{count} draft request(s) created for {requester['name']} on {inst_label} — awaiting approval"
+        execute("UPDATE command_queue SET status='awaiting_approval', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+        for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+            notify(op["id"], "task", f"AI bulk intake: {count} samples",
+                   f"{user['name']}: {count} samples for {inst_label}", url_for("schedule"))
+
+    elif action == "attach_results" and action_data:
+        # Attach results to an existing request — mark as completed pending approval
+        d = action_data
+        ref = d.get("request_id_or_title", "")
+        req_row = None
+        if ref:
+            # Try by ID or request_no first
+            req_row = query_one("SELECT * FROM sample_requests WHERE id = ? OR request_no = ?",
+                                (ref if str(ref).isdigit() else 0, str(ref)))
+            if not req_row:
+                req_row = query_one("SELECT * FROM sample_requests WHERE title LIKE ? ORDER BY id DESC LIMIT 1",
+                                    ("%" + str(ref) + "%",))
+        if req_row:
+            result_notes = d.get("result_notes", "Results attached via AI Pane")
+            # If a file was attached to this message, link it
+            file_note = ""
+            if file_name:
+                file_note = f" [File: {file_name}]"
+            execute(
+                "UPDATE sample_requests SET status = 'results_pending_approval', originator_note = COALESCE(originator_note, '') || ? , updated_at = ? WHERE id = ?",
+                (f"\n[AI results] {result_notes}{file_note}", now_iso(), req_row["id"]),
+            )
+            entity_created = "results_attached"
+            summary = f"Results attached to {req_row['request_no']} — awaiting operator confirmation"
+            execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                    (req_row["id"], summary, now_iso(), cmd_id))
+            for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+                notify(op["id"], "task", "AI results need confirmation",
+                       f"Results for {req_row['request_no']}: {result_notes[:80]}", url_for("request_detail", id=req_row["id"]))
+        else:
+            summary += f" — Could not find request '{ref}'"
+
     elif action == "general_query":
         # For questions, the AI already answered in the summary
         execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
@@ -22768,6 +22900,39 @@ def ai_pane_submit():
         "entity_created": entity_created,
         "command_id": cmd_id,
     })
+
+
+@app.route("/api/ai/draft-approve/<int:request_id>", methods=["POST"])
+@login_required
+def ai_draft_approve(request_id):
+    """Approve or reject an AI-created draft request."""
+    user = current_user()
+    if user["role"] not in ("operator", "instrument_admin", "super_admin", "site_admin"):
+        abort(403)
+    req = query_one("SELECT * FROM sample_requests WHERE id = ?", (request_id,))
+    if not req:
+        abort(404)
+    verdict = request.form.get("verdict", "approve")  # approve or reject
+    if verdict == "approve":
+        if req["status"] == "draft_ai":
+            execute("UPDATE sample_requests SET status = 'submitted', updated_at = ? WHERE id = ?",
+                    (now_iso(), request_id))
+            flash(f"Draft {req['request_no']} approved — now live as submitted.", "success")
+            log_action(request_id, user["id"], "ai_draft_approved",
+                       f"AI draft approved by {user['name']}")
+        elif req["status"] == "results_pending_approval":
+            execute("UPDATE sample_requests SET status = 'completed', updated_at = ? WHERE id = ?",
+                    (now_iso(), request_id))
+            flash(f"Results for {req['request_no']} confirmed — marked completed.", "success")
+            log_action(request_id, user["id"], "ai_results_confirmed",
+                       f"AI results confirmed by {user['name']}")
+    else:
+        execute("UPDATE sample_requests SET status = 'cancelled', updated_at = ? WHERE id = ?",
+                (now_iso(), request_id))
+        flash(f"Draft {req['request_no']} rejected.", "warning")
+        log_action(request_id, user["id"], "ai_draft_rejected",
+                   f"AI draft rejected by {user['name']}")
+    return redirect(url_for("request_detail", request_id=request_id))
 
 
 @app.route("/api/ai/pane/history")

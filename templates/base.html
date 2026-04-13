@@ -165,6 +165,11 @@
 
     {% endfor %}
 
+    {# Global search #}
+    <form action="{{ url_for('global_search') }}" method="get" class="nav-search" data-vis="{{ V }}">
+      <input type="search" name="q" placeholder="Search..." value="{{ request.args.get('q','') }}" autocomplete="off" data-vis="{{ V }}">
+    </form>
+
     {# Settings — always #}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
 
@@ -213,6 +218,8 @@
       <a href="{{ url_for('finance_grants_list') }}" data-vis="{{ V }}">Grants</a>
       <span class="breadcrumb-sep" aria-hidden="true" data-vis="{{ V }}">/</span>
       <span class="breadcrumb-current" data-vis="{{ V }}">{{ title or 'Grant' }}</span>
+    {% elif endpoint == 'global_search' %}
+      <span class="breadcrumb-current" data-vis="{{ V }}">Search</span>
     {% elif endpoint == 'dev_panel' %}
       <span class="breadcrumb-current" data-vis="{{ V }}">Dev Console</span>
     {% elif endpoint == 'portfolio_panel' %}

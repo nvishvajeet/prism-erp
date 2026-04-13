@@ -14428,6 +14428,50 @@ def debug_feedback():
     return jsonify(ok=True, saved_to=str(FEEDBACK_LOG))
 
 
+# ── Feature: Global Search ───────────────────────────────────────────
+@app.route("/search")
+@login_required
+def global_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return render_template("search.html", query=q, results=[], title="Search")
+    results = []
+    like = f"%{q}%"
+    # Instruments
+    for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 5", (like, like)):
+        results.append({"type": "Instrument", "title": r["name"], "code": r["code"], "url": url_for("instrument_detail", instrument_id=r["id"])})
+    # Requests
+    for r in query_all("SELECT id, request_no, title FROM sample_requests WHERE request_no LIKE ? OR title LIKE ? OR sample_name LIKE ? LIMIT 5", (like, like, like)):
+        results.append({"type": "Request", "title": r["title"], "code": r["request_no"], "url": url_for("request_detail", request_id=r["id"])})
+    # Users
+    for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 5", (like, like)):
+        results.append({"type": "User", "title": r["name"], "code": r["email"], "url": url_for("user_profile", user_id=r["id"])})
+    # Grants
+    for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 5", (like, like)):
+        results.append({"type": "Grant", "title": r["name"], "code": r["code"], "url": url_for("finance_grant_detail", grant_id=r["id"])})
+    return render_template("search.html", query=q, results=results, title="Search")
+
+
+# ── Feature: Audit Log CSV Export ────────────────────────────────────
+@app.route("/admin/audit-export")
+@owner_required
+def audit_export():
+    import csv as _csv
+    import io as _io
+    rows = query_all("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 10000")
+    output = _io.StringIO()
+    writer = _csv.writer(output)
+    writer.writerow(["id", "entity_type", "entity_id", "action", "actor_id", "payload_json", "created_at"])
+    for r in rows:
+        writer.writerow([r["id"], r["entity_type"], r["entity_id"], r["action"], r["actor_id"], r["payload_json"], r["created_at"]])
+    return send_file(
+        _io.BytesIO(output.getvalue().encode("utf-8")),
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name="prism_audit_log.csv",
+    )
+
+
 if __name__ == "__main__":
     init_db()
     # Always auto-reload templates so changes appear without server restart

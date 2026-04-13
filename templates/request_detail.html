@@ -302,7 +302,15 @@
       <tbody id="reqFilesBody" data-vis="{{ V }}">
       {% for attachment in submitted_documents %}
       <tr data-pane-item data-vis="{{ V }}">
-        <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a></td>
+        <td data-vis="{{ V }}">
+          <a class="text-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">{{ attachment["original_filename"] }}</a>
+          {% set ext = attachment.original_filename.rsplit('.', 1)[-1]|lower %}
+          {% if ext in ('jpg','jpeg','png','gif','webp') %}
+          <img src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-preview" alt="{{ attachment['original_filename'] }}" loading="lazy">
+          {% elif ext == 'pdf' %}
+          <iframe src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-pdf-preview" title="{{ attachment['original_filename'] }}"></iframe>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
       </tbody>
@@ -340,6 +348,12 @@
               <span class="event-attachment-tag" data-vis="{{ V }}">{% if filename_lower.endswith('.pdf') %}PDF{% else %}FILE{% endif %}</span>
               {{ attachment["original_filename"] }}
             </a>
+            {% set ext = attachment.original_filename.rsplit('.', 1)[-1]|lower %}
+            {% if ext in ('jpg','jpeg','png','gif','webp') %}
+            <img src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-preview" alt="{{ attachment['original_filename'] }}" loading="lazy">
+            {% elif ext == 'pdf' %}
+            <iframe src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-pdf-preview" title="{{ attachment['original_filename'] }}"></iframe>
+            {% endif %}
             {% endfor %}
           </div>
           {% endif %}

@@ -95,6 +95,17 @@
     </div>
   </section>
 
+  {# ─── 3b. AUDIT EXPORT ─── #}
+  <section class="card tile" data-vis="{{ V }}">
+    {{ card_heading("AUDIT", "Export audit trail") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">Download the full audit log as CSV (up to 10 000 rows).</p>
+      <div style="margin-top:var(--sp-3)" data-vis="{{ V }}">
+        <a class="btn btn-sm" href="{{ url_for('audit_export') }}" data-vis="{{ V }}">Export Audit Log</a>
+      </div>
+    </div>
+  </section>
+
   {# ─── 4. RECENT COMMITS — Last 5 in a clean list ─── #}
   <section class="card tile tile-stats" data-vis="{{ V }}">
     {{ card_heading("RECENT COMMITS", "Last 5 on trunk") }}

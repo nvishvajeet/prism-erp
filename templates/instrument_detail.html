@@ -17,6 +17,10 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn btn-primary" href="{{ url_for('new_request', instrument_id=instrument['id']) }}" data-vis="{{ V }}">New Request</a>
+    {% if can_edit %}
+    <a class="btn" href="#metaEditTile" data-vis="{{ V }}">Edit</a>
+    <a class="btn" href="{{ url_for('instrument_form_control', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Configure</a>
+    {% endif %}
   </div>
 </header>
 

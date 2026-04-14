@@ -6971,11 +6971,7 @@ def new_request():
         prefill=prefill,
     )
 
-
-@app.route("/requests/<int:request_id>", methods=["GET", "POST"])
-@login_required
-def request_detail(request_id: int):
-    user = current_user()
+def load_request_detail_context(user: sqlite3.Row, request_id: int) -> dict[str, object]:
     sample_request = query_one(
         f"""
         SELECT sr.*, i.name AS instrument_name, i.daily_capacity, i.accepting_requests, i.soft_accept_enabled,
@@ -6989,18 +6985,10 @@ def request_detail(request_id: int):
     )
     if sample_request is None:
         abort(404)
-
     if not can_view_request(user, sample_request):
         abort(403)
-
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
-    can_upload_files = can_upload_attachment(user, sample_request)
-    can_flag_issue = can_flag_request_issue(user, sample_request)
-    can_respond_issue = can_respond_request_issue(user, sample_request)
-    card_policy = request_card_policy(user, sample_request)
     approval_steps = query_all(
         """
         SELECT aps.*, u.name AS approver_name, u.email AS approver_email
@@ -7012,143 +7000,297 @@ def request_detail(request_id: int):
         (request_id,),
     )
     actionable_step_ids = {step["id"] for step in approval_steps if approval_step_is_actionable(step, approval_steps)}
+    return {
+        "sample_request": sample_request,
+        "can_manage": can_manage,
+        "can_operate": can_operate,
+        "can_upload_files": can_upload_attachment(user, sample_request),
+        "can_flag_issue": can_flag_request_issue(user, sample_request),
+        "can_respond_issue": can_respond_request_issue(user, sample_request),
+        "card_policy": request_card_policy(user, sample_request),
+        "approval_steps": approval_steps,
+        "actionable_step_ids": actionable_step_ids,
+    }
+
+
+def build_request_detail_template_context(
+    user: sqlite3.Row,
+    request_id: int,
+    sample_request: sqlite3.Row,
+    *,
+    can_manage: bool,
+    can_operate: bool,
+    can_upload_files: bool,
+    can_flag_issue: bool,
+    can_respond_issue: bool,
+    card_policy: dict,
+    approval_steps: list[sqlite3.Row],
+    actionable_step_ids: set[int],
+) -> dict[str, object]:
+    operators = []
+    if can_manage or can_operate:
+        operators = query_all(
+            """
+            SELECT DISTINCT u.id, u.name, u.role
+            FROM users u
+            LEFT JOIN instrument_operators       io  ON io.user_id  = u.id AND io.instrument_id  = ?
+            LEFT JOIN instrument_admins          ia  ON ia.user_id  = u.id AND ia.instrument_id  = ?
+            LEFT JOIN instrument_faculty_admins  ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
+            WHERE u.active = 1
+              AND (
+                io.instrument_id IS NOT NULL OR
+                ia.instrument_id IS NOT NULL OR
+                ifa.instrument_id IS NOT NULL OR
+                u.role IN ('super_admin', 'site_admin') OR
+                EXISTS (
+                    SELECT 1 FROM user_roles ur
+                     WHERE ur.user_id = u.id
+                       AND ur.role IN ('super_admin', 'site_admin')
+                )
+              )
+            ORDER BY u.name
+            """,
+            (sample_request["instrument_id"], sample_request["instrument_id"], sample_request["instrument_id"]),
+        )
+    attachments = get_request_attachments(request_id)
+    issues = get_request_issues(request_id)
+    message_thread = get_request_message_thread(request_id)
+    message_attachments = attachments_by_message_ids([row["id"] for row in message_thread])
+    logs = query_all("SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id WHERE entity_type = 'sample_request' AND entity_id = ? ORDER BY al.id", (request_id,))
+    audit_chain_valid = verify_audit_chain("sample_request", request_id)
+    status_summary = request_status_summary(sample_request, approval_steps)
+    lifecycle_steps = request_lifecycle_steps(sample_request, approval_steps)
+    visible_attachments = request_card_visible_attachments(user, sample_request, attachments)
+    timeline_entries = request_card_visible_timeline(
+        user,
+        sample_request,
+        request_timeline_entries(sample_request, logs, visible_attachments, message_thread, message_attachments),
+    )
+    has_open_issue = any(issue["status"] == "open" for issue in issues)
+    submitted_documents = [row for row in visible_attachments if row["attachment_type"] in {"request_document", "sample_slip"}]
+    approval_candidates = {
+        "finance": approval_candidate_options("finance", sample_request["instrument_id"]),
+        "professor": approval_candidate_options("professor", sample_request["instrument_id"]),
+        "operator": approval_candidate_options("operator", sample_request["instrument_id"]),
+    }
+    actionable_approval_steps = [
+        step
+        for step in approval_steps
+        if step["id"] in actionable_step_ids and can_approve_step(user, step, sample_request["instrument_id"])
+    ]
+    remarks_author_row = query_one(
+        """SELECT u.name FROM audit_logs al
+           JOIN users u ON u.id = al.actor_id
+           WHERE al.entity_type = 'sample_request' AND al.entity_id = ? AND al.actor_id IS NOT NULL
+           ORDER BY al.created_at DESC LIMIT 1""",
+        (request_id,),
+    )
+    remarks_author = remarks_author_row["name"] if remarks_author_row else None
+    return {
+        "sample_request": sample_request,
+        "card_policy": card_policy,
+        "back_url": request.args.get("back", "").strip(),
+        "can_manage": can_manage,
+        "can_operate": can_operate,
+        "can_upload_files": can_upload_files,
+        "operators": operators,
+        "approval_steps": approval_steps,
+        "actionable_step_ids": actionable_step_ids,
+        "actionable_approval_steps": actionable_approval_steps,
+        "attachment_type_choices": attachment_type_choices(),
+        "attachments": visible_attachments,
+        "submitted_documents": submitted_documents,
+        "issues": issues,
+        "message_thread": message_thread,
+        "message_attachments": message_attachments,
+        "attachment_size_label": attachment_size_label,
+        "logs": logs,
+        "audit_chain_valid": audit_chain_valid,
+        "status_summary": status_summary,
+        "lifecycle_steps": lifecycle_steps,
+        "timeline_entries": timeline_entries,
+        "has_open_issue": has_open_issue,
+        "conversation_note_types": [item for item in COMMUNICATION_NOTE_TYPES if item[0] in {"lab_reply", "final_note"}],
+        "admin_status_choices": ["submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "in_progress", "completed", "rejected"],
+        "can_flag_issue": can_flag_issue,
+        "can_respond_issue": can_respond_issue,
+        "approval_candidates": approval_candidates,
+        "remarks_author": remarks_author,
+    }
+
+
+def _handle_request_detail_note_actions(user, request_id: int, sample_request, action: str):
+    if action not in {"save_note", "post_message"}:
+        return None
+    if not can_post_message(user, sample_request):
+        abort(403)
+    note_kind = request.form.get("note_kind", "").strip()
+    if action == "post_message" and not note_kind:
+        note_kind = "requester_note" if sample_request["requester_id"] == user["id"] else "operator_note"
+    if note_kind not in {item[0] for item in COMMUNICATION_NOTE_TYPES}:
+        flash("Invalid note type.", "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if not can_edit_request_note(user, sample_request, note_kind):
+        abort(403)
+    message_body = request.form.get("note_body", request.form.get("message_body", "")).strip()
+    uploaded_file = request.files.get("attachment")
+    has_attachment = bool(uploaded_file and (uploaded_file.filename or "").strip())
+    if not message_body and not has_attachment:
+        flash("Reply cannot be empty.", "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if action == "save_note":
+        execute(
+            "UPDATE request_messages SET is_active = 0 WHERE request_id = ? AND note_kind = ?",
+            (request_id, note_kind),
+        )
+    message_id = execute(
+        """
+        INSERT INTO request_messages (request_id, sender_user_id, note_kind, message_body, created_at, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
+        """,
+        (request_id, user["id"], note_kind, message_body, now_iso()),
+    )
+    if has_attachment:
+        try:
+            save_uploaded_attachment(
+                sample_request,
+                uploaded_file,
+                user["id"],
+                "other",
+                "Attached in conversation",
+                request_message_id=message_id,
+            )
+        except ValueError as exc:
+            execute("DELETE FROM request_messages WHERE id = ?", (message_id,))
+            flash(str(exc), "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+    write_request_metadata_snapshot(request_id)
+    log_action(
+        user["id"],
+        "sample_request",
+        request_id,
+        "communication_note_saved",
+        {"note_kind": note_kind, "message_preview": message_body[:120]},
+    )
+    flash("Reply added." if action == "post_message" else f"{note_kind_label(note_kind)} updated.", "success")
+    return redirect(url_for("request_detail", request_id=request_id))
+
+
+def _handle_request_detail_issue_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    can_flag_issue: bool,
+    can_respond_issue: bool,
+):
+    if action not in {"flag_issue", "respond_issue", "resolve_issue", "reopen_issue"}:
+        return None
+    if action == "flag_issue":
+        if not can_flag_issue:
+            abort(403)
+        issue_message = request.form.get("issue_message", "").strip()
+        if not issue_message:
+            flash("Please describe the issue before flagging it.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        execute(
+            """
+            INSERT INTO request_issues (request_id, created_by_user_id, issue_message, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (request_id, user["id"], issue_message, now_iso()),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_flagged", {"issue_preview": issue_message[:160]})
+        flash("Issue flagged for this sample.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+    issue_id = int(request.form.get("issue_id") or 0)
+    issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
+    if issue is None:
+        abort(404)
+    if action == "respond_issue":
+        if not can_respond_issue:
+            abort(403)
+        response_message = request.form.get("response_message", "").strip()
+        if not response_message:
+            flash("Please add a response before saving it.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        execute(
+            """
+            UPDATE request_issues
+            SET response_message = ?, responded_at = ?, responded_by_user_id = ?
+            WHERE id = ?
+            """,
+            (response_message, now_iso(), user["id"], issue_id),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_response_saved", {"response_preview": response_message[:160]})
+        flash("Issue response saved.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if action == "resolve_issue":
+        if not can_respond_issue:
+            abort(403)
+        resolution_message = request.form.get("response_message", "").strip() or issue["response_message"] or "Resolved by lab."
+        execute(
+            """
+            UPDATE request_issues
+            SET response_message = ?, responded_at = COALESCE(responded_at, ?), responded_by_user_id = COALESCE(responded_by_user_id, ?),
+                status = 'resolved', resolved_at = ?, resolved_by_user_id = ?
+            WHERE id = ?
+            """,
+            (resolution_message, now_iso(), user["id"], now_iso(), user["id"], issue_id),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_resolved", {"resolution_preview": resolution_message[:160]})
+        flash("Issue marked as resolved.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if sample_request["requester_id"] != user["id"]:
+        abort(403)
+    execute(
+        """
+        UPDATE request_issues
+        SET status = 'open', resolved_at = NULL, resolved_by_user_id = NULL
+        WHERE id = ?
+        """,
+        (issue_id,),
+    )
+    write_request_metadata_snapshot(request_id)
+    log_action(user["id"], "sample_request", request_id, "issue_reopened", {"issue_id": issue_id})
+    flash("Issue reopened.", "success")
+    return redirect(url_for("request_detail", request_id=request_id))
+
+
+@app.route("/requests/<int:request_id>", methods=["GET", "POST"])
+@login_required
+def request_detail(request_id: int):
+    user = current_user()
+    detail_context = load_request_detail_context(user, request_id)
+    sample_request = detail_context["sample_request"]
+    can_manage = detail_context["can_manage"]
+    can_operate = detail_context["can_operate"]
+    can_upload_files = detail_context["can_upload_files"]
+    can_flag_issue = detail_context["can_flag_issue"]
+    can_respond_issue = detail_context["can_respond_issue"]
+    card_policy = detail_context["card_policy"]
+    approval_steps = detail_context["approval_steps"]
+    actionable_step_ids = detail_context["actionable_step_ids"]
 
     if request.method == "POST":
         action = request.form["action"]
-        if action in {"save_note", "post_message"}:
-            if not can_post_message(user, sample_request):
-                abort(403)
-            note_kind = request.form.get("note_kind", "").strip()
-            if action == "post_message" and not note_kind:
-                note_kind = "requester_note" if sample_request["requester_id"] == user["id"] else "operator_note"
-            if note_kind not in {item[0] for item in COMMUNICATION_NOTE_TYPES}:
-                flash("Invalid note type.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if not can_edit_request_note(user, sample_request, note_kind):
-                abort(403)
-            message_body = request.form.get("note_body", request.form.get("message_body", "")).strip()
-            uploaded_file = request.files.get("attachment")
-            has_attachment = bool(uploaded_file and (uploaded_file.filename or "").strip())
-            if not message_body and not has_attachment:
-                flash("Reply cannot be empty.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if action == "save_note":
-                execute(
-                    "UPDATE request_messages SET is_active = 0 WHERE request_id = ? AND note_kind = ?",
-                    (request_id, note_kind),
-                )
-            message_id = execute(
-                """
-                INSERT INTO request_messages (request_id, sender_user_id, note_kind, message_body, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, 1)
-                """,
-                (request_id, user["id"], note_kind, message_body, now_iso()),
-            )
-            if has_attachment:
-                try:
-                    save_uploaded_attachment(
-                        sample_request,
-                        uploaded_file,
-                        user["id"],
-                        "other",
-                        "Attached in conversation",
-                        request_message_id=message_id,
-                    )
-                except ValueError as exc:
-                    execute("DELETE FROM request_messages WHERE id = ?", (message_id,))
-                    flash(str(exc), "error")
-                    return redirect(url_for("request_detail", request_id=request_id))
-            write_request_metadata_snapshot(request_id)
-            log_action(
-                user["id"],
-                "sample_request",
-                request_id,
-                "communication_note_saved",
-                {"note_kind": note_kind, "message_preview": message_body[:120]},
-            )
-            flash("Reply added." if action == "post_message" else f"{note_kind_label(note_kind)} updated.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        if action == "flag_issue":
-            if not can_flag_issue:
-                abort(403)
-            issue_message = request.form.get("issue_message", "").strip()
-            if not issue_message:
-                flash("Please describe the issue before flagging it.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            execute(
-                """
-                INSERT INTO request_issues (request_id, created_by_user_id, issue_message, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (request_id, user["id"], issue_message, now_iso()),
-            )
-            write_request_metadata_snapshot(request_id)
-            log_action(user["id"], "sample_request", request_id, "issue_flagged", {"issue_preview": issue_message[:160]})
-            flash("Issue flagged for this sample.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        if action == "respond_issue":
-            if not can_respond_issue:
-                abort(403)
-            issue_id = int(request.form.get("issue_id") or 0)
-            issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
-            if issue is None:
-                abort(404)
-            response_message = request.form.get("response_message", "").strip()
-            if not response_message:
-                flash("Please add a response before saving it.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            execute(
-                """
-                UPDATE request_issues
-                SET response_message = ?, responded_at = ?, responded_by_user_id = ?
-                WHERE id = ?
-                """,
-                (response_message, now_iso(), user["id"], issue_id),
-            )
-            write_request_metadata_snapshot(request_id)
-            log_action(user["id"], "sample_request", request_id, "issue_response_saved", {"response_preview": response_message[:160]})
-            flash("Issue response saved.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        if action == "resolve_issue":
-            if not can_respond_issue:
-                abort(403)
-            issue_id = int(request.form.get("issue_id") or 0)
-            issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
-            if issue is None:
-                abort(404)
-            resolution_message = request.form.get("response_message", "").strip() or issue["response_message"] or "Resolved by lab."
-            execute(
-                """
-                UPDATE request_issues
-                SET response_message = ?, responded_at = COALESCE(responded_at, ?), responded_by_user_id = COALESCE(responded_by_user_id, ?),
-                    status = 'resolved', resolved_at = ?, resolved_by_user_id = ?
-                WHERE id = ?
-                """,
-                (resolution_message, now_iso(), user["id"], now_iso(), user["id"], issue_id),
-            )
-            write_request_metadata_snapshot(request_id)
-            log_action(user["id"], "sample_request", request_id, "issue_resolved", {"resolution_preview": resolution_message[:160]})
-            flash("Issue marked as resolved.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        if action == "reopen_issue":
-            issue_id = int(request.form.get("issue_id") or 0)
-            issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
-            if issue is None:
-                abort(404)
-            if sample_request["requester_id"] != user["id"]:
-                abort(403)
-            execute(
-                """
-                UPDATE request_issues
-                SET status = 'open', resolved_at = NULL, resolved_by_user_id = NULL
-                WHERE id = ?
-                """,
-                (issue_id,),
-            )
-            write_request_metadata_snapshot(request_id)
-            log_action(user["id"], "sample_request", request_id, "issue_reopened", {"issue_id": issue_id})
-            flash("Issue reopened.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
+        note_action_response = _handle_request_detail_note_actions(user, request_id, sample_request, action)
+        if note_action_response is not None:
+            return note_action_response
+        issue_action_response = _handle_request_detail_issue_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            can_flag_issue=can_flag_issue,
+            can_respond_issue=can_respond_issue,
+        )
+        if issue_action_response is not None:
+            return issue_action_response
         if action == "upload_attachment":
             if not can_upload_files:
                 abort(403)
@@ -7671,102 +7813,21 @@ def request_detail(request_id: int):
         write_request_metadata_snapshot(request_id)
         return redirect(url_for("request_detail", request_id=request_id))
 
-    operators = []
-    if can_manage or can_operate:
-        # Assignment picker: every user who has access to this
-        # specific instrument via any of the 3 access tables, PLUS
-        # every super/site admin (by primary role OR by user_roles
-        # junction — the v1.5.0 multi-role fix, closes the assign-
-        # approver bug where admins-via-junction were invisible in
-        # the picker). Sorted alphabetically.
-        operators = query_all(
-            """
-            SELECT DISTINCT u.id, u.name, u.role
-            FROM users u
-            LEFT JOIN instrument_operators       io  ON io.user_id  = u.id AND io.instrument_id  = ?
-            LEFT JOIN instrument_admins          ia  ON ia.user_id  = u.id AND ia.instrument_id  = ?
-            LEFT JOIN instrument_faculty_admins  ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
-            WHERE u.active = 1
-              AND (
-                io.instrument_id IS NOT NULL OR
-                ia.instrument_id IS NOT NULL OR
-                ifa.instrument_id IS NOT NULL OR
-                u.role IN ('super_admin', 'site_admin') OR
-                EXISTS (
-                    SELECT 1 FROM user_roles ur
-                     WHERE ur.user_id = u.id
-                       AND ur.role IN ('super_admin', 'site_admin')
-                )
-              )
-            ORDER BY u.name
-            """,
-            (sample_request["instrument_id"], sample_request["instrument_id"], sample_request["instrument_id"]),
-        )
-    attachments = get_request_attachments(request_id)
-    issues = get_request_issues(request_id)
-    message_thread = get_request_message_thread(request_id)
-    message_attachments = attachments_by_message_ids([row["id"] for row in message_thread])
-    logs = query_all("SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id WHERE entity_type = 'sample_request' AND entity_id = ? ORDER BY al.id", (request_id,))
-    audit_chain_valid = verify_audit_chain("sample_request", request_id)
-    status_summary = request_status_summary(sample_request, approval_steps)
-    lifecycle_steps = request_lifecycle_steps(sample_request, approval_steps)
-    visible_attachments = request_card_visible_attachments(user, sample_request, attachments)
-    timeline_entries = request_card_visible_timeline(
-        user,
-        sample_request,
-        request_timeline_entries(sample_request, logs, visible_attachments, message_thread, message_attachments),
-    )
-    has_open_issue = any(issue["status"] == "open" for issue in issues)
-    submitted_documents = [row for row in visible_attachments if row["attachment_type"] in {"request_document", "sample_slip"}]
-    approval_candidates = {
-        "finance": approval_candidate_options("finance", sample_request["instrument_id"]),
-        "professor": approval_candidate_options("professor", sample_request["instrument_id"]),
-        "operator": approval_candidate_options("operator", sample_request["instrument_id"]),
-    }
-    actionable_approval_steps = [
-        step
-        for step in approval_steps
-        if step["id"] in actionable_step_ids and can_approve_step(user, step, sample_request["instrument_id"])
-    ]
-    remarks_author_row = query_one(
-        """SELECT u.name FROM audit_logs al
-           JOIN users u ON u.id = al.actor_id
-           WHERE al.entity_type = 'sample_request' AND al.entity_id = ? AND al.actor_id IS NOT NULL
-           ORDER BY al.created_at DESC LIMIT 1""",
-        (request_id,),
-    )
-    remarks_author = remarks_author_row["name"] if remarks_author_row else None
     return render_template(
         "request_detail.html",
-        sample_request=sample_request,
-        card_policy=card_policy,
-        back_url=request.args.get("back", "").strip(),
-        can_manage=can_manage,
-        can_operate=can_operate,
-        can_upload_files=can_upload_files,
-        operators=operators,
-        approval_steps=approval_steps,
-        actionable_step_ids=actionable_step_ids,
-        actionable_approval_steps=actionable_approval_steps,
-        attachment_type_choices=attachment_type_choices(),
-        attachments=visible_attachments,
-        submitted_documents=submitted_documents,
-        issues=issues,
-        message_thread=message_thread,
-        message_attachments=message_attachments,
-        attachment_size_label=attachment_size_label,
-        logs=logs,
-        audit_chain_valid=audit_chain_valid,
-        status_summary=status_summary,
-        lifecycle_steps=lifecycle_steps,
-        timeline_entries=timeline_entries,
-        has_open_issue=has_open_issue,
-        conversation_note_types=[item for item in COMMUNICATION_NOTE_TYPES if item[0] in {"lab_reply", "final_note"}],
-        admin_status_choices=["submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled", "in_progress", "completed", "rejected"],
-        can_flag_issue=can_flag_issue,
-        can_respond_issue=can_respond_issue,
-        approval_candidates=approval_candidates,
-        remarks_author=remarks_author,
+        **build_request_detail_template_context(
+            user,
+            request_id,
+            sample_request,
+            can_manage=can_manage,
+            can_operate=can_operate,
+            can_upload_files=can_upload_files,
+            can_flag_issue=can_flag_issue,
+            can_respond_issue=can_respond_issue,
+            card_policy=card_policy,
+            approval_steps=approval_steps,
+            actionable_step_ids=actionable_step_ids,
+        ),
     )
 
 

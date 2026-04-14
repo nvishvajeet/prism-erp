@@ -14361,12 +14361,7 @@ def schedule_bulk_actions():
     return redirect(back_value or url_for("schedule"))
 
 
-@app.route("/schedule/actions", methods=["POST"])
-@login_required
-def schedule_actions():
-    user = current_user()
-    if not can_access_schedule(user):
-        abort(403)
+def _schedule_action_request_context(user: sqlite3.Row) -> tuple[int, sqlite3.Row, bool, bool]:
     request_id = int(request.form["request_id"])
     sample_request = query_one(
         """
@@ -14382,42 +14377,48 @@ def schedule_actions():
         abort(404)
     if not can_view_request(user, sample_request):
         abort(403)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     if not (can_manage or can_operate):
         abort(403)
+    return request_id, sample_request, can_manage, can_operate
+
+
+def _schedule_redirect_response(request_id: int, bucket_override: str | None = None, focus_request: bool = False):
+    back_url = (request.form.get("back") or "").strip()
+    if back_url and back_url.startswith("/"):
+        return redirect(back_url)
+    params: dict[str, str] = {
+        "bucket": bucket_override or (request.form.get("bucket") or "all"),
+    }
+    for key in ("q", "instrument_id", "date_from", "date_to", "source_label"):
+        value = (request.form.get(key) or "").strip()
+        if value:
+            params[key] = value
+    if focus_request:
+        params["focus_request_id"] = str(request_id)
+    return redirect(url_for("schedule", **params))
+
+@app.route("/schedule/actions", methods=["POST"])
+@login_required
+def schedule_actions():
+    user = current_user()
+    if not can_access_schedule(user):
+        abort(403)
+    request_id, sample_request, can_manage, can_operate = _schedule_action_request_context(user)
     if sample_request["completion_locked"]:
         flash("Completed jobs are locked.", "error")
         return redirect(url_for("schedule", bucket="scheduled"))
-
-    def redirect_to_queue(bucket_override: str | None = None, focus_request: bool = False):
-        # If a back URL was provided (e.g. from dashboard quick intake),
-        # redirect there instead of the schedule page.
-        back_url = (request.form.get("back") or "").strip()
-        if back_url and back_url.startswith("/"):
-            return redirect(back_url)
-        params: dict[str, str] = {
-            "bucket": bucket_override or (request.form.get("bucket") or "all"),
-        }
-        for key in ("q", "instrument_id", "date_from", "date_to", "source_label"):
-            value = (request.form.get(key) or "").strip()
-            if value:
-                params[key] = value
-        if focus_request:
-            params["focus_request_id"] = str(request_id)
-        return redirect(url_for("schedule", **params))
 
     action = request.form.get("action", "").strip()
     if action == "take_up":
         if sample_request["status"] not in {"sample_received", "scheduled"}:
             flash("Only received jobs can be taken up from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         scheduled_for = request.form.get("scheduled_for", "").strip()
         if not scheduled_for:
             flash("Please choose a schedule time.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
         remarks = request.form.get("remarks", "").strip()
         assert_status_transition(sample_request["status"], "scheduled")
@@ -14428,16 +14429,16 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "scheduled_from_board", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
         flash(f"{sample_request['request_no']} taken up for work.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "quick_assign":
         operator_id = int(request.form.get("assigned_operator_id") or 0)
         if not operator_id:
             flash("Choose a person to assign.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         candidate_ids = {row["id"] for row in request_assignment_candidates(sample_request)}
         if operator_id not in candidate_ids:
             flash("That person cannot be assigned to this job.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         execute(
             "UPDATE sample_requests SET assigned_operator_id = ?, updated_at = ? WHERE id = ?",
             (operator_id, now_iso(), request_id),
@@ -14445,11 +14446,11 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "reassigned", {"assigned_operator_id": operator_id, "remarks": "Assigned from queue"})
         flash(f"{sample_request['request_no']} reassigned.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(focus_request=True)
+        return _schedule_redirect_response(request_id, focus_request=True)
     elif action == "plan_next_slot":
         if sample_request["status"] not in {"sample_received"}:
             flash("Only ready jobs can be placed into the day planner.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         planner_date = parse_schedule_day(request.form.get("planner_date"))
         scope_filters = schedule_filter_values()
         clauses, params = request_scope_sql(user, "sr")
@@ -14477,7 +14478,7 @@ def schedule_actions():
                 slot_dt = datetime.fromisoformat(scheduled_for_raw)
             except ValueError:
                 flash("Choose a valid date and time for the planner.", "error")
-                return redirect_to_queue()
+                return _schedule_redirect_response(request_id)
         else:
             slot_dt = compute_next_schedule_slot(planner_date, same_day_rows)
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
@@ -14496,11 +14497,11 @@ def schedule_actions():
         )
         write_request_metadata_snapshot(request_id)
         flash(f"{sample_request['request_no']} added to {planner_date.strftime('%d/%m/%Y')} at {slot_dt.strftime('%H:%M')}.", "success")
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "mark_received":
         if sample_request["status"] != "sample_submitted":
             flash("Only submitted samples can be marked received from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         assert_status_transition(sample_request["status"], "sample_received")
         execute(
             """
@@ -14513,11 +14514,11 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": ""})
         flash(f"{sample_request['request_no']} marked received.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "start_now":
         if sample_request["status"] not in {"scheduled", "in_progress"}:
             flash("Only scheduled jobs can be started from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         remarks = request.form.get("remarks", "").strip()
         operator_id = sample_request["assigned_operator_id"] or user["id"]
         assert_status_transition(sample_request["status"], "in_progress")
@@ -14528,15 +14529,15 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "started_from_board", {})
         flash(f"{sample_request['request_no']} is now in progress.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "finish_now":
         if sample_request["status"] != "in_progress":
             flash("Only in-progress jobs can be finished from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         results_summary = request.form.get("results_summary", "").strip()
         if not results_summary:
             flash("Please add a short result summary before finishing.", "error")
-            return redirect_to_queue()
+            return _schedule_redirect_response(request_id)
         remarks = request.form.get("remarks", "").strip()
         _finance = computed_finance_for_request(get_db(), request_id)
         amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
@@ -14589,12 +14590,12 @@ def schedule_actions():
         send_completion_inbox_message(user["id"], sample_request)
         flash("Job marked done.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
     else:
         abort(403)
 
     write_request_metadata_snapshot(request_id)
-    return redirect_to_queue()
+    return _schedule_redirect_response(request_id)
 
 
 @app.route("/attachments/<int:attachment_id>/download")

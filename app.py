@@ -770,6 +770,21 @@ def health_check():
     })
 
 
+@app.route("/favicon.ico")
+def favicon_ico():
+    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/x-icon")
+
+
+@app.route("/favicon.png")
+def favicon_png():
+    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/x-icon")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    return send_from_directory(app.static_folder, "robots.txt", mimetype="text/plain")
+
+
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_upload(_exc):
     flash("Upload too large. Maximum file size is 100 MB.", "error")
@@ -15689,7 +15704,9 @@ def processed_history():
 
 def _user_profile_target(viewer, user_id: int):
     target_user = query_one(
-        "SELECT id, name, email, role, invite_status, active, member_code FROM users WHERE id = ?",
+        "SELECT id, name, email, role, invite_status, active, member_code, "
+        "COALESCE(office_location, '') AS office_location "
+        "FROM users WHERE id = ?",
         (user_id,),
     )
     if target_user is None:
@@ -21862,6 +21879,24 @@ def receipt_detail(receipt_id):
     if not can_review and receipt["submitted_by_user_id"] != user["id"]:
         abort(403)
     return render_template("receipt_detail.html", receipt=receipt, can_review=can_review)
+
+
+@app.route("/receipts/<int:receipt_id>/file")
+@login_required
+def receipt_file(receipt_id):
+    user = current_user()
+    if not portal_route_enabled("receipts"):
+        abort(404)
+    receipt = query_one("SELECT * FROM expense_receipts WHERE id = ?", (receipt_id,))
+    if not receipt or not receipt["receipt_image_path"]:
+        abort(404)
+    can_review = _user_can_review_receipts(user)
+    if not can_review and receipt["submitted_by_user_id"] != user["id"]:
+        abort(403)
+    full_path = BASE_DIR / receipt["receipt_image_path"]
+    if not full_path.exists() or not str(full_path.resolve()).startswith(str(UPLOAD_DIR.resolve())):
+        abort(404)
+    return send_file(full_path, as_attachment=False, download_name=full_path.name)
 
 
 @app.route("/receipts/<int:receipt_id>/review", methods=["POST"])

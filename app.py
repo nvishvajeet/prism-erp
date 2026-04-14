@@ -10291,29 +10291,16 @@ def sitemap():
     return render_template("sitemap.html", sections=sections, title="Settings")
 
 
-@app.route("/docs")
-@login_required
-def docs():
-    """Render project documentation + progress bar from PROJECT.md."""
+def _docs_read_file(path: str, fallback: str = "") -> str:
+    try:
+        with open(path, "r") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return fallback
+
+
+def _docs_progress_phases(readme_content: str) -> list[dict[str, object]]:
     import re
-
-    project_path = os.path.join(os.path.dirname(__file__), "docs", "PROJECT.md")
-    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
-
-    project_content = ""
-    readme_content = ""
-    try:
-        with open(project_path, "r") as f:
-            project_content = f.read()
-    except FileNotFoundError:
-        project_content = "_PROJECT.md not found._"
-    try:
-        with open(readme_path, "r") as f:
-            readme_content = f.read()
-    except FileNotFoundError:
-        readme_content = ""
-
-    # Parse progress table from README
     progress_phases = []
     for line in readme_content.split("\n"):
         m = re.match(r"\|\s*(.+?)\s*\|\s*(Done|In Progress|Planned|Future)\s*\|.*?(\d+)%\s*\|", line)
@@ -10323,104 +10310,107 @@ def docs():
                 "status": m.group(2).strip(),
                 "pct": int(m.group(3)),
             })
+    return progress_phases
 
-    # Simple markdown-to-HTML (headings, bold, code blocks, lists, tables, links)
-    def md_to_html(md):
-        import html as html_mod
 
-        def esc(text):
-            """Escape HTML entities to prevent XSS."""
-            return html_mod.escape(str(text))
+def _docs_markdown_to_html(md: str) -> str:
+    import html as html_mod
+    import re
 
-        def inline_fmt(text):
-            """Apply inline markdown formatting to already-escaped text."""
-            text = esc(text)
-            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-            text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-            # Links: only allow http/https/mailto, not javascript:
-            def safe_link(m):
-                label, href = m.group(1), m.group(2)
-                if href.lower().startswith(("http://", "https://", "mailto:", "/", "#")):
-                    return f'<a href="{href}">{label}</a>'
-                return f"{label} ({href})"
-            text = re.sub(r"\[(.+?)\]\((.+?)\)", safe_link, text)
-            return text
+    def esc(text):
+        return html_mod.escape(str(text))
 
-        lines = md.split("\n")
-        html_parts = []
-        in_code = False
-        in_table = False
-        in_list = False
-        for line in lines:
-            # Code blocks
-            if line.strip().startswith("```"):
-                if in_code:
-                    html_parts.append("</code></pre>")
-                    in_code = False
-                else:
-                    lang = esc(line.strip()[3:].strip())
-                    html_parts.append(f'<pre><code class="lang-{lang}">')
-                    in_code = True
-                continue
+    def inline_fmt(text):
+        text = esc(text)
+        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+        text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+
+        def safe_link(match):
+            label, href = match.group(1), match.group(2)
+            if href.lower().startswith(("http://", "https://", "mailto:", "/", "#")):
+                return f'<a href="{href}">{label}</a>'
+            return f"{label} ({href})"
+
+        text = re.sub(r"\[(.+?)\]\((.+?)\)", safe_link, text)
+        return text
+
+    lines = md.split("\n")
+    html_parts = []
+    in_code = False
+    in_table = False
+    in_list = False
+    for line in lines:
+        if line.strip().startswith("```"):
             if in_code:
-                html_parts.append(esc(line))
-                continue
-            # Close table/list if needed
-            if in_table and not line.strip().startswith("|"):
-                html_parts.append("</tbody></table>")
-                in_table = False
-            if in_list and not re.match(r"^\s*[-*]\s", line) and not re.match(r"^\s*\d+\.\s", line) and line.strip():
-                html_parts.append("</ul>")
-                in_list = False
-            # Blank lines
-            if not line.strip():
-                continue
-            # Headings
-            hm = re.match(r"^(#{1,6})\s+(.*)", line)
-            if hm:
-                level = len(hm.group(1))
-                text = inline_fmt(hm.group(2).strip())
-                html_parts.append(f"<h{level}>{text}</h{level}>")
-                continue
-            # Tables
-            if line.strip().startswith("|"):
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                if all(re.match(r"^[-:]+$", c) for c in cells):
-                    continue  # separator row
-                if not in_table:
-                    html_parts.append('<table class="doc-table"><thead><tr>')
-                    for c in cells:
-                        html_parts.append(f"<th>{esc(c)}</th>")
-                    html_parts.append("</tr></thead><tbody>")
-                    in_table = True
-                else:
-                    html_parts.append("<tr>")
-                    for c in cells:
-                        html_parts.append(f"<td>{esc(c)}</td>")
-                    html_parts.append("</tr>")
-                continue
-            # Lists
-            lm = re.match(r"^\s*[-*]\s+(.*)", line)
-            if lm:
-                if not in_list:
-                    html_parts.append("<ul>")
-                    in_list = True
-                item_text = esc(lm.group(1))
-                # Checkboxes
-                item_text = item_text.replace("[x]", "&#9745;").replace("[ ]", "&#9744;")
-                html_parts.append(f"<li>{item_text}</li>")
-                continue
-            # Paragraph — escape then apply inline formatting
-            html_parts.append(f"<p>{inline_fmt(line)}</p>")
-        if in_table:
-            html_parts.append("</tbody></table>")
-        if in_list:
-            html_parts.append("</ul>")
+                html_parts.append("</code></pre>")
+                in_code = False
+            else:
+                lang = esc(line.strip()[3:].strip())
+                html_parts.append(f'<pre><code class="lang-{lang}">')
+                in_code = True
+            continue
         if in_code:
-            html_parts.append("</code></pre>")
-        return "\n".join(html_parts)
+            html_parts.append(esc(line))
+            continue
+        if in_table and not line.strip().startswith("|"):
+            html_parts.append("</tbody></table>")
+            in_table = False
+        if in_list and not re.match(r"^\s*[-*]\s", line) and not re.match(r"^\s*\d+\.\s", line) and line.strip():
+            html_parts.append("</ul>")
+            in_list = False
+        if not line.strip():
+            continue
+        heading_match = re.match(r"^(#{1,6})\s+(.*)", line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = inline_fmt(heading_match.group(2).strip())
+            html_parts.append(f"<h{level}>{text}</h{level}>")
+            continue
+        if line.strip().startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if all(re.match(r"^[-:]+$", cell) for cell in cells):
+                continue
+            if not in_table:
+                html_parts.append('<table class="doc-table"><thead><tr>')
+                for cell in cells:
+                    html_parts.append(f"<th>{esc(cell)}</th>")
+                html_parts.append("</tr></thead><tbody>")
+                in_table = True
+            else:
+                html_parts.append("<tr>")
+                for cell in cells:
+                    html_parts.append(f"<td>{esc(cell)}</td>")
+                html_parts.append("</tr>")
+            continue
+        list_match = re.match(r"^\s*[-*]\s+(.*)", line)
+        if list_match:
+            if not in_list:
+                html_parts.append("<ul>")
+                in_list = True
+            item_text = esc(list_match.group(1))
+            item_text = item_text.replace("[x]", "&#9745;").replace("[ ]", "&#9744;")
+            html_parts.append(f"<li>{item_text}</li>")
+            continue
+        html_parts.append(f"<p>{inline_fmt(line)}</p>")
+    if in_table:
+        html_parts.append("</tbody></table>")
+    if in_list:
+        html_parts.append("</ul>")
+    if in_code:
+        html_parts.append("</code></pre>")
+    return "\n".join(html_parts)
 
-    project_html = md_to_html(project_content)
+
+@app.route("/docs")
+@login_required
+def docs():
+    """Render project documentation + progress bar from PROJECT.md."""
+    project_path = os.path.join(os.path.dirname(__file__), "docs", "PROJECT.md")
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+    project_content = _docs_read_file(project_path, "_PROJECT.md not found._")
+    readme_content = _docs_read_file(readme_path, "")
+    project_html = _docs_markdown_to_html(project_content)
+    progress_phases = _docs_progress_phases(readme_content)
 
     return render_template(
         "docs.html",

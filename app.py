@@ -5826,6 +5826,54 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_ai_queue_user ON ai_advisor_queue(user_id);
             CREATE INDEX IF NOT EXISTS idx_ai_queue_batch ON ai_advisor_queue(batch_id);
 
+            -- AI Action Queue: prospective drafts the AI has extracted from
+            -- user input (receipt photo + voice prompt, etc). One row per
+            -- intent. AI never writes to the real target tables directly —
+            -- it drops a row here, routes it to the responsible human, and
+            -- the human's approval click is what promotes it into the real
+            -- vehicle_logs / expense_receipts / purchase_orders / etc.
+            -- "AI-aware, role-gated, human-supervised."
+            CREATE TABLE IF NOT EXISTS ai_prospective_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_type TEXT NOT NULL,
+                submitted_by_user_id INTEGER NOT NULL,
+                assigned_approver_id INTEGER,
+                approver_stage TEXT NOT NULL DEFAULT 'area_admin',
+                region TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                file_path TEXT NOT NULL DEFAULT '',
+                file_name TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'awaiting_review',
+                decision_note TEXT NOT NULL DEFAULT '',
+                materialised_table TEXT NOT NULL DEFAULT '',
+                materialised_row_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                decided_at TEXT,
+                decided_by_user_id INTEGER,
+                source_queue_id INTEGER,
+                FOREIGN KEY (submitted_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (assigned_approver_id) REFERENCES users(id),
+                FOREIGN KEY (decided_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (source_queue_id) REFERENCES ai_advisor_queue(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_prospective_status ON ai_prospective_actions(status);
+            CREATE INDEX IF NOT EXISTS idx_prospective_approver ON ai_prospective_actions(assigned_approver_id, status);
+            CREATE INDEX IF NOT EXISTS idx_prospective_submitter ON ai_prospective_actions(submitted_by_user_id);
+
+            -- Routing table: maps an action_type to the role that owns the
+            -- "area admin" (domain check) stage and the role that owns the
+            -- "fin admin" (money release) stage. Either may be empty to
+            -- skip that stage. Region is optional — nullable for now, used
+            -- later when Ravikiran Group opens additional offices.
+            CREATE TABLE IF NOT EXISTS ai_action_routes (
+                action_type TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                area_admin_role TEXT NOT NULL DEFAULT '',
+                fin_admin_role TEXT NOT NULL DEFAULT '',
+                target_table TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT ''
+            );
+
             -- AI Pane: real-time AI interactions (instant, not batch)
             CREATE TABLE IF NOT EXISTS ai_pane_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5944,6 +5992,8 @@ def init_db() -> None:
         pass
     # v3.0 — seed ERP portals and assign all users to both portals by default.
     _seed_erp_portals()
+    # v3.1 — seed AI action-queue routing table.
+    _seed_ai_action_routes()
     # v2.0.0 — one-shot pre-drop migration. Reads legacy finance
     # columns if present, hands them to sync_request_to_peer_aggregates,
     # then drops the columns. Second run is a no-op.
@@ -5979,6 +6029,48 @@ def _seed_erp_portals() -> None:
                     )
                 except Exception:
                     pass
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+AI_ACTION_ROUTES_SEED: list[tuple[str, str, str, str, str, str]] = [
+    # (action_type, label, area_admin_role, fin_admin_role, target_table, notes)
+    ("vehicle_expense",  "Vehicle expense",  "fleet_admin",    "finance_admin",
+     "expense_receipts", "Fuel / repair / toll — area admin verifies vehicle, fin admin releases."),
+    ("fuel_receipt",     "Fuel receipt",     "fleet_admin",    "finance_admin",
+     "expense_receipts", "Narrow subtype of vehicle_expense kept for routing clarity."),
+    ("mess_topup",       "Mess top-up",      "mess_admin",     "finance_admin",
+     "mess_entries",     "Student mess credit top-up."),
+    ("tuck_shop_sale",   "Tuck shop sale",   "mess_admin",     "",
+     "tuck_shop_sales",  "Over-the-counter sale; no finance stage."),
+    ("leave_request",    "Leave request",    "reporting_manager", "",
+     "leave_requests",   "Reporting-manager approval only; finance not involved."),
+    ("attendance_correct", "Attendance correction", "reporting_manager", "",
+     "attendance",       "Late-mark / missed-punch correction."),
+    ("vendor_invoice",   "Vendor invoice",   "ops_admin",      "finance_admin",
+     "purchase_orders",  "Falls into the existing Prashant → Pournima PO chain."),
+    ("complaint",        "Complaint",        "ops_admin",      "",
+     "complaints",       "Facilities / infra complaint; routed to area admin."),
+]
+
+
+def _seed_ai_action_routes() -> None:
+    """Seed the AI action-queue routing table. Idempotent — rows are
+    INSERT OR IGNORE keyed by action_type, so re-running preserves any
+    local edits owners made via /admin/ai-routes (when that UI lands)."""
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    try:
+        for row in AI_ACTION_ROUTES_SEED:
+            db.execute(
+                "INSERT OR IGNORE INTO ai_action_routes "
+                "(action_type, label, area_admin_role, fin_admin_role, target_table, notes) "
+                "VALUES (?,?,?,?,?,?)",
+                row,
+            )
         db.commit()
     except Exception:
         pass

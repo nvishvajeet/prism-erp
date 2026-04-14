@@ -79,7 +79,7 @@ rm ~/Library/LaunchAgents/local.catalyst.plist
 launchctl print gui/$(id -u)/local.catalyst | head -20
 
 # smoke the URL
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5055/login
+curl -ks -o /dev/null -w "%{http_code}\n" https://127.0.0.1:5055/login
 # expect: 200
 
 # tail the log (one file for both stdout and stderr)
@@ -99,7 +99,8 @@ tail -f logs/deploy-verify.log
 This verifier does not replace the normal `post-receive` deploy hook.
 It is a recovery lane that checks for deploy drift every minute and
 kickstarts `local.catalyst` if the bare repo, worktree, and served
-health endpoint disagree.
+HTTPS health endpoint disagree. If drift still persists, it attempts one
+automatic force-resync per day by default.
 
 ## Why no reloader
 

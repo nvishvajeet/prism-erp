@@ -204,10 +204,23 @@ install a lightweight verifier that runs every minute and confirms:
 
 - bare repo stable branch HEAD
 - checked-out worktree HEAD
-- live `/api/health-check` reported `git_head`
+- live HTTPS `/api/health-check` reported `git_head`
 
 If those drift apart, the verifier kickstarts `local.catalyst` and logs
-the result to `logs/deploy-verify.log`.
+the result to `logs/deploy-verify.log`. The service on the mini serves
+TLS on `127.0.0.1:5055`, so the verifier probes
+`https://127.0.0.1:5055/api/health-check` and accepts the local cert.
+
+If drift still persists after the kickstart, the verifier now performs
+one automatic force-resync attempt per day by default. That fallback:
+
+- runs at most once every 24 hours
+- fetches `origin/v1.3.0-stable-release`
+- hard-resets the mini worktree to that branch tip
+- kickstarts `local.catalyst` again
+
+This is a recovery lane for a broken deploy state, not the normal path.
+The normal path is still `push` → `post-receive` → `kickstart`.
 
 Install on the mini:
 

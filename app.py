@@ -7429,7 +7429,12 @@ def inject_globals():
     access_profile = user_access_profile(user)
     ai_settings = _ai_settings_snapshot()
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
-    V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
+    # Every db role must appear here — base.html's [data-vis] filter hides
+    # elements whose data-vis list doesn't include the current user's role,
+    # so a role omitted here renders as a completely blank page. "owner" is
+    # a real db role (see users.role), and historical member/requester rows
+    # may still exist, so list them all.
+    V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
     nav_instruments_truncated = False
@@ -7999,11 +8004,11 @@ def index():
             },
             {
                 "slug": "hq",
-                "label": "Private Workspace",
-                "title": "Private ERP Workspace",
-                "tagline": "Separate internal workspace for non-lab operations and private demo access.",
+                "label": "",
+                "title": "",
+                "tagline": "Alternate internal entry point for private operations and demo access.",
                 "href": url_for("login", portal="hq"),
-                "cta": "Enter Private Workspace",
+                "cta": "Alternate Entry",
             },
         ]
         return render_template(

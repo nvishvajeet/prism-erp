@@ -8090,11 +8090,48 @@ def _dev_panel_future_fixes_count() -> dict:
     return {"total": total, "by_file": by_file}
 
 
+def _dev_panel_semver_tags() -> list[dict]:
+    """Return semver tags plus their git metadata in one pass.
+
+    Keeps the dev panel from spawning one `git for-each-ref` process per
+    timeline row and another one for the latest-release hero tile.
+    """
+    tag_lines = _dev_panel_git(
+        "for-each-ref",
+        "--format=%(refname:short)|%(objectname:short)|%(taggerdate:iso-strict)|%(subject)",
+        "refs/tags",
+    ).splitlines()
+    tags: list[dict] = []
+    for raw in tag_lines:
+        parts = raw.split("|", 3)
+        if len(parts) != 4:
+            continue
+        tag_name, sha, tagged_at, subject = parts
+        if not tag_name.startswith("v"):
+            continue
+        clean = tag_name[1:].split("-")[0]
+        semver_parts = clean.split(".")
+        if len(semver_parts) != 3 or not all(part.isdigit() for part in semver_parts):
+            continue
+        major, minor, patch = (int(part) for part in semver_parts)
+        tags.append(
+            {
+                "tag": tag_name,
+                "version": (major, minor, patch),
+                "sha": sha,
+                "tagged_at": tagged_at,
+                "subject": subject,
+            }
+        )
+    tags.sort(key=lambda row: row["version"])
+    return tags
+
+
 def _dev_panel_progress() -> dict:
     """Compute current project progress from git + the docs."""
     branch = _dev_panel_git("symbolic-ref", "--short", "HEAD") or "DETACHED"
     # Compare against the upstream of the current branch, not a hardcoded
-    # "origin/main" — PRISM lives on `v1.3.0-stable-release`, and the
+    # "origin/main" — CATALYST lives on `v1.3.0-stable-release`, and the
     # hardcode was stale from the pre-stable-release era. If the branch
     # has no tracked upstream (detached HEAD, fresh local branch), both
     # counts stay at 0 rather than returning nonsense.
@@ -8140,16 +8177,7 @@ def _dev_panel_progress() -> dict:
     # (shipped patches grouped by major.minor line) and the STABLE
     # RELEASE / header badge (latest semver tag). Fetch once, parse
     # once, use twice. See PHILOSOPHY.md §3.1 for the iOS cadence.
-    tag_lines = _dev_panel_git("tag", "--list").splitlines()
-    semver_tags: list[tuple[tuple[int, int, int], str]] = []
-    for t in tag_lines:
-        t = t.strip()
-        if not t.startswith("v"):
-            continue
-        parts = t[1:].split(".")
-        if len(parts) == 3 and all(p.isdigit() for p in parts):
-            semver_tags.append(((int(parts[0]), int(parts[1]), int(parts[2])), t))
-    semver_tags.sort()
+    semver_tags = _dev_panel_semver_tags()
 
     # Versions-in-flight for the ROADMAP tile. Historically parsed
     # TODO_AI.txt (pre-stable-release artifact with stale "v1.4.0
@@ -8160,13 +8188,14 @@ def _dev_panel_progress() -> dict:
     # the ROADMAP tile now tells the actual shipped story instead
     # of a planning fiction.
     versions: list[dict] = []
-    version_groups: dict[tuple[int, int], list[tuple[tuple[int, int, int], str]]] = {}
-    for (m_mi_p, t) in semver_tags:
-        key = (m_mi_p[0], m_mi_p[1])
-        version_groups.setdefault(key, []).append((m_mi_p, t))
+    version_groups: dict[tuple[int, int], list[dict]] = {}
+    for tag_info in semver_tags:
+        major, minor, _patch = tag_info["version"]
+        key = (major, minor)
+        version_groups.setdefault(key, []).append(tag_info)
     for (major, minor) in sorted(version_groups.keys()):
-        patches = sorted(version_groups[(major, minor)])
-        entries = [{"label": t, "done": True} for _, t in patches]
+        patches = sorted(version_groups[(major, minor)], key=lambda row: row["version"])
+        entries = [{"label": row["tag"], "done": True} for row in patches]
         versions.append({
             "name": f"v{major}.{minor}.x — {len(patches)} patch{'' if len(patches) == 1 else 'es'} shipped",
             "entries": entries,
@@ -8180,25 +8209,9 @@ def _dev_panel_progress() -> dict:
     current_release = "unknown"
     latest_tag_info: dict = {}
     if semver_tags:
-        # semver_tags was already sorted above when it was built for
-        # the ROADMAP tile; no need to re-sort.
-        latest_tag = semver_tags[-1][1]  # e.g. "v1.4.4"
+        latest_tag_row = semver_tags[-1]
+        latest_tag = latest_tag_row["tag"]  # e.g. "v1.4.4"
         current_release = latest_tag.lstrip("v")
-        # Resolve tag → commit SHA, tagged-at, tag subject (first line of
-        # the annotated message). `git for-each-ref` gives us all three in
-        # one call without needing a second subprocess roundtrip.
-        tag_meta = _dev_panel_git(
-            "for-each-ref",
-            "--format=%(objectname:short)|%(taggerdate:iso-strict)|%(subject)",
-            f"refs/tags/{latest_tag}",
-        )
-        tag_sha = ""
-        tag_date = ""
-        tag_subject = ""
-        if tag_meta:
-            mparts = tag_meta.split("|", 2)
-            if len(mparts) == 3:
-                tag_sha, tag_date, tag_subject = mparts
         # Count commits on the current branch since the tag — this is
         # the "unreleased work" depth that tells the operator whether
         # a new patch cut is warranted.
@@ -8207,9 +8220,9 @@ def _dev_panel_progress() -> dict:
         )
         latest_tag_info = {
             "tag": latest_tag,
-            "sha": tag_sha,
-            "tagged_at": tag_date,
-            "subject": tag_subject,
+            "sha": latest_tag_row["sha"],
+            "tagged_at": latest_tag_row["tagged_at"],
+            "subject": latest_tag_row["subject"],
             "commits_since": int(commits_since_tag) if commits_since_tag.isdigit() else 0,
         }
     elif (BASE_DIR / "CHANGELOG.md").exists():
@@ -8263,16 +8276,13 @@ def _dev_panel_progress() -> dict:
     # v1.5.1 / v1.6.0 / v2.0 look like; the tile shows what's real.
     timeline: list[dict] = []
     # semver_tags is already sorted ascending; reverse for newest-first.
-    for (m_mi_p, t) in reversed(semver_tags):
-        major, minor, patch = m_mi_p
-        tag_date = _dev_panel_git(
-            "for-each-ref",
-            "--format=%(taggerdate:short)",
-            f"refs/tags/{t}",
-        ).strip()
-        is_latest = (t == latest_tag_info.get("tag", ""))
+    for tag_row in reversed(semver_tags):
+        major, minor, patch = tag_row["version"]
+        tagged_at = tag_row["tagged_at"] or ""
+        tag_date = tagged_at[:10] if tagged_at else ""
+        is_latest = (tag_row["tag"] == latest_tag_info.get("tag", ""))
         timeline.append({
-            "tag": t,
+            "tag": tag_row["tag"],
             "major": major,
             "minor": minor,
             "patch": patch,

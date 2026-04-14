@@ -11,6 +11,7 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">Vendors</a>
+    <a class="btn" href="{{ url_for('payroll_view') }}" data-vis="{{ V }}">Salary</a>
     <a class="btn" href="{{ url_for('vendor_payment_reports') }}" data-vis="{{ V }}">Reports</a>
     <a class="btn" href="{{ url_for('ca_audit_dashboard') }}" data-vis="{{ V }}">Audit</a>
     <a class="btn" href="{{ url_for('vendor_payment_filing') }}" data-vis="{{ V }}">📁 Filing</a>
@@ -34,6 +35,7 @@
       {"value": approved|string,                          "label": "Approved",          "tone": "green"},
       {"value": "₹" ~ "{:,.0f}".format(paid_total),      "label": "Total Paid"},
       {"value": "₹" ~ "{:,.0f}".format(month_spend),     "label": "This Month"},
+      {"value": "₹" ~ "{:,.0f}".format(payroll_month_total or 0), "label": "Salary (monthly)"},
     ]) }}
   </article>
 </section>

@@ -9957,6 +9957,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    action buttons). See templates/_base_feedback_widgets.html
    for behaviour (voice, C-to-capture, hotkeys). */
 .feedback-widget { position: fixed; bottom: 0.75rem; right: 0.75rem; z-index: 9999; }
+.feedback-voice-badge {
+  position: absolute; right: 0; bottom: 3.35rem;
+  padding: 0.35rem 0.65rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line) 76%);
+  color: var(--text); font-size: 0.7rem; font-weight: 600;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.14);
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+.feedback-voice-badge.is-live {
+  opacity: 1;
+  transform: translateY(0);
+}
 .feedback-toggle {
   width: 2.5rem; height: 2.5rem; border-radius: 50%; border: none;
   background: var(--accent); color: white; font-size: 1.05rem;
@@ -9968,6 +9983,52 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   width: 2rem; height: 2rem; font-size: 0.95rem; opacity: 0.78;
 }
 .feedback-widget--compact .feedback-toggle:hover { opacity: 1; }
+.feedback-capture-flash {
+  position: absolute; right: 0; bottom: 3.35rem;
+  padding: 0.35rem 0.6rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 84%, white 16%);
+  color: #fff; font-size: 0.72rem; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+  opacity: 0; transform: translateY(6px) scale(0.96);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+.feedback-capture-flash.is-visible {
+  opacity: 1; transform: translateY(0) scale(1);
+}
+.feedback-capture-flash[data-tone="ok"] {
+  background: color-mix(in srgb, var(--accent) 84%, white 16%);
+}
+.feedback-capture-marker {
+  position: fixed;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-left: -0.675rem;
+  margin-top: -0.675rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--accent) 84%, white 16%);
+  background: color-mix(in srgb, var(--accent) 18%, transparent 82%);
+  box-shadow: 0 0 0 0 rgba(0,0,0,0.12);
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+  z-index: 10001;
+}
+.feedback-capture-marker.is-visible {
+  animation: feedback-capture-pulse 0.52s ease-out forwards;
+}
+@keyframes feedback-capture-pulse {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.6);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 32%, transparent 68%);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+    box-shadow: 0 0 0 18px color-mix(in srgb, var(--accent) 0%, transparent 100%);
+  }
+}
 .feedback-panel {
   position: absolute; bottom: 3rem; right: 0; width: 260px;
   background: var(--panel); border: 1px solid var(--line);

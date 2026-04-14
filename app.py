@@ -18,6 +18,7 @@ from email.message import EmailMessage
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
+from tempfile import gettempdir
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
 from flask_wtf.csrf import CSRFProtect
@@ -18902,10 +18903,21 @@ def vendor_payments_list():
         ms_sql += " AND company_id = ?"
         ms_params.append(int(company_filter))
     month_spend = query_one(ms_sql, tuple(ms_params))
+    # Nikita 2026-04-14 — surface monthly payroll alongside PO spend on
+    # /payments so the "what am I paying out this month" answer lives in
+    # one place. Total is the declared monthly_salary sum from
+    # salary_config; actual payouts happen on /personnel/payroll.
+    payroll_month_total_row = query_one(
+        "SELECT COALESCE(SUM(monthly_salary), 0) AS total FROM salary_config"
+    )
+    payroll_month_total = (
+        payroll_month_total_row["total"] if payroll_month_total_row else 0
+    )
     return render_template("vendor_payments.html", orders=rows,
                            pending=pending, approved=approved,
                            paid_total=paid_total, total_orders=total_orders,
                            month_spend=month_spend["total"] if month_spend else 0,
+                           payroll_month_total=payroll_month_total,
                            status_filter=status_filter, categories=PO_CATEGORIES,
                            companies=companies, company_filter=company_filter)
 
@@ -22377,9 +22389,20 @@ def expense_receipt_review(receipt_id):
 # grid overlay (?debug=1), speaks into the mic describing issues
 # by grid reference, and the browser's Web Speech API transcribes
 # the audio. The transcript is POSTed here and appended to
-# logs/debug_feedback.md so Claude can read it later.
+# data/<mode>/logs/debug_feedback.md so the live app can always
+# append feedback beside its active operational state instead of
+# relying on the code checkout being writable.
 
-FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
+FEEDBACK_LOG = _ACTIVE_DATA_DIR / "logs" / "debug_feedback.md"
+FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / "catalyst_feedback" / "debug_feedback.md"
+
+
+def _feedback_log_targets() -> list[Path]:
+    targets: list[Path] = []
+    for candidate in [FEEDBACK_LOG, BASE_DIR / "logs" / "debug_feedback.md", FALLBACK_FEEDBACK_LOG]:
+        if candidate not in targets:
+            targets.append(candidate)
+    return targets
 
 
 def _normalize_feedback_text(raw_text: str) -> str:
@@ -22415,6 +22438,7 @@ def _append_feedback_entry(
     selector, and any manual snapshots captured via the C hotkey.
     It is fenced as ```context so the downstream AI crawler can
     parse it directly without regex-fighting the markdown.
+    Returns the log file path actually used.
     """
     if user:
         _masked_name = OWNER_DISPLAY_NAME if is_owner(user) else user["name"]
@@ -22437,9 +22461,19 @@ def _append_feedback_entry(
         if len(ctx) > 4000:
             ctx = ctx[:4000] + "\n…truncated…"
         entry += f"\n```context\n{ctx}\n```\n"
-    FEEDBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
-        f.write(entry)
+    last_error: OSError | None = None
+    for target in _feedback_log_targets():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(target, "a", encoding="utf-8") as f:
+                f.write(entry)
+            return target
+        except OSError as exc:
+            last_error = exc
+            continue
+    if last_error:
+        raise last_error
+    return FEEDBACK_LOG
 
 @app.route("/debug/feedback", methods=["POST"])
 @csrf.exempt
@@ -22468,14 +22502,14 @@ def debug_feedback():
         for c in clicks:
             click_lines += f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` ({c.get('page', '?')})\n"
 
-    _append_feedback_entry(
+    saved_to = _append_feedback_entry(
         user=user,
         text=f"{text}\n\n{click_lines}".strip(),
         page=f"{page} ({grid})",
         source="debug-feedback",
     )
 
-    return jsonify(ok=True, saved_to=str(FEEDBACK_LOG))
+    return jsonify(ok=True, saved_to=str(saved_to))
 
 
 @app.route("/feedback", methods=["POST"])
@@ -22493,8 +22527,12 @@ def site_feedback_submit():
             user=user, text=raw_text, page=page, source=source,
             context_json=context_json,
         )
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(ok=True, message="Feedback sent. We logged it for review.")
         flash("Feedback sent. We logged it for review.", "success")
     else:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(ok=False, error="Please add a short note before sending feedback."), 400
         flash("Please add a short note before sending feedback.", "error")
     if return_to.startswith("/"):
         return redirect(return_to)

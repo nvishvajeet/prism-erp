@@ -15,6 +15,9 @@
   {% if current_user %}
   <div id="feedbackWidget" class="feedback-widget feedback-widget--compact" data-vis="{{ V }}">
     <button id="feedbackToggle" class="feedback-toggle" title="Feedback / voice note / bug (press F)" aria-label="Open feedback" data-vis="{{ V }}">💬</button>
+    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Listening and tracking cursor</div>
+    <div id="feedbackCaptureFlash" class="feedback-capture-flash" hidden data-vis="{{ V }}">Captured</div>
+    <div id="feedbackCaptureMarker" class="feedback-capture-marker" hidden data-vis="{{ V }}" aria-hidden="true"></div>
     <div id="feedbackPanel" class="feedback-panel" hidden data-vis="{{ V }}">
       <div class="feedback-header" data-vis="{{ V }}">
         <strong data-vis="{{ V }}">Quick Feedback</strong>
@@ -50,6 +53,12 @@
     var text = document.getElementById('feedbackText');
     var ctxInput = document.getElementById('feedbackContext');
     var status = document.getElementById('feedbackStatus');
+    var mic = document.getElementById('feedbackMic');
+    var captureBtn = document.getElementById('feedbackCapture');
+    var submitBtn = document.getElementById('feedbackSubmit');
+    var voiceBadge = document.getElementById('feedbackVoiceBadge');
+    var captureFlash = document.getElementById('feedbackCaptureFlash');
+    var captureMarker = document.getElementById('feedbackCaptureMarker');
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
@@ -76,8 +85,20 @@
     // ── Cursor + hover context tracking ───────────────────────────
     var lastPointer = {x: 0, y: 0};
     var lastHoverSelector = '';
+    var pointerTrail = [];
+    var pointerTrailLimit = 40;
     document.addEventListener('mousemove', function(e){
       lastPointer.x = e.clientX; lastPointer.y = e.clientY;
+      if (listening) {
+        pointerTrail.push({
+          x: e.clientX,
+          y: e.clientY,
+          ts: new Date().toISOString()
+        });
+        if (pointerTrail.length > pointerTrailLimit) {
+          pointerTrail.shift();
+        }
+      }
     }, {passive: true});
     document.addEventListener('mouseover', function(e){
       var el = e.target;
@@ -99,9 +120,44 @@
         hover: lastHoverSelector,
         ts: new Date().toISOString(),
       };
+      if (pointerTrail.length) ctx.pointer_trail = pointerTrail.slice(-pointerTrailLimit);
       if (snapshot) ctx.snapshot = snapshot;
       if (ctxInput) ctxInput.value = JSON.stringify(ctx);
       return ctx;
+    }
+
+    function flashCapture(message, tone) {
+      if (!captureFlash) return;
+      captureFlash.textContent = message || 'Captured';
+      captureFlash.setAttribute('data-tone', tone || 'ok');
+      captureFlash.hidden = false;
+      captureFlash.classList.add('is-visible');
+      window.clearTimeout(flashCapture._timer);
+      flashCapture._timer = window.setTimeout(function(){
+        captureFlash.classList.remove('is-visible');
+        captureFlash.hidden = true;
+      }, 900);
+    }
+
+    function showVoiceBadge(active) {
+      if (!voiceBadge) return;
+      voiceBadge.hidden = !active;
+      voiceBadge.classList.toggle('is-live', !!active);
+    }
+
+    function pulseCaptureMarker(point) {
+      if (!captureMarker || !point) return;
+      captureMarker.style.left = point.x + 'px';
+      captureMarker.style.top = point.y + 'px';
+      captureMarker.hidden = false;
+      captureMarker.classList.remove('is-visible');
+      void captureMarker.offsetWidth;
+      captureMarker.classList.add('is-visible');
+      window.clearTimeout(pulseCaptureMarker._timer);
+      pulseCaptureMarker._timer = window.setTimeout(function(){
+        captureMarker.classList.remove('is-visible');
+        captureMarker.hidden = true;
+      }, 520);
     }
 
     // ── "C" / 🎯 capture element under cursor ─────────────────────
@@ -120,13 +176,13 @@
         text.focus();
       }
       collectContext(descr);
+      pulseCaptureMarker({x: lastPointer.x, y: lastPointer.y});
+      flashCapture('Captured under cursor', 'ok');
     }
-    var captureBtn = document.getElementById('feedbackCapture');
     if (captureBtn) captureBtn.addEventListener('click', function(ev){ ev.preventDefault(); captureElementUnderCursor(); });
 
     // ── Voice (SpeechRecognition) ─────────────────────────────────
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var mic = document.getElementById('feedbackMic');
     var listening = false, recognition = null;
 
     function buildRecognition() {
@@ -152,6 +208,7 @@
       };
       r.onerror = function(ev){
         listening = false;
+        showVoiceBadge(false);
         if (mic) {
           mic.textContent = '🎤';
           mic.title = 'Voice error: ' + (ev.error || 'unknown') + '. Click to retry.';
@@ -161,8 +218,9 @@
       r.onend = function(){
         // Auto-restart while the panel is open + user still wants voice.
         if (listening) {
-          try { r.start(); } catch(e) { listening = false; if (mic) mic.textContent = '🎤'; }
+          try { r.start(); } catch(e) { listening = false; showVoiceBadge(false); if (mic) mic.textContent = '🎤'; }
         } else if (mic) {
+          showVoiceBadge(false);
           mic.textContent = '🎤';
           mic.title = 'Start voice input (M)';
         }
@@ -176,6 +234,7 @@
         if (listening) {
           listening = false;
           try { recognition.stop(); } catch(e) {}
+          showVoiceBadge(false);
           mic.textContent = '🎤';
           mic.title = 'Start voice input (M)';
           setStatus('Voice input stopped.', '');
@@ -184,6 +243,8 @@
         try {
           recognition.start();
           listening = true;
+          pointerTrail = [];
+          showVoiceBadge(true);
           mic.textContent = '🔴';
           mic.title = 'Listening… click to stop.';
           setStatus('Listening… speak naturally, then tap the mic to stop.', 'live');
@@ -191,6 +252,7 @@
           // start() throws if already started; treat as toggle-off.
           try { recognition.stop(); } catch(_) {}
           listening = false;
+          showVoiceBadge(false);
           mic.textContent = '🎤';
           mic.title = 'Start voice input (M)';
           setStatus('Voice input could not start cleanly. Try once more.', 'warn');
@@ -230,14 +292,57 @@
 
     // Record context on every submit, in case user skipped capture.
     var form = panel.querySelector('form');
-    var submitBtn = document.getElementById('feedbackSubmit');
-    if (form) form.addEventListener('submit', function(){
+    if (form) form.addEventListener('submit', function(ev){
+      ev.preventDefault();
       collectContext(null);
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Saving...';
       }
+      if (captureBtn) captureBtn.disabled = true;
+      if (mic) mic.disabled = true;
       setStatus('Saving feedback…', 'live');
+      var fd = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        body: fd,
+        credentials: 'same-origin'
+      })
+      .then(function(r){
+        return r.json().then(function(data){
+          return {ok: r.ok, data: data};
+        });
+      })
+      .then(function(result){
+        if (!result.ok || !result.data.ok) {
+          throw new Error((result.data && (result.data.error || result.data.message)) || 'Feedback could not be saved.');
+        }
+        if (text) text.value = '';
+        if (ctxInput) ctxInput.value = '';
+        setStatus(result.data.message || 'Feedback sent.', '');
+        if (panel && !panel.hidden) {
+          window.setTimeout(function(){
+            setStatus('', '');
+            closePanel();
+          }, 900);
+        }
+      })
+      .catch(function(err){
+        setStatus((err && err.message) || 'Feedback could not be saved. Please try again.', 'warn');
+      })
+      .finally(function(){
+        showVoiceBadge(listening);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send';
+        }
+        if (captureBtn) captureBtn.disabled = false;
+        if (mic) {
+          mic.disabled = !SpeechRecognition;
+          if (!SpeechRecognition) mic.style.opacity = '0.4';
+        }
+      });
     });
   })();
   </script>

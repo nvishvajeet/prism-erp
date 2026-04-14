@@ -247,7 +247,18 @@
   var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   var recognition = null;
   var isRecording = false;
+  // `transcript` = everything the user has said + click/hover markers
+  // across the ENTIRE recording session (possibly spanning multiple
+  // recognition restarts). `sessionFinalBase` is what transcript held
+  // BEFORE the current recognition session started — when a session
+  // restarts after Chrome's auto-stop, its e.results array resets to
+  // empty, so we must rebuild transcript as
+  //     sessionFinalBase + (this session's finals) + click markers.
+  // Prior bug: transcript was rebuilt as (this session's finals) only,
+  // so everything spoken before the first auto-restart was lost — the
+  // user would see their text vanish mid-recording.
   var transcript = '';
+  var sessionFinalBase = '';
   var transcriptEl = null;
 
   function initSpeech() {
@@ -257,30 +268,68 @@
     r.interimResults = true;
     r.lang = 'en-US';
     r.onresult = function (e) {
-      var final = '';
+      var finalNow = '';
       var interim = '';
       for (var i = 0; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
-          final += e.results[i][0].transcript + ' ';
+          finalNow += e.results[i][0].transcript + ' ';
         } else {
           interim += e.results[i][0].transcript;
         }
       }
-      // Merge speech with any click markers already in transcript
-      var clickParts = transcript.match(/\[Click:[^\]]+\]/g) || [];
-      transcript = final + clickParts.join(' ') + ' ';
+      // Preserve click/hover markers already in transcript; rebuild as
+      // base-from-prior-sessions + this session's finals + click markers.
+      var clickParts = transcript.match(/\[(?:Click|Hover):[^\]]+\]/g) || [];
+      transcript = sessionFinalBase + finalNow + clickParts.join(' ') + ' ';
       if (transcriptEl) {
         transcriptEl.textContent = transcript + (interim ? '[...' + interim + ']' : '');
       }
     };
     r.onerror = function (e) {
       console.error('Speech error:', e.error);
-      if (e.error === 'not-allowed') {
-        if (transcriptEl) transcriptEl.textContent = 'Mic denied. Allow in browser settings.';
+      // Fatal — stop entirely and tell the user why.
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed' ||
+          e.error === 'audio-capture') {
+        isRecording = false;
+        if (transcriptEl) {
+          transcriptEl.textContent = 'Mic blocked (' + e.error +
+            '). Allow microphone in browser settings, then click Record again.';
+        }
+        return;
+      }
+      // `no-speech`, `aborted`, `network` — let onend auto-restart.
+      // Surface it so the user knows we're still alive.
+      if (transcriptEl && e.error !== 'no-speech') {
+        transcriptEl.textContent = transcript +
+          ' [reconnecting after ' + e.error + '...]';
       }
     };
     r.onend = function () {
-      if (isRecording) { try { r.start(); } catch (_) {} }
+      if (!isRecording) return;
+      // Bank this session's finals into the base so the next session
+      // doesn't overwrite them, then restart on the next tick —
+      // calling start() synchronously inside onend throws
+      // InvalidStateError on some Chrome builds.
+      sessionFinalBase = transcript.replace(/\[(?:Click|Hover):[^\]]+\]/g, '').trimEnd() + ' ';
+      setTimeout(function () {
+        if (!isRecording) return;
+        try {
+          r.start();
+        } catch (err) {
+          console.warn('Recognition restart failed:', err);
+          // Fresh recognizer on hard restart failure.
+          try {
+            recognition = initSpeech();
+            if (recognition) recognition.start();
+          } catch (_) {
+            isRecording = false;
+            if (transcriptEl) {
+              transcriptEl.textContent = transcript +
+                ' [mic stopped — click Stop then Record to resume]';
+            }
+          }
+        }
+      }, 250);
     };
     return r;
   }
@@ -293,9 +342,15 @@
     }
     if (!resumed) {
       transcript = '';
+      sessionFinalBase = '';
       clickEvents = [];
       clearClickMarkers();
       clearSessionState();
+    } else {
+      // Navigated-here resume — seed the base with whatever transcript
+      // we restored from sessionStorage, so this fresh session's
+      // finals append instead of overwriting prior-page speech.
+      sessionFinalBase = transcript.replace(/\[(?:Click|Hover):[^\]]+\]/g, '').trimEnd() + ' ';
     }
     isRecording = true;
     recognition.start();

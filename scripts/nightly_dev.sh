@@ -82,14 +82,18 @@ print('  Routes: %d checks, %d errors' % (len(roles)*len(routes), errs))
 if errs==0: print('  ✓ ALL GREEN')
 " >> "$LOG" 2>&1
 
-# 1e. Process command queue
+# 1e. Process command queue (+ nightly prune of old terminal rows)
 echo "" >> "$LOG"
 echo "--- Command Queue ---" >> "$LOG"
 $VENV -c "
 import app
 with app.app.app_context():
     pending = app.query_one('SELECT COUNT(*) AS c FROM command_queue WHERE status = \"pending\"')
+    awaiting = app.query_one('SELECT COUNT(*) AS c FROM command_queue WHERE status = \"awaiting_approval\"')
     print('  Pending commands: %d' % (pending['c'] if pending else 0))
+    print('  Awaiting approval: %d' % (awaiting['c'] if awaiting else 0))
+pruned = app.prune_command_queue(days=30)
+print('  Pruned (>30d): completed=%d failed=%d' % (pruned.get('completed', 0), pruned.get('failed', 0)))
 " >> "$LOG" 2>&1
 
 # ─── PHASE 2: HEALTH (5 min) ──────────────────────────────

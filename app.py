@@ -23788,6 +23788,37 @@ def process_all_pending_commands():
         return total
 
 
+def prune_command_queue(days: int = 30) -> dict[str, int]:
+    """Garbage-collect old finished rows from the action queue.
+
+    Only terminal rows are pruned. We deliberately keep ``awaiting_approval``
+    rows forever — they represent drafts that still need a human decision
+    and must never silently disappear. ``pending`` / ``processing`` are
+    also kept (they mean work is still queued up).
+
+    Usage (nightly cron, called from scripts/nightly_dev.sh):
+        python -c "import app; print(app.prune_command_queue())"
+
+    Returns a dict with the per-status row counts that were deleted.
+    """
+    with app.app_context():
+        cutoff = (datetime.now() - timedelta(days=max(1, int(days)))).isoformat()
+        stats: dict[str, int] = {}
+        for status in ("completed", "failed"):
+            row = query_one(
+                "SELECT COUNT(*) AS c FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
+                (status, cutoff),
+            )
+            stats[status] = row["c"] if row else 0
+            if stats[status]:
+                execute(
+                    "DELETE FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
+                    (status, cutoff),
+                )
+        stats["cutoff"] = cutoff
+        return stats
+
+
 # ═══════════════════════════════════════════════════════════════════
 # QR ATTENDANCE SYSTEM
 # ═══════════════════════════════════════════════════════════════════

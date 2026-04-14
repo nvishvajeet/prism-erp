@@ -6263,9 +6263,26 @@ def demo_switch_role(role_key: str):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
+        login_id = request.form["email"].strip().lower()
         password = request.form["password"]
-        user = query_one("SELECT * FROM users WHERE email = ? AND active = 1", (email,))
+        user = query_one(
+            """
+            SELECT *
+            FROM users
+            WHERE active = 1
+              AND (
+                lower(email) = ?
+                OR (
+                  ? NOT LIKE '%@%'
+                  AND instr(email, '@') > 0
+                  AND lower(substr(email, 1, instr(email, '@') - 1)) = ?
+                )
+              )
+            ORDER BY CASE WHEN lower(email) = ? THEN 0 ELSE 1 END, id
+            LIMIT 1
+            """,
+            (login_id, login_id, login_id, login_id),
+        )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             session.clear()
             session["user_id"] = user["id"]

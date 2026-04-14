@@ -20025,6 +20025,46 @@ OPENAI_API_BASE = os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
 DEFAULT_CLAUDE_MODEL = "claude-haiku-4-20250414"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 
+# Daily AI call budget — caps spend while the site is being set up.
+# Generous default during rollout; operators tighten later via
+# /admin/ai-settings once usage patterns settle. Set
+# ai_daily_call_limit <= 0 in system_settings to disable the cap.
+# Counter is date-stamped so yesterday's row simply isn't read —
+# no cron needed for daily rollover.
+DEFAULT_AI_DAILY_LIMIT = 500
+
+
+def _ai_daily_budget_key() -> str:
+    from datetime import date as _date
+    return f"ai_calls_{_date.today().isoformat()}"
+
+
+def _ai_daily_budget_peek() -> tuple[int, int]:
+    """Return (calls_used_today, limit). limit<=0 means unlimited."""
+    raw = get_system_setting("ai_daily_call_limit", str(DEFAULT_AI_DAILY_LIMIT))
+    try:
+        limit = int((raw or str(DEFAULT_AI_DAILY_LIMIT)).strip())
+    except (TypeError, ValueError):
+        limit = DEFAULT_AI_DAILY_LIMIT
+    try:
+        used = int((get_system_setting(_ai_daily_budget_key(), "0") or "0").strip())
+    except (TypeError, ValueError):
+        used = 0
+    return used, limit
+
+
+def _ai_daily_budget_consume(user_id: int | None = None) -> tuple[bool, int, int]:
+    """Charge 1 AI call against today's budget.
+    Returns (allowed, used_after, limit). When limit<=0, always allowed."""
+    used, limit = _ai_daily_budget_peek()
+    if limit <= 0:
+        return True, used, limit
+    if used >= limit:
+        return False, used, limit
+    new_used = used + 1
+    set_system_setting(_ai_daily_budget_key(), str(new_used), user_id)
+    return True, new_used, limit
+
 
 def _ai_settings_snapshot() -> dict[str, object]:
     mode = get_system_setting("ai_provider_mode", "claude").strip().lower() or "claude"
@@ -21059,8 +21099,15 @@ def api_ai_fill():
     user = current_user()
     if not text:
         return jsonify({})
+    allowed, used, limit = _ai_daily_budget_consume(user["id"])
+    if not allowed:
+        return jsonify({
+            "error": f"AI daily limit reached ({limit} calls). Try again tomorrow or raise the cap at /admin/ai-settings.",
+            "budget_used": used,
+            "budget_limit": limit,
+        }), 429
     result = _ai_fill_form(page, fields, text, dict(user).get("role", ""))
-    log_action(user["id"], "ai_assistant", None, "form_fill", {"page": page})
+    log_action(user["id"], "ai_assistant", None, "form_fill", {"page": page, "budget_used": used, "budget_limit": limit})
     return jsonify(result)
 
 
@@ -23554,6 +23601,15 @@ def ai_pane_submit():
 
     if not message:
         return jsonify({"ok": False, "error": "Please type a message"})
+
+    allowed, used, limit = _ai_daily_budget_consume(user["id"])
+    if not allowed:
+        return jsonify({
+            "ok": False,
+            "error": f"AI daily limit reached ({limit} calls). Try again tomorrow or raise the cap at /admin/ai-settings.",
+            "budget_used": used,
+            "budget_limit": limit,
+        }), 429
 
     parsed_submission = _ai_pane_parse_submission(user, message, page_context)
     action = parsed_submission["action"]

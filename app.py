@@ -3221,22 +3221,37 @@ def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.R
 
 
 def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) -> list[sqlite3.Row]:
+    try:
+        cache = g.setdefault("_visible_instruments_for_user", {})
+    except RuntimeError:
+        cache = None
+    cache_key = None
+    if cache is not None:
+        cache_key = (int(user["id"]), bool(active_only))
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     role = user["role"]
     status_clause = "WHERE status = 'active'" if active_only else ""
     if role in {"super_admin", "site_admin", "professor_approver"}:
-        return query_all(
+        result = query_all(
             f"SELECT id, name, code, status FROM instruments {status_clause} ORDER BY name"
         )
-    instrument_ids = assigned_instrument_ids(user)
-    if instrument_ids:
-        placeholders = ",".join("?" for _ in instrument_ids)
-        status_and = "AND status = 'active'" if active_only else ""
-        return query_all(
-            f"SELECT id, name, code, status FROM instruments WHERE id IN ({placeholders}) {status_and} ORDER BY name",
-            tuple(instrument_ids),
-        )
-    return []
+    else:
+        instrument_ids = assigned_instrument_ids(user)
+        if instrument_ids:
+            placeholders = ",".join("?" for _ in instrument_ids)
+            status_and = "AND status = 'active'" if active_only else ""
+            result = query_all(
+                f"SELECT id, name, code, status FROM instruments WHERE id IN ({placeholders}) {status_and} ORDER BY name",
+                tuple(instrument_ids),
+            )
+        else:
+            result = []
+    if cache is not None and cache_key is not None:
+        cache[cache_key] = result
+    return result
 
 
 def has_instrument_area_access(user: sqlite3.Row | None) -> bool:

@@ -10655,7 +10655,13 @@ def login():
             return redirect(url_for("role_manual"))
         # Log failed attempt — use user id if email matched but password wrong
         failed_uid = user["id"] if user else None
-        log_action(failed_uid, "auth", failed_uid or 0, "login_failed", {"email": email, "ip": request.remote_addr or ""})
+        log_action(
+            failed_uid,
+            "auth",
+            failed_uid or 0,
+            "login_failed",
+            {"login": login_id, "ip": request.remote_addr or ""},
+        )
         flash("Invalid login.", "error")
     return render_template("login.html")
 

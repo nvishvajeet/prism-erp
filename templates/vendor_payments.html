@@ -82,7 +82,7 @@
             <strong data-vis="{{ V }}">{{ o.title }}</strong>
             {% if o.auto_approved %}<span class="badge" data-vis="{{ V }}">auto</span>{% endif %}
           </td>
-          <td data-vis="{{ V }}">{{ o.vendor_name or '—' }}</td>
+          <td data-vis="{{ V }}">{% if o.vendor_id %}<a class="text-link no-row-nav" href="{{ url_for('vendor_detail', vendor_id=o.vendor_id) }}" data-vis="{{ V }}">{{ o.vendor_name or '—' }}</a>{% else %}{{ o.vendor_name or '—' }}{% endif %}</td>
           <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(o.amount) }}</td>
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ o.category }}</span></td>
           {% if companies and companies|length > 1 %}<td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ o.company_short or '—' }}</span></td>{% endif %}

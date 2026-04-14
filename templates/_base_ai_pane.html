@@ -7,7 +7,7 @@
   </button>
   <div id="aiPaneHoverPrompt" data-vis="{{ V }}"
        style="display:none;position:fixed;bottom:5.45rem;right:1.5rem;z-index:9999;max-width:18rem;padding:0.5rem 0.7rem;border-radius:999px;background:color-mix(in srgb, var(--card-bg, #1c1c1e) 92%, var(--tone-blue, #007AFF) 8%);border:1px solid var(--color-separator, rgba(255,255,255,0.12));box-shadow:0 10px 28px rgba(0,0,0,0.24);font-size:0.72rem;line-height:1.25;color:inherit;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity 0.16s ease, transform 0.16s ease;">
-    Ask Catalyst Assistant about this pane
+    Make any request or tell me anything
   </div>
   <aside id="aiPane" data-vis="{{ V }}"
          style="display:none;position:fixed;bottom:5.5rem;right:1.5rem;z-index:9998;width:24rem;max-height:70vh;border-radius:12px;background:var(--card-bg, #1c1c1e);border:1px solid var(--color-separator, rgba(255,255,255,0.1));box-shadow:0 8px 40px rgba(0,0,0,0.5);overflow:hidden;flex-direction:column;">
@@ -15,16 +15,16 @@
     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
         <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst Assistant</strong>
-        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Claude-powered · human oversight</span>
+        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Human-supervised rapid AI routing</span>
       </div>
       <button id="aiPaneClose" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0.2rem;" data-vis="{{ V }}">✕</button>
     </div>
     {# Chat History #}
     <div id="aiPaneChat" style="flex:1;overflow-y:auto;padding:0.75rem;max-height:40vh;min-height:8rem;" data-vis="{{ V }}">
       <div class="hint" style="text-align:center;padding:1rem;font-size:0.8rem;" data-vis="{{ V }}">
-        Speak or type a request — create an account draft, mark attendance,<br>route work, log an expense, or ask for help.
+        Make any request, ask for help, or just tell me anything.<br>I can help draft, route, summarize, and move work forward.
         <div style="margin-top:0.45rem;font-size:0.72rem;" data-vis="{{ V }}">
-          Built on Claude for fast parsing and routing. Sensitive changes stay under human oversight before they go live.
+          Built on Claude with human supervision. Fast requests can move quickly, and sensitive changes stay reviewable before they go live.
         </div>
       </div>
     </div>
@@ -39,13 +39,13 @@
         <label style="cursor:pointer;padding:0.4rem;font-size:1.1rem;color:var(--muted);" title="Attach file" data-vis="{{ V }}">
           📎<input type="file" id="aiPaneFile" style="display:none;" data-vis="{{ V }}">
         </label>
-        <textarea id="aiPaneInput" rows="2" placeholder="Tell Catalyst Assistant what you need..."
+        <textarea id="aiPaneInput" rows="2" placeholder="Make any request or tell me anything..."
                   style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
                   data-vis="{{ V }}"></textarea>
         <button type="button" id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Route</button>
       </div>
       <p class="hint" style="margin-top:0.25rem;font-size:0.65rem;" data-vis="{{ V }}">
-        Claude helps extract metadata and route work. Manual forms still work without AI, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
+        Human-supervised rapid AI routing for requests, questions, and quick drafting. Manual forms still work, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
       </p>
     </div>
   </aside>
@@ -87,7 +87,7 @@
     }
 
     function promptCopy(label){
-      return label ? ('Ask Catalyst Assistant about ' + label) : 'Ask Catalyst Assistant about this pane';
+      return label ? ('Ask about ' + label + ' or tell me what you need') : 'Make any request or tell me anything';
     }
 
     function showHoverPrompt(label){
@@ -143,7 +143,7 @@
       if(pane.style.display === 'flex'){
         hideHoverPrompt();
         if(!input.value.trim() && (hoverContext || lastHoverContext)){
-          input.value = 'Help me with ' + (hoverContext || lastHoverContext) + ': ';
+          input.value = 'About ' + (hoverContext || lastHoverContext) + ': ';
         }
         input.focus();
       }
@@ -195,7 +195,7 @@
       addBubble(displayMsg, 'user');
       input.value = '';
 
-      var thinking = addBubble('<span style="opacity:0.5;">Catalyst Assistant is drafting the request…</span>', 'ai');
+      var thinking = addBubble('<span style="opacity:0.5;">Catalyst Assistant is thinking and routing…</span>', 'ai');
       var currentContext = hoverContext || lastHoverContext;
       var pageContext = document.title + ' | ' + window.location.pathname + (currentContext ? ' | Hovered pane: ' + currentContext : '');
 
@@ -230,12 +230,12 @@
             (data.action !== 'unknown' && data.action !== 'general_query' ? ' <span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;background:var(--tone-amber);color:var(--bg);font-size:0.65rem;font-weight:700;margin-left:0.3rem;">QUEUED</span>' : '');
           addBubble(data.summary + routeHtml + oversightHtml + actionBadge, 'ai');
         } else {
-          addBubble(data.error || 'Catalyst Assistant could not route that request cleanly.', 'ai', 'error');
+          addBubble(data.error || 'Catalyst Assistant could not handle that cleanly just yet.', 'ai', 'error');
         }
       })
       .catch(function(){
         chat.removeChild(thinking);
-        addBubble('Network error — the request was not routed. Please try again.', 'ai', 'error');
+        addBubble('Network error — your request did not go through. Please try again.', 'ai', 'error');
       });
     }
 
@@ -255,7 +255,7 @@
         .then(function(data){
           chat.innerHTML = '';
           // Greeting
-          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Claude-powered request routing with human oversight.</div>';
+          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Human-supervised rapid AI routing for requests, questions, and quick help.</div>';
           if(data.items.length){
             greeting += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
             data.items.forEach(function(it){

@@ -33,9 +33,10 @@
         <div class="feedback-actions" data-vis="{{ V }}">
           <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start/stop voice (M)" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
           <button type="button" id="feedbackCapture" class="btn" title="Capture element under cursor (C)" data-vis="{{ V }}">🎯</button>
-          <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
+          <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
         </div>
       </form>
+      <p id="feedbackStatus" class="feedback-status hint" data-vis="{{ V }}" aria-live="polite"></p>
       <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · <kbd>M</kbd> mic · <kbd>C</kbd> capture · <kbd>Esc</kbd> close.</p>
     </div>
   </div>
@@ -48,11 +49,19 @@
     var mini = document.getElementById('feedbackMinimize');
     var text = document.getElementById('feedbackText');
     var ctxInput = document.getElementById('feedbackContext');
+    var status = document.getElementById('feedbackStatus');
     if (!toggle || !panel || !widget) return;
+
+    function setStatus(message, tone) {
+      if (!status) return;
+      status.textContent = message || '';
+      status.setAttribute('data-tone', tone || '');
+    }
 
     function openPanel() {
       panel.hidden = false;
       widget.classList.remove('feedback-widget--compact');
+      setStatus('', '');
       // Pull focus into the textarea so voice + typing are immediate.
       if (text) { try { text.focus(); } catch(e) {} }
     }
@@ -147,6 +156,7 @@
           mic.textContent = '🎤';
           mic.title = 'Voice error: ' + (ev.error || 'unknown') + '. Click to retry.';
         }
+        setStatus('Voice input stopped. You can tap the mic to retry.', 'warn');
       };
       r.onend = function(){
         // Auto-restart while the panel is open + user still wants voice.
@@ -154,6 +164,7 @@
           try { r.start(); } catch(e) { listening = false; if (mic) mic.textContent = '🎤'; }
         } else if (mic) {
           mic.textContent = '🎤';
+          mic.title = 'Start voice input (M)';
         }
       };
       return r;
@@ -166,6 +177,8 @@
           listening = false;
           try { recognition.stop(); } catch(e) {}
           mic.textContent = '🎤';
+          mic.title = 'Start voice input (M)';
+          setStatus('Voice input stopped.', '');
           return;
         }
         try {
@@ -173,17 +186,21 @@
           listening = true;
           mic.textContent = '🔴';
           mic.title = 'Listening… click to stop.';
+          setStatus('Listening… speak naturally, then tap the mic to stop.', 'live');
         } catch(e) {
           // start() throws if already started; treat as toggle-off.
           try { recognition.stop(); } catch(_) {}
           listening = false;
           mic.textContent = '🎤';
+          mic.title = 'Start voice input (M)';
+          setStatus('Voice input could not start cleanly. Try once more.', 'warn');
         }
       });
     } else if (mic) {
       mic.title = 'Voice requires Chrome';
       mic.style.opacity = '0.4';
       mic.disabled = true;
+      setStatus('Voice capture is available in Chrome.', '');
     }
 
     // ── Hotkeys ───────────────────────────────────────────────────
@@ -213,7 +230,15 @@
 
     // Record context on every submit, in case user skipped capture.
     var form = panel.querySelector('form');
-    if (form) form.addEventListener('submit', function(){ collectContext(null); });
+    var submitBtn = document.getElementById('feedbackSubmit');
+    if (form) form.addEventListener('submit', function(){
+      collectContext(null);
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+      }
+      setStatus('Saving feedback…', 'live');
+    });
   })();
   </script>
   {# Duplicate ✨ AI floater removed 2026-04-14 —

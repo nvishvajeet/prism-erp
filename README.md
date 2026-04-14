@@ -207,6 +207,98 @@ Full matrix: [docs/MODULE_INTEGRATION.md](docs/MODULE_INTEGRATION.md)
 | Approver | Approval queue | Approve/reject requests |
 | Requester | Own requests | Submit samples, inbox |
 
+## AI Action Queue
+
+CATALYST treats AI as an intake and routing layer, not an unchecked
+executor. The home-page AI entry should be understood as a
+`Catalyst Assistant`: it helps people submit requests faster, extracts
+metadata, and routes work into the right operational queue.
+
+Core policy:
+
+- AI never deletes requests.
+- AI never silently drops unclear requests.
+- Manual submission must always remain available alongside AI-assisted
+  submission.
+- Any AI-originated item should be visibly marked so reviewers know it
+  came through an AI draft path.
+- Sensitive changes require human review before they become live.
+
+What enters the AI Action Queue:
+
+- account creation / deactivation
+- employee updates, manager changes, attendance marks
+- expense / receipt drafts
+- sample request drafts and routing suggestions
+- vehicle logs
+- finance / grant drafts
+- password reset or role change requests
+- bug reports and UX feedback
+
+The queue is role-aware and gated in three steps:
+
+1. `Can request` — is this user allowed to ask for this action?
+2. `Can target` — is this user allowed to affect this person/entity?
+3. `Can execute` — can this become live immediately, or must it go to
+   human review?
+
+Recommended visible flairs:
+
+- `AI Draft`
+- `Needs Review`
+- `Manual`
+- `Bug`
+
+Suggested execution statuses:
+
+- `Queued`
+- `Under Review`
+- `Approved`
+- `Rejected`
+- `Executed`
+
+Security rules:
+
+- users should only see their own requests by default
+- line managers should only see requests relevant to their direct
+  reports
+- domain admins should only see requests in their module / portal
+- AI queue admins should see pending AI-routed items, but that does not
+  automatically grant full authority over finance, payroll, privileged
+  roles, or owner-only actions
+- every transition must be audit-logged
+
+Named AI Action Queue admins for current operations:
+
+- `Prashant`
+- `Kondhalkar`
+- `Nikita`
+
+These admins should be able to repair metadata, approve routing, and
+escalate unclear requests. If AI cannot confidently parse a request, it
+must still create a queue item and send it to this admin lane rather
+than discarding it.
+
+Recommended admin panes:
+
+- `AI Action Queue` — all pending AI-assisted requests
+- `Pending Accounts` — draft accounts waiting for approval / activation
+- `Quick Add Account` — fast onboarding form with optional AI-assisted
+  metadata extraction
+- `Pending People Changes` — exits, manager changes, role changes,
+  salary-affecting updates
+- `Bug and Feedback Queue` — UX issues and error reports
+
+Quick Add Account policy:
+
+- admins should be able to type a few details and create an account in
+  front of the user
+- AI may fill missing metadata, suggest usernames, role placement,
+  portal assignment, and line manager
+- the acting admin should confirm the draft before creation
+- newly created accounts should be login-ready, force password change on
+  first login, and show the admin exactly what access the new user has
+
 ## CLI
 
 ```bash

@@ -151,6 +151,178 @@ operator is responsible for the classification; if an agent
 that was fired as read-only starts editing files, that's a
 protocol violation and the abort protocol applies.
 
+Ready-to-paste launch prompts live in
+`docs/AGENT_LAUNCH_TEMPLATES.md`.
+
+## Join-in-progress protocol
+
+This section exists so a fresh Claude / Codex / Gemini / crawler
+agent can join a live sprint without a long briefing from the
+operator. The rule is simple: **new agents join lanes, not the
+whole repo**.
+
+### Step 1 — orient in under 2 minutes
+
+A joining agent should do exactly this in order:
+
+1. Read `WORKFLOW.md`.
+2. Read `CLAIMS.md`.
+3. Read this file (`docs/PARALLEL.md`).
+4. Read `docs/NEXT_WAVES.md` if the task board is needed.
+5. Read only the files inside the lane it is assigned.
+
+Do **not** start with a repo-wide reread. That burns time and
+causes agents to "help" in unrelated files.
+
+### Step 2 — choose one lane
+
+Every joining agent must be assigned one of these lanes:
+
+| lane | purpose | agent type | allowed write surface |
+|---|---|---|---|
+| `crawl-read` | run crawlers, inspect UI, collect failures, produce handoffs | read agent | no tracked-file edits |
+| `ui-polish` | tighten templates, labels, empty states, spacing, auth flow | write agent | specific templates + CSS files only |
+| `controller-fix` | route logic, auth gates, payload shaping, bug fixes | write agent | specific Python/controller files only |
+| `crawler-fix` | update stale crawler assumptions or add coverage | write agent | `crawlers/` + directly related templates only |
+| `docs-handoff` | onboarding, manuals, plans, release notes, builder docs | write agent | docs files only |
+| `release-owner` | integration, final verification, promotion to stable | write agent | broad, but only one release owner at a time |
+
+If a task needs two lanes, split it into two agents. Example:
+"find broken login flow" is `crawl-read`; "fix login template"
+is `ui-polish`.
+
+### Step 3 — respect the lane boundaries
+
+Lane discipline is more important than enthusiasm.
+
+- `crawl-read` agents may read the entire repo and run local or
+  remote crawlers, but they may only write to `reports/` or
+  `tmp/agent_handoffs/`.
+- `ui-polish` agents should avoid `app.py` unless the operator
+  explicitly widens scope.
+- `controller-fix` agents should avoid `static/styles.css` and
+  template rewrites unless the bug cannot be solved otherwise.
+- `crawler-fix` agents should not silently "fix the product"
+  unless the operator explicitly says the crawler is correct and
+  the app is wrong.
+- `release-owner` is the only lane allowed to collect multiple
+  finished lanes into a go-live bundle.
+
+### Step 4 — claim before write, hand off after read
+
+- write agents claim tracked files in `CLAIMS.md` first
+- read agents do **not** claim, they leave handoffs instead
+- handoffs go in `tmp/agent_handoffs/<task-id>/`
+- every handoff should name:
+  - exact files inspected
+  - observed problem
+  - recommended next edit set
+  - proof command to rerun
+
+This keeps readers fast and writers safe.
+
+## Recommended parallel shape for a live 1-hour burn
+
+When the operator wants "go faster" without chaos, the default
+shape is:
+
+1. **One release owner**
+   They do no feature work. They watch the lock board, choose the
+   next lanes to merge, rerun smoke/sanity, and decide what is
+   ready for stable.
+2. **One UI write agent**
+   They own a narrow set such as login, dashboard, user pages, or
+   instrument detail presentation.
+3. **One controller write agent**
+   They own route/controller bugs, role/access issues, redirects,
+   and backend payload mistakes.
+4. **Unlimited read crawlers**
+   They keep running sanity, random-walk, role survey, dead-link,
+   or negative-path checks and drop handoffs for the writers.
+
+This is the fastest stable arrangement observed so far:
+**2 concurrent writers + unlimited readers + 1 release owner**.
+
+## Negative testing lanes
+
+When the operator says "test negatively for failure", do not
+spray random invalid inputs everywhere. Use bounded negative lanes:
+
+- `auth-negative`
+  Focus: bad login, temp-password redirect, role-blocked pages,
+  logout/login loop, change-password edge cases.
+- `route-negative`
+  Focus: 404s, stale links, hidden buttons, blocked saves,
+  missing submit paths, bad redirect targets.
+- `role-negative`
+  Focus: wrong role sees wrong tile, wrong role cannot save,
+  role switch updates UI but not behavior, self-edit restrictions.
+- `data-negative`
+  Focus: empty state, zero-row tables, missing images, absent
+  grants/vendors/instruments, archived records.
+
+Each negative lane should end with one of:
+
+- "app bug"
+- "crawler assumption stale"
+- "works as designed"
+
+Never leave a negative test as a vague complaint.
+
+## Operator prompt templates
+
+These are the recommended prompts for firing parallel agents.
+Keep them short and lane-specific.
+
+### Read crawler
+
+> Read-only task. Do not edit, commit, or push tracked files.
+> Lane: `crawl-read`.
+> Run the highest-signal crawlers for `<surface>`, inspect the
+> failing or awkward flows, and write a handoff in
+> `tmp/agent_handoffs/<task-id>/`.
+> Report: exact failing paths, affected files, and one proof
+> command to rerun after the fix.
+
+### UI write agent
+
+> Write task. Lane: `ui-polish`.
+> Follow `docs/PARALLEL.md` and claim first.
+> You may touch only: `<templates>`, `<css files>`.
+> Goal: improve `<surface>` without changing controller logic.
+> Run smoke or the named crawler after the patch.
+
+### Controller write agent
+
+> Write task. Lane: `controller-fix`.
+> Follow `docs/PARALLEL.md` and claim first.
+> You may touch only: `<python files>`, plus the minimum template
+> needed to expose the fix.
+> Goal: fix `<bug>`.
+> Run smoke plus one targeted crawler after the patch.
+
+### Release owner
+
+> Integration task. Lane: `release-owner`.
+> Do not start new feature work.
+> Watch `CLAIMS.md`, pull completed lanes, run smoke/sanity, and
+> decide which finished work is safe to move toward stable.
+> If two lanes overlap, serialize them; do not merge by optimism.
+
+## What a joining Claude-style agent should optimize for
+
+A strong joining agent should:
+
+- choose the smallest useful lane
+- avoid hot shared files unless explicitly assigned
+- leave the repo in a cleaner state than they found it
+- prefer one shippable fix over three partial improvements
+- keep human-facing notes brief and machine-handoff notes precise
+
+The right mental model is not "I am another general AI in the
+repo." It is: **"I am temporarily the owner of one bounded lane
+inside a multi-agent operating system."**
+
 ### Read agents and the 5% rule
 
 The 5% merge-overhead rule applies to **write-agent fleets

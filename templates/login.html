@@ -25,13 +25,23 @@
   <form method="post" class="form-grid" data-vis="all">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
     <label data-vis="all">Username or email
-      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
+      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" placeholder="owner@catalyst.local" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
     </label>
     <label data-vis="all">Password
-      <input type="password" name="password" required value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">
+      <input type="password" name="password" required autocomplete="current-password" placeholder="Enter your password" value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">
     </label>
-    <button type="submit" data-vis="all">Login</button>
+    <button type="submit" data-vis="all">Enter Workspace</button>
   </form>
+  <div class="login-support-stack" data-vis="all">
+    <div class="login-support-card" data-vis="all">
+      <strong data-vis="all">Need the right doorway?</strong>
+      <p class="hint" data-vis="all">Use the entry page if you want to switch between the lab ERP and the alternate private workspace before signing in.</p>
+    </div>
+    <div class="login-support-card" data-vis="all">
+      <strong data-vis="all">First-time or reset password users</strong>
+      <p class="hint" data-vis="all">After signing in with a temporary password, you will be taken directly to the password-change screen before any other page opens.</p>
+    </div>
+  </div>
   {% if google_oauth_enabled %}
   <div class="login-divider" data-vis="all"><span>or</span></div>
   <a href="{{ url_for('auth_google') }}" class="btn btn-google-signin" data-vis="all">

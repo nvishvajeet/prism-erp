@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('sitemap') }}" class="hover-back-btn" title="Back to Settings" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">← Settings</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Complaints</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">manager route + top-level oversight</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width tile-accent-danger" data-vis="{{ V }}">
+    {{ card_heading("SUBMIT", "Raise a complaint or serious concern") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Category
+        <select name="category" data-vis="{{ V }}">
+          <option value="general">General complaint</option>
+          <option value="harassment">Harassment</option>
+          <option value="sexual_harassment">Sexual harassment</option>
+          <option value="misuse">Misuse of website</option>
+          <option value="manager">Manager / reporting issue</option>
+          <option value="finance">Finance / payroll concern</option>
+          <option value="other">Other</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Against user (optional)
+        <select name="target_user_id" data-vis="{{ V }}">
+          <option value="">No specific person selected</option>
+          {% for option in target_options %}
+          <option value="{{ option.id }}" data-vis="{{ V }}">{{ option.name }} · {{ option.role }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Subject
+        <input type="text" name="subject" maxlength="200" required placeholder="Short summary" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Complaint details
+        <textarea name="body" rows="6" required placeholder="Explain what happened, when, and what you need reviewed." data-vis="{{ V }}"></textarea>
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-danger" data-vis="{{ V }}">Submit Complaint</button>
+      </div>
+      <p class="hint" data-vis="{{ V }}">Complaints go to your line manager when one exists and also remain visible to top-level admins and owners.</p>
+    </form>
+  </article>
+
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("MY COMPLAINTS", my_complaints|length ~ " total") }}
+    {% if my_complaints %}
+    <ul class="search-compact-list" data-vis="{{ V }}">
+      {% for complaint in my_complaints %}
+      <li data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ complaint.subject }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ complaint.category|replace('_', ' ')|title }} · {{ complaint.status|title }} · {{ complaint.created_at[:19]|replace("T", " ") }}</span>
+        {% if complaint.target_name %}
+        <div class="hint" data-vis="{{ V }}">Against: {{ complaint.target_name }}</div>
+        {% endif %}
+        {% if complaint.assigned_to_name or complaint.manager_name %}
+        <div class="hint" data-vis="{{ V }}">Route: {{ complaint.assigned_to_name or complaint.manager_name }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No complaints submitted yet.") }}
+    {% endif %}
+  </article>
+
+  {% if can_review_complaints %}
+  <article class="card tile tile-span-3 tile-accent-danger" data-vis="{{ V }}">
+    {{ card_heading("REVIEW QUEUE", review_queue|length ~ " items") }}
+    {% if review_queue %}
+    <ul class="search-compact-list" data-vis="{{ V }}">
+      {% for complaint in review_queue %}
+      <li data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ complaint.subject }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ complaint.complainant_name or 'Unknown' }} · {{ complaint.category|replace('_', ' ')|title }} · {{ complaint.status|title }}</span>
+        {% if complaint.target_name %}
+        <div class="hint" data-vis="{{ V }}">Against: {{ complaint.target_name }}</div>
+        {% endif %}
+        {% if complaint.manager_name %}
+        <div class="hint" data-vis="{{ V }}">Manager lane: {{ complaint.manager_name }}</div>
+        {% endif %}
+        <div class="hint" data-vis="{{ V }}">{{ complaint.body[:220] }}{% if complaint.body|length > 220 %}…{% endif %}</div>
+        <form method="post" class="form-grid compact-form" data-vis="{{ V }}" style="margin-top:0.75rem;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="review_update">
+          <input type="hidden" name="complaint_id" value="{{ complaint.id }}">
+          <label data-vis="{{ V }}">Status
+            <select name="status" data-vis="{{ V }}">
+              <option value="open" {% if complaint.status == 'open' %}selected{% endif %}>Open</option>
+              <option value="in_review" {% if complaint.status == 'in_review' %}selected{% endif %}>In review</option>
+              <option value="resolved" {% if complaint.status == 'resolved' %}selected{% endif %}>Resolved</option>
+              <option value="dismissed" {% if complaint.status == 'dismissed' %}selected{% endif %}>Dismissed</option>
+            </select>
+          </label>
+          <label data-vis="{{ V }}">Reviewer note
+            <textarea name="resolution_note" rows="3" maxlength="4000" placeholder="Optional review note or outcome." data-vis="{{ V }}">{{ complaint.resolution_note or '' }}</textarea>
+          </label>
+          <div data-vis="{{ V }}">
+            <button type="submit" class="btn btn-danger" data-vis="{{ V }}">Save Review</button>
+          </div>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No complaints in review queue.") }}
+    {% endif %}
+  </article>
+  {% endif %}
+</section>
+{% endblock %}

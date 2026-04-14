@@ -9974,6 +9974,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
   padding: 0.65rem; display: flex; flex-direction: column; gap: 0.45rem;
 }
+/* CSS `display: flex` on .feedback-panel was overriding the HTML
+   `hidden` attribute's default `display: none`, so setting
+   panel.hidden = true in JS didn't actually hide the panel. Nikita
+   reported this on /sitemap 2026-04-14T18:15:21Z. Force the hidden
+   attribute to win. */
+.feedback-panel[hidden] { display: none !important; }
 .feedback-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
 .feedback-header-actions { display: inline-flex; gap: 0.2rem; }
 .feedback-close { background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--muted); padding: 0 0.25rem; line-height: 1; }
@@ -9993,6 +9999,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .feedback-actions { display: flex; gap: 0.4rem; }
 .feedback-actions .btn { flex: 0; }
 .feedback-actions .btn-primary { flex: 1; }
+.feedback-status { min-height: 1.1rem; margin: 0; color: var(--muted); }
+.feedback-status[data-tone="live"] { color: var(--accent); }
+.feedback-status[data-tone="warn"] { color: #b26a00; }
 .feedback-hint { font-size: 0.7rem; margin: 0; }
 
 :root[data-theme="dark"] .feedback-panel { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }

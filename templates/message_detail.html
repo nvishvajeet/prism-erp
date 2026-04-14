@@ -75,12 +75,78 @@
     {% endcall %}
   </article>
 
+  <article class="card tile tile-message-body message-safety-section tile-accent-danger" data-vis="{{ V }}">
+    {{ card_heading("SAFETY", "Report abuse or misuse") }}
+    {% if existing_report %}
+    <p class="hint" data-vis="{{ V }}">You already reported this message on {{ existing_report.created_at[:19]|replace("T", " ") }}. Admin review is pending.</p>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">Use this only for harassment, sexual harassment, threats, or misuse of the website. This sends the flagged message to admins for review.</p>
+    <form method="post" action="{{ url_for('message_report', message_id=message.id) }}" class="form-grid danger-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+      <label data-vis="{{ V }}">Reason
+        <select name="category" data-vis="{{ V }}">
+          <option value="harassment">Harassment</option>
+          <option value="sexual_harassment">Sexual harassment</option>
+          <option value="threat">Threat or intimidation</option>
+          <option value="misuse">Misuse of website</option>
+          <option value="other">Other safety concern</option>
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Optional note
+        <textarea name="note" rows="3" maxlength="2000" placeholder="Add any context admins should know." data-vis="{{ V }}"></textarea>
+      </label>
+      <input type="hidden" name="confirm_report" value="no" data-vis="{{ V }}">
+      <button type="button" class="btn btn-danger confirm-gate" data-vis="{{ V }}"
+              onclick="var f=this.form; f.querySelector('input[name=confirm_report]').value='yes'; this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+        Report to admins
+      </button>
+      <button type="submit" class="btn btn-danger" style="display:none;" data-vis="{{ V }}">
+        Are you sure you want to report this message?
+      </button>
+    </form>
+    {% endif %}
+  </article>
+
   <div class="message-detail-actions" data-vis="{{ V }}">
     <form method="post" action="{{ url_for('message_delete', message_id=message.id) }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
       <button type="submit" class="message-delete-btn" data-vis="{{ V }}">Delete</button>
     </form>
   </div>
+  {% endif %}
+
+  {% if can_review_reports and message_reports %}
+  <article class="card tile tile-message-body tile-accent-danger" data-vis="{{ V }}">
+    {{ card_heading("SAFETY", message_reports|length ~ " report" ~ ("" if message_reports|length == 1 else "s")) }}
+    <ul class="search-compact-list" data-vis="{{ V }}">
+      {% for report in message_reports %}
+      <li data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ report.category|replace('_', ' ')|title }}</strong>
+        <span class="hint" data-vis="{{ V }}">by {{ report.reporter_name or 'Unknown user' }} · {{ report.created_at[:19]|replace("T", " ") }}</span>
+        {% if report.note %}
+        <div class="hint" data-vis="{{ V }}">{{ report.note }}</div>
+        {% endif %}
+        <form method="post" action="{{ url_for('message_report_review', report_id=report.id) }}" class="form-grid compact-form" data-vis="{{ V }}" style="margin-top:0.75rem;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Status
+            <select name="status" data-vis="{{ V }}">
+              <option value="open" {% if report.status == 'open' %}selected{% endif %}>Open</option>
+              <option value="in_review" {% if report.status == 'in_review' %}selected{% endif %}>In review</option>
+              <option value="resolved" {% if report.status == 'resolved' %}selected{% endif %}>Resolved</option>
+              <option value="dismissed" {% if report.status == 'dismissed' %}selected{% endif %}>Dismissed</option>
+            </select>
+          </label>
+          <label data-vis="{{ V }}">Reviewer note
+            <textarea name="resolution_note" rows="3" maxlength="4000" placeholder="Optional review note or action taken." data-vis="{{ V }}">{{ report.resolution_note or '' }}</textarea>
+          </label>
+          <div data-vis="{{ V }}">
+            <button type="submit" class="btn btn-danger" data-vis="{{ V }}">Save Review</button>
+          </div>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
   {% endif %}
 </section>
 {% endblock %}

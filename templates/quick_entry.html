@@ -12,6 +12,7 @@
 <section class="dashboard-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "What do you need?") }}
+    <p class="hint" data-vis="{{ V }}">Use this for AI-assisted drafting or routing. Manual pages still remain the primary way to submit anything directly, and sensitive metadata should be reviewed before it becomes final.</p>
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="source" value="text" id="entrySource">

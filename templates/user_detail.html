@@ -297,6 +297,31 @@
 </section>
 {% endif %}
 
+{% if can_archive_user %}
+<section class="card compact" data-vis="{{ V }}">
+  <div class="section-head" data-vis="{{ V }}">
+    <div data-vis="{{ V }}">
+      <h2 data-vis="{{ V }}">Archive Account</h2>
+    </div>
+  </div>
+  <p class="hint" data-vis="{{ V }}">
+    This retires {{ target_user["name"] }} from live access, removes portal access,
+    and archives their account snapshot for audit/history. Past operational records stay intact.
+  </p>
+  <form method="post" class="stack-form top-gap" data-vis="{{ V }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="archive_delete_user">
+    <label data-vis="{{ V }}">
+      Archive reason
+      <input type="text" name="archive_reason" placeholder="Optional note: left organization, duplicate account, role change">
+    </label>
+    <button type="button" class="confirm-gate danger" data-vis="{{ V }}"
+            onclick="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">Archive + Remove Access</button>
+    <button type="submit" class="btn btn-danger" style="display:none;" data-vis="{{ V }}">Confirm archive for {{ target_user.email }}?</button>
+  </form>
+</section>
+{% endif %}
+
 {% if can_edit_user and instrument_roster %}
 <script>
   /* Category quick-grant buttons for the instrument assignment matrix */

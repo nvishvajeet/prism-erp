@@ -20,6 +20,8 @@ Scenarios exercised (one per role):
 """
 from __future__ import annotations
 
+import sqlite3
+
 from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
@@ -33,6 +35,9 @@ class RoleBehaviorStrategy(CrawlerStrategy):
 
     def run(self, harness: Harness) -> CrawlResult:
         result = CrawlResult(name=self.name, aspect=self.aspect)
+        managed_instrument_id = self._instrument_for_user(harness, "kondhalkar@catalyst.local")
+        operated_instrument_id = self._instrument_for_user(harness, "anika@catalyst.local")
+        faculty_instrument_id = self._instrument_for_user(harness, "approver@catalyst.local")
 
         # ---- super_admin: create user ------------------------------
         with harness.logged_in("owner@catalyst.local"):
@@ -55,20 +60,34 @@ class RoleBehaviorStrategy(CrawlerStrategy):
             self._score(result, resp.status_code, "site_admin: /admin/users")
 
         # ---- instrument_admin: open instrument detail (config lives there) ----
-        with harness.logged_in("kondhalkar@catalyst.local"):
-            resp = harness.get("/instruments/1", follow_redirects=True)
-            self._score(result, resp.status_code, "instrument_admin: /instruments/1")
+        if managed_instrument_id is None:
+            result.warnings += 1
+            result.details.append("instrument_admin: no assigned instrument in crawler seed")
+        else:
+            with harness.logged_in("kondhalkar@catalyst.local"):
+                resp = harness.get(f"/instruments/{managed_instrument_id}", follow_redirects=True)
+                self._score(result, resp.status_code, f"instrument_admin: /instruments/{managed_instrument_id}")
 
         # ---- faculty_in_charge: instrument detail ------------------
-        with harness.logged_in("approver@catalyst.local"):
-            resp = harness.get("/instruments/1", follow_redirects=True)
-            self._score(result, resp.status_code, "faculty_in_charge: /instruments/1")
+        if faculty_instrument_id is None:
+            result.warnings += 1
+            result.details.append("faculty_in_charge: no accessible instrument in crawler seed")
+        else:
+            with harness.logged_in("approver@catalyst.local"):
+                resp = harness.get(f"/instruments/{faculty_instrument_id}", follow_redirects=True)
+                self._score(result, resp.status_code, f"faculty_in_charge: /instruments/{faculty_instrument_id}")
 
         # ---- operator: open queue + load instrument ----------------
         with harness.logged_in("anika@catalyst.local"):
-            for path in ["/schedule", "/instruments/1"]:
+            operator_paths = ["/schedule"]
+            if operated_instrument_id is not None:
+                operator_paths.append(f"/instruments/{operated_instrument_id}")
+            for path in operator_paths:
                 resp = harness.get(path, follow_redirects=True)
                 self._score(result, resp.status_code, f"operator: {path}")
+            if operated_instrument_id is None:
+                result.warnings += 1
+                result.details.append("operator: no assigned instrument in crawler seed")
 
         # ---- professor_approver: approvals surface -----------------
         with harness.logged_in("approver@catalyst.local"):
@@ -111,6 +130,40 @@ class RoleBehaviorStrategy(CrawlerStrategy):
         else:
             result.warnings += 1
             result.details.append(f"{label} → {status}")
+
+    def _instrument_for_user(self, harness: Harness, email: str) -> int | None:
+        if harness.temp_db_path is None:
+            return None
+        conn = sqlite3.connect(str(harness.temp_db_path))
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                """
+                SELECT instrument_id
+                FROM (
+                    SELECT ia.instrument_id AS instrument_id
+                    FROM instrument_admins ia
+                    JOIN users u ON u.id = ia.user_id
+                    WHERE u.email = ?
+                    UNION
+                    SELECT io.instrument_id AS instrument_id
+                    FROM instrument_operators io
+                    JOIN users u ON u.id = io.user_id
+                    WHERE u.email = ?
+                    UNION
+                    SELECT ifa.instrument_id AS instrument_id
+                    FROM instrument_faculty_admins ifa
+                    JOIN users u ON u.id = ifa.user_id
+                    WHERE u.email = ?
+                )
+                ORDER BY instrument_id
+                LIMIT 1
+                """,
+                (email, email, email),
+            ).fetchone()
+            return int(row["instrument_id"]) if row is not None else None
+        finally:
+            conn.close()
 
 
 RoleBehaviorStrategy.register()

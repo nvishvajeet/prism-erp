@@ -254,7 +254,7 @@ MODULE_REGISTRY = {
     "inbox": {
         "label": "Inbox",
         "icon": "\U0001f4e8",
-        "nav_order": 4,
+        "nav_order": 7,
         "description": "Internal messaging",
         "nav_endpoint": "inbox",
         "nav_active_endpoints": {"inbox"},
@@ -263,7 +263,7 @@ MODULE_REGISTRY = {
     "notifications": {
         "label": "Notifications",
         "icon": "\U0001f514",
-        "nav_order": 5,
+        "nav_order": 8,
         "description": "System notifications",
         "nav_endpoint": "notifications_page",
         "nav_active_endpoints": {"notifications_page"},
@@ -273,7 +273,7 @@ MODULE_REGISTRY = {
     "attendance": {
         "label": "Attendance",
         "icon": "\U0001f4cb",
-        "nav_order": 6,
+        "nav_order": 4,
         "description": "Daily attendance + leave",
         "nav_endpoint": "attendance_page",
         "nav_active_endpoints": {
@@ -290,7 +290,7 @@ MODULE_REGISTRY = {
     "todos": {
         "label": "Tasks",
         "icon": "\u2705",
-        "nav_order": 7,
+        "nav_order": 9,
         "description": "Assignable task list",
         "nav_endpoint": "todos_page",
         "nav_active_endpoints": {"todos_page", "todo_new", "todo_complete", "todo_delete", "todo_update"},
@@ -299,7 +299,7 @@ MODULE_REGISTRY = {
     "letters": {
         "label": "Letters",
         "icon": "\u2709\ufe0f",
-        "nav_order": 8,
+        "nav_order": 10,
         "description": "Create letters on institute letterhead",
         "nav_endpoint": "letters_list",
         "nav_active_endpoints": {"letters_list", "letter_new", "letter_detail", "letter_print"},
@@ -332,7 +332,7 @@ MODULE_REGISTRY = {
     "vehicles": {
         "label": "Fleet",
         "icon": "\U0001f697",
-        "nav_order": 9,
+        "nav_order": 5,
         "description": "Vehicle fleet management",
         "nav_endpoint": "vehicles_list",
         "nav_active_endpoints": {"vehicles_list", "vehicle_detail"},
@@ -341,7 +341,7 @@ MODULE_REGISTRY = {
     "personnel": {
         "label": "Personnel",
         "icon": "\U0001f465",
-        "nav_order": 10,
+        "nav_order": 6,
         "description": "Staff & salary management",
         "nav_endpoint": "personnel_list",
         "nav_active_endpoints": {"personnel_list", "personnel_detail", "payroll_view"},
@@ -15972,6 +15972,82 @@ def _user_profile_reset_password_info(user_id: int):
     return reset_pw_info
 
 
+def _ensure_user_archive_table() -> None:
+    get_db().execute(
+        """
+        CREATE TABLE IF NOT EXISTS archived_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            archived_at TEXT NOT NULL,
+            archived_by_user_id INTEGER,
+            archive_reason TEXT,
+            snapshot_json TEXT NOT NULL
+        )
+        """
+    )
+    get_db().commit()
+
+
+def _archive_and_retire_user(viewer, target_user, archive_reason: str = "") -> None:
+    _ensure_user_archive_table()
+    db = get_db()
+    portal_rows = db.execute(
+        """
+        SELECT ep.slug, ep.name, eup.portal_role, eup.is_default
+        FROM erp_user_portals eup
+        JOIN erp_portals ep ON ep.id = eup.portal_id
+        WHERE eup.user_id = ?
+        ORDER BY eup.is_default DESC, ep.sort_order
+        """,
+        (target_user["id"],),
+    ).fetchall()
+    snapshot = {
+        "user": {key: target_user[key] for key in target_user.keys()},
+        "portals": [dict(row) for row in portal_rows],
+        "instrument_admin_ids": [
+            row["instrument_id"] for row in db.execute(
+                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?",
+                (target_user["id"],),
+            ).fetchall()
+        ],
+        "instrument_operator_ids": [
+            row["instrument_id"] for row in db.execute(
+                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?",
+                (target_user["id"],),
+            ).fetchall()
+        ],
+        "instrument_faculty_ids": [
+            row["instrument_id"] for row in db.execute(
+                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?",
+                (target_user["id"],),
+            ).fetchall()
+        ],
+        "instrument_requester_ids": [
+            row["instrument_id"] for row in db.execute(
+                "SELECT instrument_id FROM instrument_requesters WHERE user_id = ?",
+                (target_user["id"],),
+            ).fetchall()
+        ],
+    }
+    archived_at = now_iso()
+    db.execute(
+        """
+        INSERT INTO archived_users (user_id, archived_at, archived_by_user_id, archive_reason, snapshot_json)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            target_user["id"],
+            archived_at,
+            viewer["id"] if viewer else None,
+            archive_reason,
+            json.dumps(snapshot, sort_keys=True),
+        ),
+    )
+    db.execute("DELETE FROM erp_user_portals WHERE user_id = ?", (target_user["id"],))
+    db.execute("UPDATE users SET active = 0, invite_status = 'archived', must_change_password = 0 WHERE id = ?", (target_user["id"],))
+    db.commit()
+
+
 def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str):
     if action == "remove_access":
         if not can_manage_members(viewer):
@@ -15982,6 +16058,25 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
         flash(f"Access removed for {target_user['email']}.", "success")
         return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "archive_delete_user":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) or target_user["id"] == viewer["id"]:
+            abort(403)
+        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+            abort(403)
+        archive_reason = (request.form.get("archive_reason") or "").strip()
+        _archive_and_retire_user(viewer, target_user, archive_reason=archive_reason)
+        log_action(
+            viewer["id"],
+            "user",
+            user_id,
+            "user_archived_and_removed",
+            {"email": target_user["email"], "reason": archive_reason},
+        )
+        flash(f"Archived {target_user['email']} and removed live access.", "success")
+        return redirect(url_for("users_page"))
 
     if action == "reset_password":
         if not can_manage_members(viewer):
@@ -16211,6 +16306,13 @@ def user_profile(user_id: int):
         is_self=viewer["id"] == target_user["id"],
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
+        can_archive_user=(
+            can_manage_members(viewer)
+            and target_user["id"] != viewer["id"]
+            and target_user["active"]
+            and not is_owner(target_user)
+            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+        ),
         can_reset_password=(
             can_manage_members(viewer)
             and target_user["id"] != viewer["id"]
@@ -22263,6 +22365,21 @@ def expense_receipt_review(receipt_id):
 FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
 
 
+def _normalize_feedback_text(raw_text: str) -> str:
+    """Keep freeform feedback readable while preserving capture markers."""
+    text = (raw_text or "").strip()
+    if not text:
+        return ""
+    snapshots = re.findall(r"<snapshot\b[^>]*/>", text)
+    text = re.sub(r"<snapshot\b[^>]*/>", "", text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if snapshots:
+        snapshot_block = "**Captured elements:**\n" + "\n".join(f"- `{item}`" for item in snapshots)
+        text = f"{text}\n\n{snapshot_block}" if text else snapshot_block
+    return text
+
+
 def _append_feedback_entry(
     *,
     user: sqlite3.Row | None,
@@ -22287,12 +22404,15 @@ def _append_feedback_entry(
         user_label = f"{_masked_name} ({user['role']})"
     else:
         user_label = "anonymous"
+    portal_slug = active_portal_slug() or "?"
+    cleaned_text = _normalize_feedback_text(text)
     entry = (
         f"\n## {now_iso()}\n\n"
         f"**User:** {user_label}  \n"
+        f"**Portal:** `{portal_slug}`  \n"
         f"**Page:** `{page or '?'}`  \n"
         f"**Source:** `{source}`  \n\n"
-        f"{text.strip()}\n"
+        f"{cleaned_text}\n"
     )
     ctx = (context_json or "").strip()
     if ctx:
@@ -22846,6 +22966,294 @@ def check_command_queue():
             return 0
         count = _process_command_batch()
         return count
+
+
+QUEUE_REVIEW_LOG = BASE_DIR / "logs" / "queue_review_latest.md"
+QUEUE_REVIEW_HISTORY_LOG = BASE_DIR / "logs" / "queue_review_history.md"
+SERVER_LIVE_LOG = BASE_DIR / "logs" / "server-live.log"
+
+
+def _feedback_sections(limit: int = 8) -> list[dict[str, str]]:
+    import re
+
+    if not FEEDBACK_LOG.exists():
+        return []
+    raw = FEEDBACK_LOG.read_text(encoding="utf-8", errors="replace").strip()
+    if not raw:
+        return []
+    blocks = re.split(r"\n## ", raw)
+    parsed: list[dict[str, str]] = []
+    for idx, block in enumerate(blocks):
+        if not block.strip():
+            continue
+        normalized = ("## " + block) if idx else block
+        lines = normalized.splitlines()
+        if not lines:
+            continue
+        ts = lines[0].replace("## ", "").strip()
+        user_match = re.search(r"\*\*User:\*\*\s*(.+)", normalized)
+        portal_match = re.search(r"\*\*Portal:\*\*\s*`([^`]+)`", normalized)
+        page_match = re.search(r"\*\*Page:\*\*\s*`([^`]+)`", normalized)
+        source_match = re.search(r"\*\*Source:\*\*\s*`([^`]+)`", normalized)
+        body = normalized
+        for marker in ("**User:**", "**Portal:**", "**Page:**", "**Source:**"):
+            pos = body.find(marker)
+            if pos != -1:
+                body = body[pos:]
+        body = re.sub(r"^\*\*User:\*\*.*?$", "", body, flags=re.MULTILINE)
+        body = re.sub(r"^\*\*Portal:\*\*.*?$", "", body, flags=re.MULTILINE)
+        body = re.sub(r"^\*\*Page:\*\*.*?$", "", body, flags=re.MULTILINE)
+        body = re.sub(r"^\*\*Source:\*\*.*?$", "", body, flags=re.MULTILINE)
+        body = re.sub(r"```context.*?```", "", body, flags=re.DOTALL).strip()
+        parsed.append({
+            "ts": ts,
+            "user": (user_match.group(1).strip() if user_match else "unknown"),
+            "portal": (portal_match.group(1).strip() if portal_match else "?"),
+            "page": (page_match.group(1).strip() if page_match else "?"),
+            "source": (source_match.group(1).strip() if source_match else "?"),
+            "body": body,
+        })
+    return parsed[-limit:]
+
+
+def _queue_review_keyword_counts(entries: list[dict[str, str]]) -> list[tuple[str, int]]:
+    keyword_sets = {
+        "login_permissions": ("login", "password", "role", "permission", "access"),
+        "navigation_ui": ("404", "back button", "nav", "home page", "route", "page"),
+        "forms_and_saves": ("save", "submit", "button", "pane", "form", "editable"),
+        "finance_vendor": ("finance", "vendor", "payment", "receipt", "grant", "salary"),
+        "fleet_ops": ("vehicle", "fleet", "car", "driver", "fuel"),
+        "ai_feedback": ("ai", "recording", "feedback", "debug", "voice"),
+    }
+    counts: dict[str, int] = {key: 0 for key in keyword_sets}
+    for entry in entries:
+        hay = f"{entry['page']} {entry['body']}".lower()
+        for bucket, words in keyword_sets.items():
+            if any(word in hay for word in words):
+                counts[bucket] += 1
+    return sorted(counts.items(), key=lambda item: item[1], reverse=True)
+
+
+def _recent_server_errors(limit: int = 12) -> list[str]:
+    if not SERVER_LIVE_LOG.exists():
+        return []
+    lines = SERVER_LIVE_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+    interesting = [
+        line.strip()
+        for line in lines
+        if (" 500 " in line or "Traceback" in line or "ERROR in app" in line)
+    ]
+    return interesting[-limit:]
+
+
+def _recent_server_error_clusters(hours: int = 6, limit: int = 8) -> list[dict[str, object]]:
+    import re
+    from collections import Counter
+    from datetime import datetime, timedelta, timezone
+
+    if not SERVER_LIVE_LOG.exists():
+        return []
+    raw_lines = SERVER_LIVE_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+    now_utc = datetime.now(timezone.utc)
+    cutoff = now_utc - timedelta(hours=hours)
+    bucket: Counter[tuple[str, str]] = Counter()
+    examples: dict[tuple[str, str], str] = {}
+
+    for line in raw_lines:
+        if " 500 " not in line:
+            continue
+        ts_match = re.search(r"\[(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+\-]\d{4})\]", line)
+        route_match = re.search(r"\"(?:GET|POST|PUT|DELETE|PATCH|HEAD) ([^ ]+) HTTP/1\.1\" 500", line)
+        if not ts_match or not route_match:
+            continue
+        day, mon_txt, year, hour, minute, second, tz_txt = ts_match.groups()
+        try:
+            dt = datetime.strptime(
+                f"{day} {mon_txt} {year} {hour}:{minute}:{second} {tz_txt}",
+                "%d %b %Y %H:%M:%S %z",
+            ).astimezone(timezone.utc)
+        except ValueError:
+            continue
+        if dt < cutoff:
+            continue
+        route = route_match.group(1)
+        method = line.split('"', 2)[1].split(" ", 1)[0]
+        key = (method, route)
+        bucket[key] += 1
+        examples.setdefault(key, line.strip())
+
+    ranked = bucket.most_common(limit)
+    return [
+        {"method": method, "route": route, "count": count, "example": examples[(method, route)]}
+        for (method, route), count in ranked
+    ]
+
+
+def review_operational_queues(cycle_label: str = "") -> dict[str, object]:
+    """Run the 6-hour operational review loop.
+
+    Reads the action queue plus debug/error inputs, processes the main
+    command queue, reviews advisor backlog, and writes a compact dev /
+    routing summary for the next human or AI pass.
+    """
+    with app.app_context():
+        processed_commands = check_command_queue()
+        advisor_processed = ai_advisor_batch_process(cycle_label or f"ops-{now_iso()}")
+
+        command_counts = {
+            row["status"]: row["c"]
+            for row in query_all(
+                "SELECT status, COUNT(*) AS c FROM command_queue GROUP BY status ORDER BY status"
+            )
+        }
+        advisor_counts = {
+            row["status"]: row["c"]
+            for row in query_all(
+                "SELECT status, COUNT(*) AS c FROM ai_advisor_queue GROUP BY status ORDER BY status"
+            )
+        }
+        awaiting_approval = query_all(
+            """SELECT cq.id, u.name AS user_name, cq.raw_text, cq.parsed_action, cq.result_message, cq.created_at
+               FROM command_queue cq
+               JOIN users u ON u.id = cq.user_id
+               WHERE cq.status = 'awaiting_approval'
+               ORDER BY cq.created_at DESC
+               LIMIT 12"""
+        )
+        feedback_entries = _feedback_sections(limit=8)
+        feedback_buckets = _queue_review_keyword_counts(feedback_entries)
+        server_errors = _recent_server_errors(limit=10)
+        recent_error_clusters = _recent_server_error_clusters(hours=6, limit=8)
+
+        dev_actions: list[str] = []
+        operational_priorities: list[str] = []
+        if command_counts.get("failed", 0):
+            dev_actions.append(f"Fix {command_counts['failed']} failed command-queue item(s) and re-run parsing.")
+            operational_priorities.append(f"{command_counts['failed']} action-queue item(s) failed and need immediate review.")
+        if command_counts.get("awaiting_approval", 0):
+            operational_priorities.append(
+                f"{command_counts['awaiting_approval']} action-queue item(s) are waiting on human review."
+            )
+        if advisor_counts.get("queued", 0):
+            dev_actions.append(f"Advisor backlog still has {advisor_counts['queued']} queued item(s); inspect batch latency and routing.")
+            operational_priorities.append(
+                f"{advisor_counts['queued']} advisor item(s) remain queued and should be routed in the next cycle."
+            )
+        if feedback_buckets and feedback_buckets[0][1] > 0:
+            bucket_name = feedback_buckets[0][0].replace("_", " ")
+            dev_actions.append(f"Top live user pain from debug feedback: {bucket_name}. Prioritize the highest-frequency fixes next.")
+            operational_priorities.append(f"Top user-reported pain bucket in debug feedback: {bucket_name}.")
+        if recent_error_clusters:
+            hottest = recent_error_clusters[0]
+            dev_actions.append(
+                f"Fresh live 500 cluster on {hottest['method']} {hottest['route']} ({hottest['count']} hit(s) in last 6h); inspect that traceback before UI polish work."
+            )
+            operational_priorities.append(
+                f"Fresh live 500s detected on {hottest['method']} {hottest['route']} ({hottest['count']} in last 6h)."
+            )
+        elif server_errors:
+            dev_actions.append("Historical live errors exist in server logs; confirm they are not recurring before de-prioritizing them.")
+        if not dev_actions:
+            dev_actions.append("Queues are stable; use the next dev cycle for integration polish and high-traffic pane improvements.")
+        if not operational_priorities:
+            operational_priorities.append("No hot operational blockers found in the last 6 hours; continue normal routing and UI improvement work.")
+
+        lines = [
+            "# Queue Review",
+            "",
+            f"- Run at: `{now_iso()}`",
+            f"- Cycle label: `{cycle_label or '6-hour-review'}`",
+            f"- Commands processed this run: `{processed_commands}`",
+            f"- Advisor items processed this run: `{advisor_processed}`",
+            "",
+            "## Operational Priority",
+            "",
+        ]
+        for item in operational_priorities:
+            lines.append(f"- {item}")
+
+        lines.extend([
+            "",
+            "## Queue State",
+            "",
+            f"- Action queue: `{json.dumps(command_counts, sort_keys=True)}`",
+            f"- Advisor queue: `{json.dumps(advisor_counts, sort_keys=True)}`",
+            "",
+            "## Human Review Queue",
+            "",
+        ])
+        if awaiting_approval:
+            for row in awaiting_approval:
+                lines.append(
+                    f"- `{row['created_at']}` · `{row['parsed_action'] or 'unknown'}` · {row['user_name']} · {row['result_message'] or row['raw_text'][:120]}"
+                )
+        else:
+            lines.append("- No items currently awaiting human approval.")
+
+        lines.extend([
+            "",
+            "## Debug Feedback Themes",
+            "",
+        ])
+        if feedback_entries:
+            for bucket, count in feedback_buckets:
+                if count:
+                    lines.append(f"- `{bucket}`: {count}")
+            lines.append("")
+            lines.append("### Latest Feedback")
+            lines.append("")
+            for entry in feedback_entries[-5:]:
+                snippet = " ".join(entry["body"].split())[:220]
+                lines.append(
+                    f"- `{entry['ts']}` · `{entry['portal']}` · `{entry['page']}` · {entry['user']}: {snippet}"
+                )
+        else:
+            lines.append("- No debug feedback entries found.")
+
+        lines.extend([
+            "",
+            "## Error Stream",
+            "",
+        ])
+        if recent_error_clusters:
+            for item in recent_error_clusters:
+                lines.append(
+                    f"- Last 6h · `{item['method']} {item['route']}` · {item['count']} hit(s)"
+                )
+            lines.append("")
+            lines.append("### Recent Error Examples")
+            lines.append("")
+            for item in recent_error_clusters[:3]:
+                lines.append(f"- `{str(item['example'])[:260]}`")
+        elif server_errors:
+            for item in server_errors[-5:]:
+                lines.append(f"- Historical · `{item[:260]}`")
+        else:
+            lines.append("- No recent live 500/traceback lines found.")
+
+        lines.extend([
+            "",
+            "## Suggested Dev Plan",
+            "",
+        ])
+        for item in dev_actions:
+            lines.append(f"- {item}")
+
+        report = "\n".join(lines) + "\n"
+        QUEUE_REVIEW_LOG.parent.mkdir(parents=True, exist_ok=True)
+        QUEUE_REVIEW_LOG.write_text(report, encoding="utf-8")
+        with open(QUEUE_REVIEW_HISTORY_LOG, "a", encoding="utf-8") as history:
+            history.write(report + "\n")
+        return {
+            "processed_commands": processed_commands,
+            "advisor_processed": advisor_processed,
+            "command_counts": command_counts,
+            "advisor_counts": advisor_counts,
+            "operational_priorities": operational_priorities,
+            "recent_error_clusters": recent_error_clusters,
+            "dev_actions": dev_actions,
+            "report_path": str(QUEUE_REVIEW_LOG),
+        }
 
 
 def process_all_pending_commands():
@@ -24625,6 +25033,9 @@ Your primary job is METADATA EXTRACTION and ROUTING SUGGESTIONS.
 - Suggest where to route things (which instrument, which approver, which category)
 - All data-modifying actions create DRAFTS that require human approval before becoming live
 - You never act autonomously — you extract, suggest, and let humans confirm
+- Manual submission routes always remain available; AI is an accelerator, not a gatekeeper
+- For people, payroll, permissions, salary, attendance, finance, and identity metadata, prefer review-ready structured drafts over autonomous changes
+- When data is ambiguous, preserve the uncertainty in the structured draft so a human can verify it
 
 Parse the user's message into a structured action. The user's role and current page give you context.
 
@@ -24652,26 +25063,32 @@ Available actions (return ONE):
 Return ONLY a JSON object: {"action": "...", "data": {...}, "summary": "one-line human summary", "route_to": "role that should review this (owner/finance_admin/instrument_admin/operator/self)"}
 """
 
+
+def _ai_action_requires_human_review(action: str) -> bool:
+    """Whether the action should be framed as requiring human oversight."""
+    return action not in {"general_query", "create_todo", "send_message"}
+
+
 def _ai_pane_route_label(action: str) -> str:
     """Human-readable routing label for the action."""
     labels = {
-        "submit_request": "Operator Approval",
-        "bulk_sample_intake": "Operator Approval",
-        "attach_results": "Operator Approval",
-        "create_instrument": "Admin Approval",
-        "create_account": "Admin Approval",
-        "create_custom_field": "Admin Approval",
-        "create_approval_workflow": "Admin Approval",
-        "mark_attendance": "HR / Personnel",
-        "create_receipt": "Finance",
+        "submit_request": "Operator Review",
+        "bulk_sample_intake": "Operator Review",
+        "attach_results": "Operator Review",
+        "create_instrument": "Admin Review",
+        "create_account": "Admin Review",
+        "create_custom_field": "Admin Review",
+        "create_approval_workflow": "Admin Review",
+        "mark_attendance": "HR / Personnel Review",
+        "create_receipt": "Finance Review",
         "create_todo": "You",
-        "create_grant": "Finance Admin",
-        "reset_password": "System Admin",
+        "create_grant": "Finance Admin Review",
+        "reset_password": "System Admin Review",
         "send_message": "Recipient",
-        "approve_request": "Instrument Admin",
-        "route_request": "Instrument Admin",
-        "vehicle_log": "Fleet Admin",
-        "salary_note": "Payroll Admin",
+        "approve_request": "Instrument Admin Review",
+        "route_request": "Instrument Admin Review",
+        "vehicle_log": "Fleet Admin Review",
+        "salary_note": "Payroll Admin Review",
         "general_query": "AI",
         "unknown": "System",
     }
@@ -24754,6 +25171,7 @@ def ai_pane_submit():
         "action": action,
         "summary": summary,
         "route_to": route_label,
+        "oversight_required": _ai_action_requires_human_review(action),
         "entity_created": entity_created,
         "command_id": cmd_id,
     })
@@ -25124,22 +25542,31 @@ def _ai_pane_run_advanced_actions(
         role = action_data.get("role", "requester")
         if role not in allowed_roles:
             role = "site_admin" if lab_profile_mode_active() else "requester"
-        temp_password = generate_temp_password()
-        member_code = generate_member_code(action_data["name"], role)
-        new_id = execute(
-            """INSERT INTO users (name, email, password_hash, role, invited_by,
-               invite_status, active, member_code, must_change_password, phone)
-               VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1, ?)""",
-            (action_data["name"], email, generate_password_hash(temp_password, method="pbkdf2:sha256"),
-             role, user["id"], member_code, action_data.get("phone", "")),
+        review_payload = {
+            "name": action_data["name"],
+            "email": email,
+            "role": role,
+            "phone": action_data.get("phone", ""),
+            "requested_by": user["id"],
+            "source": "ai_pane",
+        }
+        summary = (
+            f"Account draft prepared for {action_data['name']} ({email}, {role_display_name(role)}). "
+            "Review the metadata, reporting line, salary, and permissions before creating the real account."
         )
-        summary = (f"Account created: {action_data['name']} ({email}, {role_display_name(role)}). "
-                   f"Temp password: {temp_password} — share securely, they must change on first login. "
-                   f"Member code: {member_code}")
-        execute("UPDATE command_queue SET status='completed', result_entity_type='user', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                (new_id, summary, now_iso(), cmd_id))
-        log_action(user["id"], "user", new_id, "ai_user_created", {"email": email, "role": role})
-        return {"entity_created": "account_created", "summary": summary}
+        execute(
+            "UPDATE command_queue SET status='awaiting_approval', parsed_data=?, result_message=?, processed_at=? WHERE id=?",
+            (json.dumps(review_payload), summary, now_iso(), cmd_id),
+        )
+        for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'finance_admin') LIMIT 5"):
+            notify(
+                adm["id"],
+                "admin",
+                "AI account draft needs review",
+                f"{user['name']} proposed {action_data['name']} ({email}). Review metadata before creating the login.",
+                url_for("personnel_list"),
+            )
+        return {"entity_created": "", "summary": summary}
 
     if action == "create_custom_field" and action_data.get("instrument_name") and action_data.get("field_name"):
         if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):

@@ -6,7 +6,7 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('attendance_page') }}" data-vis="{{ V }}">← Attendance</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">Leave Requests</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ "Team Leave Requests" if queue_scope == "team" else "Leave Requests" }}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ pending|length }} pending</span>
   </div>
 </header>
@@ -24,6 +24,9 @@
 
   <article class="card tile tile-full-width" data-columns="6" data-vis="{{ V }}">
     {{ card_heading("PENDING APPROVAL", pending|length|string ~ " request" ~ ("s" if pending|length != 1 else "")) }}
+    {% if queue_scope == "team" %}
+    <p class="hint" data-vis="{{ V }}">This queue is scoped to your direct reports.</p>
+    {% endif %}
     {% if pending %}
     <table class="sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

@@ -4249,6 +4249,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  width: 100%;
 }
 
 .meta-edit-grid {
@@ -4306,11 +4307,25 @@ code {
 .meta-edit-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.6rem;
+  align-items: center;
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 640px) {
   .meta-edit-grid,
   .meta-edit-assignments { grid-template-columns: 1fr; }
+  .meta-edit-actions {
+    justify-content: stretch;
+  }
+  .meta-edit-actions > button,
+  .meta-edit-actions > .btn,
+  .meta-edit-actions > .primary-action,
+  .meta-edit-actions > .small-button {
+    width: 100%;
+  }
 }
 
 /* ── Per-user role + instrument assignment tiles ── */
@@ -4368,6 +4383,9 @@ code {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .assignment-matrix th,
 .assignment-matrix td {

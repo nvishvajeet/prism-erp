@@ -66,6 +66,7 @@
           <th data-vis="{{ V }}">Code</th>
           <th data-vis="{{ V }}">Name</th>
           <th data-vis="{{ V }}">Role</th>
+          <th data-vis="{{ V }}">Manager</th>
           <th data-vis="{{ V }}">Designation</th>
           <th data-vis="{{ V }}">Department</th>
           <th data-vis="{{ V }}">Today</th>
@@ -79,7 +80,7 @@
         {% for s in staff %}
         <tr class="clickable-row" data-href="{{ url_for('personnel_detail', user_id=s.id) }}" data-vis="{{ V }}">
           <td data-vis="{{ V }}"><code style="font-weight:700;letter-spacing:0.1em;" data-vis="{{ V }}">{{ s.short_code or '—' }}</code></td>
-          <td data-vis="{{ V }}">{{ person_chip(s.name, user_id=s.id, size='sm') }}</td>
+          <td data-vis="{{ V }}">{{ person_chip(s.name, size='sm', href=url_for('personnel_detail', user_id=s.id)) }}</td>
           <td data-vis="{{ V }}">
             {% if s.role == 'operator' %}
             <span class="badge badge-role" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
@@ -89,6 +90,15 @@
             <span class="badge badge-role" style="background:var(--tone-amber);color:var(--bg);" data-vis="{{ V }}">{{ s.role }}</span>
             {% else %}
             <span class="badge badge-role" data-vis="{{ V }}">{{ s.role or "—" }}</span>
+            {% endif %}
+          </td>
+          <td data-vis="{{ V }}">
+            {% if s.manager_name %}
+            {{ s.manager_name }}
+            {% elif s.id in manager_missing_ids %}
+            <span class="badge badge-role" style="background:var(--danger);color:var(--bg);" data-vis="{{ V }}">Manager missing</span>
+            {% else %}
+            <span class="hint" data-vis="{{ V }}">Top level</span>
             {% endif %}
           </td>
           <td data-vis="{{ V }}">{{ s.designation or "—" }}</td>

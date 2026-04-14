@@ -6,7 +6,7 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('personnel_list') }}" data-vis="{{ V }}">← Personnel</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">{{ person_chip(employee.name, user_id=employee.id, size='lg') }}</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ person_chip(employee.name, size='lg', href=url_for('personnel_detail', user_id=employee.id)) }}</h2>
     <span class="inst-header-code" data-vis="{{ V }}">{{ employee.email or "" }}</span>
   </div>
 </header>
@@ -30,10 +30,36 @@
       ("Name", employee.name),
       ("Username", employee.email or "—"),
       ("Role", employee.role or "—"),
+      ("Line Manager", manager_row.name if manager_row else ("Required" if manager_required else "Top level")),
       ("Designation", salary_cfg.designation if salary_cfg else "—"),
       ("Department", salary_cfg.department if salary_cfg else "—"),
       ("Joined", salary_cfg.join_date if salary_cfg and salary_cfg.join_date else "—"),
     ]) }}
+  </article>
+
+  <article class="card tile" data-vis="{{ V }}">
+    {{ card_heading("HIERARCHY", "Reporting line") }}
+    {% if manager_row %}
+    <div class="meta-row" data-vis="{{ V }}">
+      <strong data-vis="{{ V }}">Reports to</strong>
+      <span data-vis="{{ V }}">{{ person_chip(manager_row.name, size='sm', href=url_for('personnel_detail', user_id=manager_row.id)) }}</span>
+    </div>
+    {% elif manager_required %}
+    <p class="hint tone-down" data-vis="{{ V }}">This user should have a line manager assigned.</p>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">Top of hierarchy. No manager required.</p>
+    {% endif %}
+    {% if direct_reports %}
+    <div class="top-gap" data-vis="{{ V }}">
+      <strong class="hint" data-vis="{{ V }}">Direct reports</strong>
+      {% for report in direct_reports %}
+      <div class="meta-row" data-vis="{{ V }}">
+        <span data-vis="{{ V }}">{{ person_chip(report.name, size='sm', href=url_for('personnel_detail', user_id=report.id)) }}</span>
+        <span class="hint" data-vis="{{ V }}">{{ report.role }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </article>
 
   {# ── Quick Actions ── #}
@@ -104,6 +130,29 @@
         <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save Config</button>
       </form>
     </details>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("LINE MANAGER", "Ownership and company structure") }}
+    <form method="post" action="{{ url_for('personnel_set_manager', user_id=employee.id) }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Manager
+        <select name="manager_id" data-vis="{{ V }}">
+          <option value="" {% if not manager_row %}selected{% endif %}>{{ "Top level / no manager" if hierarchy_is_top else "Select manager" }}</option>
+          {% for option in manager_options %}
+          <option value="{{ option.id }}" {% if manager_row and manager_row.id == option.id %}selected{% endif %} data-vis="{{ V }}">{{ option.name }} · {{ option.role }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div data-vis="{{ V }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Save Line Manager</button>
+      </div>
+      {% if manager_required %}
+      <p class="hint" data-vis="{{ V }}">Every active person except the hidden owner and top leadership should have a line manager.</p>
+      {% else %}
+      <p class="hint" data-vis="{{ V }}">This account is allowed to sit at the top of the hierarchy.</p>
+      {% endif %}
+    </form>
   </article>
   {% endif %}
 

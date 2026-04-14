@@ -11282,6 +11282,13 @@ def portal_enter(slug: str):
     return redirect(url_for("index"))
 
 
+@app.route("/portals/switch/<slug>")
+@login_required
+def portal_switch_legacy(slug: str):
+    """Backwards-compatible alias for older portal-switch links/bookmarks."""
+    return redirect(url_for("portal_enter", slug=slug))
+
+
 @app.route("/logout")
 def logout():
     uid = session.get("user_id")
@@ -18194,6 +18201,12 @@ def _personnel_can_edit(user):
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
 
 
+def _personnel_hierarchy_is_top(user_row: sqlite3.Row | None) -> bool:
+    if not user_row:
+        return False
+    return is_owner(user_row) or row_value(user_row, "role", "") in {"super_admin", "site_admin"}
+
+
 def _days_in_month(year: int, month: int) -> int:
     """Return number of days in given month."""
     import calendar
@@ -18228,8 +18241,11 @@ def personnel_list():
     can_edit = _personnel_can_edit(user)
     staff = query_all("""
         SELECT u.id, u.name, u.email, u.role, u.short_code, u.active,
+               mgr.name AS manager_name,
                sc.monthly_salary, sc.designation, sc.department, sc.join_date
           FROM users u
+          LEFT JOIN reporting_structure rs ON rs.user_id = u.id
+          LEFT JOIN users mgr ON mgr.id = rs.manager_id
           LEFT JOIN salary_config sc ON sc.user_id = u.id
          ORDER BY u.name
     """)
@@ -18240,8 +18256,16 @@ def personnel_list():
     att_rows = query_all("SELECT user_id, status FROM attendance WHERE date = ?", (today,))
     for a in att_rows:
         attendance_map[a["user_id"]] = a["status"]
+    manager_missing_ids = {
+        row["id"]
+        for row in staff
+        if row_value(row, "active", 0)
+        and not row_value(row, "manager_name")
+        and not _personnel_hierarchy_is_top(row)
+    }
     return render_template("personnel.html", staff=staff, can_edit=can_edit,
-                           attendance_map=attendance_map, today=today)
+                           attendance_map=attendance_map, today=today,
+                           manager_missing_ids=manager_missing_ids)
 
 
 @app.route("/personnel/<int:user_id>")
@@ -18272,10 +18296,71 @@ def personnel_detail(user_id: int):
         "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ?",
         (user_id,))
     can_edit = _personnel_can_edit(user)
+    manager_id = _line_manager_id_for_user(user_id)
+    manager_row = query_one("SELECT id, name, role FROM users WHERE id = ?", (manager_id,)) if manager_id else None
+    direct_reports = query_all(
+        """
+        SELECT u.id, u.name, u.role
+          FROM reporting_structure rs
+          JOIN users u ON u.id = rs.user_id
+         WHERE rs.manager_id = ?
+         ORDER BY u.name
+        """,
+        (user_id,),
+    )
+    hierarchy_is_top = _personnel_hierarchy_is_top(employee)
+    manager_required = row_value(employee, "active", 0) and not hierarchy_is_top
+    manager_options = query_all(
+        """
+        SELECT id, name, role
+          FROM users
+         WHERE active = 1 AND id != ?
+         ORDER BY name
+        """,
+        (user_id,),
+    ) if can_edit else []
     return render_template("personnel_detail.html", employee=employee,
                            salary_cfg=salary_cfg, payments=payments,
                            days_worked=days_worked, assigned_vehicles=assigned_vehicles,
-                           can_edit=can_edit, today=today.isoformat())
+                           can_edit=can_edit, today=today.isoformat(),
+                           manager_row=manager_row, direct_reports=direct_reports,
+                           hierarchy_is_top=hierarchy_is_top, manager_required=manager_required,
+                           manager_options=manager_options)
+
+
+@app.route("/personnel/<int:user_id>/manager", methods=["POST"])
+@login_required
+def personnel_set_manager(user_id: int):
+    user = current_user()
+    if not portal_route_enabled("personnel"):
+        abort(404)
+    if not _personnel_can_edit(user):
+        abort(403)
+    employee = query_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    if not employee:
+        abort(404)
+    manager_raw = request.form.get("manager_id", "").strip()
+    manager_id = int(manager_raw) if manager_raw else None
+    if manager_id == user_id:
+        flash("A person cannot be their own line manager.", "error")
+        return redirect(url_for("personnel_detail", user_id=user_id))
+    if manager_id:
+        manager = query_one("SELECT id, active FROM users WHERE id = ?", (manager_id,))
+        if not manager or not row_value(manager, "active", 0):
+            flash("Selected manager is not available.", "error")
+            return redirect(url_for("personnel_detail", user_id=user_id))
+    if manager_id is None and not _personnel_hierarchy_is_top(employee):
+        flash("This role should have a line manager assigned.", "error")
+        return redirect(url_for("personnel_detail", user_id=user_id))
+    execute("DELETE FROM reporting_structure WHERE user_id = ?", (user_id,))
+    if manager_id is not None:
+        execute(
+            "INSERT INTO reporting_structure (user_id, manager_id) VALUES (?, ?)",
+            (user_id, manager_id),
+        )
+    log_action(user["id"], "personnel", user_id, "line_manager_updated", {"manager_id": manager_id})
+    flash("Line manager updated.", "success")
+    return redirect(url_for("personnel_detail", user_id=user_id))
 
 
 @app.route("/personnel/<int:user_id>/salary-config", methods=["POST"])

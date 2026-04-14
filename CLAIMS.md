@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | initdb-bootstrap-optimization | 2026-04-14 16:55 CEST | `app.py`, `CLAIMS.md` | `perf: skip repeat bootstrap work on init` |
 | _(empty)_ | — | — | — | — |
 
 ## Stale-claim recovery

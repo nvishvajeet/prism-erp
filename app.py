@@ -39,6 +39,7 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
+RUNTIME_BOOTSTRAP_VERSION = "2026-04-14-runtime-v1"
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -3873,6 +3874,12 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_user_roles_role        ON user_roles(role);
             CREATE INDEX IF NOT EXISTS idx_igm_group              ON instrument_group_member(group_id);
             CREATE INDEX IF NOT EXISTS idx_igm_instrument         ON instrument_group_member(instrument_id);
+
+            CREATE TABLE IF NOT EXISTS runtime_bootstrap_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT ''
+            );
             """
         )
 
@@ -3922,6 +3929,68 @@ def init_db() -> None:
 
         db.commit()
     db.close()
+    _run_runtime_bootstrap()
+
+
+def _runtime_bootstrap_key() -> str:
+    return f"runtime_bootstrap:{'demo' if DEMO_MODE else 'operational'}"
+
+
+def _runtime_bootstrap_force_enabled() -> bool:
+    return os.environ.get("CATALYST_FORCE_BOOTSTRAP", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_bootstrap_version(db: sqlite3.Connection) -> str:
+    try:
+        row = db.execute("SELECT value FROM runtime_bootstrap_meta WHERE key = ?", (_runtime_bootstrap_key(),)).fetchone()
+    except sqlite3.Error:
+        return ""
+    return row[0] if row and row[0] else ""
+
+
+def _set_runtime_bootstrap_version() -> None:
+    db = sqlite3.connect(DB_PATH)
+    try:
+        db.execute(
+            """
+            INSERT INTO runtime_bootstrap_meta (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            (_runtime_bootstrap_key(), RUNTIME_BOOTSTRAP_VERSION, now_iso()),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def _sync_demo_passwords(db: sqlite3.Connection) -> None:
+    if not DEMO_MODE:
+        return
+    demo_pw_hash = generate_password_hash("12345", method="pbkdf2:sha256")
+    persona_emails = (
+        "admin@lab.local", "dean@lab.local", "fesem.admin@lab.local",
+        "sen@lab.local", "anika@lab.local", "finance@lab.local",
+        "prof.approver@lab.local", "shah@lab.local",
+    )
+    db.executemany(
+        "UPDATE users SET password_hash = ? WHERE email = ?",
+        [(demo_pw_hash, email) for email in persona_emails],
+    )
+    db.commit()
+
+
+def _run_runtime_bootstrap() -> None:
+    db = sqlite3.connect(DB_PATH)
+    try:
+        _sync_demo_passwords(db)
+        if not _runtime_bootstrap_force_enabled() and _runtime_bootstrap_version(db) == RUNTIME_BOOTSTRAP_VERSION:
+            return
+    finally:
+        db.close()
+
     seed_data()
     # Second pass of the W1.3.7 backfill — the first pass runs before
     # seed_data() creates demo users, so user_roles starts empty.
@@ -3944,6 +4013,7 @@ def init_db() -> None:
     # then drops the columns. Second run is a no-op.
     _backfill_domain_split()
     _drop_legacy_finance_columns()
+    _set_runtime_bootstrap_version()
 
 
 def _drop_legacy_finance_columns() -> None:

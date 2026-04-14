@@ -23424,20 +23424,8 @@ def ai_pane_submit():
         entity_created = advanced_action_result["entity_created"]
         summary = advanced_action_result["summary"]
 
-    # For actions that need admin review (grants, password resets, approvals), leave as 'parsed'
-    # The batch processor or admin will pick them up
-    if action in ("create_grant", "reset_password", "approve_request", "route_request") and not entity_created:
-        # Notify the appropriate admin
-        admin_roles = {"create_grant": "finance_admin", "reset_password": "super_admin",
-                       "approve_request": "instrument_admin", "route_request": "operator"}
-        target_role = admin_roles.get(action, "super_admin")
-        admins = query_all("SELECT id FROM users WHERE role = ? LIMIT 3", (target_role,))
-        if not admins:
-            admins = query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 3")
-        for adm in admins:
-            notify(adm["id"], "task", f"AI request from {user['name']}",
-                   f"{summary} — needs your review", url_for("quick_entry"))
-        summary += " — Sent to admin for review"
+    if not entity_created:
+        summary = _ai_pane_enqueue_admin_review(user, action=action, summary=summary)
 
     route_label = _ai_pane_route_label(action)
     return jsonify({
@@ -23892,6 +23880,36 @@ def _ai_pane_run_advanced_actions(
     return None
 
 
+def _ai_pane_enqueue_admin_review(user, *, action: str, summary: str) -> str:
+    review_roles = {
+        "create_grant": "finance_admin",
+        "reset_password": "super_admin",
+        "approve_request": "instrument_admin",
+        "route_request": "operator",
+    }
+    target_role = review_roles.get(action)
+    if not target_role:
+        return summary
+    admins = query_all("SELECT id FROM users WHERE role = ? LIMIT 3", (target_role,))
+    if not admins:
+        admins = query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 3")
+    for admin in admins:
+        notify(
+            admin["id"],
+            "task",
+            f"AI request from {user['name']}",
+            f"{summary} — needs your review",
+            url_for("quick_entry"),
+        )
+    return summary + " — Sent to admin for review"
+
+
+def _should_start_compute_queue_manager() -> bool:
+    if not module_enabled("compute"):
+        return False
+    return os.environ.get("CATALYST_START_COMPUTE_QUEUE", "1") == "1"
+
+
 @app.route("/api/ai/draft-approve/<int:request_id>", methods=["POST"])
 @login_required
 def ai_draft_approve(request_id):
@@ -24079,7 +24097,8 @@ def quick_entry():
 
 if __name__ == "__main__":
     init_db()
-    _start_compute_queue_manager()
+    if _should_start_compute_queue_manager():
+        _start_compute_queue_manager()
     # Always auto-reload templates so changes appear without server restart
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.jinja_env.auto_reload = True

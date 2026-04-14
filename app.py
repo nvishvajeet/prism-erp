@@ -9045,13 +9045,7 @@ def schedule_bulk_actions():
     return redirect(back_value or url_for("schedule"))
 
 
-@app.route("/schedule/actions", methods=["POST"])
-@login_required
-def schedule_actions():
-    user = current_user()
-    if not can_access_schedule(user):
-        abort(403)
-    request_id = int(request.form["request_id"])
+def _schedule_board_request_or_404(user: sqlite3.Row, request_id: int) -> tuple[sqlite3.Row, bool, bool]:
     sample_request = query_one(
         """
         SELECT sr.*, i.name AS instrument_name, r.name AS requester_name, r.email AS requester_email
@@ -9066,40 +9060,50 @@ def schedule_actions():
         abort(404)
     if not can_view_request(user, sample_request):
         abort(403)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_manage = can_manage_instrument(user["id"], sample_request["instrument_id"], user["role"])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_operate = can_operate_instrument(user["id"], sample_request["instrument_id"], user["role"])
     if not (can_manage or can_operate):
         abort(403)
+    return sample_request, can_manage, can_operate
+
+
+def _schedule_queue_redirect_response(request_id: int, bucket_override: str | None = None, focus_request: bool = False):
+    params: dict[str, str] = {
+        "bucket": bucket_override or (request.form.get("bucket") or "all"),
+    }
+    for key in ("q", "instrument_id", "date_from", "date_to", "source_label"):
+        value = (request.form.get(key) or "").strip()
+        if value:
+            params[key] = value
+    back_value = (request.form.get("back") or "").strip()
+    if back_value:
+        params["back"] = back_value
+    if focus_request:
+        params["focus_request_id"] = str(request_id)
+    return redirect(url_for("schedule", **params))
+
+
+@app.route("/schedule/actions", methods=["POST"])
+@login_required
+def schedule_actions():
+    user = current_user()
+    if not can_access_schedule(user):
+        abort(403)
+    request_id = int(request.form["request_id"])
+    sample_request, can_manage, can_operate = _schedule_board_request_or_404(user, request_id)
     if sample_request["completion_locked"]:
         flash("Completed jobs are locked.", "error")
-        return redirect(url_for("schedule", bucket="scheduled"))
-
-    def redirect_to_queue(bucket_override: str | None = None, focus_request: bool = False):
-        params: dict[str, str] = {
-            "bucket": bucket_override or (request.form.get("bucket") or "all"),
-        }
-        for key in ("q", "instrument_id", "date_from", "date_to", "source_label"):
-            value = (request.form.get(key) or "").strip()
-            if value:
-                params[key] = value
-        back_value = (request.form.get("back") or "").strip()
-        if back_value:
-            params["back"] = back_value
-        if focus_request:
-            params["focus_request_id"] = str(request_id)
-        return redirect(url_for("schedule", **params))
+        return _schedule_queue_redirect_response(request_id, bucket_override="scheduled")
 
     action = request.form.get("action", "").strip()
     if action == "take_up":
         if sample_request["status"] not in {"sample_received", "scheduled"}:
             flash("Only received jobs can be taken up from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         scheduled_for = request.form.get("scheduled_for", "").strip()
         if not scheduled_for:
             flash("Please choose a schedule time.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
         remarks = request.form.get("remarks", "").strip()
         assert_status_transition(sample_request["status"], "scheduled")
@@ -9110,16 +9114,16 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "scheduled_from_board", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
         flash(f"{sample_request['request_no']} taken up for work.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_queue_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "quick_assign":
         operator_id = int(request.form.get("assigned_operator_id") or 0)
         if not operator_id:
             flash("Choose a person to assign.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         candidate_ids = {row["id"] for row in request_assignment_candidates(sample_request)}
         if operator_id not in candidate_ids:
             flash("That person cannot be assigned to this job.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         execute(
             "UPDATE sample_requests SET assigned_operator_id = ?, updated_at = ? WHERE id = ?",
             (operator_id, now_iso(), request_id),
@@ -9127,11 +9131,11 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "reassigned", {"assigned_operator_id": operator_id, "remarks": "Assigned from queue"})
         flash(f"{sample_request['request_no']} reassigned.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(focus_request=True)
+        return _schedule_queue_redirect_response(request_id, focus_request=True)
     elif action == "plan_next_slot":
         if sample_request["status"] not in {"sample_received"}:
             flash("Only ready jobs can be placed into the day planner.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         planner_date = parse_schedule_day(request.form.get("planner_date"))
         scope_filters = schedule_filter_values()
         clauses, params = request_scope_sql(user, "sr")
@@ -9159,7 +9163,7 @@ def schedule_actions():
                 slot_dt = datetime.fromisoformat(scheduled_for_raw)
             except ValueError:
                 flash("Choose a valid date and time for the planner.", "error")
-                return redirect_to_queue()
+                return _schedule_queue_redirect_response(request_id)
         else:
             slot_dt = compute_next_schedule_slot(planner_date, same_day_rows)
         operator_id = int(request.form.get("assigned_operator_id") or user["id"])
@@ -9178,11 +9182,11 @@ def schedule_actions():
         )
         write_request_metadata_snapshot(request_id)
         flash(f"{sample_request['request_no']} added to {planner_date.strftime('%d/%m/%Y')} at {slot_dt.strftime('%H:%M')}.", "success")
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_queue_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "mark_received":
         if sample_request["status"] != "sample_submitted":
             flash("Only submitted samples can be marked received from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         assert_status_transition(sample_request["status"], "sample_received")
         execute(
             """
@@ -9195,11 +9199,11 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": ""})
         flash(f"{sample_request['request_no']} marked received.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_queue_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "start_now":
         if sample_request["status"] not in {"scheduled", "in_progress"}:
             flash("Only scheduled jobs can be started from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         remarks = request.form.get("remarks", "").strip()
         operator_id = sample_request["assigned_operator_id"] or user["id"]
         assert_status_transition(sample_request["status"], "in_progress")
@@ -9210,15 +9214,15 @@ def schedule_actions():
         log_action(user["id"], "sample_request", request_id, "started_from_board", {})
         flash(f"{sample_request['request_no']} is now in progress.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_queue_redirect_response(request_id, bucket_override="all", focus_request=True)
     elif action == "finish_now":
         if sample_request["status"] != "in_progress":
             flash("Only in-progress jobs can be finished from the board.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         results_summary = request.form.get("results_summary", "").strip()
         if not results_summary:
             flash("Please add a short result summary before finishing.", "error")
-            return redirect_to_queue()
+            return _schedule_queue_redirect_response(request_id)
         remarks = request.form.get("remarks", "").strip()
         _finance = computed_finance_for_request(get_db(), request_id)
         amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
@@ -9270,12 +9274,12 @@ def schedule_actions():
         )
         flash("Job marked done.", "success")
         write_request_metadata_snapshot(request_id)
-        return redirect_to_queue(bucket_override="all", focus_request=True)
+        return _schedule_queue_redirect_response(request_id, bucket_override="all", focus_request=True)
     else:
         abort(403)
 
     write_request_metadata_snapshot(request_id)
-    return redirect_to_queue()
+    return _schedule_queue_redirect_response(request_id)
 
 
 @app.route("/attachments/<int:attachment_id>/download")
@@ -9382,6 +9386,103 @@ def processed_history():
     args = request.args.to_dict()
     args.setdefault("bucket", "completed")
     return redirect(url_for("schedule", **args))
+
+
+def _can_edit_user_profile(viewer: sqlite3.Row, target_user: sqlite3.Row) -> bool:
+    return (
+        can_manage_members(viewer)
+        and (not is_owner(target_user) or is_owner(viewer))
+        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+    )
+
+
+def _user_profile_request_rows(
+    viewer: sqlite3.Row,
+    predicate_sql: str,
+    predicate_params: tuple[object, ...],
+    order_sql: str,
+) -> list[sqlite3.Row]:
+    scope_clauses, scope_params = request_scope_sql(viewer, "sr")
+    return query_all(
+        f"""
+        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
+               op.name AS operator_name,
+               COALESCE(COUNT(ra.id), 0) AS attachment_count
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN users op ON op.id = sr.assigned_operator_id
+        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
+        WHERE {' AND '.join(scope_clauses + [predicate_sql])}
+        GROUP BY sr.id
+        ORDER BY {order_sql}
+        LIMIT 25
+        """,
+        (*scope_params, *predicate_params),
+    )
+
+
+def _user_profile_summary(
+    viewer: sqlite3.Row,
+    predicate_sql: str,
+    predicate_params: tuple[object, ...],
+) -> sqlite3.Row:
+    scope_clauses, scope_params = request_scope_sql(viewer, "sr")
+    return query_one(
+        f"""
+        SELECT COUNT(*) AS total_jobs,
+               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
+               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
+               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
+        FROM sample_requests sr
+        WHERE {' AND '.join(scope_clauses + [predicate_sql])}
+        """,
+        (*scope_params, *predicate_params),
+    )
+
+
+def _user_profile_instrument_context(
+    viewer: sqlite3.Row,
+    target_user: sqlite3.Row,
+    can_edit_user_value: bool,
+) -> dict[str, object]:
+    context: dict[str, object] = {
+        "instrument_roster": [],
+        "instrument_categories": [],
+        "assigned_admin_ids": set(),
+        "assigned_operator_ids": set(),
+        "assigned_faculty_ids": set(),
+        "role_choices": [],
+    }
+    if can_edit_user_value:
+        instrument_roster = query_all(
+            "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
+        )
+        context["instrument_roster"] = instrument_roster
+        context["assigned_admin_ids"] = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?", (target_user["id"],)
+            )
+        }
+        context["assigned_operator_ids"] = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?", (target_user["id"],)
+            )
+        }
+        context["assigned_faculty_ids"] = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (target_user["id"],)
+            )
+        }
+        context["instrument_categories"] = sorted({(r["category"] or "Uncategorized") for r in instrument_roster})
+    if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
+        base_roles = [
+            "requester", "operator", "instrument_admin", "faculty_in_charge",
+            "professor_approver", "finance_admin",
+        ]
+        if viewer["role"] == "super_admin":
+            base_roles += ["site_admin", "super_admin"]
+        context["role_choices"] = [(role, role_display_name(role)) for role in base_roles]
+    return context
 
 
 @app.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -9628,105 +9729,26 @@ def user_profile(user_id: int):
             flash("Instrument assignments saved.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
 
+    rows = _user_profile_request_rows(viewer, "sr.requester_id = ?", (user_id,), "sr.created_at DESC")
+    handled_rows = _user_profile_request_rows(
+        viewer,
+        "(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)",
+        (user_id, user_id),
+        "COALESCE(sr.completed_at, sr.updated_at, sr.created_at) DESC",
+    )
     scope_clauses, scope_params = request_scope_sql(viewer, "sr")
-    rows = query_all(
-        f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
-               op.name AS operator_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
-        GROUP BY sr.id
-        ORDER BY sr.created_at DESC
-        LIMIT 25
-        """,
-        (*scope_params, user_id),
-    )
-    handled_rows = query_all(
-        f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
-               op.name AS operator_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
-        GROUP BY sr.id
-        ORDER BY COALESCE(sr.completed_at, sr.updated_at, sr.created_at) DESC
-        LIMIT 25
-        """,
-        (*scope_params, user_id, user_id),
-    )
     originated_count = query_one(
         f"SELECT COUNT(*) AS c FROM sample_requests sr WHERE {' AND '.join(scope_clauses + ['sr.created_by_user_id = ?'])}",
         (*scope_params, user_id),
     )["c"]
-    submitted_summary = query_one(
-        f"""
-        SELECT COUNT(*) AS total_jobs,
-               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
-               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
-               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
-        FROM sample_requests sr
-        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
-        """,
-        (*scope_params, user_id),
+    submitted_summary = _user_profile_summary(viewer, "sr.requester_id = ?", (user_id,))
+    handled_summary = _user_profile_summary(
+        viewer,
+        "(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)",
+        (user_id, user_id),
     )
-    handled_summary = query_one(
-        f"""
-        SELECT COUNT(*) AS total_jobs,
-               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
-               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
-               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
-        FROM sample_requests sr
-        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
-        """,
-        (*scope_params, user_id, user_id),
-    )
-    can_edit_user_value = (
-        can_manage_members(viewer)
-        and (not is_owner(target_user) or is_owner(viewer))
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
-    )
-    instrument_roster: list[sqlite3.Row] = []
-    instrument_categories: list[str] = []
-    assigned_admin_ids: set[int] = set()
-    assigned_operator_ids: set[int] = set()
-    assigned_faculty_ids: set[int] = set()
-    if can_edit_user_value:
-        instrument_roster = query_all(
-            "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
-        )
-        assigned_admin_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?", (user_id,)
-            )
-        }
-        assigned_operator_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?", (user_id,)
-            )
-        }
-        assigned_faculty_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (user_id,)
-            )
-        }
-        instrument_categories = sorted({(r["category"] or "Uncategorized") for r in instrument_roster})
-    # Role choices the viewer is allowed to promote/demote this target to.
-    role_choices: list[tuple[str, str]] = []
-    if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
-        base_roles = ["requester", "operator", "instrument_admin", "faculty_in_charge",
-                      "professor_approver", "finance_admin"]
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if viewer["role"] == "super_admin":
-            base_roles += ["site_admin", "super_admin"]
-        role_choices = [(r, role_display_name(r)) for r in base_roles]
+    can_edit_user_value = _can_edit_user_profile(viewer, target_user)
+    instrument_context = _user_profile_instrument_context(viewer, target_user, can_edit_user_value)
     return render_template(
         "user_detail.html",
         target_user=target_user,
@@ -9746,12 +9768,12 @@ def user_profile(user_id: int):
             and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
         ),
         can_edit_user=can_edit_user_value,
-        instrument_roster=instrument_roster,
-        instrument_categories=instrument_categories,
-        assigned_admin_ids=assigned_admin_ids,
-        assigned_operator_ids=assigned_operator_ids,
-        assigned_faculty_ids=assigned_faculty_ids,
-        role_choices=role_choices,
+        instrument_roster=instrument_context["instrument_roster"],
+        instrument_categories=instrument_context["instrument_categories"],
+        assigned_admin_ids=instrument_context["assigned_admin_ids"],
+        assigned_operator_ids=instrument_context["assigned_operator_ids"],
+        assigned_faculty_ids=instrument_context["assigned_faculty_ids"],
+        role_choices=instrument_context["role_choices"],
         target_role_set=user_role_set(target_user),
         layered_role_choices=[
             ("operator", "Operator"),

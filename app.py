@@ -11720,10 +11720,7 @@ def instrument_custom_fields_json(instrument_id: int):
     })
 
 
-@app.route("/requests/new", methods=["GET", "POST"])
-@login_required
-def new_request():
-    user = current_user()
+def _new_request_form_context(user: sqlite3.Row) -> dict[str, object]:
     instruments = query_all("SELECT * FROM instruments WHERE status = 'active' ORDER BY name")
     can_submit_for_others = can_manage_members(user) or has_instrument_area_access(user)
     requester_candidates = query_all(
@@ -11734,63 +11731,105 @@ def new_request():
         ORDER BY name, email
         """
     ) if can_submit_for_others else []
+    prefill = {
+        "instrument_id": request.args.get("instrument_id", ""),
+        "title": request.args.get("title", ""),
+        "sample_name": request.args.get("sample_name", ""),
+        "sample_count": request.args.get("sample_count", ""),
+        "description": request.args.get("description", ""),
+        "sample_origin": request.args.get("sample_origin", ""),
+        "priority": request.args.get("priority", ""),
+    }
+    return {
+        "instruments": instruments,
+        "can_submit_for_others": can_submit_for_others,
+        "requester_candidates": requester_candidates,
+        "prefill": prefill,
+    }
+
+
+def _validate_new_request_post(user: sqlite3.Row, can_submit_for_others: bool) -> tuple[dict[str, object] | None, object | None]:
+    instrument_id_raw = request.form.get("instrument_id")
+    if not instrument_id_raw:
+        flash("Please select an instrument.", "error")
+        return None, redirect(url_for("new_request"))
+    try:
+        instrument_id = int(instrument_id_raw)
+    except (ValueError, TypeError):
+        flash("Invalid instrument selection.", "error")
+        return None, redirect(url_for("new_request"))
+    instrument = query_one("SELECT * FROM instruments WHERE id = ? AND status = 'active'", (instrument_id,))
+    if instrument is None:
+        flash("Selected instrument is not available.", "error")
+        return None, redirect(url_for("new_request"))
+
+    title = request.form.get("title", "").strip()
+    if not title:
+        flash("Title is required.", "error")
+        return None, redirect(url_for("new_request"))
+    sample_name = request.form.get("sample_name", "").strip()
+    if not sample_name:
+        flash("Sample name is required.", "error")
+        return None, redirect(url_for("new_request"))
+
+    sample_count_raw = request.form.get("sample_count")
+    if not sample_count_raw:
+        flash("Sample count is required.", "error")
+        return None, redirect(url_for("new_request"))
+    try:
+        sample_count = int(sample_count_raw)
+    except (ValueError, TypeError):
+        flash("Sample count must be a number.", "error")
+        return None, redirect(url_for("new_request"))
+    if sample_count < 1 or sample_count > 99:
+        flash("Sample count must be between 1 and 99.", "error")
+        return None, redirect(url_for("new_request"))
+
+    requester_id = user["id"]
+    if can_submit_for_others and request.form.get("requester_id"):
+        requester_id = int(request.form["requester_id"])
+    requester_row = query_one(
+        "SELECT * FROM users WHERE id = ? AND active = 1 AND invite_status = 'active'",
+        (requester_id,),
+    )
+    if requester_row is None:
+        flash("Selected requester is not available.", "error")
+        return None, redirect(url_for("new_request"))
+
+    sample_origin = request.form.get("sample_origin", "internal")
+    return {
+        "instrument_id": instrument_id,
+        "instrument": instrument,
+        "title": title,
+        "sample_name": sample_name,
+        "sample_count": sample_count,
+        "description": request.form.get("description", "").strip(),
+        "sample_origin": sample_origin,
+        "receipt_number": request.form.get("receipt_number", "").strip() or generate_receipt_reference(sample_origin),
+        "amount_due": float(request.form.get("amount_due") or 0),
+        "amount_paid": float(request.form.get("amount_paid") or 0),
+        "finance_status": request.form.get("finance_status", "n/a"),
+        "priority": request.form.get("priority", "normal"),
+        "requester_id": requester_id,
+        "requester_row": requester_row,
+        "originator_note": request.form.get("originator_note", "").strip(),
+    }, None
+
+@app.route("/requests/new", methods=["GET", "POST"])
+@login_required
+def new_request():
+    user = current_user()
+    form_context = _new_request_form_context(user)
+    can_submit_for_others = bool(form_context["can_submit_for_others"])
     if request.method == "POST":
-        # --- Validate required fields gracefully (return 400, not 500) ---
-        instrument_id_raw = request.form.get("instrument_id")
-        if not instrument_id_raw:
-            flash("Please select an instrument.", "error")
-            return redirect(url_for("new_request"))
-        try:
-            instrument_id = int(instrument_id_raw)
-        except (ValueError, TypeError):
-            flash("Invalid instrument selection.", "error")
-            return redirect(url_for("new_request"))
-        instrument = query_one("SELECT * FROM instruments WHERE id = ? AND status = 'active'", (instrument_id,))
-        if instrument is None:
-            flash("Selected instrument is not available.", "error")
-            return redirect(url_for("new_request"))
-        title = request.form.get("title", "").strip()
-        if not title:
-            flash("Title is required.", "error")
-            return redirect(url_for("new_request"))
-        sample_name = request.form.get("sample_name", "").strip()
-        if not sample_name:
-            flash("Sample name is required.", "error")
-            return redirect(url_for("new_request"))
-        sample_count_raw = request.form.get("sample_count")
-        if not sample_count_raw:
-            flash("Sample count is required.", "error")
-            return redirect(url_for("new_request"))
-        try:
-            sample_count = int(sample_count_raw)
-        except (ValueError, TypeError):
-            flash("Sample count must be a number.", "error")
-            return redirect(url_for("new_request"))
-        if sample_count < 1 or sample_count > 99:
-            flash("Sample count must be between 1 and 99.", "error")
-            return redirect(url_for("new_request"))
-        description = request.form.get("description", "").strip()
-        sample_origin = request.form.get("sample_origin", "internal")
-        receipt_number = request.form.get("receipt_number", "").strip()
-        if not receipt_number:
-            receipt_number = generate_receipt_reference(sample_origin)
-        amount_due = float(request.form.get("amount_due") or 0)
-        amount_paid = float(request.form.get("amount_paid") or 0)
-        finance_status = request.form.get("finance_status", "n/a")
-        priority = request.form.get("priority", "normal")
-        requester_id = user["id"]
-        if can_submit_for_others and request.form.get("requester_id"):
-            requester_id = int(request.form["requester_id"])
-        requester_row = query_one(
-            "SELECT * FROM users WHERE id = ? AND active = 1 AND invite_status = 'active'",
-            (requester_id,),
-        )
-        if requester_row is None:
-            flash("Selected requester is not available.", "error")
-            return redirect(url_for("new_request"))
-        originator_note = request.form.get("originator_note", "").strip()
-        request_no = generate_job_reference(sample_origin)
-        sample_ref = generate_sample_reference(instrument["name"], sample_origin)
+        payload, error_response = _validate_new_request_post(user, can_submit_for_others)
+        if error_response is not None:
+            return error_response
+        assert payload is not None
+        instrument = payload["instrument"]
+        instrument_id = int(payload["instrument_id"])
+        request_no = generate_job_reference(str(payload["sample_origin"]))
+        sample_ref = generate_sample_reference(instrument["name"], str(payload["sample_origin"]))
         created = now_iso()
         initial_status = "submitted"
         # v2.0.0 — INSERT skips legacy finance columns (dropped in
@@ -11806,16 +11845,16 @@ def new_request():
             (
                 request_no,
                 sample_ref,
-                requester_id,
+                int(payload["requester_id"]),
                 user["id"],
-                originator_note,
+                str(payload["originator_note"]),
                 instrument_id,
-                title,
-                sample_name,
-                sample_count,
-                description,
-                sample_origin,
-                priority,
+                str(payload["title"]),
+                str(payload["sample_name"]),
+                int(payload["sample_count"]),
+                str(payload["description"]),
+                str(payload["sample_origin"]),
+                str(payload["priority"]),
                 initial_status,
                 created,
                 created,
@@ -11850,10 +11889,10 @@ def new_request():
         sync_request_to_peer_aggregates(
             get_db(),
             request_id,
-            amount_due=amount_due,
-            amount_paid=amount_paid,
-            finance_status=finance_status,
-            receipt_number=receipt_number,
+            amount_due=float(payload["amount_due"]),
+            amount_paid=float(payload["amount_paid"]),
+            finance_status=str(payload["finance_status"]),
+            receipt_number=str(payload["receipt_number"]),
         )
         # Auto-link to instrument's default grant if set
         default_grant = row_value(instrument, "default_grant_id", None)
@@ -11907,11 +11946,11 @@ def new_request():
             {
                 "request_no": request_no,
                 "instrument_id": instrument_id,
-                "requester_id": requester_id,
-                "sample_origin": sample_origin,
-                "sample_count": sample_count,
+                "requester_id": int(payload["requester_id"]),
+                "sample_origin": str(payload["sample_origin"]),
+                "sample_count": int(payload["sample_count"]),
                 "created_by_user_id": user["id"],
-                "originator_note": originator_note,
+                "originator_note": str(payload["originator_note"]),
                 "accepting_requests": bool(instrument["accepting_requests"]),
             },
         )
@@ -11924,33 +11963,17 @@ def new_request():
             _req_url = url_for("request_detail", request_id=request_id)
             for op in ops:
                 notify(op["user_id"], "request",
-                       f"New request: {title}",
+                       f"New request: {payload['title']}",
                        f"Request {request_no} submitted for {instrument['name']}",
                        _req_url, "sample_request", request_id)
         except Exception:
             pass  # notification failure must not block request creation
         if instrument["accepting_requests"]:
-            flash(f"Request {request_no} submitted for {requester_row['name']}. Sample number {sample_ref} and printable slip generated.", "success")
+            flash(f"Request {request_no} submitted for {payload['requester_row']['name']}. Sample number {sample_ref} and printable slip generated.", "success")
         else:
-            flash(f"Request {request_no} submitted for {requester_row['name']}. The lab is not accepting jobs yet, so it has been queued. Sample number {sample_ref} and printable slip generated.", "success")
+            flash(f"Request {request_no} submitted for {payload['requester_row']['name']}. The lab is not accepting jobs yet, so it has been queued. Sample number {sample_ref} and printable slip generated.", "success")
         return redirect(url_for("request_detail", request_id=request_id))
-    # Support pre-fill from duplicate_request route
-    prefill = {
-        "instrument_id": request.args.get("instrument_id", ""),
-        "title": request.args.get("title", ""),
-        "sample_name": request.args.get("sample_name", ""),
-        "sample_count": request.args.get("sample_count", ""),
-        "description": request.args.get("description", ""),
-        "sample_origin": request.args.get("sample_origin", ""),
-        "priority": request.args.get("priority", ""),
-    }
-    return render_template(
-        "new_request.html",
-        instruments=instruments,
-        can_submit_for_others=can_submit_for_others,
-        requester_candidates=requester_candidates,
-        prefill=prefill,
-    )
+    return render_template("new_request.html", **form_context)
 
 def load_request_detail_context(user: sqlite3.Row, request_id: int) -> dict[str, object]:
     sample_request = query_one(

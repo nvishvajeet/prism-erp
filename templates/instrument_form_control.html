@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, empty_state with context %}
 {% block breadcrumb_instrument %}{{ instrument["name"] }} / Form Control{% endblock %}
-{% block hover_back %}{% endblock %}
+{% block hover_back %}<a href="{{ url_for('instrument_detail', instrument_id=instrument['id']) }}" class="hover-back-btn" title="Back to instrument">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">

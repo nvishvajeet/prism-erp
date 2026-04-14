@@ -23372,143 +23372,44 @@ def ai_pane_submit():
     """AJAX: Real-time AI pane submission. Parses via Claude Haiku,
     queues the action, returns instant feedback."""
     user = current_user()
-    message = ""
-    page_context = ""
-    file_name = ""
-
-    # Support both JSON and multipart form data (for file uploads)
-    if request.is_json:
-        data = request.get_json(force=True)
-        message = data.get("message", "").strip()
-        page_context = data.get("page_context", "")
-    else:
-        message = request.form.get("message", "").strip()
-        page_context = request.form.get("page_context", "")
-        f = request.files.get("file")
-        if f and f.filename:
-            file_name = f.filename
-            # Save to uploads
-            safe_name = f"{user['id']}_{int(datetime.utcnow().timestamp())}_{f.filename}"
-            upload_path = UPLOAD_DIR / "ai_pane" / safe_name
-            upload_path.parent.mkdir(parents=True, exist_ok=True)
-            f.save(str(upload_path))
-            message += f"\n\n[Attached file: {f.filename}]"
+    submission = _ai_pane_collect_submission(user)
+    message = submission["message"]
+    page_context = submission["page_context"]
+    file_name = submission["file_name"]
 
     if not message:
         return jsonify({"ok": False, "error": "Please type a message"})
 
-    # Build rich context with real data for accurate metadata extraction
-    user_context = f"User: {user['name']} (role: {user['role']})\nPage: {page_context}"
-    try:
-        db = get_db()
-        inst_names = [r["name"] for r in db.execute("SELECT name FROM instruments WHERE status='active' ORDER BY name").fetchall()]
-        if inst_names:
-            user_context += f"\nAvailable instruments: {', '.join(inst_names)}"
-        user_names = [r["name"] for r in db.execute("SELECT name FROM users WHERE active=1 AND invite_status='active' ORDER BY name LIMIT 40").fetchall()]
-        if user_names:
-            user_context += f"\nKnown users: {', '.join(user_names[:30])}"
-    except Exception:
-        pass
+    parsed_submission = _ai_pane_parse_submission(user, message, page_context)
+    action = parsed_submission["action"]
+    action_data = parsed_submission["action_data"]
+    summary = parsed_submission["summary"]
+    route_to = parsed_submission["route_to"]
 
-    action = "unknown"
-    action_data = {}
-    summary = "Received — queued for processing"
-    route_to = "admin"
-    tokens_used = 0
-
-    try:
-        response_text, meta = _ai_generate_text(
-            f"{user_context}\n\n{message}",
-            max_tokens=512,
-            system=AI_PANE_SYSTEM_PROMPT,
-            lane="interactive",
-        )
-        tokens_used = int(meta.get("tokens_used", 0) or 0)
-
-        import re as _re
-        json_match = _re.search(r'\{.*\}', response_text, _re.DOTALL)
-        if json_match:
-            parsed = json.loads(json_match.group())
-            action = parsed.get("action", "unknown")
-            action_data = parsed.get("data", {})
-            summary = parsed.get("summary", summary)
-            route_to = parsed.get("route_to", "admin")
-    except Exception:
-        pass  # Fall through to queue-based processing
-
-    # Queue in command_queue for execution (reuse existing infra)
-    cmd_id = execute(
-        "INSERT INTO command_queue (user_id, raw_text, source, status, parsed_action, parsed_data, result_message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (user["id"], message, "ai_pane", "pending" if action == "unknown" else "parsed",
-         action, json.dumps(action_data), summary, now_iso()),
-    )
-
-    # Log the AI interaction
-    execute(
-        """INSERT INTO ai_pane_log (user_id, page_context, user_message, ai_response,
-           action_taken, action_data, file_name, tokens_used, model, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (user["id"], page_context, message, summary, action,
-         json.dumps(action_data), file_name, tokens_used, _ai_active_model_label("interactive"), now_iso()),
+    cmd_id = _ai_pane_record_submission(
+        user,
+        message=message,
+        page_context=page_context,
+        file_name=file_name,
+        action=action,
+        action_data=action_data,
+        summary=summary,
+        tokens_used=parsed_submission["tokens_used"],
     )
 
     # Execute safe actions immediately (self-serve)
+    basic_action_result = _ai_pane_run_basic_actions(
+        user,
+        action=action,
+        action_data=action_data,
+        message=message,
+        summary=summary,
+        cmd_id=cmd_id,
+    )
     entity_created = None
-    if action == "create_todo" and action_data:
-        execute(
-            "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
-            (user["id"], user["id"], action_data.get("title", message[:50]),
-             "[Created via AI Pane]", action_data.get("priority", "normal"), now_iso()),
-        )
-        entity_created = "todo"
-        summary += " — Task created"
-        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
-                (summary, now_iso(), cmd_id))
-
-    elif action == "send_message" and action_data.get("to_name"):
-        target = query_one("SELECT id FROM users WHERE name LIKE ?", ("%" + action_data["to_name"] + "%",))
-        if target:
-            execute(
-                "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at) VALUES (?, ?, ?, ?, ?)",
-                (user["id"], target["id"], action_data.get("subject", "Message from AI Pane"),
-                 action_data.get("body", message), now_iso()),
-            )
-            entity_created = "message"
-            summary += f" — Sent to {action_data['to_name']}"
-            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
-                    (summary, now_iso(), cmd_id))
-
-    elif action == "mark_attendance" and action_data.get("target_name"):
-        target = query_one("SELECT id, name FROM users WHERE name LIKE ?", ("%" + action_data["target_name"] + "%",))
-        if target:
-            today = action_data.get("date", date.today().isoformat())
-            status_val = action_data.get("status", "present")
-            existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
-            if existing:
-                execute("UPDATE attendance SET status = ? WHERE id = ?", (status_val, existing["id"]))
-            else:
-                execute("INSERT INTO attendance (user_id, date, status, notes, created_at) VALUES (?, ?, ?, ?, ?)",
-                        (target["id"], today, status_val, f"[AI Pane by {user['name']}]", now_iso()))
-            entity_created = "attendance"
-            summary += f" — {target['name']} marked {status_val}"
-            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
-                    (summary, now_iso(), cmd_id))
-
-    elif action == "create_receipt" and action_data.get("amount"):
-        d = action_data
-        receipt_id = execute(
-            "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
-            (user["id"], d.get("title", message[:50]), float(d["amount"]),
-             d.get("category", "general"), f"[AI Pane] {d.get('description', '')}", now_iso()),
-        )
-        entity_created = "receipt"
-        summary += f" — Receipt ₹{d['amount']} created (pending finance review)"
-        execute("UPDATE command_queue SET status='completed', result_entity_type='receipt', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                (receipt_id, summary, now_iso(), cmd_id))
-        # Notify finance
-        for fa in query_all("SELECT id FROM users WHERE role = 'finance_admin' LIMIT 3"):
-            notify(fa["id"], "finance", "AI receipt needs review",
-                   f"{user['name']} submitted ₹{d['amount']} via AI Pane", url_for("receipts_list"))
+    if basic_action_result is not None:
+        entity_created = basic_action_result["entity_created"]
+        summary = basic_action_result["summary"]
 
     elif action == "submit_request" and action_data.get("instrument"):
         # AI-created draft request — needs operator approval before becoming live
@@ -23767,7 +23668,6 @@ def ai_pane_submit():
                            url_for("instrument_detail", instrument_id=inst["id"]))
 
     elif action == "general_query":
-        # For questions, the AI already answered in the summary
         execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
                 (summary, now_iso(), cmd_id))
         entity_created = "answer"
@@ -23796,6 +23696,198 @@ def ai_pane_submit():
         "entity_created": entity_created,
         "command_id": cmd_id,
     })
+
+
+def _ai_pane_collect_submission(user) -> dict[str, str]:
+    message = ""
+    page_context = ""
+    file_name = ""
+
+    if request.is_json:
+        data = request.get_json(force=True)
+        message = data.get("message", "").strip()
+        page_context = data.get("page_context", "")
+    else:
+        message = request.form.get("message", "").strip()
+        page_context = request.form.get("page_context", "")
+        uploaded_file = request.files.get("file")
+        if uploaded_file and uploaded_file.filename:
+            file_name = uploaded_file.filename
+            safe_name = f"{user['id']}_{int(datetime.utcnow().timestamp())}_{uploaded_file.filename}"
+            upload_path = UPLOAD_DIR / "ai_pane" / safe_name
+            upload_path.parent.mkdir(parents=True, exist_ok=True)
+            uploaded_file.save(str(upload_path))
+            message += f"\n\n[Attached file: {uploaded_file.filename}]"
+
+    return {
+        "message": message,
+        "page_context": page_context,
+        "file_name": file_name,
+    }
+
+
+def _ai_pane_build_user_context(user, page_context: str) -> str:
+    user_context = f"User: {user['name']} (role: {user['role']})\nPage: {page_context}"
+    try:
+        db = get_db()
+        inst_names = [r["name"] for r in db.execute("SELECT name FROM instruments WHERE status='active' ORDER BY name").fetchall()]
+        if inst_names:
+            user_context += f"\nAvailable instruments: {', '.join(inst_names)}"
+        user_names = [r["name"] for r in db.execute("SELECT name FROM users WHERE active=1 AND invite_status='active' ORDER BY name LIMIT 40").fetchall()]
+        if user_names:
+            user_context += f"\nKnown users: {', '.join(user_names[:30])}"
+    except Exception:
+        pass
+    return user_context
+
+
+def _ai_pane_parse_submission(user, message: str, page_context: str) -> dict[str, object]:
+    action = "unknown"
+    action_data: dict = {}
+    summary = "Received — queued for processing"
+    route_to = "admin"
+    tokens_used = 0
+    user_context = _ai_pane_build_user_context(user, page_context)
+
+    try:
+        response_text, meta = _ai_generate_text(
+            f"{user_context}\n\n{message}",
+            max_tokens=512,
+            system=AI_PANE_SYSTEM_PROMPT,
+            lane="interactive",
+        )
+        tokens_used = int(meta.get("tokens_used", 0) or 0)
+
+        import re as _re
+        json_match = _re.search(r'\{.*\}', response_text, _re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            action = parsed.get("action", "unknown")
+            action_data = parsed.get("data", {})
+            summary = parsed.get("summary", summary)
+            route_to = parsed.get("route_to", "admin")
+    except Exception:
+        pass
+
+    return {
+        "action": action,
+        "action_data": action_data,
+        "summary": summary,
+        "route_to": route_to,
+        "tokens_used": tokens_used,
+    }
+
+
+def _ai_pane_record_submission(
+    user,
+    *,
+    message: str,
+    page_context: str,
+    file_name: str,
+    action: str,
+    action_data: dict,
+    summary: str,
+    tokens_used: int,
+) -> int:
+    cmd_id = execute(
+        "INSERT INTO command_queue (user_id, raw_text, source, status, parsed_action, parsed_data, result_message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            user["id"],
+            message,
+            "ai_pane",
+            "pending" if action == "unknown" else "parsed",
+            action,
+            json.dumps(action_data),
+            summary,
+            now_iso(),
+        ),
+    )
+    execute(
+        """INSERT INTO ai_pane_log (user_id, page_context, user_message, ai_response,
+           action_taken, action_data, file_name, tokens_used, model, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            user["id"],
+            page_context,
+            message,
+            summary,
+            action,
+            json.dumps(action_data),
+            file_name,
+            tokens_used,
+            _ai_active_model_label("interactive"),
+            now_iso(),
+        ),
+    )
+    return cmd_id
+
+
+def _ai_pane_run_basic_actions(
+    user,
+    *,
+    action: str,
+    action_data: dict,
+    message: str,
+    summary: str,
+    cmd_id: int,
+) -> dict[str, str] | None:
+    if action == "create_todo" and action_data:
+        execute(
+            "INSERT INTO user_todos (user_id, assigned_by_user_id, title, body, priority, status, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
+            (user["id"], user["id"], action_data.get("title", message[:50]),
+             "[Created via AI Pane]", action_data.get("priority", "normal"), now_iso()),
+        )
+        summary += " — Task created"
+        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+        return {"entity_created": "todo", "summary": summary}
+
+    if action == "send_message" and action_data.get("to_name"):
+        target = query_one("SELECT id FROM users WHERE name LIKE ?", ("%" + action_data["to_name"] + "%",))
+        if target:
+            execute(
+                "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at) VALUES (?, ?, ?, ?, ?)",
+                (user["id"], target["id"], action_data.get("subject", "Message from AI Pane"),
+                 action_data.get("body", message), now_iso()),
+            )
+            summary += f" — Sent to {action_data['to_name']}"
+            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                    (summary, now_iso(), cmd_id))
+            return {"entity_created": "message", "summary": summary}
+        return None
+
+    if action == "mark_attendance" and action_data.get("target_name"):
+        target = query_one("SELECT id, name FROM users WHERE name LIKE ?", ("%" + action_data["target_name"] + "%",))
+        if target:
+            today = action_data.get("date", date.today().isoformat())
+            status_val = action_data.get("status", "present")
+            existing = query_one("SELECT id FROM attendance WHERE user_id = ? AND date = ?", (target["id"], today))
+            if existing:
+                execute("UPDATE attendance SET status = ? WHERE id = ?", (status_val, existing["id"]))
+            else:
+                execute("INSERT INTO attendance (user_id, date, status, notes, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (target["id"], today, status_val, f"[AI Pane by {user['name']}]", now_iso()))
+            summary += f" — {target['name']} marked {status_val}"
+            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                    (summary, now_iso(), cmd_id))
+            return {"entity_created": "attendance", "summary": summary}
+        return None
+
+    if action == "create_receipt" and action_data.get("amount"):
+        receipt_id = execute(
+            "INSERT INTO expense_receipts (submitted_by_user_id, title, amount, category, description, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            (user["id"], action_data.get("title", message[:50]), float(action_data["amount"]),
+             action_data.get("category", "general"), f"[AI Pane] {action_data.get('description', '')}", now_iso()),
+        )
+        summary += f" — Receipt ₹{action_data['amount']} created (pending finance review)"
+        execute("UPDATE command_queue SET status='completed', result_entity_type='receipt', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (receipt_id, summary, now_iso(), cmd_id))
+        for finance_admin in query_all("SELECT id FROM users WHERE role = 'finance_admin' LIMIT 3"):
+            notify(finance_admin["id"], "finance", "AI receipt needs review",
+                   f"{user['name']} submitted ₹{action_data['amount']} via AI Pane", url_for("receipts_list"))
+        return {"entity_created": "receipt", "summary": summary}
+
+    return None
 
 
 @app.route("/api/ai/draft-approve/<int:request_id>", methods=["POST"])

@@ -21919,10 +21919,115 @@ def ai_advisor_batch_process(batch_label: str = "") -> int:
         return len(queued)
 
 
+# ── AI Action Queue: classification + routing ─────────────────────────────
+# Keyword classifier. First match wins. This lives in app.py rather than
+# going through an LLM because the routing decision must be cheap,
+# deterministic, and auditable — the LLM's job is to extract the payload
+# from a noisy prompt, not to pick who approves it.
+_AI_CLASSIFY_PATTERNS: list[tuple[str, str]] = [
+    (r"\bfuel\b|\bpetrol\b|\bdiesel\b|\brefill\b", "fuel_receipt"),
+    (r"\b(car|camry|vehicle|bike|scooter|van|truck)\b.*\b(expense|receipt|bill|repair|service|toll|parking|tyre|tire|wash)\b", "vehicle_expense"),
+    (r"\b(expense|receipt|bill|repair|service|toll|parking|tyre|tire|wash)\b.*\b(car|camry|vehicle|bike|scooter|van|truck)\b", "vehicle_expense"),
+    (r"\bmess\b.*\b(top.?up|credit|recharge)\b|\btop.?up\b.*\bmess\b", "mess_topup"),
+    (r"\btuck.?shop\b", "tuck_shop_sale"),
+    (r"\bleave\b.*\b(request|apply|application|from|till)\b|\bapply\b.*\bleave\b", "leave_request"),
+    (r"\battendance\b.*\b(correct|fix|missed|late|punch)\b", "attendance_correct"),
+    (r"\bvendor\b.*\b(invoice|bill|payment|po)\b|\binvoice\b.*\bvendor\b", "vendor_invoice"),
+    (r"\bcomplaint\b|\bleak\b|\bbroken\b|\bnot working\b|\bissue with\b", "complaint"),
+]
+
+
+def _classify_ai_prompt(prompt: str, file_name: str = "") -> str | None:
+    """Map a free-text AI-pane prompt to an action_type via keyword match."""
+    blob = ((prompt or "") + " " + (file_name or "")).lower()
+    for pattern, action_type in _AI_CLASSIFY_PATTERNS:
+        if re.search(pattern, blob):
+            return action_type
+    return None
+
+
+def _resolve_ai_approver(role: str, region: str = "") -> int | None:
+    """Pick the assigned approver for a given role, round-robining by
+    pending action-queue workload. Region is reserved for multi-office
+    routing — nullable for now, the single-office fallback returns the
+    lowest-pending user with that role."""
+    if not role:
+        return None
+    candidates = query_all(
+        "SELECT id FROM users WHERE role = ? AND active = 1 ORDER BY id",
+        (role,),
+    )
+    ids = [r["id"] for r in candidates]
+    if not ids:
+        return None
+    pending = {
+        r["assigned_approver_id"]: r["c"]
+        for r in query_all(
+            "SELECT assigned_approver_id, COUNT(*) AS c FROM ai_prospective_actions "
+            "WHERE status='awaiting_review' GROUP BY assigned_approver_id"
+        )
+    }
+    ids.sort(key=lambda uid: (pending.get(uid, 0), uid))
+    return ids[0]
+
+
+def create_prospective_action(
+    action_type: str,
+    submitted_by_user_id: int,
+    prompt: str,
+    file_path: str = "",
+    file_name: str = "",
+    source_queue_id: int | None = None,
+    region: str = "",
+) -> int | None:
+    """Drop a prospective action into the queue and route it to the
+    first-stage approver. Returns the row id, or None if the action_type
+    has no route (caller should fall back to a generic owner inbox)."""
+    route = query_one(
+        "SELECT * FROM ai_action_routes WHERE action_type = ?", (action_type,)
+    )
+    if not route:
+        return None
+    stage = "area_admin" if row_value(route, "area_admin_role") else "fin_admin"
+    role = row_value(route, "area_admin_role") or row_value(route, "fin_admin_role")
+    approver_id = _resolve_ai_approver(role, region)
+    # Fallback: owner if no one in the role pool (e.g. brand-new install).
+    if approver_id is None and OWNER_EMAILS:
+        placeholders = ",".join("?" for _ in OWNER_EMAILS)
+        owner_row = query_one(
+            f"SELECT id FROM users WHERE lower(email) IN ({placeholders}) ORDER BY id LIMIT 1",
+            tuple(OWNER_EMAILS),
+        )
+        if owner_row:
+            approver_id = owner_row["id"]
+    payload = {
+        "prompt": prompt,
+        "file_name": file_name,
+        "action_type": action_type,
+        "label": row_value(route, "label", action_type),
+        "target_table": row_value(route, "target_table", ""),
+    }
+    execute(
+        "INSERT INTO ai_prospective_actions "
+        "(action_type, submitted_by_user_id, assigned_approver_id, approver_stage, "
+        "region, payload_json, file_path, file_name, status, created_at, source_queue_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            action_type, submitted_by_user_id, approver_id, stage, region,
+            json.dumps(payload), file_path, file_name, "awaiting_review",
+            now_iso(), source_queue_id,
+        ),
+    )
+    row = query_one("SELECT last_insert_rowid() AS id")
+    return row["id"] if row else None
+
+
 @app.route("/ai/ask", methods=["POST"])
 @login_required
 def ai_advisor_submit():
-    """Submit a prompt to the AI advisor queue."""
+    """Submit a prompt to the AI advisor queue. If the prompt classifies
+    to a known action_type, ALSO drops a prospective-action row so it
+    appears in the responsible human's inbox."""
     user = current_user()
     prompt_text = request.form.get("ai_prompt", "").strip()
     portal = request.form.get("portal", "dashboard")
@@ -21947,10 +22052,35 @@ def ai_advisor_submit():
     execute(
         "INSERT INTO ai_advisor_queue (user_id, portal, instrument_id, prompt, file_path, file_name, context_snapshot, created_at) VALUES (?,?,?,?,?,?,?,?)",
         (user["id"], portal, instrument_id, prompt_text, file_path, file_name, ctx, now_iso()))
+    queue_row = query_one("SELECT last_insert_rowid() AS id")
+    advisor_queue_id = queue_row["id"] if queue_row else None
+    # Classify + drop a prospective action if the prompt matches a known route.
+    action_type = _classify_ai_prompt(prompt_text, file_name)
+    prospective_id = None
+    if action_type:
+        try:
+            prospective_id = create_prospective_action(
+                action_type=action_type,
+                submitted_by_user_id=user["id"],
+                prompt=prompt_text,
+                file_path=file_path,
+                file_name=file_name,
+                source_queue_id=advisor_queue_id,
+            )
+        except sqlite3.OperationalError:
+            # Table not yet created on this instance — fall back to advisor queue only.
+            prospective_id = None
     # Count queue position
     pos = query_one("SELECT COUNT(*) as cnt FROM ai_advisor_queue WHERE status='queued'")
     queue_count = pos["cnt"] if pos else 1
-    flash(f"Your question has been queued (position #{queue_count}). It will be processed in the next batch cycle.", "success")
+    if prospective_id:
+        flash(
+            f"AI extracted a {action_type.replace('_', ' ')} draft (#" + str(prospective_id) +
+            ") and routed it to the responsible admin for approval.",
+            "success",
+        )
+    else:
+        flash(f"Your question has been queued (position #{queue_count}). It will be processed in the next batch cycle.", "success")
     # Redirect back
     if portal == "instrument" and instrument_id:
         return redirect(url_for("instrument_detail", instrument_id=instrument_id))

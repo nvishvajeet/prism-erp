@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | request-detail-post-lightening | 2026-04-14 17:43 CEST | `app.py`, `CLAIMS.md` | `refactor: lighten request detail actions` |
 
 ## Stale-claim recovery
 

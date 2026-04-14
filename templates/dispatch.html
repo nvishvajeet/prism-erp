@@ -55,6 +55,40 @@
   </article>
   {% endif %}
 
+  {# ── Bottlenecks — who's holding up the oldest open work ── #}
+  {% if bottlenecks %}
+  <article class="tile dispatch-bottlenecks" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">
+      Bottlenecks <span class="badge status-attention" data-vis="{{ V }}">{{ bottlenecks|length }}</span>
+    </h2>
+    <p class="hint" data-vis="{{ V }}">Oldest open requests and the person currently gating each one. Tap to call or text if things have stalled.</p>
+    <ul class="dispatch-list" data-vis="{{ V }}">
+      {% for b in bottlenecks %}
+      <li class="dispatch-item" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('request_detail', request_id=b['id']) }}" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ b['title'] or b['request_no'] }}</strong>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">
+            {{ b['age_days'] }}d stuck · {{ request_display_status(b['status']) }} · {{ b['instrument_name'] }}
+          </span>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">
+            Waiting on {{ b['gate_role'] }}: <strong data-vis="{{ V }}">{{ b['blocker_name'] }}</strong>
+            {% if b['blocker_phone'] %} · {{ b['blocker_phone'] }}{% endif %}
+          </span>
+        </a>
+        {% if b['blocker_phone'] %}
+        <span class="dispatch-inline-approve" data-vis="{{ V }}">
+          <a href="tel:{{ b['blocker_phone'] }}" class="btn btn-primary btn-compact" title="Call {{ b['blocker_name'] }}" data-vis="{{ V }}">📞</a>
+          <a href="sms:{{ b['blocker_phone'] }}?body=Re%20{{ b['request_no'] or b['id'] }}%3A%20still%20pending%20on%20your%20side.%20Can%20you%20take%20a%20look%3F" class="btn btn-compact" title="Text {{ b['blocker_name'] }}" data-vis="{{ V }}">💬</a>
+        </span>
+        {% else %}
+        <span class="hint" style="font-size:0.7rem;opacity:0.6;" data-vis="{{ V }}">no phone on file</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
   {# ── Live requests ── #}
   {% if pending_requests %}
   <article class="tile" data-vis="{{ V }}">

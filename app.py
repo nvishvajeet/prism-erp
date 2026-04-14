@@ -8897,39 +8897,12 @@ def message_attachment(message_id: int, att_id: int):
     return send_file(str(file_path), as_attachment=True, download_name=att["filename"])
 
 
-@app.route("/finance")
-@login_required
-def finance_portal():
-    """v2.0.0-alpha.2 — Finance portal reads from the new peer aggregates.
+def _finance_rupee(value) -> str:
+    return "₹{:,.0f}".format(value or 0)
 
-    The v1.7.0 implementation read SUM(amount_due) / SUM(amount_paid) /
-    finance_status straight off sample_requests. alpha.1 added the peer
-    tables (invoices, payments, projects, grant_allocations) and
-    dual-wrote them via _backfill_domain_split(). alpha.2 (this step)
-    flips the read path: every number on /finance now comes from
-    invoices + payments, with finance_status derived at read time from
-    SUM(payments.amount) vs invoices.amount_due — no denormalized status
-    column that could drift.
 
-    The legacy columns on sample_requests are still being written, so
-    this tag is reversible: if a bug surfaces on the new path, revert
-    the route bodies and /finance returns to reading the old columns.
-    alpha.3 will stop writing the legacy columns; beta.1 drops them.
-
-    Row shape into the template is preserved — `outstanding` and
-    `recently_paid` rows still expose `amount_due`, `amount_paid`,
-    `finance_status`, `receipt_number`, so finance.html does not change.
-
-    Gated to finance_admin / super_admin / site_admin / owner.
-    """
-    user = current_user()
-    if not _user_can_view_finance(user):
-        abort(403)
-    roles = user_role_set(user)
-    can_edit = _user_can_edit_finance(user)
-    # KPIs — headline row. Computed over invoices joined to external
-    # sample_requests, with paid-sum derived from payments.
-    kpi_row = query_one(
+def _finance_portal_kpis() -> dict:
+    row = query_one(
         """
         SELECT
           COALESCE(SUM(inv.amount_due), 0) AS total_owed,
@@ -8946,20 +8919,21 @@ def finance_portal():
         WHERE sr.sample_origin = 'external'
         """
     )
-    kpis = dict(kpi_row) if kpi_row else {
+    kpis = dict(row) if row else {
         "total_owed": 0, "total_paid": 0, "pending_count": 0, "paid_count": 0,
     }
     kpis["outstanding"] = max(0, (kpis["total_owed"] or 0) - (kpis["total_paid"] or 0))
-    kpis["outstanding_fmt"] = "₹{:,.0f}".format(kpis["outstanding"])
-    kpis["total_owed_fmt"] = "₹{:,.0f}".format(kpis["total_owed"] or 0)
-    kpis["total_paid_fmt"] = "₹{:,.0f}".format(kpis["total_paid"] or 0)
+    kpis["outstanding_fmt"] = _finance_rupee(kpis["outstanding"])
+    kpis["total_owed_fmt"] = _finance_rupee(kpis["total_owed"])
+    kpis["total_paid_fmt"] = _finance_rupee(kpis["total_paid"])
     kpis["collection_rate"] = int(
         (kpis["total_paid"] or 0) * 100 / (kpis["total_owed"] or 1)
     ) if (kpis["total_owed"] or 0) > 0 else 0
+    return kpis
 
-    # By-instrument aggregation — subquery per metric keeps the join
-    # graph shallow and makes each column independently auditable.
-    by_instrument = query_all(
+
+def _finance_portal_by_instrument() -> list[dict]:
+    rows = query_all(
         """
         SELECT
           i.code, i.name,
@@ -8984,11 +8958,19 @@ def finance_portal():
         LIMIT 20
         """
     )
+    formatted = []
+    for row in rows:
+        payload = dict(row)
+        payload["owed_fmt"] = _finance_rupee(payload["owed"])
+        payload["paid_fmt"] = _finance_rupee(payload["paid"])
+        payload["outstanding_amt"] = (payload["owed"] or 0) - (payload["paid"] or 0)
+        payload["outstanding_fmt"] = _finance_rupee(payload["outstanding_amt"])
+        formatted.append(payload)
+    return formatted
 
-    # Outstanding list — invoices with SUM(payments) < amount_due.
-    # finance_status is derived on the fly; receipt_number taken from
-    # the most recent payment row on that invoice (NULL for pure-pending).
-    outstanding = query_all(
+
+def _finance_portal_outstanding() -> list[dict]:
+    rows = query_all(
         """
         SELECT
           sr.id, sr.request_no, sr.title, sr.created_at,
@@ -9017,9 +8999,18 @@ def finance_portal():
         LIMIT 30
         """
     )
+    formatted = []
+    for row in rows:
+        payload = dict(row)
+        payload["balance_fmt"] = _finance_rupee((payload["amount_due"] or 0) - (payload["amount_paid"] or 0))
+        payload["amount_due_fmt"] = _finance_rupee(payload["amount_due"])
+        payload["amount_paid_fmt"] = _finance_rupee(payload["amount_paid"])
+        formatted.append(payload)
+    return formatted
 
-    # Recently paid — invoices where SUM(payments) >= amount_due > 0.
-    recently_paid = query_all(
+
+def _finance_portal_recently_paid() -> list[dict]:
+    rows = query_all(
         """
         SELECT
           sr.id, sr.request_no, sr.title, sr.created_at,
@@ -9042,45 +9033,16 @@ def finance_portal():
         LIMIT 15
         """
     )
-    # ── Format amounts as ₹ strings for stat_blob display ──
-    def _fmt(v):
-        return "₹{:,.0f}".format(v or 0)
+    formatted = []
+    for row in rows:
+        payload = dict(row)
+        payload["amount_paid_fmt"] = _finance_rupee(payload["amount_paid"])
+        formatted.append(payload)
+    return formatted
 
-    kpis["outstanding_fmt"] = _fmt(kpis["outstanding"])
-    kpis["total_owed_fmt"] = _fmt(kpis["total_owed"])
-    kpis["total_paid_fmt"] = _fmt(kpis["total_paid"])
-    total_owed = kpis["total_owed"] or 0
-    collection_rate = "{:.0f}".format(
-        (kpis["total_paid"] or 0) * 100 / total_owed
-    ) if total_owed > 0 else "—"
 
-    # ── By-instrument: pre-format amounts ──
-    by_instrument_fmt = []
-    for row in by_instrument:
-        r = dict(row)
-        r["owed_fmt"] = _fmt(r["owed"])
-        r["paid_fmt"] = _fmt(r["paid"])
-        r["outstanding_amt"] = (r["owed"] or 0) - (r["paid"] or 0)
-        r["outstanding_fmt"] = _fmt(r["outstanding_amt"])
-        by_instrument_fmt.append(r)
-
-    # ── Outstanding / recently paid: pre-format amounts ──
-    outstanding_fmt = []
-    for row in outstanding:
-        r = dict(row)
-        r["balance_fmt"] = _fmt((r["amount_due"] or 0) - (r["amount_paid"] or 0))
-        r["amount_due_fmt"] = _fmt(r["amount_due"])
-        r["amount_paid_fmt"] = _fmt(r["amount_paid"])
-        outstanding_fmt.append(r)
-
-    recently_paid_fmt = []
-    for row in recently_paid:
-        r = dict(row)
-        r["amount_paid_fmt"] = _fmt(r["amount_paid"])
-        recently_paid_fmt.append(r)
-
-    # ── Grant summary for sidebar tile ──
-    grant_summary = query_one(
+def _finance_portal_grant_kpis() -> dict:
+    row = query_one(
         """
         SELECT
           COUNT(*) AS total_grants,
@@ -9090,22 +9052,64 @@ def finance_portal():
         FROM grants
         """
     )
-    grant_kpis = dict(grant_summary) if grant_summary else {
+    grant_kpis = dict(row) if row else {
         "total_grants": 0, "active_grants": 0, "total_budget": 0, "active_budget": 0,
     }
-    grant_kpis["active_budget_fmt"] = _fmt(grant_kpis["active_budget"])
+    grant_kpis["active_budget_fmt"] = _finance_rupee(grant_kpis["active_budget"])
+    return grant_kpis
 
-    # ── Cross-module KPIs: Fleet costs + Salary outflow ──
+
+def _finance_portal_cross_module_kpis() -> tuple[dict, dict]:
     vehicle_spend = query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs") or {"total": 0}
     salary_outflow = query_one("SELECT COALESCE(SUM(net_pay), 0) AS total FROM salary_payments WHERE status = 'paid'") or {"total": 0}
+    return vehicle_spend, salary_outflow
+
+
+@app.route("/finance")
+@login_required
+def finance_portal():
+    """v2.0.0-alpha.2 — Finance portal reads from the new peer aggregates.
+
+    The v1.7.0 implementation read SUM(amount_due) / SUM(amount_paid) /
+    finance_status straight off sample_requests. alpha.1 added the peer
+    tables (invoices, payments, projects, grant_allocations) and
+    dual-wrote them via _backfill_domain_split(). alpha.2 (this step)
+    flips the read path: every number on /finance now comes from
+    invoices + payments, with finance_status derived at read time from
+    SUM(payments.amount) vs invoices.amount_due — no denormalized status
+    column that could drift.
+
+    The legacy columns on sample_requests are still being written, so
+    this tag is reversible: if a bug surfaces on the new path, revert
+    the route bodies and /finance returns to reading the old columns.
+    alpha.3 will stop writing the legacy columns; beta.1 drops them.
+
+    Row shape into the template is preserved — `outstanding` and
+    `recently_paid` rows still expose `amount_due`, `amount_paid`,
+    `finance_status`, `receipt_number`, so finance.html does not change.
+
+    Gated to finance_admin / super_admin / site_admin / owner.
+    """
+    user = current_user()
+    if not _user_can_view_finance(user):
+        abort(403)
+    kpis = _finance_portal_kpis()
+    collection_rate = "{:.0f}".format(
+        (kpis["total_paid"] or 0) * 100 / (kpis["total_owed"] or 0)
+    ) if (kpis["total_owed"] or 0) > 0 else "—"
+    by_instrument = _finance_portal_by_instrument()
+    outstanding = _finance_portal_outstanding()
+    recently_paid = _finance_portal_recently_paid()
+    grant_kpis = _finance_portal_grant_kpis()
+    vehicle_spend, salary_outflow = _finance_portal_cross_module_kpis()
 
     return render_template(
         "finance.html",
         kpis=kpis,
         collection_rate=collection_rate,
-        by_instrument=by_instrument_fmt,
-        outstanding=outstanding_fmt,
-        recently_paid=recently_paid_fmt,
+        by_instrument=by_instrument,
+        outstanding=outstanding,
+        recently_paid=recently_paid,
         grant_kpis=grant_kpis,
         can_edit_finance=_user_can_edit_finance(user),
         vehicle_spend=vehicle_spend,

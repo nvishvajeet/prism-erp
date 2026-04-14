@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | finance-portal-lightening | 2026-04-14 05:03 CEST | `app.py`, `CLAIMS.md` | `refactor: lighten finance portal read model` |
 
 ## Stale-claim recovery
 

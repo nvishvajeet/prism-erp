@@ -40,7 +40,7 @@
         </div>
       </form>
       <p id="feedbackStatus" class="feedback-status hint" data-vis="{{ V }}" aria-live="polite"></p>
-      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · <kbd>M</kbd> mic · <kbd>C</kbd> capture · <kbd>Esc</kbd> close.</p>
+      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · buttons for mic/capture · <kbd>Esc</kbd> close.</p>
     </div>
   </div>
   <script>
@@ -314,10 +314,6 @@
       if (!hotkeysActive(ev)) return;
       if (ev.key === 'f' || ev.key === 'F') {
         if (panel.hidden) { openPanel(); ev.preventDefault(); }
-      } else if (ev.key === 'm' || ev.key === 'M') {
-        if (!panel.hidden && mic) { mic.click(); ev.preventDefault(); }
-      } else if (ev.key === 'c' || ev.key === 'C') {
-        if (!panel.hidden) { captureElementUnderCursor(); ev.preventDefault(); }
       }
     });
 

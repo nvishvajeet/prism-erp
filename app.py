@@ -22023,6 +22023,71 @@ def dispatch_console():
         (user["id"],),
     )
 
+    # ── Bottleneck resolution ─────────────────────────────────────────
+    # Oldest open requests, with the current gating person resolved.
+    # Only shown to ops roles — a requester calling the instrument
+    # admin from their own dispatch would be noise, not signal.
+    bottlenecks = []
+    if is_op:
+        stale_reqs = query_all(
+            """SELECT sr.id, sr.request_no, sr.title, sr.status, sr.created_at,
+                      sr.instrument_id, sr.requester_id,
+                      CAST((julianday('now') - julianday(sr.created_at)) AS INTEGER) AS age_days,
+                      i.name AS instrument_name,
+                      req.name AS requester_name,
+                      req.phone AS requester_phone
+               FROM sample_requests sr
+               LEFT JOIN instruments i ON i.id = sr.instrument_id
+               LEFT JOIN users req ON req.id = sr.requester_id
+               WHERE sr.status NOT IN ('completed', 'cancelled', 'rejected', 'draft')
+                 AND julianday('now') - julianday(sr.created_at) > 2
+               ORDER BY sr.created_at ASC LIMIT 5"""
+        )
+        for r in stale_reqs:
+            status = r["status"]
+            if status == "awaiting_sample_submission":
+                gate = {"role": "requester", "name": r["requester_name"], "phone": r["requester_phone"] or ""}
+            elif status in ("sample_submitted", "sample_received", "scheduled"):
+                op_row = query_one(
+                    """SELECT u.name, COALESCE(u.phone, '') AS phone
+                       FROM instrument_operators io JOIN users u ON u.id = io.user_id
+                       WHERE io.instrument_id = ? LIMIT 1""",
+                    (r["instrument_id"],),
+                ) or query_one(
+                    """SELECT u.name, COALESCE(u.phone, '') AS phone
+                       FROM instrument_admins ia JOIN users u ON u.id = ia.user_id
+                       WHERE ia.instrument_id = ? LIMIT 1""",
+                    (r["instrument_id"],),
+                )
+                gate = {
+                    "role": "operator",
+                    "name": (op_row["name"] if op_row else "unassigned"),
+                    "phone": (op_row["phone"] if op_row else ""),
+                }
+            else:
+                adm_row = query_one(
+                    """SELECT u.name, COALESCE(u.phone, '') AS phone
+                       FROM instrument_admins ia JOIN users u ON u.id = ia.user_id
+                       WHERE ia.instrument_id = ? LIMIT 1""",
+                    (r["instrument_id"],),
+                )
+                gate = {
+                    "role": "instrument admin",
+                    "name": (adm_row["name"] if adm_row else "unassigned"),
+                    "phone": (adm_row["phone"] if adm_row else ""),
+                }
+            bottlenecks.append({
+                "id": r["id"],
+                "request_no": r["request_no"],
+                "title": r["title"],
+                "status": r["status"],
+                "age_days": r["age_days"],
+                "instrument_name": r["instrument_name"] or "—",
+                "gate_role": gate["role"],
+                "blocker_name": gate["name"] or "unassigned",
+                "blocker_phone": gate["phone"],
+            })
+
     return render_template(
         "dispatch.html",
         ai_drafts=ai_drafts,
@@ -22030,6 +22095,7 @@ def dispatch_console():
         pending_receipts=pending_receipts,
         my_todos=my_todos,
         recent_ai=recent_ai,
+        bottlenecks=bottlenecks,
         is_op=is_op,
         is_fin=is_fin,
     )
@@ -23486,9 +23552,9 @@ def check_command_queue():
         return count
 
 
-QUEUE_REVIEW_LOG = BASE_DIR / "logs" / "queue_review_latest.md"
-QUEUE_REVIEW_HISTORY_LOG = BASE_DIR / "logs" / "queue_review_history.md"
-SERVER_LIVE_LOG = BASE_DIR / "logs" / "server-live.log"
+QUEUE_REVIEW_LOG = _ACTIVE_DATA_DIR / "logs" / "queue_review_latest.md"
+QUEUE_REVIEW_HISTORY_LOG = _ACTIVE_DATA_DIR / "logs" / "queue_review_history.md"
+SERVER_LIVE_LOG = _ACTIVE_DATA_DIR / "logs" / "server-live.log"
 
 
 def _feedback_sections(limit: int = 8) -> list[dict[str, str]]:
@@ -23552,15 +23618,32 @@ def _queue_review_keyword_counts(entries: list[dict[str, str]]) -> list[tuple[st
     return sorted(counts.items(), key=lambda item: item[1], reverse=True)
 
 
-def _recent_server_errors(limit: int = 12) -> list[str]:
+def _recent_server_errors(limit: int = 12, hours: int = 6) -> list[str]:
+    import re
+    from datetime import datetime, timedelta, timezone
+
     if not SERVER_LIVE_LOG.exists():
         return []
     lines = SERVER_LIVE_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
-    interesting = [
-        line.strip()
-        for line in lines
-        if (" 500 " in line or "Traceback" in line or "ERROR in app" in line)
-    ]
+    now_utc = datetime.now(timezone.utc)
+    cutoff = now_utc - timedelta(hours=hours)
+    interesting = []
+    for line in lines:
+        if " 500 " not in line and "Traceback" not in line and "ERROR in app" not in line:
+            continue
+        ts_match = re.search(r"\[(\d{2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+\-]\d{4})\]", line)
+        if ts_match:
+            day, mon_txt, year, hour, minute, second, tz_txt = ts_match.groups()
+            try:
+                dt = datetime.strptime(
+                    f"{day} {mon_txt} {year} {hour}:{minute}:{second} {tz_txt}",
+                    "%d %b %Y %H:%M:%S %z",
+                ).astimezone(timezone.utc)
+            except ValueError:
+                dt = None
+            if dt and dt < cutoff:
+                continue
+        interesting.append(line.strip())
     return interesting[-limit:]
 
 
@@ -26388,15 +26471,13 @@ def _handle_quick_entry_submit(user):
         "INSERT INTO command_queue (user_id, raw_text, source, created_at) VALUES (?, ?, ?, ?)",
         (user["id"], raw_text, source, now_iso()),
     )
+    import threading
+    threading.Thread(target=check_command_queue, daemon=True).start()
     pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
-    if pending and pending["c"] >= 25:
-        import threading
-        threading.Thread(target=_process_command_batch, daemon=True).start()
-        flash("Request submitted. Processing now — check back in a few minutes.", "success")
-        return redirect(url_for("quick_entry"))
+    queued_now = pending["c"] if pending else 0
     flash(
-        "Request submitted and logged. AI processes at 8 AM, 2 PM, and 10 PM — check back by %s."
-        % _next_quick_entry_window_label(),
+        "Request submitted. Processing has started now%s."
+        % (f" ({queued_now} still queued)" if queued_now else ""),
         "success",
     )
     return redirect(url_for("quick_entry"))

@@ -77,7 +77,25 @@
     function closePanel() {
       panel.hidden = true;
       widget.classList.add('feedback-widget--compact');
+      // Dr. Bharat 2026-04-14 — voice kept listening in the background
+      // after Esc/× because closePanel didn't signal recognition.
+      // Hard-stop so the browser's mic indicator goes away.
+      stopListening('panel closed');
     }
+    // Defined up here because closePanel() is wired before the
+    // SpeechRecognition block runs. stopListening is a no-op until
+    // the recognition instance exists.
+    function stopListening(reason) {
+      if (typeof recognition === 'undefined' || !recognition) return;
+      listening = false;
+      try { recognition.stop(); } catch(e) {}
+      showVoiceBadge(false);
+      if (mic) { mic.textContent = '🎤'; mic.title = 'Start voice input (M)'; }
+      if (reason && typeof setStatus === 'function') setStatus('', '');
+    }
+    // Referenced before declaration at module scope — keep forward-declared
+    // with `var` so the TDZ doesn't bite the closePanel call above.
+    var recognition;
     toggle.addEventListener('click', function(){ panel.hidden ? openPanel() : closePanel(); });
     if (close) close.addEventListener('click', closePanel);
     if (mini) mini.addEventListener('click', closePanel);
@@ -207,13 +225,26 @@
         }
       };
       r.onerror = function(ev){
-        listening = false;
-        showVoiceBadge(false);
-        if (mic) {
-          mic.textContent = '🎤';
-          mic.title = 'Voice error: ' + (ev.error || 'unknown') + '. Click to retry.';
+        // Chrome's SpeechRecognition fires onerror for transient blips
+        // that shouldn't kill the session: 'no-speech' after a silent
+        // stretch, 'aborted' on every benign restart, 'network' when
+        // Google's STT backend hiccups, 'audio-capture' briefly on some
+        // hardware. Treat those as soft and let onend auto-restart via
+        // the `listening` flag. Only hard-stop on permission-denied.
+        var err = ev && ev.error;
+        var fatal = (err === 'not-allowed' || err === 'service-not-allowed');
+        if (fatal) {
+          listening = false;
+          showVoiceBadge(false);
+          if (mic) {
+            mic.textContent = '🎤';
+            mic.title = 'Mic permission blocked. Check site settings.';
+          }
+          setStatus('Voice input blocked — allow mic in the site settings and retry.', 'warn');
+        } else if (mic) {
+          // Leave listening=true so onend restarts; just surface a hint.
+          mic.title = 'Listening (recovered from ' + (err || 'blip') + ')';
         }
-        setStatus('Voice input stopped. You can tap the mic to retry.', 'warn');
       };
       r.onend = function(){
         // Auto-restart while the panel is open + user still wants voice.

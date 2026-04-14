@@ -20999,7 +20999,7 @@ def _ai_dashboard_advice(user) -> list:
     """Personalized AI dashboard recommendations."""
     db = get_db()
     roles = user_role_set(user)
-    ctx = {"name": user["name"], "role": user.get("role", "")}
+    ctx = {"name": user["name"], "role": user["role"] or ""}
     try:
         ctx["pending_requests"] = db.execute("SELECT COUNT(*) FROM sample_requests WHERE requester_id=? AND status NOT IN ('completed','cancelled','rejected')", (user["id"],)).fetchone()[0]
     except Exception:
@@ -21056,7 +21056,7 @@ Return ONLY JSON: [{{"text":"...", "href":"/path", "priority":"high|medium|low"}
 def _ai_advisor_context(user, portal: str, instrument_id: int | None = None) -> str:
     """Build a context snapshot for the AI advisor based on portal and user."""
     db = get_db()
-    ctx = {"user": user["name"], "role": user.get("role", ""), "portal": portal}
+    ctx = {"user": user["name"], "role": user["role"] or "", "portal": portal}
     try:
         ctx["pending_requests"] = db.execute(
             "SELECT COUNT(*) FROM sample_requests WHERE requester_id=? AND status NOT IN ('completed','cancelled','rejected')",
@@ -21259,7 +21259,7 @@ def dispatch_console():
 def ai_advisor_trigger_batch():
     """Manually trigger AI advisor batch processing (owner/super_admin only)."""
     user = current_user()
-    if not (is_owner(user) or user.get("role") == "super_admin"):
+    if not (is_owner(user) or user["role"] == "super_admin"):
         flash("Only owners can trigger batch processing.", "warning")
         return redirect(url_for("index"))
     count = ai_advisor_batch_process(f"manual-{now_iso()}")
@@ -22659,7 +22659,7 @@ def qr_attendance_scan():
 def qr_my_code():
     """Show the current user's QR code for attendance scanning."""
     user = current_user()
-    return render_template("qr_my_code.html", member_code=user.get("member_code", ""))
+    return render_template("qr_my_code.html", member_code=user["member_code"] or "")
 
 
 @app.route("/attendance/qr/generate-svg/<code>")

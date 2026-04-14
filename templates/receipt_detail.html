@@ -16,11 +16,11 @@
     {% if receipt.receipt_image_path %}
       {% set ext = receipt.receipt_image_path.rsplit('.', 1)[-1]|lower %}
       {% if ext in ('jpg','jpeg','png','gif','webp') %}
-      <img src="/{{ receipt.receipt_image_path }}" alt="Receipt" class="receipt-img" data-vis="{{ V }}">
+      <img src="{{ url_for('receipt_file', receipt_id=receipt.id) }}" alt="Receipt" class="receipt-img" data-vis="{{ V }}">
       {% elif ext == 'pdf' %}
-      <a class="btn" href="/{{ receipt.receipt_image_path }}" target="_blank" data-vis="{{ V }}">View PDF →</a>
+      <a class="btn" href="{{ url_for('receipt_file', receipt_id=receipt.id) }}" target="_blank" data-vis="{{ V }}">View PDF →</a>
       {% else %}
-      <a class="btn" href="/{{ receipt.receipt_image_path }}" data-vis="{{ V }}">Download attachment</a>
+      <a class="btn" href="{{ url_for('receipt_file', receipt_id=receipt.id) }}" data-vis="{{ V }}">Download attachment</a>
       {% endif %}
     {% else %}
     <p class="hint" data-vis="{{ V }}">No receipt image attached.</p>

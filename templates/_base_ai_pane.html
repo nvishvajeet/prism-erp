@@ -39,6 +39,8 @@
         <label style="cursor:pointer;padding:0.4rem;font-size:1.1rem;color:var(--muted);" title="Attach file" data-vis="{{ V }}">
           📎<input type="file" id="aiPaneFile" style="display:none;" data-vis="{{ V }}">
         </label>
+        <button type="button" id="aiPaneMic" title="Start voice input" aria-label="Toggle microphone"
+                style="background:none;border:none;cursor:pointer;padding:0.4rem;font-size:1.05rem;color:var(--muted);" data-vis="{{ V }}">🎤</button>
         <textarea id="aiPaneInput" rows="2" placeholder="Make any request or tell me anything..."
                   style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
                   data-vis="{{ V }}"></textarea>
@@ -57,6 +59,7 @@
     var chat = document.getElementById('aiPaneChat');
     var input = document.getElementById('aiPaneInput');
     var sendBtn = document.getElementById('aiPaneSend');
+    var micBtn = document.getElementById('aiPaneMic');
     var hoverPrompt = document.getElementById('aiPaneHoverPrompt');
     var fileInput = document.getElementById('aiPaneFile');
     var dropZone = document.getElementById('aiPaneDropZone');
@@ -65,6 +68,9 @@
     var pendingFile = null;
     var hoverContext = '';
     var lastHoverContext = '';
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var aiListening = false;
+    var aiRecognition = null;
     if(!toggle || !pane) return;
 
     function cleanText(value){
@@ -187,6 +193,51 @@
       return div;
     }
 
+    function buildAiRecognition() {
+      if (!SpeechRecognition) return null;
+      var r = new SpeechRecognition();
+      r.continuous = true;
+      r.interimResults = true;
+      r.lang = navigator.language || 'en-US';
+      var committedLength = input ? input.value.length : 0;
+      var interim = '';
+      r.onresult = function(e){
+        var finalText = '';
+        interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          var chunk = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalText += chunk;
+          else interim += chunk;
+        }
+        if (input) {
+          input.value = input.value.substring(0, committedLength) + finalText + interim;
+          if (finalText) committedLength = input.value.length - interim.length;
+        }
+      };
+      r.onerror = function(){
+        aiListening = false;
+        if (micBtn) {
+          micBtn.textContent = '🎤';
+          micBtn.title = 'Start voice input';
+        }
+      };
+      r.onend = function(){
+        if (aiListening) {
+          try { r.start(); } catch(e) {
+            aiListening = false;
+            if (micBtn) {
+              micBtn.textContent = '🎤';
+              micBtn.title = 'Start voice input';
+            }
+          }
+        } else if (micBtn) {
+          micBtn.textContent = '🎤';
+          micBtn.title = 'Start voice input';
+        }
+      };
+      return r;
+    }
+
     function send(){
       var msg = input.value.trim();
       if(!msg && !pendingFile) return;
@@ -243,6 +294,35 @@
     input.addEventListener('keydown', function(e){
       if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
     });
+
+    if (SpeechRecognition && micBtn) {
+      micBtn.addEventListener('click', function(){
+        if (!aiRecognition) aiRecognition = buildAiRecognition();
+        if (aiListening) {
+          aiListening = false;
+          try { aiRecognition.stop(); } catch(e) {}
+          micBtn.textContent = '🎤';
+          micBtn.title = 'Start voice input';
+          return;
+        }
+        try {
+          aiRecognition.start();
+          aiListening = true;
+          micBtn.textContent = '🔴';
+          micBtn.title = 'Listening… click to stop';
+          if (input) input.focus();
+        } catch(e) {
+          try { aiRecognition.stop(); } catch(_) {}
+          aiListening = false;
+          micBtn.textContent = '🎤';
+          micBtn.title = 'Start voice input';
+        }
+      });
+    } else if (micBtn) {
+      micBtn.disabled = true;
+      micBtn.style.opacity = '0.4';
+      micBtn.title = 'Voice input requires Chrome';
+    }
 
     // Load context summary + history on first open
     var loaded = false;

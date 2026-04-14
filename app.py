@@ -497,6 +497,11 @@ def portal_text(default_text: str, *, lab: str, portal_slug: str | None = None) 
     return lab if lab_portal_active(portal_slug) else default_text
 
 
+def portal_route_enabled(module_name: str) -> bool:
+    """Route-level module gate that respects the active portal boundary."""
+    return module_visible_in_active_portal(module_name)
+
+
 def portal_role_display_name(role: str | None, portal_slug: str | None = None) -> str:
     role_key = role or ""
     if lab_portal_active(portal_slug):
@@ -2533,6 +2538,12 @@ def can_respond_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bo
 def can_view_user_profile(viewer: sqlite3.Row, target_user: sqlite3.Row) -> bool:
     if viewer["id"] == target_user["id"]:
         return True
+    # Owner accounts are invisible to non-owners. The owner role sits
+    # outside the normal visibility model — they can see everyone, but
+    # other admins (super_admin / site_admin) should not see the owner
+    # as a listed profile, a clickable name, or a reachable /users/<id>.
+    if is_owner(target_user) and not is_owner(viewer):
+        return False
     if user_access_profile(viewer)["can_view_user_profiles"] and user_access_profile(viewer)["can_view_all_requests"]:
         return True
     instrument_ids = assigned_instrument_ids(viewer)
@@ -3708,6 +3719,24 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
     },
 }
 
+FULL_REQUEST_ACCESS_ROLES = {"super_admin", "site_admin", "professor_approver"}
+LAB_OPERATIONS_ROLES = {"instrument_admin", "operator"}
+INSTRUMENT_SCOPE_TABLES = (
+    "instrument_admins",
+    "instrument_operators",
+    "instrument_faculty_admins",
+    "instrument_requesters",
+)
+INSTRUMENT_MANAGEMENT_TABLES = (
+    "instrument_admins",
+    "instrument_operators",
+    "instrument_faculty_admins",
+)
+REQUEST_ASSIGNMENT_SOURCE_TABLES = (
+    "instrument_operators",
+    "instrument_admins",
+)
+
 
 def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
     if user is None:
@@ -3896,7 +3925,7 @@ def instrument_access_required(level: str = "view"):
 def can_manage_instrument(user_id: int, instrument_id: int, role: str) -> bool:
     if role in {"super_admin", "site_admin"}:
         return True
-    for table in ("instrument_admins", "instrument_operators", "instrument_faculty_admins"):
+    for table in INSTRUMENT_MANAGEMENT_TABLES:
         row = query_one(
             f"SELECT 1 FROM {table} WHERE user_id = ? AND instrument_id = ?",
             (user_id, instrument_id),
@@ -3939,7 +3968,7 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
         return cache[user_id]
 
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
+    if user["role"] in FULL_REQUEST_ACCESS_ROLES:
         rows = query_all("SELECT id FROM instruments ORDER BY id")
         result = [row["id"] for row in rows]
     else:
@@ -4001,7 +4030,7 @@ def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) ->
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     role = user["role"]
     status_clause = "WHERE status = 'active'" if active_only else ""
-    if role in {"super_admin", "site_admin", "professor_approver"}:
+    if role in FULL_REQUEST_ACCESS_ROLES:
         result = query_all(
             f"SELECT id, name, code, status FROM instruments {status_clause} ORDER BY name"
         )
@@ -4026,7 +4055,7 @@ def has_instrument_area_access(user: sqlite3.Row | None) -> bool:
 
 
 def sync_instrument_assignments(table: str, instrument_id: int, user_ids: list[int]) -> None:
-    allowed = {"instrument_admins", "instrument_operators", "instrument_faculty_admins", "instrument_requesters"}
+    allowed = set(INSTRUMENT_SCOPE_TABLES)
     if table not in allowed:
         raise ValueError("Unsupported assignment table")
     db = get_db()
@@ -4051,7 +4080,7 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
     clauses: list[str] = []
     params: list = []
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
+    if user["role"] in FULL_REQUEST_ACCESS_ROLES:
         result = (tuple(clauses), tuple(params))
         if cache is not None and cache_key is not None:
             cache[cache_key] = result
@@ -17459,7 +17488,7 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
     return True
 
 
-def _admin_users_list_payload() -> dict[str, object]:
+def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, object]:
     # 5000-user scaling fix: admins + owners are always small sets
     # (< ~100 combined) so an unbounded query is fine. Members
     # (canonical role = requester) can grow to thousands — cap at
@@ -17486,6 +17515,11 @@ def _admin_users_list_payload() -> dict[str, object]:
         )
     owners = [row for row in admin_rows if row["email"].strip().lower() in OWNER_EMAILS]
     admins = [row for row in admin_rows if row["email"].strip().lower() not in OWNER_EMAILS]
+    # Owner rows are only visible to other owners. Site / super admins
+    # still see every other admin, but never the owner(s) — even in the
+    # admin users directory.
+    if not is_owner(viewer):
+        owners = []
     member_where = "WHERE role = 'requester'"
     member_params: list = []
     if member_q:
@@ -17519,7 +17553,7 @@ def admin_users():
     permissions = _admin_users_permissions(user)
     if _admin_users_handle_post(user, permissions):
         return redirect(url_for("admin_users"))
-    list_payload = _admin_users_list_payload()
+    list_payload = _admin_users_list_payload(user)
     return render_template(
         "users.html",
         members=list_payload["members"],
@@ -17732,7 +17766,7 @@ def catalyst_clear():
 def vehicles_list():
     """List all vehicles with status, assigned driver, last fuel date."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     vehicles = query_all("""
         SELECT v.*,
@@ -17765,7 +17799,7 @@ def vehicles_list():
 def vehicle_create():
     """Add a new vehicle (admin only)."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
         abort(403)
@@ -17803,7 +17837,7 @@ def vehicle_create():
 def vehicle_detail(vehicle_id: int):
     """Vehicle detail: info + log history + fuel/maintenance totals."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
@@ -17843,7 +17877,7 @@ def vehicle_detail(vehicle_id: int):
 def vehicle_add_log(vehicle_id: int):
     """Add a fuel/maintenance/expense log entry."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     vehicle = query_one("SELECT id FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
@@ -17885,7 +17919,7 @@ def vehicle_add_log(vehicle_id: int):
 def vehicle_edit(vehicle_id: int):
     """Update vehicle details (admin only)."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
         abort(403)
@@ -17918,7 +17952,7 @@ def vehicle_edit(vehicle_id: int):
 def vehicle_archive(vehicle_id: int):
     """Toggle vehicle status between active and archived."""
     user = current_user()
-    if not module_enabled("vehicles"):
+    if not portal_route_enabled("vehicles"):
         abort(404)
     if not (is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})):
         abort(403)
@@ -17973,7 +18007,7 @@ def _attendance_days_worked(user_id: int, year: int, month: int) -> float:
 def personnel_list():
     """Staff directory with salary info (finance_admin/owner only see salary)."""
     user = current_user()
-    if not module_enabled("personnel"):
+    if not portal_route_enabled("personnel"):
         abort(404)
     if not _personnel_access(user):
         abort(403)
@@ -18001,7 +18035,7 @@ def personnel_list():
 def personnel_detail(user_id: int):
     """Employee detail: salary config, attendance summary, payment history."""
     user = current_user()
-    if not module_enabled("personnel"):
+    if not portal_route_enabled("personnel"):
         abort(404)
     if not _personnel_access(user):
         abort(403)
@@ -18035,7 +18069,7 @@ def personnel_detail(user_id: int):
 def personnel_salary_config(user_id: int):
     """Set or update salary configuration for an employee."""
     user = current_user()
-    if not module_enabled("personnel"):
+    if not portal_route_enabled("personnel"):
         abort(404)
     if not _personnel_can_edit(user):
         abort(403)
@@ -18078,7 +18112,7 @@ def personnel_salary_config(user_id: int):
 def payroll_view():
     """Monthly payroll view: all staff, days worked, calculated pay."""
     user = current_user()
-    if not module_enabled("personnel"):
+    if not portal_route_enabled("personnel"):
         abort(404)
     if not _personnel_access(user):
         abort(403)
@@ -18132,7 +18166,7 @@ def payroll_view():
 def payroll_pay():
     """Mark an employee as paid for a month."""
     user = current_user()
-    if not module_enabled("personnel"):
+    if not portal_route_enabled("personnel"):
         abort(404)
     if not _personnel_can_edit(user):
         abort(403)
@@ -18227,7 +18261,7 @@ def _user_can_manage_payments(user) -> bool:
 @app.route("/vendors")
 @login_required
 def vendor_list():
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18247,7 +18281,7 @@ def vendor_list():
 @app.route("/vendors/new", methods=["GET", "POST"])
 @login_required
 def vendor_new():
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18284,7 +18318,7 @@ def vendor_new():
 @app.route("/vendors/<int:vendor_id>")
 @login_required
 def vendor_detail(vendor_id):
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18308,7 +18342,7 @@ def vendor_detail(vendor_id):
 @login_required
 def vendor_payments_list():
     """Main payment list — shows all POs grouped by status."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18364,7 +18398,7 @@ def vendor_payments_list():
 @login_required
 def vendor_payment_new():
     """Create a new purchase order."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18446,7 +18480,7 @@ def vendor_payment_new():
 @login_required
 def vendor_payment_detail(po_id):
     """View PO detail with full timeline."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18483,7 +18517,7 @@ def vendor_payment_detail(po_id):
 @login_required
 def vendor_payment_approve(po_id):
     """Owner approves or rejects a PO."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not is_owner(user):
@@ -18537,7 +18571,7 @@ def vendor_payment_approve_queue():
     POs below that amount are grouped into a 'small expenses' summary
     section and can be batch-approved with one tap. POs above the
     threshold are shown individually for detailed review."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not is_owner(user):
@@ -18580,7 +18614,7 @@ def vendor_payment_approve_queue():
 @login_required
 def vendor_payment_batch_approve():
     """Batch approve multiple POs at once. Owner only."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not is_owner(user):
@@ -18622,7 +18656,7 @@ def vendor_payment_batch_approve():
 @login_required
 def vendor_payment_print(po_id):
     """Printable audit record for a purchase order. Designed for filing."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18655,7 +18689,7 @@ def vendor_payment_print(po_id):
 @login_required
 def vendor_payment_mark_paid(po_id):
     """Mark an approved PO as paid."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18681,7 +18715,7 @@ def vendor_payment_mark_paid(po_id):
 @login_required
 def vendor_payment_upload_receipt(po_id):
     """Upload payment receipt for a paid PO."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18713,7 +18747,7 @@ def vendor_payment_upload_receipt(po_id):
 @login_required
 def vendor_payment_reports():
     """Vendor payment reports dashboard."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18934,7 +18968,7 @@ def _po_filing_info(po):
 def vendor_payment_filing():
     """Filing cabinet overview — shows folder structure, what needs
     printing, and which folders are paper-needed vs digital-only."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -18974,7 +19008,7 @@ def vendor_payment_filing():
 @login_required
 def vendor_payment_print_batch():
     """Bulk print: multi-page A4, one PO per page, for filing."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19058,7 +19092,7 @@ def _user_is_ca_auditor(user) -> bool:
 @login_required
 def ca_audit_dashboard():
     """CA audit dashboard — overview of audit status across all transactions."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19185,7 +19219,7 @@ def ca_audit_dashboard():
 @login_required
 def ca_audit_batch():
     """Batch audit multiple transactions. CA team approves in bulk."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19223,7 +19257,7 @@ def ca_audit_batch():
 @login_required
 def ca_audit_single(po_id):
     """Audit or flag a single transaction."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19257,7 +19291,7 @@ def ca_audit_single(po_id):
 @login_required
 def ca_audit_upload_statement():
     """Upload a bank statement (CSV) for auto-matching."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19381,7 +19415,7 @@ def _auto_match_statement(stmt_id: int) -> int:
 @login_required
 def ca_audit_signoff():
     """CA signs off audit for a period/company. Creates printable record."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19432,7 +19466,7 @@ def ca_audit_signoff():
 @login_required
 def ca_audit_print_signoff(signoff_id):
     """Print audit sign-off certificate and transaction list."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19472,7 +19506,7 @@ def ca_audit_print_signoff(signoff_id):
 @login_required
 def ca_audit_statement_review(stmt_id):
     """Review bank statement entries and their matches."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19502,7 +19536,7 @@ def ca_audit_statement_review(stmt_id):
 @login_required
 def ca_audit_match_entry(entry_id):
     """Manually match or unmatch a bank statement entry to a PO."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_is_ca_auditor(user):
@@ -19533,7 +19567,7 @@ def ca_audit_match_entry(entry_id):
 @login_required
 def receipt_submit():
     """Staff submits a receipt/bill to the finance team."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     companies = _get_companies()
@@ -19582,7 +19616,7 @@ def receipt_submit():
 @login_required
 def receipt_inbox():
     """Finance team reviews submitted receipts."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19616,7 +19650,7 @@ def receipt_inbox():
 @login_required
 def receipt_review(sub_id):
     """Finance team approves/rejects a receipt submission."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19648,7 +19682,7 @@ def receipt_review(sub_id):
 def filing_retention():
     """Retention management — shows which FYs are eligible for destruction,
     maps to physical folder codes, generates destruction schedule."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19744,7 +19778,7 @@ def filing_retention():
 @login_required
 def filing_register_folder():
     """Register a physical folder — marks it as existing in the cabinet."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19773,7 +19807,7 @@ def filing_register_folder():
 def filing_archive_folder(pf_id):
     """Archive (hide) a physical folder — moves to 'archived' status.
     Records remain in DB but hidden from active views."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -19807,7 +19841,7 @@ def filing_archive_folder(pf_id):
 def filing_destroy_plan():
     """Printable destruction plan — lists all folders eligible for destruction
     with physical location, contents summary, and signature blocks."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -20152,7 +20186,7 @@ def tally_export():
     """Export transactions as Tally-compatible XML or CSV for import.
     Supports multiple voucher types: Payment, Salary Journal,
     Inter-company Journal, GST Purchase."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -20182,7 +20216,7 @@ def tally_export():
 @login_required
 def tally_export_page():
     """Tally export configuration page."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -20200,7 +20234,7 @@ def tally_export_page():
 @login_required
 def tally_import():
     """Import Tally day book (CSV) for reconciliation against CATALYST data."""
-    if not module_enabled("vendor_payments"):
+    if not portal_route_enabled("vendor_payments"):
         abort(404)
     user = current_user()
     if not _user_can_manage_payments(user):
@@ -21185,7 +21219,7 @@ def _start_compute_queue_manager():
 def compute_list():
     """Compute dashboard — AI prompts + HPC jobs."""
     user = current_user()
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     status_filter = request.args.get("status", "all")
@@ -21224,7 +21258,7 @@ def compute_list():
 def compute_new():
     """Submit a new compute job (AI prompt or HPC)."""
     user = current_user()
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     software_list = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY category, name")
     if request.method == "POST":
@@ -21313,7 +21347,7 @@ def compute_new():
 def compute_detail(job_id: int):
     """Job detail — metadata, files, downloads."""
     user = current_user()
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     job = query_one("""
         SELECT j.*, u.name AS user_name, s.name AS software_name, s.icon AS software_icon, s.tutorial_md
@@ -21415,7 +21449,7 @@ def compute_cancel(job_id: int):
 def compute_rerun(job_id: int):
     """Rerun a job — creates a new job with same params."""
     user = current_user()
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     old = query_one("SELECT * FROM compute_jobs WHERE id=?", (job_id,))
     if not old:
@@ -21473,7 +21507,7 @@ def compute_estimate():
 @login_required
 def compute_software_list():
     """Software catalog — available packages and tutorials."""
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     software = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY category, name")
     categories = {}
@@ -21489,7 +21523,7 @@ def compute_software_list():
 @login_required
 def compute_software_detail(slug: str):
     """Software tutorial page."""
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         abort(404)
     sw = query_one("SELECT * FROM software_catalog WHERE slug=?", (slug,))
     if not sw:
@@ -21566,7 +21600,7 @@ def _user_can_review_receipts(user):
 @login_required
 def receipts_list():
     user = current_user()
-    if not module_enabled("receipts"):
+    if not portal_route_enabled("receipts"):
         abort(404)
     can_review = _user_can_review_receipts(user)
     status_filter = request.args.get("status", "")
@@ -21589,7 +21623,7 @@ def receipts_list():
 @login_required
 def receipt_new():
     user = current_user()
-    if not module_enabled("receipts"):
+    if not portal_route_enabled("receipts"):
         abort(404)
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -21626,7 +21660,7 @@ def receipt_new():
 @login_required
 def receipt_detail(receipt_id):
     user = current_user()
-    if not module_enabled("receipts"):
+    if not portal_route_enabled("receipts"):
         abort(404)
     receipt = query_one("SELECT er.*, u.name AS submitter_name, u.email AS submitter_email, r.name AS reviewer_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id LEFT JOIN users r ON r.id = er.reviewed_by_user_id WHERE er.id = ?", (receipt_id,))
     if not receipt:
@@ -24609,7 +24643,7 @@ def _ai_pane_enqueue_admin_review(user, *, action: str, summary: str) -> str:
 
 
 def _should_start_compute_queue_manager() -> bool:
-    if not module_enabled("compute"):
+    if not portal_route_enabled("compute"):
         return False
     return os.environ.get("CATALYST_START_COMPUTE_QUEUE", "1") == "1"
 

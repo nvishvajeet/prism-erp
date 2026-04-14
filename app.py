@@ -5538,6 +5538,7 @@ def init_db() -> None:
             except Exception:
                 pass
 
+        _assert_required_schema_contracts(db)
         db.commit()
     db.close()
     seed_data()
@@ -6201,7 +6202,8 @@ def sync_request_to_peer_aggregates(
     invoice_id = None
     if amount_due > 0:
         inv_row = db.execute(
-            "SELECT id, amount_due FROM invoices WHERE request_id = ?", (req_id,)
+            "SELECT id, amount_due, project_id, grant_id FROM invoices WHERE request_id = ?",
+            (req_id,),
         ).fetchone()
         if inv_row:
             invoice_id = inv_row["id"]
@@ -6212,6 +6214,16 @@ def sync_request_to_peer_aggregates(
                 db.execute(
                     "UPDATE invoices SET amount_due = ? WHERE id = ?",
                     (amount_due, invoice_id),
+                )
+            if inv_row["project_id"] != project_id:
+                db.execute(
+                    "UPDATE invoices SET project_id = ? WHERE id = ?",
+                    (project_id, invoice_id),
+                )
+            if legacy_grant_id is not None and inv_row["grant_id"] != legacy_grant_id:
+                db.execute(
+                    "UPDATE invoices SET grant_id = ? WHERE id = ?",
+                    (legacy_grant_id, invoice_id),
                 )
         else:
             status_map = {
@@ -6225,8 +6237,8 @@ def sync_request_to_peer_aggregates(
             cur = db.execute(
                 """
                 INSERT INTO invoices
-                    (request_id, project_id, amount_due, status, issued_at, due_at, notes)
-                VALUES (?, ?, ?, ?, ?, NULL, ?)
+                    (request_id, project_id, amount_due, status, issued_at, due_at, notes, grant_id)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
                 """,
                 (
                     req_id,
@@ -6235,6 +6247,7 @@ def sync_request_to_peer_aggregates(
                     inv_status,
                     created_at,
                     "Auto-created by v2.0.0-alpha.3 runtime sync.",
+                    legacy_grant_id,
                 ),
             )
             invoice_id = cur.lastrowid
@@ -6284,6 +6297,39 @@ def sync_request_to_peer_aggregates(
                     f"Auto-created by v2.0.0-alpha.3 runtime sync from {req_no}.",
                 ),
             )
+
+
+def _assert_required_schema_contracts(db: sqlite3.Connection) -> None:
+    """Fail fast if hard-required post-migration columns are missing."""
+    required_columns = {
+        "sample_requests": {"project_id"},
+        "invoices": {"amount_due", "project_id", "grant_id", "invoice_number", "created_by_user_id"},
+        "compute_jobs": {
+            "job_type",
+            "software_id",
+            "duration_minutes",
+            "estimated_memory_mb",
+            "estimated_cores",
+            "estimated_output_mb",
+            "actual_output_mb",
+            "user_instructions",
+            "ai_analysis",
+            "ai_converted",
+            "conversion_log",
+            "output_expires_at",
+            "backend",
+            "pid_remote",
+        },
+    }
+    missing: list[str] = []
+    for table, needed in required_columns.items():
+        present = {row[1] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
+        for col in sorted(needed - present):
+            missing.append(f"{table}.{col}")
+    if missing:
+        raise RuntimeError(
+            "Schema migration incomplete; missing required columns: " + ", ".join(missing)
+        )
 
 
 # ── v2.0.0-alpha.1 dual-write helpers ────────────────────────────
@@ -9416,6 +9462,12 @@ def finance_invoice_new():
                VALUES (?, NULL, ?, 'pending', ?, NULL, ?, ?, ?, ?, ?)""",
             (req_id, amount_due, now_iso(), notes, invoice_number, description, user["id"], grant_id),
         )
+        sync_request_to_peer_aggregates(
+            get_db(),
+            req_id,
+            amount_due=amount_due,
+            grant_id=grant_id,
+        )
 
         log_action(user["id"], "invoice", inv_id, "invoice_created", {
             "invoice_number": invoice_number, "amount_due": amount_due,
@@ -9777,21 +9829,41 @@ def finance_grants_list():
               FROM payments p
               JOIN invoices inv ON inv.id = p.invoice_id
               JOIN sample_requests sr ON sr.id = inv.request_id
-              JOIN grant_allocations ga ON ga.project_id = sr.project_id
-             WHERE ga.grant_id = g.id
+             WHERE inv.grant_id = g.id
+                OR EXISTS (
+                    SELECT 1
+                      FROM grant_allocations ga
+                     WHERE ga.project_id = sr.project_id
+                       AND ga.grant_id = g.id
+                )
           ), 0) AS spend_paid,
           COALESCE((
             SELECT SUM(inv.amount_due)
               FROM invoices inv
               JOIN sample_requests sr ON sr.id = inv.request_id
-              JOIN grant_allocations ga ON ga.project_id = sr.project_id
-             WHERE ga.grant_id = g.id
+             WHERE inv.grant_id = g.id
+                OR EXISTS (
+                    SELECT 1
+                      FROM grant_allocations ga
+                     WHERE ga.project_id = sr.project_id
+                       AND ga.grant_id = g.id
+                )
           ), 0) AS spend_billed,
           COALESCE((
             SELECT COUNT(DISTINCT sr.id)
               FROM sample_requests sr
-              JOIN grant_allocations ga ON ga.project_id = sr.project_id
-             WHERE ga.grant_id = g.id
+             WHERE EXISTS (
+                    SELECT 1
+                      FROM grant_allocations ga
+                     WHERE ga.project_id = sr.project_id
+                       AND ga.grant_id = g.id
+                )
+                OR EXISTS (
+                    SELECT 1
+                      FROM invoices inv
+                     WHERE inv.request_id = sr.id
+                       AND inv.grant_id = g.id
+                )
           ), 0) AS sample_count
         FROM grants g
         LEFT JOIN users pi ON pi.id = g.pi_user_id
@@ -9809,7 +9881,12 @@ def finance_grants_list():
              FROM payments p
              JOIN invoices inv ON inv.id = p.invoice_id
              JOIN sample_requests sr ON sr.id = inv.request_id
-             JOIN grant_allocations ga ON ga.project_id = sr.project_id) AS total_paid
+            WHERE inv.grant_id IS NOT NULL
+               OR EXISTS (
+                    SELECT 1
+                      FROM grant_allocations ga
+                     WHERE ga.project_id = sr.project_id
+                )) AS total_paid
         """
     )
     totals = dict(totals_row) if totals_row else {
@@ -9955,16 +10032,21 @@ def finance_grant_detail(grant_id: int):
             ORDER BY paid_at DESC LIMIT 1) AS receipt_number,
           i.code AS instrument_code, i.name AS instrument_name,
           u.name AS requester_name
-        FROM grant_allocations ga
-        JOIN sample_requests sr ON sr.project_id = ga.project_id
+        FROM sample_requests sr
         LEFT JOIN invoices inv ON inv.request_id = sr.id
         JOIN instruments i ON i.id = sr.instrument_id
         LEFT JOIN users u ON u.id = sr.requester_id
-        WHERE ga.grant_id = ?
+        WHERE EXISTS (
+                SELECT 1
+                  FROM grant_allocations ga
+                 WHERE ga.project_id = sr.project_id
+                   AND ga.grant_id = ?
+            )
+           OR COALESCE(inv.grant_id, 0) = ?
         ORDER BY sr.created_at DESC
         LIMIT 200
         """,
-        (grant_id,),
+        (grant_id, grant_id),
     )
     total_paid = sum(r["amount_paid"] or 0 for r in charged)
     total_billed = sum(r["amount_due"] or 0 for r in charged)
@@ -11936,6 +12018,7 @@ def new_request():
         # INSERT above omitted the legacy finance columns; this call
         # creates the Project + Invoice + Payment rows if the form
         # submitted non-zero values.
+        request_grant_id = row_value(instrument, "default_grant_id", None)
         sync_request_to_peer_aggregates(
             get_db(),
             request_id,
@@ -11943,13 +12026,8 @@ def new_request():
             amount_paid=float(payload["amount_paid"]),
             finance_status=str(payload["finance_status"]),
             receipt_number=str(payload["receipt_number"]),
+            grant_id=request_grant_id,
         )
-        # Auto-link to instrument's default grant if set
-        default_grant = row_value(instrument, "default_grant_id", None)
-        if default_grant:
-            invoice = query_one("SELECT id FROM invoices WHERE request_id = ?", (request_id,))
-            if invoice:
-                execute("UPDATE invoices SET grant_id = ? WHERE id = ?", (default_grant, invoice["id"]))
         get_db().commit()
         created_request = query_one(
             """
@@ -20258,7 +20336,7 @@ def _ai_advisor_context(user, portal: str, instrument_id: int | None = None) -> 
     elif portal == "finance":
         try:
             ctx["pending_invoices"] = db.execute("SELECT COUNT(*) FROM invoices WHERE status='pending'").fetchone()[0]
-            ctx["total_outstanding"] = db.execute("SELECT COALESCE(SUM(amount),0) FROM invoices WHERE status='pending'").fetchone()[0]
+            ctx["total_outstanding"] = db.execute("SELECT COALESCE(SUM(amount_due),0) FROM invoices WHERE status='pending'").fetchone()[0]
         except Exception:
             pass
     return json.dumps(ctx)

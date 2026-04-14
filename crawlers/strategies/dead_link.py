@@ -20,7 +20,12 @@ from urllib.parse import urldefrag, urlparse
 from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
 
-HREF_RE = re.compile(rb'href="([^"]+)"')
+# Match only real `href="..."` attributes. The negative lookbehind keeps
+# `data-href="..."` and other `*-href` attributes out — those are wired up
+# by JS navigation handlers, not browser-followed hrefs, and the documentation
+# comment in base.html contains a literal `data-href="..."` placeholder that
+# would otherwise be harvested and visited as a 404 path.
+HREF_RE = re.compile(rb'(?<![\w-])href="([^"]+)"')
 
 SEED_PATHS = [
     "/", "/schedule", "/calendar", "/instruments", "/stats",

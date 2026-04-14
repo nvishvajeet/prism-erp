@@ -64,6 +64,7 @@ These are the actual files:
 
 ```bash
 cd ~/Scheduler/Main
+chmod +x scripts/install_launchd.sh
 ./scripts/install_launchd.sh
 ```
 
@@ -147,6 +148,23 @@ is not allowed to fall over between releases. Crawler proof of
 that rule is the `deploy_smoke` strategy added to the `sanity`
 wave — every push to `v1.3.0-stable-release` (with
 `CATALYST_DEPLOY_URL` set) re-verifies the mini is answering.
+
+## 2.1 Separate local demo on the mini
+
+The mini should also run a second, isolated local demo process:
+
+- production HTTPS site: `local.catalyst` on `127.0.0.1:5055`
+- local demo: `local.catalyst.demo` on `127.0.0.1:5056`
+
+Do not mix demo mode into the production service. The demo must use
+its own env file and its own launchd label.
+
+```bash
+cd ~/Scheduler/Main
+./scripts/install_launchd.sh --demo
+```
+
+See [MINI_SERVE.md](/Users/vishvajeetn/Documents/Scheduler/Main/docs/MINI_SERVE.md).
 
 ---
 

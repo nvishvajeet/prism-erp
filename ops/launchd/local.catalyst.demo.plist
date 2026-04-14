@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CATALYST local demo service for the Mac mini.
+
+  Purpose:
+    * production service (`local.catalyst`) stays the canonical HTTPS site
+    * demo service (`local.catalyst.demo`) stays separate on a second port
+      so live MITWPU traffic never shares runtime state with demo mode
+
+  Install:
+    cp ops/launchd/local.catalyst.demo.plist ~/Library/LaunchAgents/local.catalyst.demo.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.catalyst.demo.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst.demo
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.catalyst.demo</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vishwajeet/Scheduler/Main/scripts/start.sh</string>
+        <string>--service</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishwajeet/Scheduler/Main</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>LAB_SCHEDULER_ENV_FILE</key>
+        <string>/Users/vishwajeet/Scheduler/Main/.env.demo</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server-demo.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/server-demo.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

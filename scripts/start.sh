@@ -12,12 +12,13 @@
 # Always run from repo root so relative paths (app.py, .env) resolve
 cd "$(dirname "$0")/.."
 
-# Source .env if present — launchd does NOT inherit your shell env, so this is
+# Source env file if present — launchd does NOT inherit your shell env, so this is
 # the only place the service mode learns SECRET_KEY / HOST / DEMO_MODE etc.
-if [ -f .env ]; then
+ENV_FILE="${LAB_SCHEDULER_ENV_FILE:-.env}"
+if [ -f "$ENV_FILE" ]; then
   set -a
   # shellcheck disable=SC1091
-  . ./.env
+  . "$ENV_FILE"
   set +a
 fi
 

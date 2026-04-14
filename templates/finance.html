@@ -38,7 +38,48 @@
     </div>
   </article>
 
-  {# ── Row 2 left: By Instrument (span-3) ── #}
+  {# ── Row 2 left: By Instrument (Lab) / By Category (HQ) — span-3 ── #}
+  {% if is_hq_portal %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("", "By Category") }}
+    {% if own_firms %}
+    <p class="hint" data-vis="{{ V }}" style="margin:0 0 0.5rem;font-size:0.72rem;letter-spacing:0.06em;">
+      Firms:
+      {% for f in own_firms %}
+        <span style="display:inline-block;padding:0.1rem 0.4rem;margin-right:0.25rem;border-radius:4px;background:var(--color-separator, rgba(0,0,0,0.06));font-weight:600;" data-vis="{{ V }}">{{ f.short_name or f.name }}</span>
+      {% endfor %}
+    </p>
+    {% endif %}
+    {% if by_category %}
+    {% call paginated_pane('finByCat', page_size=8, max_height='none') %}
+    <table class="tile-queue-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Category</th>
+          <th class="finance-num" data-vis="{{ V }}">Receipts</th>
+          <th class="finance-num" data-vis="{{ V }}">Pending</th>
+          <th class="finance-num" data-vis="{{ V }}">Approved</th>
+          <th class="finance-num" data-vis="{{ V }}">Total</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for row in by_category %}
+        <tr class="clickable-row" data-href="{{ url_for('finance_spend', category=row.category) }}" data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ row.category }}</strong></td>
+          <td class="finance-num" data-vis="{{ V }}">{{ row.total_receipts }}</td>
+          <td class="finance-num" data-vis="{{ V }}">{{ row.pending_count }}</td>
+          <td class="finance-num" data-vis="{{ V }}">{{ row.approved_count }}</td>
+          <td class="finance-num" data-vis="{{ V }}">{{ row.total_amount_fmt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endcall %}
+    {% else %}
+    {{ empty_state("No expenses filed yet — submit receipts from Spend → + New expense.") }}
+    {% endif %}
+  </article>
+  {% else %}
   <article class="card tile tile-span-3" data-vis="{{ V }}">
     {{ card_heading("", "By Instrument") }}
     {% if by_instrument %}
@@ -70,6 +111,7 @@
     {{ empty_state("No billing activity yet.") }}
     {% endif %}
   </article>
+  {% endif %}
 
   {# ── Row 2 right: Grants Summary (span-3) ── #}
   <article class="card tile tile-span-3" data-vis="{{ V }}">

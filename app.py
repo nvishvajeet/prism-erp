@@ -9686,6 +9686,39 @@ def _finance_portal_by_instrument() -> list[dict]:
     return formatted
 
 
+def _finance_portal_by_category() -> list[dict]:
+    """HQ-side grouping: expenses by category, across all firms.
+
+    Replaces the Lab-side "By Instrument" tile when viewing the
+    finance portal from the HQ (Ravikiran) context. Instruments are a
+    Lab concept; for Ravikiran the natural axis is expense category
+    (fuel, maintenance, supplies, salaries, utilities, …) across the
+    three firms (Ravikiran Services, Suryajyoti Services, RK Services)
+    combined.
+    """
+    rows = query_all(
+        """
+        SELECT
+          COALESCE(NULLIF(TRIM(category), ''), 'uncategorised') AS category,
+          COUNT(*)            AS total_receipts,
+          COALESCE(SUM(amount), 0) AS total_amount,
+          SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending_count,
+          SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_count,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count
+        FROM expense_receipts
+        GROUP BY COALESCE(NULLIF(TRIM(category), ''), 'uncategorised')
+        ORDER BY total_amount DESC
+        LIMIT 20
+        """
+    )
+    out = []
+    for row in rows:
+        payload = dict(row)
+        payload["total_amount_fmt"] = _finance_rupee(payload["total_amount"] or 0)
+        out.append(payload)
+    return out
+
+
 def _finance_portal_outstanding() -> list[dict]:
     rows = query_all(
         """
@@ -9814,17 +9847,26 @@ def finance_portal():
     collection_rate = "{:.0f}".format(
         (kpis["total_paid"] or 0) * 100 / (kpis["total_owed"] or 0)
     ) if (kpis["total_owed"] or 0) > 0 else "—"
-    by_instrument = _finance_portal_by_instrument()
+    is_hq = not lab_portal_active()
+    by_instrument = [] if is_hq else _finance_portal_by_instrument()
+    by_category = _finance_portal_by_category() if is_hq else []
     outstanding = _finance_portal_outstanding()
     recently_paid = _finance_portal_recently_paid()
     grant_kpis = _finance_portal_grant_kpis()
     vehicle_spend, salary_outflow = _finance_portal_cross_module_kpis()
+    own_firms = query_all(
+        "SELECT id, name, short_name, gstin FROM companies "
+        "WHERE is_active = 1 AND is_own_firm = 1 ORDER BY id"
+    )
 
     return render_template(
         "finance.html",
         kpis=kpis,
         collection_rate=collection_rate,
         by_instrument=by_instrument,
+        by_category=by_category,
+        is_hq_portal=is_hq,
+        own_firms=own_firms,
         outstanding=outstanding,
         recently_paid=recently_paid,
         grant_kpis=grant_kpis,

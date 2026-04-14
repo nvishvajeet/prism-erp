@@ -12354,157 +12354,17 @@ def request_detail(request_id: int):
             flash("Completed jobs are locked. Add amendments through a controlled workflow later.", "error")
             return redirect(url_for("request_detail", request_id=request_id))
 
-        if action == "approve_step":
-            step_id = int(request.form["step_id"])
-            remarks = request.form.get("remarks", "").strip()
-            approval_attachment = request.files.get("approval_attachment")
-            step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
-            if (
-                step is None
-                or not can_approve_step(user, step, sample_request["instrument_id"])
-                or not approval_step_is_actionable(step, approval_steps)
-            ):
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    return jsonify({"ok": False, "error": "forbidden"}), 403
-                abort(403)
-            execute(
-                "UPDATE approval_steps SET status = 'approved', remarks = ?, acted_at = ? WHERE id = ?",
-                (remarks, now_iso(), step_id),
-            )
-            next_status = build_request_status(get_db(), request_id)
-            assert_status_transition(sample_request["status"], next_status)
-            execute("UPDATE sample_requests SET status = ?, remarks = ?, updated_at = ? WHERE id = ?", (next_status, remarks, now_iso(), request_id))
-            if approval_attachment and (approval_attachment.filename or "").strip():
-                try:
-                    save_uploaded_attachment(
-                        sample_request,
-                        approval_attachment,
-                        user["id"],
-                        "invoice",
-                        remarks or f"{step['approver_role'].replace('_', ' ').title()} approval attachment",
-                    )
-                except ValueError as exc:
-                    flash(f"Approved, but file upload failed: {exc}", "error")
-            log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_approved", {"step_id": step_id})
-            # ── Workflow notification: approval step approved ──
-            try:
-                notify(sample_request["requester_id"], "request",
-                       f"Approval update on {sample_request['request_no']}",
-                       f"Step {step['approver_role'].replace('_', ' ').title()} approved",
-                       url_for("request_detail", request_id=request_id),
-                       "sample_request", request_id)
-            except Exception:
-                pass
-            # Phase 2 commit 5 — notify submitter via inbox if configured
-            notify_cfg = query_one(
-                "SELECT notify_submitter FROM instrument_approval_config WHERE instrument_id = ? AND step_order = ?",
-                (sample_request["instrument_id"], step["step_order"]),
-            )
-            if notify_cfg and notify_cfg["notify_submitter"]:
-                execute(
-                    "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at) VALUES (?, ?, ?, ?, ?, NULL)",
-                    (
-                        user["id"],
-                        sample_request["requester_id"],
-                        f"Request {sample_request['request_no']}: Step {step['step_order']} approved",
-                        f"Your request {sample_request['request_no']} ({sample_request['sample_name']}) has been approved at step {step['step_order']} ({step['approver_role'].replace('_', ' ').title()}). You may now proceed with the next stage.",
-                        now_iso(),
-                    ),
-                )
-            # W1.4.6 — XHR branch: return JSON so approval-toggle.js can
-            # refresh in place without a full-page reload round-trip.
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return jsonify({
-                    "ok": True,
-                    "step_id": step_id,
-                    "new_request_status": next_status,
-                    "approver_role": step["approver_role"],
-                    "reload_url": url_for("request_detail", request_id=request_id),
-                })
-        elif action == "reject_step":
-            step_id = int(request.form["step_id"])
-            remarks = request.form.get("remarks", "").strip()
-            step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
-            if (
-                step is None
-                or not can_approve_step(user, step, sample_request["instrument_id"])
-                or not approval_step_is_actionable(step, approval_steps)
-            ):
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    return jsonify({"ok": False, "error": "forbidden"}), 403
-                abort(403)
-            if not remarks:
-                # Rejection without a reason is an audit gap — the old UI
-                # enforced this with `required` on the textarea. Preserve
-                # that contract on the XHR path too.
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    return jsonify({"ok": False, "error": "remarks_required"}), 400
-                flash("A rejection reason is required.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            execute(
-                "UPDATE approval_steps SET status = 'rejected', remarks = ?, acted_at = ? WHERE id = ?",
-                (remarks, now_iso(), step_id),
-            )
-            assert_status_transition(sample_request["status"], "rejected")
-            execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
-            log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_rejected", {"step_id": step_id})
-            # ── Workflow notification: approval step rejected ──
-            try:
-                notify(sample_request["requester_id"], "request",
-                       f"Approval update on {sample_request['request_no']}",
-                       f"Step {step['approver_role'].replace('_', ' ').title()} rejected",
-                       url_for("request_detail", request_id=request_id),
-                       "sample_request", request_id)
-            except Exception:
-                pass
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return jsonify({
-                    "ok": True,
-                    "step_id": step_id,
-                    "new_request_status": "rejected",
-                    "approver_role": step["approver_role"],
-                    "reload_url": url_for("request_detail", request_id=request_id),
-                })
-        elif action == "assign_approver" and can_manage:
-            step_id = int(request.form["step_id"])
-            raw_approver = request.form.get("approver_user_id", "").strip()
-            step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
-            if step is None:
-                abort(403)
-            # v2.1.4 — "0" means unassign: any person with the right
-            # role can pick up the step. NULL in the DB = role-based.
-            if raw_approver == "0" or not raw_approver:
-                execute(
-                    "UPDATE approval_steps SET approver_user_id = NULL, acted_at = NULL WHERE id = ?",
-                    (step_id,),
-                )
-                log_action(
-                    user["id"],
-                    "sample_request",
-                    request_id,
-                    "approval_unassigned",
-                    {"step_id": step_id, "approver_role": step["approver_role"]},
-                )
-                flash(f"{approval_role_label(step['approver_role'])} unassigned — any eligible person can approve.", "success")
-            else:
-                approver_user_id = int(raw_approver)
-                candidate = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (approver_user_id,))
-                if not candidate_allowed_for_step(candidate, step["approver_role"], sample_request["instrument_id"]):
-                    abort(403)
-                execute(
-                    "UPDATE approval_steps SET approver_user_id = ?, acted_at = NULL WHERE id = ?",
-                    (approver_user_id, step_id),
-                )
-                log_action(
-                    user["id"],
-                    "sample_request",
-                    request_id,
-                    "approval_assigned",
-                    {"step_id": step_id, "approver_role": step["approver_role"], "approver_user_id": approver_user_id},
-                )
-                flash(f"{approval_role_label(step['approver_role'])} approver updated.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        elif action == "mark_sample_submitted" and sample_request["requester_id"] == user["id"]:
+        approval_action_response = _handle_request_detail_approval_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            approval_steps=approval_steps,
+            can_manage=can_manage,
+        )
+        if approval_action_response is not None:
+            return approval_action_response
+        if action == "mark_sample_submitted" and sample_request["requester_id"] == user["id"]:
             if sample_request["status"] != "awaiting_sample_submission":
                 flash("This request is not waiting for physical sample submission.", "error")
                 return redirect(url_for("request_detail", request_id=request_id))
@@ -12958,6 +12818,177 @@ def _handle_request_detail_admin_actions(
         except Exception:
             pass
         flash("Status updated.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    return None
+
+
+def _handle_request_detail_approval_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    approval_steps,
+    can_manage: bool,
+):
+    if action == "approve_step":
+        step_id = int(request.form["step_id"])
+        remarks = request.form.get("remarks", "").strip()
+        approval_attachment = request.files.get("approval_attachment")
+        step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
+        if (
+            step is None
+            or not can_approve_step(user, step, sample_request["instrument_id"])
+            or not approval_step_is_actionable(step, approval_steps)
+        ):
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"ok": False, "error": "forbidden"}), 403
+            abort(403)
+        execute(
+            "UPDATE approval_steps SET status = 'approved', remarks = ?, acted_at = ? WHERE id = ?",
+            (remarks, now_iso(), step_id),
+        )
+        next_status = build_request_status(get_db(), request_id)
+        assert_status_transition(sample_request["status"], next_status)
+        execute(
+            "UPDATE sample_requests SET status = ?, remarks = ?, updated_at = ? WHERE id = ?",
+            (next_status, remarks, now_iso(), request_id),
+        )
+        if approval_attachment and (approval_attachment.filename or "").strip():
+            try:
+                save_uploaded_attachment(
+                    sample_request,
+                    approval_attachment,
+                    user["id"],
+                    "invoice",
+                    remarks or f"{step['approver_role'].replace('_', ' ').title()} approval attachment",
+                )
+            except ValueError as exc:
+                flash(f"Approved, but file upload failed: {exc}", "error")
+        log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_approved", {"step_id": step_id})
+        try:
+            notify(
+                sample_request["requester_id"],
+                "request",
+                f"Approval update on {sample_request['request_no']}",
+                f"Step {step['approver_role'].replace('_', ' ').title()} approved",
+                url_for("request_detail", request_id=request_id),
+                "sample_request",
+                request_id,
+            )
+        except Exception:
+            pass
+        notify_cfg = query_one(
+            "SELECT notify_submitter FROM instrument_approval_config WHERE instrument_id = ? AND step_order = ?",
+            (sample_request["instrument_id"], step["step_order"]),
+        )
+        if notify_cfg and notify_cfg["notify_submitter"]:
+            execute(
+                "INSERT INTO messages (sender_id, recipient_id, subject, body, sent_at, read_at) VALUES (?, ?, ?, ?, ?, NULL)",
+                (
+                    user["id"],
+                    sample_request["requester_id"],
+                    f"Request {sample_request['request_no']}: Step {step['step_order']} approved",
+                    f"Your request {sample_request['request_no']} ({sample_request['sample_name']}) has been approved at step {step['step_order']} ({step['approver_role'].replace('_', ' ').title()}). You may now proceed with the next stage.",
+                    now_iso(),
+                ),
+            )
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "ok": True,
+                "step_id": step_id,
+                "new_request_status": next_status,
+                "approver_role": step["approver_role"],
+                "reload_url": url_for("request_detail", request_id=request_id),
+            })
+        return None
+
+    if action == "reject_step":
+        step_id = int(request.form["step_id"])
+        remarks = request.form.get("remarks", "").strip()
+        step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
+        if (
+            step is None
+            or not can_approve_step(user, step, sample_request["instrument_id"])
+            or not approval_step_is_actionable(step, approval_steps)
+        ):
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"ok": False, "error": "forbidden"}), 403
+            abort(403)
+        if not remarks:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"ok": False, "error": "remarks_required"}), 400
+            flash("A rejection reason is required.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        execute(
+            "UPDATE approval_steps SET status = 'rejected', remarks = ?, acted_at = ? WHERE id = ?",
+            (remarks, now_iso(), step_id),
+        )
+        assert_status_transition(sample_request["status"], "rejected")
+        execute(
+            "UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?",
+            (remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, f"{step['approver_role']}_rejected", {"step_id": step_id})
+        try:
+            notify(
+                sample_request["requester_id"],
+                "request",
+                f"Approval update on {sample_request['request_no']}",
+                f"Step {step['approver_role'].replace('_', ' ').title()} rejected",
+                url_for("request_detail", request_id=request_id),
+                "sample_request",
+                request_id,
+            )
+        except Exception:
+            pass
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({
+                "ok": True,
+                "step_id": step_id,
+                "new_request_status": "rejected",
+                "approver_role": step["approver_role"],
+                "reload_url": url_for("request_detail", request_id=request_id),
+            })
+        return None
+
+    if action == "assign_approver" and can_manage:
+        step_id = int(request.form["step_id"])
+        raw_approver = request.form.get("approver_user_id", "").strip()
+        step = query_one("SELECT * FROM approval_steps WHERE id = ? AND sample_request_id = ?", (step_id, request_id))
+        if step is None:
+            abort(403)
+        if raw_approver == "0" or not raw_approver:
+            execute(
+                "UPDATE approval_steps SET approver_user_id = NULL, acted_at = NULL WHERE id = ?",
+                (step_id,),
+            )
+            log_action(
+                user["id"],
+                "sample_request",
+                request_id,
+                "approval_unassigned",
+                {"step_id": step_id, "approver_role": step["approver_role"]},
+            )
+            flash(f"{approval_role_label(step['approver_role'])} unassigned — any eligible person can approve.", "success")
+        else:
+            approver_user_id = int(raw_approver)
+            candidate = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (approver_user_id,))
+            if not candidate_allowed_for_step(candidate, step["approver_role"], sample_request["instrument_id"]):
+                abort(403)
+            execute(
+                "UPDATE approval_steps SET approver_user_id = ?, acted_at = NULL WHERE id = ?",
+                (approver_user_id, step_id),
+            )
+            log_action(
+                user["id"],
+                "sample_request",
+                request_id,
+                "approval_assigned",
+                {"step_id": step_id, "approver_role": step["approver_role"], "approver_user_id": approver_user_id},
+            )
+            flash(f"{approval_role_label(step['approver_role'])} approver updated.", "success")
         return redirect(url_for("request_detail", request_id=request_id))
 
     return None

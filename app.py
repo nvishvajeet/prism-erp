@@ -14596,186 +14596,14 @@ def schedule_actions():
         return redirect(url_for("schedule", bucket="scheduled"))
 
     action = request.form.get("action", "").strip()
-    if action == "take_up":
-        if sample_request["status"] not in {"sample_received", "scheduled"}:
-            flash("Only received jobs can be taken up from the board.", "error")
-            return _schedule_redirect_response(request_id)
-        scheduled_for = request.form.get("scheduled_for", "").strip()
-        if not scheduled_for:
-            flash("Please choose a schedule time.", "error")
-            return _schedule_redirect_response(request_id)
-        operator_id = int(request.form.get("assigned_operator_id") or user["id"])
-        remarks = request.form.get("remarks", "").strip()
-        assert_status_transition(sample_request["status"], "scheduled")
-        execute(
-            "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
-            (scheduled_for, operator_id, remarks, now_iso(), request_id),
-        )
-        log_action(user["id"], "sample_request", request_id, "scheduled_from_board", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
-        flash(f"{sample_request['request_no']} taken up for work.", "success")
-        write_request_metadata_snapshot(request_id)
-        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
-    elif action == "quick_assign":
-        operator_id = int(request.form.get("assigned_operator_id") or 0)
-        if not operator_id:
-            flash("Choose a person to assign.", "error")
-            return _schedule_redirect_response(request_id)
-        candidate_ids = {row["id"] for row in request_assignment_candidates(sample_request)}
-        if operator_id not in candidate_ids:
-            flash("That person cannot be assigned to this job.", "error")
-            return _schedule_redirect_response(request_id)
-        execute(
-            "UPDATE sample_requests SET assigned_operator_id = ?, updated_at = ? WHERE id = ?",
-            (operator_id, now_iso(), request_id),
-        )
-        log_action(user["id"], "sample_request", request_id, "reassigned", {"assigned_operator_id": operator_id, "remarks": "Assigned from queue"})
-        flash(f"{sample_request['request_no']} reassigned.", "success")
-        write_request_metadata_snapshot(request_id)
-        return _schedule_redirect_response(request_id, focus_request=True)
-    elif action == "plan_next_slot":
-        if sample_request["status"] not in {"sample_received"}:
-            flash("Only ready jobs can be placed into the day planner.", "error")
-            return _schedule_redirect_response(request_id)
-        planner_date = parse_schedule_day(request.form.get("planner_date"))
-        scope_filters = schedule_filter_values()
-        clauses, params = request_scope_sql(user, "sr")
-        if scope_filters.get("requester_id"):
-            clauses.append("sr.requester_id = ?")
-            params.append(int(scope_filters["requester_id"]))
-        base_sql, base_params = request_history_query(clauses, params, scope_filters)
-        rows_all = [row for row in query_all(base_sql, tuple(base_params)) if row_matches_period(row, scope_filters["period"])]
-        same_day_rows = []
-        for row in rows_all:
-            if row["status"] not in {"scheduled", "in_progress"} or not row["scheduled_for"]:
-                continue
-            try:
-                parsed = datetime.fromisoformat(str(row["scheduled_for"]).replace("Z", "+00:00"))
-            except ValueError:
-                try:
-                    parsed = datetime.strptime(str(row["scheduled_for"])[:16], "%Y-%m-%dT%H:%M")
-                except ValueError:
-                    parsed = None
-            if parsed and parsed.date() == planner_date:
-                same_day_rows.append(row)
-        scheduled_for_raw = (request.form.get("scheduled_for") or "").strip()
-        if scheduled_for_raw:
-            try:
-                slot_dt = datetime.fromisoformat(scheduled_for_raw)
-            except ValueError:
-                flash("Choose a valid date and time for the planner.", "error")
-                return _schedule_redirect_response(request_id)
-        else:
-            slot_dt = compute_next_schedule_slot(planner_date, same_day_rows)
-        operator_id = int(request.form.get("assigned_operator_id") or user["id"])
-        remarks = request.form.get("remarks", "").strip()
-        assert_status_transition(sample_request["status"], "scheduled")
-        execute(
-            "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
-            (slot_dt.isoformat(timespec="minutes"), operator_id, remarks, now_iso(), request_id),
-        )
-        log_action(
-            user["id"],
-            "sample_request",
-            request_id,
-            "scheduled_from_board",
-            {"scheduled_for": slot_dt.isoformat(timespec="minutes"), "assigned_operator_id": operator_id, "planner_date": planner_date.isoformat()},
-        )
-        write_request_metadata_snapshot(request_id)
-        flash(f"{sample_request['request_no']} added to {planner_date.strftime('%d/%m/%Y')} at {slot_dt.strftime('%H:%M')}.", "success")
-        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
-    elif action == "mark_received":
-        if sample_request["status"] != "sample_submitted":
-            flash("Only submitted samples can be marked received from the board.", "error")
-            return _schedule_redirect_response(request_id)
-        assert_status_transition(sample_request["status"], "sample_received")
-        execute(
-            """
-            UPDATE sample_requests
-            SET status = 'sample_received', sample_received_at = ?, received_by_operator_id = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (now_iso(), user["id"], now_iso(), request_id),
-        )
-        log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": ""})
-        flash(f"{sample_request['request_no']} marked received.", "success")
-        write_request_metadata_snapshot(request_id)
-        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
-    elif action == "start_now":
-        if sample_request["status"] not in {"scheduled", "in_progress"}:
-            flash("Only scheduled jobs can be started from the board.", "error")
-            return _schedule_redirect_response(request_id)
-        remarks = request.form.get("remarks", "").strip()
-        operator_id = sample_request["assigned_operator_id"] or user["id"]
-        assert_status_transition(sample_request["status"], "in_progress")
-        execute(
-            "UPDATE sample_requests SET status = 'in_progress', assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
-            (operator_id, remarks, now_iso(), request_id),
-        )
-        log_action(user["id"], "sample_request", request_id, "started_from_board", {})
-        flash(f"{sample_request['request_no']} is now in progress.", "success")
-        write_request_metadata_snapshot(request_id)
-        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
-    elif action == "finish_now":
-        if sample_request["status"] != "in_progress":
-            flash("Only in-progress jobs can be finished from the board.", "error")
-            return _schedule_redirect_response(request_id)
-        results_summary = request.form.get("results_summary", "").strip()
-        if not results_summary:
-            flash("Please add a short result summary before finishing.", "error")
-            return _schedule_redirect_response(request_id)
-        remarks = request.form.get("remarks", "").strip()
-        _finance = computed_finance_for_request(get_db(), request_id)
-        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
-        finance_status = request.form.get("finance_status", _finance["finance_status"])
-        email_ok, email_message = send_completion_email(sample_request, results_summary)
-        now_value = now_iso()
-        completion_fields = completion_override_fields(sample_request, user["id"], now_value)
-        assert_status_transition(sample_request["status"], "completed")
-        execute(
-            """
-            UPDATE sample_requests
-            SET status = 'completed', results_summary = ?, remarks = ?,
-                result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
-                submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
-                scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                results_summary,
-                remarks,
-                email_message,
-                now_value if email_ok else None,
-                completion_fields["submitted_to_lab_at"],
-                completion_fields["sample_submitted_at"],
-                completion_fields["sample_received_at"],
-                completion_fields["received_by_operator_id"],
-                completion_fields["scheduled_for"],
-                completion_fields["assigned_operator_id"],
-                completion_fields["completed_at"],
-                now_value,
-                request_id,
-            ),
-        )
-        sync_request_to_peer_aggregates(
-            get_db(), request_id,
-            amount_due=_finance["amount_due"] or amount_paid,
-            amount_paid=amount_paid,
-            finance_status=finance_status,
-            receipt_number=_finance["receipt_number"],
-        )
-        get_db().commit()
-        log_completion_override_events(
-            user["id"],
-            sample_request,
-            completion_fields,
-            now_value,
-            "completed_from_board",
-            {"results_summary": results_summary, "email_status": email_message},
-        )
-        send_completion_inbox_message(user["id"], sample_request)
-        flash("Job marked done.", "success")
-        write_request_metadata_snapshot(request_id)
-        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+    schedule_action_response = _handle_schedule_board_actions(
+        user,
+        request_id,
+        sample_request,
+        action,
+    )
+    if schedule_action_response is not None:
+        return schedule_action_response
     else:
         abort(403)
 
@@ -14840,6 +14668,196 @@ def delete_attachment(attachment_id: int):
     )
     flash("Attachment removed.", "success")
     return redirect(url_for("request_detail", request_id=request_row["id"]))
+
+
+def _handle_schedule_board_actions(user, request_id: int, sample_request, action: str):
+    if action == "take_up":
+        if sample_request["status"] not in {"sample_received", "scheduled"}:
+            flash("Only received jobs can be taken up from the board.", "error")
+            return _schedule_redirect_response(request_id)
+        scheduled_for = request.form.get("scheduled_for", "").strip()
+        if not scheduled_for:
+            flash("Please choose a schedule time.", "error")
+            return _schedule_redirect_response(request_id)
+        operator_id = int(request.form.get("assigned_operator_id") or user["id"])
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled")
+        execute(
+            "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
+            (scheduled_for, operator_id, remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "scheduled_from_board", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
+        flash(f"{sample_request['request_no']} taken up for work.", "success")
+        write_request_metadata_snapshot(request_id)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+
+    if action == "quick_assign":
+        operator_id = int(request.form.get("assigned_operator_id") or 0)
+        if not operator_id:
+            flash("Choose a person to assign.", "error")
+            return _schedule_redirect_response(request_id)
+        candidate_ids = {row["id"] for row in request_assignment_candidates(sample_request)}
+        if operator_id not in candidate_ids:
+            flash("That person cannot be assigned to this job.", "error")
+            return _schedule_redirect_response(request_id)
+        execute(
+            "UPDATE sample_requests SET assigned_operator_id = ?, updated_at = ? WHERE id = ?",
+            (operator_id, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "reassigned", {"assigned_operator_id": operator_id, "remarks": "Assigned from queue"})
+        flash(f"{sample_request['request_no']} reassigned.", "success")
+        write_request_metadata_snapshot(request_id)
+        return _schedule_redirect_response(request_id, focus_request=True)
+
+    if action == "plan_next_slot":
+        if sample_request["status"] not in {"sample_received"}:
+            flash("Only ready jobs can be placed into the day planner.", "error")
+            return _schedule_redirect_response(request_id)
+        planner_date = parse_schedule_day(request.form.get("planner_date"))
+        scope_filters = schedule_filter_values()
+        clauses, params = request_scope_sql(user, "sr")
+        if scope_filters.get("requester_id"):
+            clauses.append("sr.requester_id = ?")
+            params.append(int(scope_filters["requester_id"]))
+        base_sql, base_params = request_history_query(clauses, params, scope_filters)
+        rows_all = [row for row in query_all(base_sql, tuple(base_params)) if row_matches_period(row, scope_filters["period"])]
+        same_day_rows = []
+        for row in rows_all:
+            if row["status"] not in {"scheduled", "in_progress"} or not row["scheduled_for"]:
+                continue
+            try:
+                parsed = datetime.fromisoformat(str(row["scheduled_for"]).replace("Z", "+00:00"))
+            except ValueError:
+                try:
+                    parsed = datetime.strptime(str(row["scheduled_for"])[:16], "%Y-%m-%dT%H:%M")
+                except ValueError:
+                    parsed = None
+            if parsed and parsed.date() == planner_date:
+                same_day_rows.append(row)
+        scheduled_for_raw = (request.form.get("scheduled_for") or "").strip()
+        if scheduled_for_raw:
+            try:
+                slot_dt = datetime.fromisoformat(scheduled_for_raw)
+            except ValueError:
+                flash("Choose a valid date and time for the planner.", "error")
+                return _schedule_redirect_response(request_id)
+        else:
+            slot_dt = compute_next_schedule_slot(planner_date, same_day_rows)
+        operator_id = int(request.form.get("assigned_operator_id") or user["id"])
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled")
+        execute(
+            "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
+            (slot_dt.isoformat(timespec="minutes"), operator_id, remarks, now_iso(), request_id),
+        )
+        log_action(
+            user["id"],
+            "sample_request",
+            request_id,
+            "scheduled_from_board",
+            {"scheduled_for": slot_dt.isoformat(timespec="minutes"), "assigned_operator_id": operator_id, "planner_date": planner_date.isoformat()},
+        )
+        write_request_metadata_snapshot(request_id)
+        flash(f"{sample_request['request_no']} added to {planner_date.strftime('%d/%m/%Y')} at {slot_dt.strftime('%H:%M')}.", "success")
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+
+    if action == "mark_received":
+        if sample_request["status"] != "sample_submitted":
+            flash("Only submitted samples can be marked received from the board.", "error")
+            return _schedule_redirect_response(request_id)
+        assert_status_transition(sample_request["status"], "sample_received")
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'sample_received', sample_received_at = ?, received_by_operator_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (now_iso(), user["id"], now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": ""})
+        flash(f"{sample_request['request_no']} marked received.", "success")
+        write_request_metadata_snapshot(request_id)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+
+    if action == "start_now":
+        if sample_request["status"] not in {"scheduled", "in_progress"}:
+            flash("Only scheduled jobs can be started from the board.", "error")
+            return _schedule_redirect_response(request_id)
+        remarks = request.form.get("remarks", "").strip()
+        operator_id = sample_request["assigned_operator_id"] or user["id"]
+        assert_status_transition(sample_request["status"], "in_progress")
+        execute(
+            "UPDATE sample_requests SET status = 'in_progress', assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
+            (operator_id, remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "started_from_board", {})
+        flash(f"{sample_request['request_no']} is now in progress.", "success")
+        write_request_metadata_snapshot(request_id)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+
+    if action == "finish_now":
+        if sample_request["status"] != "in_progress":
+            flash("Only in-progress jobs can be finished from the board.", "error")
+            return _schedule_redirect_response(request_id)
+        results_summary = request.form.get("results_summary", "").strip()
+        if not results_summary:
+            flash("Please add a short result summary before finishing.", "error")
+            return _schedule_redirect_response(request_id)
+        remarks = request.form.get("remarks", "").strip()
+        _finance = computed_finance_for_request(get_db(), request_id)
+        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+        finance_status = request.form.get("finance_status", _finance["finance_status"])
+        email_ok, email_message = send_completion_email(sample_request, results_summary)
+        now_value = now_iso()
+        completion_fields = completion_override_fields(sample_request, user["id"], now_value)
+        assert_status_transition(sample_request["status"], "completed")
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'completed', results_summary = ?, remarks = ?,
+                result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
+                submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
+                scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                results_summary,
+                remarks,
+                email_message,
+                now_value if email_ok else None,
+                completion_fields["submitted_to_lab_at"],
+                completion_fields["sample_submitted_at"],
+                completion_fields["sample_received_at"],
+                completion_fields["received_by_operator_id"],
+                completion_fields["scheduled_for"],
+                completion_fields["assigned_operator_id"],
+                completion_fields["completed_at"],
+                now_value,
+                request_id,
+            ),
+        )
+        sync_request_to_peer_aggregates(
+            get_db(), request_id,
+            amount_due=_finance["amount_due"] or amount_paid,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=_finance["receipt_number"],
+        )
+        get_db().commit()
+        log_completion_override_events(
+            user["id"],
+            sample_request,
+            completion_fields,
+            now_value,
+            "completed_from_board",
+            {"results_summary": results_summary, "email_status": email_message},
+        )
+        send_completion_inbox_message(user["id"], sample_request)
+        flash("Job marked done.", "success")
+        write_request_metadata_snapshot(request_id)
+        return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
+
+    return None
 
 
 @app.route("/my/history")
@@ -15076,6 +15094,218 @@ def _user_profile_reset_password_info(user_id: int):
     return reset_pw_info
 
 
+def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str):
+    if action == "remove_access":
+        if not can_manage_members(viewer):
+            abort(403)
+        if target_user["role"] != "requester" or is_owner(target_user) or target_user["id"] == viewer["id"]:
+            abort(403)
+        execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
+        log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
+        flash(f"Access removed for {target_user['email']}.", "success")
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "reset_password":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+            abort(403)
+        temp_password = generate_temp_password()
+        execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+            (generate_password_hash(temp_password, method="pbkdf2:sha256"), user_id),
+        )
+        log_action(viewer["id"], "user", user_id, "password_reset_by_admin", {"email": target_user["email"]})
+        session["_reset_pw"] = {
+            "user_id": user_id,
+            "email": target_user["email"],
+            "name": target_user["name"],
+            "temp_password": temp_password,
+        }
+        flash(
+            f"Temporary password issued for {target_user['email']}. "
+            f"See the PIN card below to copy or email it.",
+            "success",
+        )
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "update_user_metadata":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+            abort(403)
+        new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
+        new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
+        new_active = 1 if request.form.get("active") == "on" else 0
+        if target_user["id"] == viewer["id"]:
+            new_active = 1
+        execute(
+            "UPDATE users SET name = ?, member_code = ?, active = ? WHERE id = ?",
+            (new_name, new_member_code, new_active, user_id),
+        )
+        log_action(
+            viewer["id"],
+            "user",
+            user_id,
+            "user_metadata_updated",
+            {"name": new_name, "member_code": new_member_code, "active": new_active},
+        )
+        flash(f"Profile updated for {new_name}.", "success")
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "change_role":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) or target_user["id"] == viewer["id"]:
+            abort(403)
+        new_role = (request.form.get("new_role") or "").strip()
+        all_roles = {
+            "requester", "operator", "instrument_admin",
+            "faculty_in_charge", "professor_approver", "finance_admin",
+            "site_admin", "super_admin",
+        }
+        is_xhr = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        if new_role not in all_roles:
+            if is_xhr:
+                return jsonify({"ok": False, "error": "invalid_role"}), 400
+            flash("Pick a valid role.", "error")
+            return redirect(url_for("user_profile", user_id=user_id))
+        if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+            abort(403)
+        if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+            abort(403)
+        execute(
+            "UPDATE users SET role = ?, invite_status = 'active', active = 1, role_manual_notice = ? WHERE id = ?",
+            (
+                new_role,
+                f"An administrator changed your primary role from {role_display_name(target_user['role'])} to {role_display_name(new_role)}. Review this manual before continuing.",
+                user_id,
+            ),
+        )
+        log_action(
+            viewer["id"], "user", user_id, "user_role_changed",
+            {"from_role": target_user["role"], "to_role": new_role, "email": target_user["email"]},
+        )
+        grant_user_role(user_id, new_role, viewer["id"])
+        if is_xhr:
+            return jsonify({
+                "ok": True,
+                "new_role": new_role,
+                "new_role_label": role_display_name(new_role),
+                "reload_url": url_for("user_profile", user_id=user_id),
+            })
+        flash(f"Role updated to {role_display_name(new_role)}.", "success")
+        if user_id == viewer["id"]:
+            queue_role_manual(
+                viewer["id"],
+                reason="role_changed",
+                notice=f"Your primary role is now {role_display_name(new_role)}.",
+            )
+            return redirect(url_for("role_manual"))
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "update_user_role_set":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+            abort(403)
+        checked = set(request.form.getlist("extra_roles"))
+        layered_roles = {
+            "operator", "instrument_admin", "faculty_in_charge",
+            "professor_approver", "finance_admin",
+        }
+        if viewer["role"] == "super_admin":
+            layered_roles |= {"site_admin"}
+        grant_user_role(user_id, target_user["role"], viewer["id"])
+        for role_name in layered_roles:
+            if role_name in checked:
+                grant_user_role(user_id, role_name, viewer["id"])
+            elif role_name != target_user["role"]:
+                revoke_user_role(user_id, role_name)
+        log_action(
+            viewer["id"], "user", user_id, "user_role_set_updated",
+            {"roles": sorted(checked), "email": target_user["email"]},
+        )
+        execute(
+            "UPDATE users SET role_manual_notice = ? WHERE id = ?",
+            (
+                "Your role access was updated by an administrator. Review the manual to see what panes, modules, and approvals you can now use.",
+                user_id,
+            ),
+        )
+        flash("Additional roles updated.", "success")
+        if user_id == viewer["id"]:
+            queue_role_manual(
+                viewer["id"],
+                reason="role_changed",
+                notice="Your additional role access was updated. Review the manual for the current operating model.",
+            )
+            return redirect(url_for("role_manual"))
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    if action == "update_user_instruments":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+
+        def _ids(field: str) -> set[int]:
+            return {int(v) for v in request.form.getlist(field) if str(v).strip().isdigit()}
+
+        desired = {
+            "instrument_admins": _ids("admin_ids"),
+            "instrument_operators": _ids("operator_ids"),
+            "instrument_faculty_admins": _ids("faculty_ids"),
+            "instrument_requesters": _ids("requester_ids"),
+        }
+        manageable_rows = query_all("SELECT id FROM instruments WHERE status = 'active'")
+        if viewer["role"] != "super_admin":
+            manageable_rows = [
+                row for row in manageable_rows
+                if can_manage_instrument(viewer["id"], row["id"], viewer["role"])
+            ]
+        manageable_ids = {row["id"] for row in manageable_rows}
+        for table, wanted in desired.items():
+            wanted &= manageable_ids
+            current_ids = {
+                row["instrument_id"]
+                for row in query_all(
+                    f"SELECT instrument_id FROM {table} WHERE user_id = ?",
+                    (user_id,),
+                )
+                if row["instrument_id"] in manageable_ids
+            }
+            for instrument_id in wanted - current_ids:
+                execute(
+                    f"INSERT OR IGNORE INTO {table} (user_id, instrument_id) VALUES (?, ?)",
+                    (user_id, instrument_id),
+                )
+            for instrument_id in current_ids - wanted:
+                execute(
+                    f"DELETE FROM {table} WHERE user_id = ? AND instrument_id = ?",
+                    (user_id, instrument_id),
+                )
+        log_action(
+            viewer["id"], "user", user_id, "user_instrument_assignments_updated",
+            {
+                "email": target_user["email"],
+                "admin_count": len(desired["instrument_admins"]),
+                "operator_count": len(desired["instrument_operators"]),
+                "faculty_count": len(desired["instrument_faculty_admins"]),
+            },
+        )
+        flash("Instrument assignments saved.", "success")
+        return redirect(url_for("user_profile", user_id=user_id))
+
+    return None
+
+
 @app.route("/users/<int:user_id>", methods=["GET", "POST"])
 @login_required
 def user_profile(user_id: int):
@@ -15083,273 +15313,9 @@ def user_profile(user_id: int):
     target_user = _user_profile_target(viewer, user_id)
     if request.method == "POST":
         action = request.form.get("action", "").strip()
-        if action == "remove_access":
-            if not can_manage_members(viewer):
-                abort(403)
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if target_user["role"] != "requester" or is_owner(target_user) or target_user["id"] == viewer["id"]:
-                abort(403)
-            execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
-            log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
-            flash(f"Access removed for {target_user['email']}.", "success")
-            return redirect(url_for("user_profile", user_id=user_id))
-        if action == "reset_password":
-            # Password hygiene (W1.3.8) — admin-issued password reset.
-            # Admin never types a password. We generate a random temp
-            # password, flash it to the admin exactly once, and set
-            # must_change_password=1 so the target is forced to pick
-            # their own on next login. Owner rows are never reset from
-            # here; super_admin rows can only be reset by another
-            # super_admin.
-            if not can_manage_members(viewer):
-                abort(403)
-            if is_owner(target_user) and not is_owner(viewer):
-                abort(403)
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
-                abort(403)
-            temp_password = generate_temp_password()
-            execute(
-                "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
-                (generate_password_hash(temp_password, method="pbkdf2:sha256"), user_id),
-            )
-            log_action(
-                viewer["id"], "user", user_id, "password_reset_by_admin",
-                {"email": target_user["email"]},
-            )
-            # Store in session so the template can render the PIN card
-            # and the .eml download route can build the file. Cleared
-            # on next page load or when the .eml is downloaded.
-            session["_reset_pw"] = {
-                "user_id": user_id,
-                "email": target_user["email"],
-                "name": target_user["name"],
-                "temp_password": temp_password,
-            }
-            flash(
-                f"Temporary password issued for {target_user['email']}. "
-                f"See the PIN card below to copy or email it.",
-                "success",
-            )
-            return redirect(url_for("user_profile", user_id=user_id))
-        if action == "update_user_metadata":
-            # In-place admin edit of a user's profile. Shown behind the
-            # "Edit" toggle on the User Metadata tile; same pattern as the
-            # instrument metadata tile. Only members-managers can save —
-            # non-super_admins cannot touch a super_admin or owner row,
-            # and no one can demote themselves via this form.
-            if not can_manage_members(viewer):
-                abort(403)
-            if is_owner(target_user) and not is_owner(viewer):
-                abort(403)
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
-                abort(403)
-            new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
-            new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
-            new_active = 1 if request.form.get("active") == "on" else 0
-            if target_user["id"] == viewer["id"]:
-                # Never let an admin deactivate themselves by accident.
-                new_active = 1
-            execute(
-                "UPDATE users SET name = ?, member_code = ?, active = ? WHERE id = ?",
-                (new_name, new_member_code, new_active, user_id),
-            )
-            log_action(
-                viewer["id"],
-                "user",
-                user_id,
-                "user_metadata_updated",
-                {
-                    "name": new_name,
-                    "member_code": new_member_code,
-                    "active": new_active,
-                },
-            )
-            flash(f"Profile updated for {new_name}.", "success")
-            return redirect(url_for("user_profile", user_id=user_id))
-        if action == "change_role":
-            # Per-user role promotion / demotion. Site-admin+ can move a
-            # user between requester, operator, instrument_admin,
-            # faculty_in_charge, professor_approver, and finance_admin.
-            # Only super_admin can promote to or demote from site_admin,
-            # and super_admin rows can only be touched by a super_admin.
-            # Owner rows are never demoted here.
-            if not can_manage_members(viewer):
-                abort(403)
-            if is_owner(target_user):
-                abort(403)
-            if target_user["id"] == viewer["id"]:
-                abort(403)
-            new_role = (request.form.get("new_role") or "").strip()
-            all_roles = {
-                "requester", "operator", "instrument_admin",
-                "faculty_in_charge", "professor_approver", "finance_admin",
-                "site_admin", "super_admin",
-            }
-            is_xhr = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-            if new_role not in all_roles:
-                if is_xhr:
-                    return jsonify({"ok": False, "error": "invalid_role"}), 400
-                flash("Pick a valid role.", "error")
-                return redirect(url_for("user_profile", user_id=user_id))
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
-                abort(403)
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
-                abort(403)
-            execute(
-                "UPDATE users SET role = ?, invite_status = 'active', active = 1, role_manual_notice = ? WHERE id = ?",
-                (
-                    new_role,
-                    f"An administrator changed your primary role from {role_display_name(target_user['role'])} to {role_display_name(new_role)}. Review this manual before continuing.",
-                    user_id,
-                ),
-            )
-            log_action(
-                viewer["id"], "user", user_id, "user_role_changed",
-                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-                {"from_role": target_user["role"], "to_role": new_role, "email": target_user["email"]},
-            )
-            # Make sure the new primary role is also in the role set.
-            grant_user_role(user_id, new_role, viewer["id"])
-            if is_xhr:
-                # W1.4.12 — third consumer of the inline-toggle XHR
-                # pattern. Client soft-reloads so the tile, role set,
-                # and permission-gated sections refresh authoritatively.
-                return jsonify({
-                    "ok": True,
-                    "new_role": new_role,
-                    "new_role_label": role_display_name(new_role),
-                    "reload_url": url_for("user_profile", user_id=user_id),
-                })
-            flash(f"Role updated to {role_display_name(new_role)}.", "success")
-            if user_id == viewer["id"]:
-                queue_role_manual(
-                    viewer["id"],
-                    reason="role_changed",
-                    notice=f"Your primary role is now {role_display_name(new_role)}.",
-                )
-                return redirect(url_for("role_manual"))
-            return redirect(url_for("user_profile", user_id=user_id))
-        if action == "update_user_role_set":
-            # W1.3.7 — layer additional roles on top of users.role.
-            # The primary role (users.role) is controlled by
-            # change_role above; this form only manipulates the
-            # additional-role junction table. Checked roles are
-            # granted, unchecked are revoked. The primary role is
-            # always force-granted so the set never goes below the
-            # single-role baseline the rest of the app expects.
-            if not can_manage_members(viewer):
-                abort(403)
-            if is_owner(target_user) and not is_owner(viewer):
-                abort(403)
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
-                abort(403)
-            checked = set(request.form.getlist("extra_roles"))
-            layered_roles = {
-                "operator", "instrument_admin", "faculty_in_charge",
-                "professor_approver", "finance_admin",
-            }
-            # site_admin / super_admin can only be granted by a super_admin
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if viewer["role"] == "super_admin":
-                layered_roles |= {"site_admin"}
-            # Force-grant the primary role; sync the rest from checked.
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            grant_user_role(user_id, target_user["role"], viewer["id"])
-            for r in layered_roles:
-                if r in checked:
-                    grant_user_role(user_id, r, viewer["id"])
-                # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-                elif r != target_user["role"]:
-                    revoke_user_role(user_id, r)
-            log_action(
-                viewer["id"], "user", user_id, "user_role_set_updated",
-                {"roles": sorted(checked), "email": target_user["email"]},
-            )
-            execute(
-                "UPDATE users SET role_manual_notice = ? WHERE id = ?",
-                (
-                    "Your role access was updated by an administrator. Review the manual to see what panes, modules, and approvals you can now use.",
-                    user_id,
-                ),
-            )
-            flash("Additional roles updated.", "success")
-            if user_id == viewer["id"]:
-                queue_role_manual(
-                    viewer["id"],
-                    reason="role_changed",
-                    notice="Your additional role access was updated. Review the manual for the current operating model.",
-                )
-                return redirect(url_for("role_manual"))
-            return redirect(url_for("user_profile", user_id=user_id))
-        if action == "update_user_instruments":
-            # Bulk per-instrument assignment across the three lanes
-            # (admin / operator / faculty). Accepts three POST lists —
-            # admin_ids, operator_ids, faculty_ids — where each entry is
-            # an instrument id the user should be a member of. Any prior
-            # membership not present in the new list is removed. Non-
-            # super-admins are limited to instruments they can already
-            # manage, so a site_admin can't over-grant.
-            if not can_manage_members(viewer):
-                abort(403)
-            if is_owner(target_user) and not is_owner(viewer):
-                abort(403)
-            def _ids(field: str) -> set[int]:
-                return {int(v) for v in request.form.getlist(field) if str(v).strip().isdigit()}
-            desired = {
-                "instrument_admins": _ids("admin_ids"),
-                "instrument_operators": _ids("operator_ids"),
-                "instrument_faculty_admins": _ids("faculty_ids"),
-                "instrument_requesters": _ids("requester_ids"),
-            }
-            manageable_rows = query_all(
-                "SELECT id FROM instruments WHERE status = 'active'"
-            )
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if viewer["role"] != "super_admin":
-                manageable_rows = [
-                    row for row in manageable_rows
-                    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-                    if can_manage_instrument(viewer["id"], row["id"], viewer["role"])
-                ]
-            manageable_ids = {row["id"] for row in manageable_rows}
-            for table, wanted in desired.items():
-                wanted &= manageable_ids
-                current_ids = {
-                    row["instrument_id"]
-                    for row in query_all(
-                        f"SELECT instrument_id FROM {table} WHERE user_id = ?",
-                        (user_id,),
-                    )
-                    if row["instrument_id"] in manageable_ids
-                }
-                to_add = wanted - current_ids
-                to_remove = current_ids - wanted
-                for instrument_id in to_add:
-                    execute(
-                        f"INSERT OR IGNORE INTO {table} (user_id, instrument_id) VALUES (?, ?)",
-                        (user_id, instrument_id),
-                    )
-                for instrument_id in to_remove:
-                    execute(
-                        f"DELETE FROM {table} WHERE user_id = ? AND instrument_id = ?",
-                        (user_id, instrument_id),
-                    )
-            log_action(
-                viewer["id"], "user", user_id, "user_instrument_assignments_updated",
-                {
-                    "email": target_user["email"],
-                    "admin_count": len(desired["instrument_admins"]),
-                    "operator_count": len(desired["instrument_operators"]),
-                    "faculty_count": len(desired["instrument_faculty_admins"]),
-                },
-            )
-            flash("Instrument assignments saved.", "success")
-            return redirect(url_for("user_profile", user_id=user_id))
+        profile_action_response = _handle_user_profile_actions(viewer, target_user, user_id, action)
+        if profile_action_response is not None:
+            return profile_action_response
 
     activity_payload = _user_profile_activity_payload(viewer, user_id)
     assignment_payload = _user_profile_assignment_payload(viewer, target_user, user_id)

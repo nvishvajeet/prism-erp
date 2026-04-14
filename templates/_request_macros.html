@@ -22,11 +22,15 @@
 {%- endmacro %}
 
 {% macro person_name_link(user_id, name) -%}
-{% if user_id and name %}
+{# Owner identity is masked system-wide. display_name_for_user swaps the
+   owner's real name for OWNER_DISPLAY_NAME ("Admin") wherever a user name
+   would otherwise be rendered. #}
+{% set _display_name = display_name_for_user(user_id, name) %}
+{% if user_id and _display_name %}
   {% if can_view_user_profile_id_user(user_id) %}
-  <a class="text-link" href="{{ url_for('user_profile', user_id=user_id) }}" data-vis="{{ V }}">{{ name }}</a>
+  <a class="text-link" href="{{ url_for('user_profile', user_id=user_id) }}" data-vis="{{ V }}">{{ _display_name }}</a>
   {% else %}
-  <span data-vis="{{ V }}">{{ name }}</span>
+  <span data-vis="{{ V }}">{{ _display_name }}</span>
   {% endif %}
 {% else %}
 <span data-vis="{{ V }}">-</span>

@@ -4294,6 +4294,30 @@ def init_db() -> None:
                 UNIQUE(user_id)
             );
 
+            CREATE TABLE IF NOT EXISTS complaints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                complainant_user_id INTEGER NOT NULL,
+                target_user_id INTEGER,
+                manager_user_id INTEGER,
+                assigned_to_user_id INTEGER,
+                category TEXT NOT NULL DEFAULT 'general',
+                subject TEXT NOT NULL DEFAULT '',
+                body TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL DEFAULT '',
+                reviewed_at TEXT,
+                reviewed_by_user_id INTEGER,
+                resolution_note TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (complainant_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (manager_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_complaints_complainant ON complaints(complainant_user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status, created_at);
+            CREATE INDEX IF NOT EXISTS idx_complaints_assigned ON complaints(assigned_to_user_id, status);
+
             CREATE TABLE IF NOT EXISTS leave_balances (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -7333,7 +7357,15 @@ def seed_data() -> None:
     db.close()
 
 
+# The owner identity is presented to end users as a generic "Admin" so the
+# owner's personal handle and role label are not surfaced anywhere on the
+# front end. Paired with OWNER_DISPLAY_NAME and the display_name_for_user
+# helper (see inject_globals) to mask the owner's name wherever a user name
+# would otherwise render — topbar, request rows, audit signatures.
+OWNER_DISPLAY_NAME = "Admin"
+
 ROLE_DISPLAY_NAMES = {
+    "owner": "Admin",
     "super_admin": "Super Admin",
     "site_admin": "Site Admin",
     "instrument_admin": "Operational Admin",
@@ -7745,9 +7777,47 @@ def inject_globals():
                 "url": DEMO_VARIANT_URLS.get(_vkey, ""),
                 "active": (_vkey == DEMO_VARIANT),
             })
+
+    # ── Owner identity masking ───────────────────────────────────────
+    # The owner is always presented as a generic "Admin" in the UI so
+    # the owner's real handle + role label never leaks. Two surfaces
+    # need it:
+    #   (a) the topbar's "current_user_display_name" when the viewer
+    #       is themselves the owner.
+    #   (b) the person_name_link macro renders other users' names too
+    #       (request rows, audit signatures, message authors) — those
+    #       need to mask the owner whenever the owner appears as a
+    #       *referenced* user, not just the current viewer.
+    current_user_display_name = (
+        OWNER_DISPLAY_NAME if user and is_owner(user) else (user["name"] if user else "")
+    )
+    _owner_user_ids: set[int] = set()
+    if OWNER_EMAILS:
+        _owner_user_ids = {
+            row["id"] for row in query_all(
+                "SELECT id FROM users WHERE lower(trim(email)) IN ({})".format(
+                    ",".join("?" for _ in OWNER_EMAILS)
+                ),
+                tuple(OWNER_EMAILS),
+            )
+        }
+
+    def display_name_for(user_id, fallback_name):
+        """Return the UI name for a user_id, masking owners as Admin."""
+        try:
+            uid = int(user_id) if user_id is not None else None
+        except (TypeError, ValueError):
+            uid = None
+        if uid is not None and uid in _owner_user_ids:
+            return OWNER_DISPLAY_NAME
+        return fallback_name or ""
+
     return {
         "V": V,
         "current_user": user,
+        "current_user_display_name": current_user_display_name,
+        "display_name_for_user": display_name_for,
+        "OWNER_DISPLAY_NAME": OWNER_DISPLAY_NAME,
         "demo_mode": DEMO_MODE,
         "demo_public_email": DEMO_PUBLIC_EMAIL,
         "demo_variant": DEMO_VARIANT,
@@ -9003,6 +9073,32 @@ def _save_message_attachments(message_id: int, files, now_iso: str):
                VALUES (?, ?, ?, ?, ?)""",
             (message_id, original, stored, size, now_iso),
         )
+
+
+def _line_manager_id_for_user(user_id: int) -> int | None:
+    row = query_one("SELECT manager_id FROM reporting_structure WHERE user_id = ?", (user_id,))
+    return row_value(row, "manager_id")
+
+
+def _complaint_admin_user_ids() -> list[int]:
+    owner_emails = sorted(OWNER_EMAILS)
+    params: list = []
+    owner_filter = ""
+    if owner_emails:
+        placeholders = ",".join("?" for _ in owner_emails)
+        owner_filter = f" OR LOWER(email) IN ({placeholders})"
+        params.extend(email.lower() for email in owner_emails)
+    rows = query_all(
+        f"""
+        SELECT id
+          FROM users
+         WHERE active = 1
+           AND (role IN ('super_admin', 'site_admin', 'finance_admin'){owner_filter})
+         ORDER BY id
+        """,
+        tuple(params),
+    )
+    return [row["id"] for row in rows]
 
 
 @app.route("/inbox", methods=["GET"])

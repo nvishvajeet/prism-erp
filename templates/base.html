@@ -95,7 +95,12 @@
     <div class="topbar-right" data-vis="{{ V }}">
       <div class="userbox" data-vis="{{ V }}">
         <div class="user-meta" data-vis="{{ V }}">
-          <strong data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}" data-vis="{{ V }}">{{ current_user["name"] }}</a></strong>
+          {% if is_owner_user %}
+          {# Owner identity is masked — no profile link, generic label only. #}
+          <strong data-vis="{{ V }}">{{ current_user_display_name }}</strong>
+          {% else %}
+          <strong data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('user_profile', user_id=current_user['id']) }}" data-vis="{{ V }}">{{ current_user_display_name }}</a></strong>
+          {% endif %}
           <span class="topbar-role-badge" data-vis="{{ V }}">{{ current_role_display }}</span>
         </div>
         <div class="user-controls" data-vis="{{ V }}">

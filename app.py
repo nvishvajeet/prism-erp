@@ -9485,6 +9485,42 @@ def inbox():
         })
     inbox_notifications.sort(key=lambda item: item["is_read"])
     notification_unread = sum(1 for item in inbox_notifications if not item["is_read"])
+    # AI action queue — prospective drafts awaiting this user's decision.
+    # Silent-skip if the table doesn't exist yet (fresh install, not
+    # all deploys have run init_db since the v3.1 seed).
+    prospective_actions: list[dict] = []
+    try:
+        action_rows = query_all(
+            """SELECT pa.id, pa.action_type, pa.status, pa.payload_json,
+                      pa.file_name, pa.created_at, pa.approver_stage,
+                      pa.submitted_by_user_id, u.name AS submitter_name,
+                      ar.label AS action_label, ar.target_table
+                 FROM ai_prospective_actions pa
+                 LEFT JOIN users u ON u.id = pa.submitted_by_user_id
+                 LEFT JOIN ai_action_routes ar ON ar.action_type = pa.action_type
+                WHERE pa.assigned_approver_id = ?
+                  AND pa.status = 'awaiting_review'
+                ORDER BY pa.created_at DESC
+                LIMIT 20""",
+            (target_user_id,),
+        )
+        for r in action_rows:
+            try:
+                payload = json.loads(row_value(r, "payload_json", "{}") or "{}")
+            except Exception:
+                payload = {}
+            prospective_actions.append({
+                "id": r["id"],
+                "action_type": r["action_type"],
+                "label": row_value(r, "action_label") or r["action_type"].replace("_", " ").title(),
+                "prompt": payload.get("prompt", ""),
+                "file_name": row_value(r, "file_name", ""),
+                "submitter_name": row_value(r, "submitter_name", "—"),
+                "stage": row_value(r, "approver_stage", ""),
+                "created_at": r["created_at"],
+            })
+    except sqlite3.OperationalError:
+        prospective_actions = []
     return render_template(
         "inbox.html",
         messages=rows,
@@ -9495,6 +9531,7 @@ def inbox():
         folder_counts=folder_counts,
         inbox_notifications=inbox_notifications[:4],
         notification_unread=notification_unread,
+        prospective_actions=prospective_actions,
     )
 
 
@@ -22087,6 +22124,132 @@ def ai_advisor_submit():
     elif portal == "finance":
         return redirect(url_for("finance_portal"))
     return redirect(url_for("index"))
+
+
+def _materialise_prospective_action(action: sqlite3.Row, approver_id: int) -> tuple[str, int | None]:
+    """Promote a prospective action into its real target table.
+    Returns (table_name, new_row_id) or ("", None) if no materialisation
+    is wired up for this action_type yet.
+
+    This is the one-and-only path that converts AI-extracted drafts into
+    real data. AI code never calls this — only the approver's click does.
+    """
+    try:
+        payload = json.loads(row_value(action, "payload_json", "{}") or "{}")
+    except Exception:
+        payload = {}
+    target = row_value(action, "materialised_table") or ""
+    action_type = row_value(action, "action_type", "")
+    file_path = row_value(action, "file_path", "") or ""
+    prompt = payload.get("prompt", "") or ""
+    submitter = row_value(action, "submitted_by_user_id")
+    # Default target inferred from route if not set on the row.
+    if not target:
+        route = query_one(
+            "SELECT target_table FROM ai_action_routes WHERE action_type = ?",
+            (action_type,),
+        )
+        target = row_value(route, "target_table", "") if route else ""
+    if target == "expense_receipts":
+        title = (prompt[:60] or action_type.replace("_", " ").title()).strip()
+        execute(
+            "INSERT INTO expense_receipts "
+            "(submitted_by_user_id, title, description, amount, category, "
+            "receipt_date, receipt_image_path, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (submitter, title, prompt, 0.0,
+             "fuel" if action_type == "fuel_receipt" else "vehicle",
+             now_iso()[:10], file_path, "pending", now_iso()),
+        )
+        row = query_one("SELECT last_insert_rowid() AS id")
+        return ("expense_receipts", row["id"] if row else None)
+    # Other target tables — not wired yet. Audit-only materialisation: leave
+    # the prospective row approved but with no target row id. The approver
+    # has to complete the entry manually via the module's own UI. Prevents
+    # silent half-materialisation.
+    return (target, None)
+
+
+@app.route("/ai/action/<int:action_id>/decide", methods=["POST"])
+@login_required
+def ai_action_decide(action_id: int):
+    """Approve or reject a prospective action. Gated by
+    assigned_approver_id match (owner bypass via is_owner)."""
+    user = current_user()
+    action = query_one(
+        "SELECT * FROM ai_prospective_actions WHERE id = ?", (action_id,)
+    )
+    if not action:
+        flash("Action not found.", "warning")
+        return redirect(url_for("inbox"))
+    if action["status"] != "awaiting_review":
+        flash(f"Already {action['status']}.", "warning")
+        return redirect(url_for("inbox"))
+    assigned = row_value(action, "assigned_approver_id")
+    if assigned != user["id"] and not is_owner(user):
+        flash("Not your queue item.", "warning")
+        return redirect(url_for("inbox"))
+    decision = request.form.get("decision", "").strip()
+    note = request.form.get("note", "").strip()
+    if decision == "reject":
+        if not note:
+            flash("Rejection requires a note.", "warning")
+            return redirect(url_for("inbox"))
+        execute(
+            "UPDATE ai_prospective_actions SET status='rejected', decision_note=?, "
+            "decided_at=?, decided_by_user_id=? WHERE id=?",
+            (note, now_iso(), user["id"], action_id),
+        )
+        flash(f"Rejected action #{action_id}.", "success")
+        return redirect(url_for("inbox"))
+    if decision != "approve":
+        flash("Unknown decision.", "warning")
+        return redirect(url_for("inbox"))
+    # Approve: advance to next stage if one exists, else materialise.
+    stage = row_value(action, "approver_stage", "area_admin")
+    action_type = row_value(action, "action_type", "")
+    route = query_one(
+        "SELECT * FROM ai_action_routes WHERE action_type = ?", (action_type,)
+    )
+    fin_role = row_value(route, "fin_admin_role", "") if route else ""
+    if stage == "area_admin" and fin_role:
+        # Hand off to fin admin stage.
+        next_approver = _resolve_ai_approver(fin_role, row_value(action, "region", ""))
+        if next_approver is None and OWNER_EMAILS:
+            placeholders = ",".join("?" for _ in OWNER_EMAILS)
+            owner_row = query_one(
+                f"SELECT id FROM users WHERE lower(email) IN ({placeholders}) ORDER BY id LIMIT 1",
+                tuple(OWNER_EMAILS),
+            )
+            if owner_row:
+                next_approver = owner_row["id"]
+        execute(
+            "UPDATE ai_prospective_actions SET approver_stage='fin_admin', "
+            "assigned_approver_id=?, decision_note=? WHERE id=?",
+            (next_approver, note, action_id),
+        )
+        flash(f"Approved stage 1 (#{action_id}). Handed off to finance admin.", "success")
+        return redirect(url_for("inbox"))
+    # Final stage — materialise.
+    table, new_id = _materialise_prospective_action(action, user["id"])
+    execute(
+        "UPDATE ai_prospective_actions SET status='approved', decision_note=?, "
+        "decided_at=?, decided_by_user_id=?, materialised_table=?, "
+        "materialised_row_id=? WHERE id=?",
+        (note, now_iso(), user["id"], table, new_id, action_id),
+    )
+    if table and new_id:
+        flash(
+            f"Approved action #{action_id} and created {table} #{new_id}.",
+            "success",
+        )
+    else:
+        flash(
+            f"Approved action #{action_id}. Materialisation for {table or action_type} "
+            f"isn't wired yet — complete the entry manually in the module UI.",
+            "warning",
+        )
+    return redirect(url_for("inbox"))
 
 
 @app.route("/ai/log")

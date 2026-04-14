@@ -12374,208 +12374,18 @@ def request_detail(request_id: int):
         )
         if workflow_action_response is not None:
             return workflow_action_response
-        if action == "complete" and (can_operate or can_manage):
-            results_summary = request.form["results_summary"].strip()
-            remarks = request.form.get("remarks", "").strip()
-            # v2.0.0 — finance values come from the form + peer aggregates
-            _finance = computed_finance_for_request(get_db(), request_id)
-            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", _finance["finance_status"])
-            email_ok, email_message = send_completion_email(sample_request, results_summary)
-            now_value = now_iso()
-            completion_fields = completion_override_fields(sample_request, user["id"], now_value)
-            assert_status_transition(sample_request["status"], "completed")
-            execute(
-                """
-                UPDATE sample_requests
-                SET status = 'completed', results_summary = ?, remarks = ?,
-                    result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
-                    submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
-                    scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    results_summary,
-                    remarks,
-                    email_message,
-                    now_value if email_ok else None,
-                    completion_fields["submitted_to_lab_at"],
-                    completion_fields["sample_submitted_at"],
-                    completion_fields["sample_received_at"],
-                    completion_fields["received_by_operator_id"],
-                    completion_fields["scheduled_for"],
-                    completion_fields["assigned_operator_id"],
-                    completion_fields["completed_at"],
-                    now_value,
-                    request_id,
-                ),
-            )
-            sync_request_to_peer_aggregates(
-                get_db(), request_id,
-                amount_due=_finance["amount_due"] or amount_paid,
-                amount_paid=amount_paid,
-                finance_status=finance_status,
-                receipt_number=_finance["receipt_number"],
-            )
-            get_db().commit()
-            log_completion_override_events(
-                user["id"],
-                sample_request,
-                completion_fields,
-                now_value,
-                "completed",
-                {"results_summary": results_summary, "email_status": email_message},
-            )
-        elif action == "admin_complete_override" and can_manage:
-            results_summary = request.form["results_summary"].strip()
-            remarks = request.form.get("remarks", "").strip()
-            _finance = computed_finance_for_request(get_db(), request_id)
-            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", _finance["finance_status"])
-            operator_id = int(request.form["assigned_operator_id"]) if request.form.get("assigned_operator_id") else (sample_request["assigned_operator_id"] or user["id"])
-            email_ok, email_message = send_completion_email(sample_request, results_summary)
-            now_value = now_iso()
-            completion_fields = completion_override_fields(sample_request, operator_id, now_value)
-            assert_status_transition(sample_request["status"], "completed", force=True)
-            execute(
-                """
-                UPDATE sample_requests
-                SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?,
-                    received_by_operator_id = ?, scheduled_for = ?,
-                    results_summary = ?, remarks = ?,
-                    result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    completion_fields["assigned_operator_id"],
-                    completion_fields["submitted_to_lab_at"],
-                    completion_fields["sample_submitted_at"],
-                    completion_fields["sample_received_at"],
-                    completion_fields["received_by_operator_id"],
-                    completion_fields["scheduled_for"],
-                    results_summary,
-                    remarks,
-                    email_message,
-                    now_value if email_ok else None,
-                    completion_fields["completed_at"],
-                    now_value,
-                    request_id,
-                ),
-            )
-            sync_request_to_peer_aggregates(
-                get_db(), request_id,
-                amount_due=_finance["amount_due"] or amount_paid,
-                amount_paid=amount_paid,
-                finance_status=finance_status,
-                receipt_number=_finance["receipt_number"],
-            )
-            get_db().commit()
-            execute(
-                "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Admin override' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
-                (now_value, request_id),
-            )
-            log_completion_override_events(
-                user["id"],
-                sample_request,
-                completion_fields,
-                now_value,
-                "admin_complete_override",
-                {"results_summary": results_summary, "email_status": email_message},
-            )
-        elif action == "resolve_sample" and (can_operate or can_manage):
-            results_summary = request.form.get("results_summary", "").strip()
-            remarks = request.form.get("remarks", "").strip()
-            _finance = computed_finance_for_request(get_db(), request_id)
-            amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
-            finance_status = request.form.get("finance_status", _finance["finance_status"])
-            mark_complete = request.form.get("mark_complete") == "1"
-            uploaded_resolution_file = request.files.get("resolution_attachment")
-            resolution_upload_error = None
-            if mark_complete:
-                final_summary = results_summary or remarks or "Completed by operator."
-                email_ok, email_message = send_completion_email(sample_request, final_summary)
-                now_value = now_iso()
-                completion_fields = completion_override_fields(sample_request, user["id"], now_value)
-                execute(
-                    """
-                    UPDATE sample_requests
-                    SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?,
-                        sample_received_at = ?, received_by_operator_id = ?, scheduled_for = ?, results_summary = ?, remarks = ?,
-                        result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        completion_fields["assigned_operator_id"],
-                        completion_fields["submitted_to_lab_at"],
-                        completion_fields["sample_submitted_at"],
-                        completion_fields["sample_received_at"],
-                        completion_fields["received_by_operator_id"],
-                        completion_fields["scheduled_for"],
-                        final_summary,
-                        remarks,
-                        email_message,
-                        now_value if email_ok else None,
-                        completion_fields["completed_at"],
-                        now_value,
-                        request_id,
-                    ),
-                )
-                execute(
-                    "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Completed from job page' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
-                    (now_value, request_id),
-                )
-                log_completion_override_events(
-                    user["id"],
-                    sample_request,
-                    completion_fields,
-                    now_value,
-                    "resolved_and_completed",
-                    {"results_summary": final_summary, "email_status": email_message},
-                )
-                send_completion_inbox_message(user["id"], sample_request)
-            else:
-                execute(
-                    "UPDATE sample_requests SET results_summary = ?, remarks = ?, updated_at = ? WHERE id = ?",
-                    (results_summary, remarks, now_iso(), request_id),
-                )
-                log_action(user["id"], "sample_request", request_id, "resolution_saved", {"results_summary": results_summary})
-            # v2.0.0 — finance state lives in peer aggregates now. The
-            # sync call creates/updates Invoice + Payment rows so the
-            # finance portal reflects the new amount_paid.
-            sync_request_to_peer_aggregates(
-                get_db(), request_id,
-                amount_due=_finance["amount_due"] or amount_paid,
-                amount_paid=amount_paid,
-                finance_status=finance_status,
-                receipt_number=_finance["receipt_number"],
-            )
-            get_db().commit()
-            if uploaded_resolution_file and uploaded_resolution_file.filename:
-                try:
-                    save_uploaded_attachment(
-                        sample_request,
-                        uploaded_resolution_file,
-                        user["id"],
-                        "result_document",
-                        remarks or "Resolution upload",
-                    )
-                except ValueError as exc:
-                    resolution_upload_error = str(exc)
-            write_request_metadata_snapshot(request_id)
-            if resolution_upload_error:
-                flash(f"Resolution saved, but file upload failed: {resolution_upload_error}", "error")
-            else:
-                flash("Job marked done." if mark_complete else "Resolution saved.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        elif action == "reject" and can_manage:
-            remarks = request.form.get("remarks", "").strip()
-            assert_status_transition(sample_request["status"], "rejected", force=True)
-            execute("UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
-            log_action(user["id"], "sample_request", request_id, "rejected", {})
+        terminal_action_response = _handle_request_detail_terminal_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            can_manage=can_manage,
+            can_operate=can_operate,
+        )
+        if terminal_action_response is not None:
+            return terminal_action_response
         else:
             abort(403)
-        write_request_metadata_snapshot(request_id)
-        return redirect(url_for("request_detail", request_id=request_id))
 
     return render_template(
         "request_detail.html",
@@ -13042,6 +12852,233 @@ def _handle_request_detail_workflow_actions(
             (remarks, now_iso(), request_id),
         )
         log_action(user["id"], "sample_request", request_id, "started", {})
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    return None
+
+
+def _handle_request_detail_terminal_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    can_manage: bool,
+    can_operate: bool,
+):
+    if action == "complete" and (can_operate or can_manage):
+        results_summary = request.form["results_summary"].strip()
+        remarks = request.form.get("remarks", "").strip()
+        _finance = computed_finance_for_request(get_db(), request_id)
+        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+        finance_status = request.form.get("finance_status", _finance["finance_status"])
+        email_ok, email_message = send_completion_email(sample_request, results_summary)
+        now_value = now_iso()
+        completion_fields = completion_override_fields(sample_request, user["id"], now_value)
+        assert_status_transition(sample_request["status"], "completed")
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'completed', results_summary = ?, remarks = ?,
+                result_email_status = ?, result_email_sent_at = ?, completion_locked = 1,
+                submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?, received_by_operator_id = ?,
+                scheduled_for = ?, assigned_operator_id = ?, completed_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                results_summary,
+                remarks,
+                email_message,
+                now_value if email_ok else None,
+                completion_fields["submitted_to_lab_at"],
+                completion_fields["sample_submitted_at"],
+                completion_fields["sample_received_at"],
+                completion_fields["received_by_operator_id"],
+                completion_fields["scheduled_for"],
+                completion_fields["assigned_operator_id"],
+                completion_fields["completed_at"],
+                now_value,
+                request_id,
+            ),
+        )
+        sync_request_to_peer_aggregates(
+            get_db(), request_id,
+            amount_due=_finance["amount_due"] or amount_paid,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=_finance["receipt_number"],
+        )
+        get_db().commit()
+        log_completion_override_events(
+            user["id"],
+            sample_request,
+            completion_fields,
+            now_value,
+            "completed",
+            {"results_summary": results_summary, "email_status": email_message},
+        )
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "admin_complete_override" and can_manage:
+        results_summary = request.form["results_summary"].strip()
+        remarks = request.form.get("remarks", "").strip()
+        _finance = computed_finance_for_request(get_db(), request_id)
+        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+        finance_status = request.form.get("finance_status", _finance["finance_status"])
+        operator_id = int(request.form["assigned_operator_id"]) if request.form.get("assigned_operator_id") else (sample_request["assigned_operator_id"] or user["id"])
+        email_ok, email_message = send_completion_email(sample_request, results_summary)
+        now_value = now_iso()
+        completion_fields = completion_override_fields(sample_request, operator_id, now_value)
+        assert_status_transition(sample_request["status"], "completed", force=True)
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?, sample_received_at = ?,
+                received_by_operator_id = ?, scheduled_for = ?,
+                results_summary = ?, remarks = ?,
+                result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                completion_fields["assigned_operator_id"],
+                completion_fields["submitted_to_lab_at"],
+                completion_fields["sample_submitted_at"],
+                completion_fields["sample_received_at"],
+                completion_fields["received_by_operator_id"],
+                completion_fields["scheduled_for"],
+                results_summary,
+                remarks,
+                email_message,
+                now_value if email_ok else None,
+                completion_fields["completed_at"],
+                now_value,
+                request_id,
+            ),
+        )
+        execute(
+            "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Admin override' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
+            (now_value, request_id),
+        )
+        sync_request_to_peer_aggregates(
+            get_db(), request_id,
+            amount_due=_finance["amount_due"] or amount_paid,
+            amount_paid=amount_paid,
+            finance_status=finance_status,
+            receipt_number=_finance["receipt_number"],
+        )
+        get_db().commit()
+        log_completion_override_events(
+            user["id"],
+            sample_request,
+            completion_fields,
+            now_value,
+            "admin_complete_override",
+            {"results_summary": results_summary, "email_status": email_message},
+        )
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "resolve_sample" and (can_operate or can_manage):
+        results_summary = request.form.get("results_summary", "").strip()
+        remarks = request.form.get("remarks", "").strip()
+        _finance = computed_finance_for_request(get_db(), request_id)
+        amount_paid = float(request.form.get("amount_paid") or _finance["amount_paid"] or 0)
+        finance_status = request.form.get("finance_status", _finance["finance_status"])
+        mark_complete = request.form.get("mark_complete") == "1"
+        uploaded_resolution_file = request.files.get("resolution_attachment")
+        resolution_upload_error = None
+        if mark_complete:
+            final_summary = results_summary or remarks or "Completed by operator."
+            email_ok, email_message = send_completion_email(sample_request, final_summary)
+            now_value = now_iso()
+            completion_fields = completion_override_fields(sample_request, user["id"], now_value)
+            execute(
+                """
+                UPDATE sample_requests
+                SET status = 'completed', assigned_operator_id = ?, submitted_to_lab_at = ?, sample_submitted_at = ?,
+                    sample_received_at = ?, received_by_operator_id = ?, scheduled_for = ?, results_summary = ?, remarks = ?,
+                    result_email_status = ?, result_email_sent_at = ?, completion_locked = 1, completed_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    completion_fields["assigned_operator_id"],
+                    completion_fields["submitted_to_lab_at"],
+                    completion_fields["sample_submitted_at"],
+                    completion_fields["sample_received_at"],
+                    completion_fields["received_by_operator_id"],
+                    completion_fields["scheduled_for"],
+                    final_summary,
+                    remarks,
+                    email_message,
+                    now_value if email_ok else None,
+                    completion_fields["completed_at"],
+                    now_value,
+                    request_id,
+                ),
+            )
+            execute(
+                "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Completed from job page' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
+                (now_value, request_id),
+            )
+            sync_request_to_peer_aggregates(
+                get_db(), request_id,
+                amount_due=_finance["amount_due"] or amount_paid,
+                amount_paid=amount_paid,
+                finance_status=finance_status,
+                receipt_number=_finance["receipt_number"],
+            )
+            get_db().commit()
+            log_completion_override_events(
+                user["id"],
+                sample_request,
+                completion_fields,
+                now_value,
+                "resolved_and_completed",
+                {"results_summary": final_summary, "email_status": email_message},
+            )
+            send_completion_inbox_message(user["id"], sample_request)
+        else:
+            execute(
+                "UPDATE sample_requests SET results_summary = ?, remarks = ?, updated_at = ? WHERE id = ?",
+                (results_summary, remarks, now_iso(), request_id),
+            )
+            log_action(user["id"], "sample_request", request_id, "resolution_saved", {"results_summary": results_summary})
+            sync_request_to_peer_aggregates(
+                get_db(), request_id,
+                amount_due=_finance["amount_due"] or amount_paid,
+                amount_paid=amount_paid,
+                finance_status=finance_status,
+                receipt_number=_finance["receipt_number"],
+            )
+            get_db().commit()
+        if uploaded_resolution_file and uploaded_resolution_file.filename:
+            try:
+                save_uploaded_attachment(
+                    sample_request,
+                    uploaded_resolution_file,
+                    user["id"],
+                    "result_document",
+                    remarks or "Resolution upload",
+                )
+            except ValueError as exc:
+                resolution_upload_error = str(exc)
+        write_request_metadata_snapshot(request_id)
+        if resolution_upload_error:
+            flash(f"Resolution saved, but file upload failed: {resolution_upload_error}", "error")
+        else:
+            flash("Job marked done." if mark_complete else "Resolution saved.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "reject" and can_manage:
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "rejected", force=True)
+        execute(
+            "UPDATE sample_requests SET status = 'rejected', remarks = ?, updated_at = ? WHERE id = ?",
+            (remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "rejected", {})
         write_request_metadata_snapshot(request_id)
         return redirect(url_for("request_detail", request_id=request_id))
 

@@ -547,11 +547,15 @@ def main() -> None:
     assert b"Zeiss" in response.data
     assert b"Sigma 500" in response.data
     assert client.get("/admin/users").status_code == 403
+    uploaded_instrument_photo: Path | None = None
     with app.app.app_context():
         instrument = app.get_db().execute("SELECT machine_photo_url FROM instruments WHERE id = 1").fetchone()
         assert instrument is not None
         assert instrument["machine_photo_url"].startswith("instrument_images/instrument_1_")
-        assert (app.STATIC_DIR / instrument["machine_photo_url"]).exists()
+        uploaded_instrument_photo = app.STATIC_DIR / instrument["machine_photo_url"]
+        assert uploaded_instrument_photo.exists()
+    if uploaded_instrument_photo is not None:
+        uploaded_instrument_photo.unlink(missing_ok=True)
 
     client.get("/logout")
     login(client, "user1@catalyst.local")

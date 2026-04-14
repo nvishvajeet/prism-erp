@@ -33,6 +33,20 @@ CATALYST defaults to **single-writer fast mode**.
 Fast mode is the default because most work should not pay parallel
 coordination overhead when there is no parallel writer.
 
+## Release-lane split
+
+Parallelism is primarily a **dev-lane** tool.
+
+- active multi-agent implementation belongs in the dev repo / dev lane
+- the stable/live lane should stay quiet, bounded, and close to
+  single-writer
+- if one agent is preparing for go-live, other agents should keep
+  shipping in dev and let the release owner promote only the approved
+  commit bundle
+
+In other words: when concurrency rises, move work away from stable;
+do not turn stable into a crowded integration branch.
+
 ## The three safety layers
 
 **Layer 1 — advisory lock (`CLAIMS.md`).** Agents declare which

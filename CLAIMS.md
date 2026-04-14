@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | git-lane-policy-split | 2026-04-14 16:40 CEST | `WORKFLOW.md`, `README.md`, `docs/DEPLOY.md`, `CLAIMS.md` | `docs: split dev and stable git lanes` |
 
 ## Stale-claim recovery
 

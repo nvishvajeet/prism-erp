@@ -152,6 +152,11 @@ wave — every push to `v1.3.0-stable-release` (with
 
 ## 3. Deploying a new release
 
+**Release-lane rule:** the Mac mini deploys only from the
+stable/live lane. Dev commits, crawler experiments, unfinished UI
+work, and parallel-agent refactors stay in the dev repo/lane until
+they are explicitly promoted.
+
 From the MacBook:
 
 ```bash
@@ -159,11 +164,11 @@ From the MacBook:
 ssh mini 'cd ~/Scheduler/Main && git status --porcelain'
 
 # 2. Push the release from the MacBook.
-git push origin master
+git push origin v1.3.0-stable-release
 
 # 3. Fetch + restart on the mini.
 ssh mini 'cd ~/Scheduler/Main && \
-  git pull --rebase && \
+  git pull --rebase origin v1.3.0-stable-release && \
   .venv/bin/pip install -r requirements.txt && \
   .venv/bin/python scripts/smoke_test.py && \
   launchctl kickstart -k gui/$(id -u)/local.catalyst'
@@ -172,6 +177,14 @@ ssh mini 'cd ~/Scheduler/Main && \
 The deploy is gated by `scripts/smoke_test.py`. If smoke fails the
 `launchctl kickstart` does not run and the old process keeps
 serving.
+
+Promotion model:
+
+- agents build and merge in **dev**
+- release owner selects the approved commits
+- only that release bundle is promoted to
+  `v1.3.0-stable-release`
+- the mini pulls only the stable/live branch
 
 ---
 
@@ -188,7 +201,7 @@ sed -i '' 's/[[:<:]]usekeychain[[:>:]]/UseKeychain/' ~/.ssh/config
 or use `/usr/bin/ssh` explicitly:
 
 ```bash
-GIT_SSH_COMMAND=/usr/bin/ssh git push origin master
+GIT_SSH_COMMAND=/usr/bin/ssh git push origin v1.3.0-stable-release
 ```
 
 `backend/setup_remote.command` handles this interactively.

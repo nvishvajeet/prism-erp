@@ -41,6 +41,26 @@ attribute is locked.
 
 Primary entry point: `app.py` (≈7,000 lines). This is the product.
 
+## 1.1 Release Channels
+
+CATALYST now has **two git lanes** and agents must treat them
+as different environments:
+
+- **Dev lane / dev repo** — where active implementation, refactors,
+  crawler-led fixes, and parallel agent work happen.
+- **Stable lane / live repo** — release-candidate commits only.
+  This lane exists to keep the live website boring and predictable.
+
+Rule:
+
+- write agents do normal work in the **dev lane**
+- only explicitly release-bound work is promoted into the
+  **stable/live lane**
+- the Mac mini / live website must only pull from the
+  **stable/live lane**
+- if another agent is preparing a go-live push, do **not** pile
+  unrelated work onto the stable branch; keep shipping in dev
+
 ## 2. Topology
 
 CATALYST is the only project on this laptop with a Level-2 mini
@@ -54,11 +74,17 @@ to deploy atomically.
 |---|---|
 | Level 1 bare (canonical origin) | `~/.claude/git-server/lab-scheduler.git` |
 | Working copy | `~/Documents/Scheduler/Main/` *(moved out of Dropbox on 2026-04-11 to avoid pack-file corruption)* |
-| Default branch | `v1.3.0-stable-release` |
+| Default branch | `v1.3.0-stable-release` *(stable/live lane only)* |
 | Level 2 upstream | **`mini`** — auto-mirror via post-receive hook. Target: `catalyst-mini:~/git/lab-scheduler.git`. Reason: mini runs CATALYST in production. |
 
-Push to `origin` only. The Level 1 bare's hook mirrors to the
-mini. No GitHub, no Bitbucket — CATALYST is private.
+Push policy:
+
+- **Dev work:** push to the dev repo / dev lane only
+- **Release work:** push the selected release commit(s) to the
+  stable/live lane, then let that lane mirror to the mini
+
+Do not use the stable branch as a shared scratchpad for all
+agents anymore.
 
 ## 3. CATALYST-specific rules
 
@@ -221,15 +247,15 @@ mini has pulled. See `docs/DEPLOY.md` for the full deploy recipe.
 
 ```bash
 cd ~/Documents/Scheduler/Main
-git pull origin v1.3.0-stable-release
+git pull origin <dev-branch>
 
 # ... make changes ...
 
 .venv/bin/python scripts/smoke_test.py             # MUST pass
 git add -p
 git commit -m "<imperative subject ≤ 70 chars>"
-git pull --rebase origin v1.3.0-stable-release     # absorb concurrent work
-git push origin v1.3.0-stable-release
+git pull --rebase origin <dev-branch>              # absorb concurrent work
+git push origin <dev-branch>
 ```
 
 Commit rhythm is Level 1. Do not restate it here.
@@ -239,13 +265,28 @@ Fast-path single-writer recipe:
 ```bash
 cd ~/Documents/Scheduler/Main
 git status --short
-git pull origin v1.3.0-stable-release
+git pull origin <dev-branch>
 
 # ... make one bounded change ...
 
 .venv/bin/python scripts/smoke_test.py
 git add <files>
 git commit -m "<type>: <subject>" -m "Co-Authored-By: Codex <noreply@openai.com>"
+git push origin <dev-branch>
+```
+
+Stable-release promotion recipe:
+
+```bash
+# from a clean release-prep working copy
+git checkout v1.3.0-stable-release
+git pull origin v1.3.0-stable-release
+
+# promote only release-approved commits from dev
+git cherry-pick <approved-commit> [<approved-commit> ...]
+
+.venv/bin/python scripts/smoke_test.py
+.venv/bin/python -m crawlers wave sanity
 git push origin v1.3.0-stable-release
 ```
 
@@ -259,6 +300,10 @@ git push origin v1.3.0-stable-release
 - **Parallel-write path is explicit.** The moment a second write
   agent appears, or a lane needs a hot shared file, leave fast
   mode and switch to the full claim protocol.
+- **Parallel writes belong in dev.** Stable/live should aim to be
+  single-writer and release-bound. If many agents are active,
+  the correct answer is usually "move them to dev", not "claim
+  harder on stable".
 - **Pre-receive hook is fast** (~1s smoke on branch pushes).
   Full sanity only runs on tag pushes or `CATALYST_FULL_GATE=1`.
 - **Batch related changes** into one commit. Don't split a

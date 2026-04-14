@@ -2,7 +2,20 @@
 
 > Open-source modular ERP. One file. Any organization. 14 modules. 15,000 lines. Zero dependencies beyond Flask + SQLite.
 
-**Live domain:** [catalysterp.org](https://catalysterp.org) · **GitHub:** [nvishvajeet/catalyst-erp](https://github.com/nvishvajeet/catalyst-erp)
+**Live domain:** [catalysterp.org](https://catalysterp.org)
+
+## Git Channels
+
+CATALYST now follows a two-lane git model:
+
+- **Dev lane / dev repo** — all normal agent work, refactors, UI
+  improvements, crawler-led fixes, and experiments
+- **Stable lane / live repo** — only release-approved commits that
+  are safe to deploy to the live website
+
+The live website should only track the stable/live lane. If multiple
+agents are building at once, they should collaborate in dev and
+promote a bounded release bundle into stable later.
 
 ## Install
 
@@ -58,7 +71,8 @@ The first guided response should cover these steps in plain English:
    MacBook = editing/verification machine, Mac mini = production-serving
    verifier, extra MacBooks = more supervised local verification.
 5. Explain the git safety model:
-   `CLAIMS.md` + `git pull`/sync + pre-receive smoke/sanity checks.
+   `CLAIMS.md` + dev-vs-stable lane split + `git pull`/sync +
+   pre-receive smoke/sanity checks.
 6. Explain the terminal basics if needed:
    what `cd`, `ls`, `git`, `ssh`, `sudo`, Homebrew, virtualenv, smoke
    tests, HTTPS, and domains mean.

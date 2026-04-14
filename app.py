@@ -7999,11 +7999,11 @@ def index():
             },
             {
                 "slug": "hq",
-                "label": "Ravikiran",
-                "title": "Ravikiran ERP",
-                "tagline": "Operations and business ERP entry point. Demo access can continue here while we simplify the rest.",
+                "label": "Private Workspace",
+                "title": "Private ERP Workspace",
+                "tagline": "Separate internal workspace for non-lab operations and private demo access.",
                 "href": url_for("login", portal="hq"),
-                "cta": "Enter Ravikiran",
+                "cta": "Enter Private Workspace",
             },
         ]
         return render_template(

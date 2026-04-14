@@ -23411,266 +23411,18 @@ def ai_pane_submit():
         entity_created = basic_action_result["entity_created"]
         summary = basic_action_result["summary"]
 
-    elif action == "submit_request" and action_data.get("instrument"):
-        # AI-created draft request — needs operator approval before becoming live
-        d = action_data
-        inst_name = d["instrument"]
-        inst = query_one("SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'",
-                         ("%" + inst_name + "%",))
-        if inst:
-            # Resolve requester by name (or default to the operator themselves)
-            requester = user
-            req_name = d.get("requester_name", "")
-            if req_name:
-                found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1",
-                                  ("%" + req_name + "%",))
-                if found:
-                    requester = found
-            title = d.get("title", f"AI request — {inst['name']}")
-            sample_name = d.get("sample_name", d.get("description", "Sample")[:100])
-            sample_count = int(d.get("sample_count", d.get("num_samples", 1)))
-            sample_origin = d.get("sample_origin", "internal")
-            request_no = generate_job_reference(sample_origin)
-            sample_ref = generate_sample_reference(inst["name"], sample_origin)
-            req_id = execute(
-                """INSERT INTO sample_requests
-                   (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
-                    instrument_id, title, sample_name, sample_count, description, sample_origin,
-                    priority, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (request_no, sample_ref, requester["id"], user["id"],
-                 f"[AI Pane draft — needs approval]",
-                 inst["id"], title, sample_name, sample_count,
-                 d.get("description", ""), sample_origin,
-                 d.get("priority", "normal"), "draft_ai", now_iso(), now_iso()),
-            )
-            entity_created = "draft_request"
-            summary = f"Draft request #{request_no} created for {requester['name']} on {inst['name']} — awaiting your approval"
-            execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                    (req_id, summary, now_iso(), cmd_id))
-            # Notify operators for approval
-            for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
-                notify(op["id"], "task", "AI draft request needs approval",
-                       f"{user['name']}: {title} for {requester['name']} on {inst['name']}", url_for("request_detail", id=req_id))
-        else:
-            summary += f" — Could not find instrument '{inst_name}'"
-
-    elif action == "bulk_sample_intake" and action_data.get("samples"):
-        # Bulk intake: create multiple draft requests at once
-        d = action_data
-        inst_name = d.get("instrument", "")
-        inst = query_one("SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'",
-                         ("%" + inst_name + "%",)) if inst_name else None
-        if not inst:
-            # Try first active instrument as fallback
-            inst = query_one("SELECT * FROM instruments WHERE status = 'active' ORDER BY name LIMIT 1")
-        requester = user
-        req_name = d.get("requester_name", "")
-        if req_name:
-            found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1",
-                              ("%" + req_name + "%",))
-            if found:
-                requester = found
-        samples = d["samples"]
-        created_ids = []
-        sample_origin = "internal"
-        for s in samples[:20]:  # cap at 20
-            s_name = s.get("name", "Sample")
-            s_desc = s.get("description", "")
-            request_no = generate_job_reference(sample_origin)
-            sample_ref = generate_sample_reference(inst["name"] if inst else None, sample_origin)
-            req_id = execute(
-                """INSERT INTO sample_requests
-                   (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
-                    instrument_id, title, sample_name, sample_count, description, sample_origin,
-                    priority, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (request_no, sample_ref, requester["id"], user["id"],
-                 "[AI bulk intake — needs approval]",
-                 inst["id"] if inst else None, f"Bulk intake — {s_name}",
-                 s_name, 1, s_desc, sample_origin,
-                 "normal", "draft_ai", now_iso(), now_iso()),
-            )
-            created_ids.append(req_id)
-        entity_created = "bulk_draft"
-        count = len(created_ids)
-        inst_label = inst["name"] if inst else "unassigned"
-        summary = f"{count} draft request(s) created for {requester['name']} on {inst_label} — awaiting approval"
-        execute("UPDATE command_queue SET status='awaiting_approval', result_message=?, processed_at=? WHERE id=?",
-                (summary, now_iso(), cmd_id))
-        for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
-            notify(op["id"], "task", f"AI bulk intake: {count} samples",
-                   f"{user['name']}: {count} samples for {inst_label}", url_for("schedule"))
-
-    elif action == "attach_results" and action_data:
-        # Attach results to an existing request — mark as completed pending approval
-        d = action_data
-        ref = d.get("request_id_or_title", "")
-        req_row = None
-        if ref:
-            # Try by ID or request_no first
-            req_row = query_one("SELECT * FROM sample_requests WHERE id = ? OR request_no = ?",
-                                (ref if str(ref).isdigit() else 0, str(ref)))
-            if not req_row:
-                req_row = query_one("SELECT * FROM sample_requests WHERE title LIKE ? ORDER BY id DESC LIMIT 1",
-                                    ("%" + str(ref) + "%",))
-        if req_row:
-            result_notes = d.get("result_notes", "Results attached via AI Pane")
-            # If a file was attached to this message, link it
-            file_note = ""
-            if file_name:
-                file_note = f" [File: {file_name}]"
-            execute(
-                "UPDATE sample_requests SET status = 'results_pending_approval', originator_note = COALESCE(originator_note, '') || ? , updated_at = ? WHERE id = ?",
-                (f"\n[AI results] {result_notes}{file_note}", now_iso(), req_row["id"]),
-            )
-            entity_created = "results_attached"
-            summary = f"Results attached to {req_row['request_no']} — awaiting operator confirmation"
-            execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                    (req_row["id"], summary, now_iso(), cmd_id))
-            for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
-                notify(op["id"], "task", "AI results need confirmation",
-                       f"Results for {req_row['request_no']}: {result_notes[:80]}", url_for("request_detail", id=req_row["id"]))
-        else:
-            summary += f" — Could not find request '{ref}'"
-
-    elif action == "create_instrument" and action_data.get("name"):
-        # Admin setup: draft a new instrument pending admin activation
-        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
-            summary = "Only admins can create instruments. — Request sent for admin review."
-        else:
-            d = action_data
-            name = d["name"]
-            code = d.get("code", "").strip() or next_instrument_code()
-            # Check for collision
-            existing = query_one("SELECT id FROM instruments WHERE name = ? OR code = ?", (name, code))
-            if existing:
-                summary = f"Instrument '{name}' or code '{code}' already exists."
-            else:
-                inst_id = execute(
-                    """INSERT INTO instruments (name, code, category, location, daily_capacity, status,
-                       notes, office_info, faculty_group, manufacturer, model_number,
-                       capabilities_summary, machine_photo_url, reference_links,
-                       instrument_description, accepting_requests, soft_accept_enabled)
-                       VALUES (?, ?, ?, ?, ?, 'inactive', '', '', '', ?, ?, '', '', '', ?, 0, 0)""",
-                    (name, code, d.get("category", "general"), d.get("location", ""),
-                     int(d.get("daily_capacity", 3) or 3),
-                     d.get("manufacturer", ""), d.get("model_number", ""),
-                     d.get("description", "")),
-                )
-                entity_created = "draft_instrument"
-                summary = f"Draft instrument '{name}' ({code}) created — inactive until you activate it"
-                execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                        (inst_id, summary, now_iso(), cmd_id))
-                log_action(user["id"], "instrument", inst_id, "ai_instrument_drafted",
-                           {"name": name, "code": code})
-                for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 5"):
-                    notify(adm["id"], "admin", "AI drafted new instrument",
-                           f"{user['name']}: {name} ({code}) — review and activate",
-                           url_for("instrument_detail", instrument_id=inst_id))
-
-    elif action == "create_account" and action_data.get("name") and action_data.get("email"):
-        # Admin setup: create a new user with a temp password
-        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
-            summary = "Only admins can create accounts. — Request sent for admin review."
-        else:
-            d = action_data
-            email = d["email"].strip().lower()
-            existing = query_one("SELECT id FROM users WHERE email = ?", (email,))
-            if existing:
-                summary = f"User {email} already exists."
-            else:
-                allowed_roles = {"requester", "operator", "instrument_admin", "site_admin",
-                                 "finance_admin", "professor_approver", "super_admin"}
-                role = d.get("role", "requester")
-                if role not in allowed_roles:
-                    role = "requester"
-                temp_password = generate_temp_password()
-                member_code = generate_member_code(d["name"], role)
-                new_id = execute(
-                    """INSERT INTO users (name, email, password_hash, role, invited_by,
-                       invite_status, active, member_code, must_change_password, phone)
-                       VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1, ?)""",
-                    (d["name"], email, generate_password_hash(temp_password, method="pbkdf2:sha256"),
-                     role, user["id"], member_code, d.get("phone", "")),
-                )
-                entity_created = "account_created"
-                summary = (f"Account created: {d['name']} ({email}, {role}). "
-                           f"Temp password: {temp_password} — share securely, they must change on first login. "
-                           f"Member code: {member_code}")
-                execute("UPDATE command_queue SET status='completed', result_entity_type='user', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                        (new_id, summary, now_iso(), cmd_id))
-                log_action(user["id"], "user", new_id, "ai_user_created",
-                           {"email": email, "role": role})
-
-    elif action == "create_custom_field" and action_data.get("instrument_name") and action_data.get("field_name"):
-        # Admin setup: add a custom field to an instrument's request form
-        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
-            summary = "Only admins can modify form fields."
-        else:
-            d = action_data
-            inst = query_one("SELECT id, name FROM instruments WHERE name LIKE ?",
-                             ("%" + d["instrument_name"] + "%",))
-            if not inst:
-                summary = f"Instrument '{d['instrument_name']}' not found."
-            else:
-                field_type = d.get("field_type", "text")
-                if field_type not in ("text", "number", "select", "date", "textarea"):
-                    field_type = "text"
-                # Get max display_order for this instrument
-                max_row = query_one(
-                    "SELECT COALESCE(MAX(display_order), 0) AS mx FROM instrument_custom_fields WHERE instrument_id = ?",
-                    (inst["id"],),
-                )
-                next_order = (max_row["mx"] if max_row else 0) + 1
-                options_json = ""
-                if field_type == "select" and d.get("options"):
-                    opts = d["options"] if isinstance(d["options"], list) else [d["options"]]
-                    options_json = json.dumps(opts)
-                try:
-                    fid = execute(
-                        """INSERT INTO instrument_custom_fields (instrument_id, field_label, field_type,
-                           is_required, display_order, field_options, is_active)
-                           VALUES (?, ?, ?, ?, ?, ?, 1)""",
-                        (inst["id"], d["field_name"], field_type,
-                         1 if d.get("required") else 0, next_order, options_json),
-                    )
-                    entity_created = "custom_field"
-                    summary = f"Added '{d['field_name']}' ({field_type}) field to {inst['name']} form"
-                    execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
-                            (summary, now_iso(), cmd_id))
-                    log_action(user["id"], "instrument", inst["id"], "ai_custom_field_added",
-                               {"field_name": d["field_name"], "field_type": field_type})
-                except Exception as exc:
-                    summary = f"Could not add field: {exc}"
-
-    elif action == "create_approval_workflow" and action_data.get("instrument_name"):
-        # Admin setup: draft an approval chain. Admin confirms on instrument page.
-        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
-            summary = "Only admins can define workflows."
-        else:
-            d = action_data
-            inst = query_one("SELECT id, name FROM instruments WHERE name LIKE ?",
-                             ("%" + d["instrument_name"] + "%",))
-            if not inst:
-                summary = f"Instrument '{d['instrument_name']}' not found."
-            else:
-                steps = d.get("steps", [])
-                readable = " → ".join(s.get("role", "?") for s in steps)
-                summary = (f"Suggested workflow for {inst['name']}: {readable} — "
-                           f"review and apply from the instrument detail page")
-                execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
-                        (inst["id"], summary, now_iso(), cmd_id))
-                entity_created = "workflow_suggestion"
-                for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'instrument_admin') LIMIT 5"):
-                    notify(adm["id"], "admin", f"AI workflow suggestion for {inst['name']}",
-                           f"{user['name']}: {readable}",
-                           url_for("instrument_detail", instrument_id=inst["id"]))
-
-    elif action == "general_query":
-        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
-                (summary, now_iso(), cmd_id))
-        entity_created = "answer"
+    advanced_action_result = _ai_pane_run_advanced_actions(
+        user,
+        action=action,
+        action_data=action_data,
+        message=message,
+        file_name=file_name,
+        summary=summary,
+        cmd_id=cmd_id,
+    )
+    if entity_created is None and advanced_action_result is not None:
+        entity_created = advanced_action_result["entity_created"]
+        summary = advanced_action_result["summary"]
 
     # For actions that need admin review (grants, password resets, approvals), leave as 'parsed'
     # The batch processor or admin will pick them up
@@ -23886,6 +23638,256 @@ def _ai_pane_run_basic_actions(
             notify(finance_admin["id"], "finance", "AI receipt needs review",
                    f"{user['name']} submitted ₹{action_data['amount']} via AI Pane", url_for("receipts_list"))
         return {"entity_created": "receipt", "summary": summary}
+
+    return None
+
+
+def _ai_pane_run_advanced_actions(
+    user,
+    *,
+    action: str,
+    action_data: dict,
+    message: str,
+    file_name: str,
+    summary: str,
+    cmd_id: int,
+) -> dict[str, str] | None:
+    if action == "submit_request" and action_data.get("instrument"):
+        inst = query_one(
+            "SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'",
+            ("%" + action_data["instrument"] + "%",),
+        )
+        if not inst:
+            return {"entity_created": "", "summary": summary + f" — Could not find instrument '{action_data['instrument']}'"}
+        requester = user
+        req_name = action_data.get("requester_name", "")
+        if req_name:
+            found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1", ("%" + req_name + "%",))
+            if found:
+                requester = found
+        title = action_data.get("title", f"AI request — {inst['name']}")
+        sample_origin = action_data.get("sample_origin", "internal")
+        request_no = generate_job_reference(sample_origin)
+        req_id = execute(
+            """INSERT INTO sample_requests
+               (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
+                instrument_id, title, sample_name, sample_count, description, sample_origin,
+                priority, status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                request_no,
+                generate_sample_reference(inst["name"], sample_origin),
+                requester["id"],
+                user["id"],
+                "[AI Pane draft — needs approval]",
+                inst["id"],
+                title,
+                action_data.get("sample_name", action_data.get("description", "Sample")[:100]),
+                int(action_data.get("sample_count", action_data.get("num_samples", 1))),
+                action_data.get("description", ""),
+                sample_origin,
+                action_data.get("priority", "normal"),
+                "draft_ai",
+                now_iso(),
+                now_iso(),
+            ),
+        )
+        summary = f"Draft request #{request_no} created for {requester['name']} on {inst['name']} — awaiting your approval"
+        execute(
+            "UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+            (req_id, summary, now_iso(), cmd_id),
+        )
+        for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+            notify(op["id"], "task", "AI draft request needs approval",
+                   f"{user['name']}: {title} for {requester['name']} on {inst['name']}", url_for("request_detail", id=req_id))
+        return {"entity_created": "draft_request", "summary": summary}
+
+    if action == "bulk_sample_intake" and action_data.get("samples"):
+        inst_name = action_data.get("instrument", "")
+        inst = query_one("SELECT * FROM instruments WHERE name LIKE ? AND status = 'active'", ("%" + inst_name + "%",)) if inst_name else None
+        if not inst:
+            inst = query_one("SELECT * FROM instruments WHERE status = 'active' ORDER BY name LIMIT 1")
+        requester = user
+        req_name = action_data.get("requester_name", "")
+        if req_name:
+            found = query_one("SELECT * FROM users WHERE name LIKE ? AND active = 1", ("%" + req_name + "%",))
+            if found:
+                requester = found
+        created_ids = []
+        sample_origin = "internal"
+        for sample in action_data["samples"][:20]:
+            req_id = execute(
+                """INSERT INTO sample_requests
+                   (request_no, sample_ref, requester_id, created_by_user_id, originator_note,
+                    instrument_id, title, sample_name, sample_count, description, sample_origin,
+                    priority, status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    generate_job_reference(sample_origin),
+                    generate_sample_reference(inst["name"] if inst else None, sample_origin),
+                    requester["id"],
+                    user["id"],
+                    "[AI bulk intake — needs approval]",
+                    inst["id"] if inst else None,
+                    f"Bulk intake — {sample.get('name', 'Sample')}",
+                    sample.get("name", "Sample"),
+                    1,
+                    sample.get("description", ""),
+                    sample_origin,
+                    "normal",
+                    "draft_ai",
+                    now_iso(),
+                    now_iso(),
+                ),
+            )
+            created_ids.append(req_id)
+        inst_label = inst["name"] if inst else "unassigned"
+        summary = f"{len(created_ids)} draft request(s) created for {requester['name']} on {inst_label} — awaiting approval"
+        execute("UPDATE command_queue SET status='awaiting_approval', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+        for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+            notify(op["id"], "task", f"AI bulk intake: {len(created_ids)} samples",
+                   f"{user['name']}: {len(created_ids)} samples for {inst_label}", url_for("schedule"))
+        return {"entity_created": "bulk_draft", "summary": summary}
+
+    if action == "attach_results" and action_data:
+        ref = action_data.get("request_id_or_title", "")
+        req_row = None
+        if ref:
+            req_row = query_one("SELECT * FROM sample_requests WHERE id = ? OR request_no = ?",
+                                (ref if str(ref).isdigit() else 0, str(ref)))
+            if not req_row:
+                req_row = query_one("SELECT * FROM sample_requests WHERE title LIKE ? ORDER BY id DESC LIMIT 1",
+                                    ("%" + str(ref) + "%",))
+        if not req_row:
+            return {"entity_created": "", "summary": summary + f" — Could not find request '{ref}'"}
+        file_note = f" [File: {file_name}]" if file_name else ""
+        result_notes = action_data.get("result_notes", "Results attached via AI Pane")
+        execute(
+            "UPDATE sample_requests SET status = 'results_pending_approval', originator_note = COALESCE(originator_note, '') || ? , updated_at = ? WHERE id = ?",
+            (f"\n[AI results] {result_notes}{file_note}", now_iso(), req_row["id"]),
+        )
+        summary = f"Results attached to {req_row['request_no']} — awaiting operator confirmation"
+        execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (req_row["id"], summary, now_iso(), cmd_id))
+        for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
+            notify(op["id"], "task", "AI results need confirmation",
+                   f"Results for {req_row['request_no']}: {result_notes[:80]}", url_for("request_detail", id=req_row["id"]))
+        return {"entity_created": "results_attached", "summary": summary}
+
+    if action == "create_instrument" and action_data.get("name"):
+        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
+            return {"entity_created": "", "summary": "Only admins can create instruments. — Request sent for admin review."}
+        name = action_data["name"]
+        code = action_data.get("code", "").strip() or next_instrument_code()
+        existing = query_one("SELECT id FROM instruments WHERE name = ? OR code = ?", (name, code))
+        if existing:
+            return {"entity_created": "", "summary": f"Instrument '{name}' or code '{code}' already exists."}
+        inst_id = execute(
+            """INSERT INTO instruments (name, code, category, location, daily_capacity, status,
+               notes, office_info, faculty_group, manufacturer, model_number,
+               capabilities_summary, machine_photo_url, reference_links,
+               instrument_description, accepting_requests, soft_accept_enabled)
+               VALUES (?, ?, ?, ?, ?, 'inactive', '', '', '', ?, ?, '', '', '', ?, 0, 0)""",
+            (name, code, action_data.get("category", "general"), action_data.get("location", ""),
+             int(action_data.get("daily_capacity", 3) or 3),
+             action_data.get("manufacturer", ""), action_data.get("model_number", ""),
+             action_data.get("description", "")),
+        )
+        summary = f"Draft instrument '{name}' ({code}) created — inactive until you activate it"
+        execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (inst_id, summary, now_iso(), cmd_id))
+        log_action(user["id"], "instrument", inst_id, "ai_instrument_drafted", {"name": name, "code": code})
+        for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 5"):
+            notify(adm["id"], "admin", "AI drafted new instrument",
+                   f"{user['name']}: {name} ({code}) — review and activate",
+                   url_for("instrument_detail", instrument_id=inst_id))
+        return {"entity_created": "draft_instrument", "summary": summary}
+
+    if action == "create_account" and action_data.get("name") and action_data.get("email"):
+        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
+            return {"entity_created": "", "summary": "Only admins can create accounts. — Request sent for admin review."}
+        email = action_data["email"].strip().lower()
+        existing = query_one("SELECT id FROM users WHERE email = ?", (email,))
+        if existing:
+            return {"entity_created": "", "summary": f"User {email} already exists."}
+        allowed_roles = {"requester", "operator", "instrument_admin", "site_admin", "finance_admin", "professor_approver", "super_admin"}
+        role = action_data.get("role", "requester")
+        if role not in allowed_roles:
+            role = "requester"
+        temp_password = generate_temp_password()
+        member_code = generate_member_code(action_data["name"], role)
+        new_id = execute(
+            """INSERT INTO users (name, email, password_hash, role, invited_by,
+               invite_status, active, member_code, must_change_password, phone)
+               VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1, ?)""",
+            (action_data["name"], email, generate_password_hash(temp_password, method="pbkdf2:sha256"),
+             role, user["id"], member_code, action_data.get("phone", "")),
+        )
+        summary = (f"Account created: {action_data['name']} ({email}, {role}). "
+                   f"Temp password: {temp_password} — share securely, they must change on first login. "
+                   f"Member code: {member_code}")
+        execute("UPDATE command_queue SET status='completed', result_entity_type='user', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (new_id, summary, now_iso(), cmd_id))
+        log_action(user["id"], "user", new_id, "ai_user_created", {"email": email, "role": role})
+        return {"entity_created": "account_created", "summary": summary}
+
+    if action == "create_custom_field" and action_data.get("instrument_name") and action_data.get("field_name"):
+        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
+            return {"entity_created": "", "summary": "Only admins can modify form fields."}
+        inst = query_one("SELECT id, name FROM instruments WHERE name LIKE ?", ("%" + action_data["instrument_name"] + "%",))
+        if not inst:
+            return {"entity_created": "", "summary": f"Instrument '{action_data['instrument_name']}' not found."}
+        field_type = action_data.get("field_type", "text")
+        if field_type not in ("text", "number", "select", "date", "textarea"):
+            field_type = "text"
+        max_row = query_one(
+            "SELECT COALESCE(MAX(display_order), 0) AS mx FROM instrument_custom_fields WHERE instrument_id = ?",
+            (inst["id"],),
+        )
+        next_order = (max_row["mx"] if max_row else 0) + 1
+        options_json = ""
+        if field_type == "select" and action_data.get("options"):
+            opts = action_data["options"] if isinstance(action_data["options"], list) else [action_data["options"]]
+            options_json = json.dumps(opts)
+        try:
+            execute(
+                """INSERT INTO instrument_custom_fields (instrument_id, field_label, field_type,
+                   is_required, display_order, field_options, is_active)
+                   VALUES (?, ?, ?, ?, ?, ?, 1)""",
+                (inst["id"], action_data["field_name"], field_type,
+                 1 if action_data.get("required") else 0, next_order, options_json),
+            )
+            summary = f"Added '{action_data['field_name']}' ({field_type}) field to {inst['name']} form"
+            execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                    (summary, now_iso(), cmd_id))
+            log_action(user["id"], "instrument", inst["id"], "ai_custom_field_added",
+                       {"field_name": action_data["field_name"], "field_type": field_type})
+            return {"entity_created": "custom_field", "summary": summary}
+        except Exception as exc:
+            return {"entity_created": "", "summary": f"Could not add field: {exc}"}
+
+    if action == "create_approval_workflow" and action_data.get("instrument_name"):
+        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
+            return {"entity_created": "", "summary": "Only admins can define workflows."}
+        inst = query_one("SELECT id, name FROM instruments WHERE name LIKE ?", ("%" + action_data["instrument_name"] + "%",))
+        if not inst:
+            return {"entity_created": "", "summary": f"Instrument '{action_data['instrument_name']}' not found."}
+        steps = action_data.get("steps", [])
+        readable = " -> ".join(s.get("role", "?") for s in steps)
+        summary = f"Suggested workflow for {inst['name']}: {readable} — review and apply from the instrument detail page"
+        execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
+                (inst["id"], summary, now_iso(), cmd_id))
+        for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'instrument_admin') LIMIT 5"):
+            notify(adm["id"], "admin", f"AI workflow suggestion for {inst['name']}",
+                   f"{user['name']}: {readable}",
+                   url_for("instrument_detail", instrument_id=inst["id"]))
+        return {"entity_created": "workflow_suggestion", "summary": summary}
+
+    if action == "general_query":
+        execute("UPDATE command_queue SET status='completed', result_message=?, processed_at=? WHERE id=?",
+                (summary, now_iso(), cmd_id))
+        return {"entity_created": "answer", "summary": summary}
 
     return None
 

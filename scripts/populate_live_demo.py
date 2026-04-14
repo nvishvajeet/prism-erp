@@ -148,21 +148,28 @@ def create_request(
     sample_received_at: str | None = None,
     completed_at: str | None = None,
     created_by_email: str | None = None,
+    request_no: str | None = None,
+    requester_id: int | None = None,
+    created_by_user_id: int | None = None,
+    instrument_id: int | None = None,
+    operator_id: int | None = None,
 ) -> int:
-    request_no = next_request_number(db)
-    _r = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()
-    if not _r:
-        return -1  # skip — user not in seed
-    requester_id = _r["id"]
-    created_by_lookup = created_by_email or requester_email
-    _cb = db.execute("SELECT id FROM users WHERE email = ?", (created_by_lookup,)).fetchone()
-    created_by_user_id = _cb["id"] if _cb else requester_id
-    _inst = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()
-    if not _inst:
-        return -1
-    instrument_id = _inst["id"]
-    operator_id = None
-    if operator_email:
+    request_no = request_no or next_request_number(db)
+    if requester_id is None:
+        _r = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()
+        if not _r:
+            return -1  # skip — user not in seed
+        requester_id = _r["id"]
+    if created_by_user_id is None:
+        created_by_lookup = created_by_email or requester_email
+        _cb = db.execute("SELECT id FROM users WHERE email = ?", (created_by_lookup,)).fetchone()
+        created_by_user_id = _cb["id"] if _cb else requester_id
+    if instrument_id is None:
+        _inst = db.execute("SELECT id FROM instruments WHERE code = ?", (instrument_code,)).fetchone()
+        if not _inst:
+            return -1
+        instrument_id = _inst["id"]
+    if operator_id is None and operator_email:
         _op = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()
         operator_id = _op["id"] if _op else None
     completion_locked = 1 if status == "completed" else 0
@@ -323,6 +330,23 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
     for record in instruments:
         ensure_instrument(db, *record)
 
+    user_ids = {
+        row["email"]: row["id"]
+        for row in db.execute("SELECT id, email FROM users").fetchall()
+    }
+    instrument_ids = {
+        row["code"]: row["id"]
+        for row in db.execute("SELECT id, code FROM instruments").fetchall()
+    }
+    finance_admin_id = user_ids.get("finance@catalyst.local") or user_ids.get("finance@lab.local")
+    professor_approver_id = user_ids.get("approver@catalyst.local") or user_ids.get("professor@lab.local")
+    if finance_admin_id is None:
+        finance_row = db.execute("SELECT id FROM users WHERE role = 'finance_admin' ORDER BY id LIMIT 1").fetchone()
+        finance_admin_id = finance_row["id"] if finance_row else 1
+    if professor_approver_id is None:
+        professor_row = db.execute("SELECT id FROM users WHERE role = 'professor_approver' ORDER BY id LIMIT 1").fetchone()
+        professor_approver_id = professor_row["id"] if professor_row else 1
+
     admin_map = {
         "INST-001": "fesem.admin@lab.local",
         "INST-002": "icpms.admin@lab.local",
@@ -360,25 +384,22 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
         "INST-010": "sports@lab.local",
     }
     for code, email in admin_map.items():
-        instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-        if not _u:
+        instrument_id = instrument_ids.get(code)
+        user_id = user_ids.get(email)
+        if instrument_id is None or user_id is None:
             continue
-        user_id = _u["id"]
         assign_admin(db, user_id, instrument_id)
     for code, email in operator_map.items():
-        instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-        if not _u:
+        instrument_id = instrument_ids.get(code)
+        user_id = user_ids.get(email)
+        if instrument_id is None or user_id is None:
             continue
-        user_id = _u["id"]
         assign_operator(db, user_id, instrument_id)
     for code, email in faculty_map.items():
-        instrument_id = db.execute("SELECT id FROM instruments WHERE code = ?", (code,)).fetchone()["id"]
-        _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-        if not _u:
+        instrument_id = instrument_ids.get(code)
+        user_id = user_ids.get(email)
+        if instrument_id is None or user_id is None:
             continue
-        user_id = _u["id"]
         assign_faculty(db, user_id, instrument_id)
 
     if db.execute("SELECT COUNT(*) FROM sample_requests WHERE request_no LIKE 'REQ-2%'").fetchone()[0]:
@@ -459,6 +480,8 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             )
         )
 
+    next_request_seq = 2001 + db.execute("SELECT COUNT(*) AS c FROM sample_requests").fetchone()["c"]
+
     for idx, spec in enumerate(request_specs + extra_batch):
         (
             requester_email,
@@ -485,6 +508,11 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             approval_state,
         ) = spec
         request_base = base + timedelta(hours=idx * 4)
+        request_no = f"REQ-{next_request_seq}"
+        next_request_seq += 1
+        requester_id = user_ids.get(requester_email)
+        instrument_id = instrument_ids.get(instrument_code)
+        actor_operator = user_ids.get(operator_email) if operator_email else None
         request_id = create_request(
             db,
             requester_email,
@@ -509,28 +537,24 @@ def seed_live_demo(db: sqlite3.Connection) -> None:
             sample_submitted_at=sample_submitted_at,
             sample_received_at=sample_received_at,
             completed_at=completed_at,
+            request_no=request_no,
+            requester_id=requester_id,
+            instrument_id=instrument_id,
+            operator_id=actor_operator,
         )
         create_approval_chain(db, request_id, instrument_code, request_base, approval_state)
 
         if request_id == -1:
             continue
-        _rq = db.execute("SELECT id FROM users WHERE email = ?", (requester_email,)).fetchone()
-        if not _rq:
+        if requester_id is None:
             continue
-        requester_id = _rq["id"]
-        actor_operator = None
-        if operator_email:
-            _aop = db.execute("SELECT id FROM users WHERE email = ?", (operator_email,)).fetchone()
-            actor_operator = _aop["id"] if _aop else None
         log_action(db, requester_id, request_id, "submitted", {"status": "submitted"}, now_iso(request_base))
         if approval_state in {"finance_only", "professor_pending", "fully_approved", "operator_rejected"}:
-            _fin = db.execute("SELECT id FROM users WHERE role = 'finance_admin' ORDER BY id LIMIT 1").fetchone()
-            if _fin:
-                log_action(db, _fin["id"], request_id, "finance_approved", {}, now_iso(request_base + timedelta(hours=3)))
+            if finance_admin_id:
+                log_action(db, finance_admin_id, request_id, "finance_approved", {}, now_iso(request_base + timedelta(hours=3)))
         if approval_state in {"fully_approved", "operator_rejected"}:
-            _prof = db.execute("SELECT id FROM users WHERE role = 'professor_approver' ORDER BY id LIMIT 1").fetchone()
-            if _prof:
-                log_action(db, _prof["id"], request_id, "professor_approved", {}, now_iso(request_base + timedelta(hours=6)))
+            if professor_approver_id:
+                log_action(db, professor_approver_id, request_id, "professor_approved", {}, now_iso(request_base + timedelta(hours=6)))
         if approval_state == "fully_approved":
             log_action(db, actor_operator, request_id, "operator_approved", {}, now_iso(request_base + timedelta(hours=9)))
         if approval_state == "operator_rejected":

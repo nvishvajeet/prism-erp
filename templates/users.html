@@ -54,6 +54,53 @@
 
 <section class="users-tiles" data-vis="{{ V }}">
 
+  {% if can_create_users %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Pending Profile Approvals", pending_users|length|string ~ " waiting") }}
+    {% if pending_users %}
+    <table class="inst-list-table sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Name</th>
+          <th data-vis="{{ V }}">Username</th>
+          <th data-vis="{{ V }}">Role</th>
+          <th data-vis="{{ V }}">Phone</th>
+          <th data-vis="{{ V }}">Action</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for pending in pending_users %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ pending.name }}</strong></td>
+          <td data-vis="{{ V }}">{{ pending.email }}</td>
+          <td data-vis="{{ V }}">{{ role_display_name(pending.role) }}</td>
+          <td data-vis="{{ V }}">{{ pending.phone or "—" }}</td>
+          <td data-vis="{{ V }}">
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" data-vis="{{ V }}">
+              <form method="post" class="inline-form" data-vis="{{ V }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="approve_pending_user">
+                <input type="hidden" name="user_id" value="{{ pending.id }}">
+                <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
+              </form>
+              <form method="post" class="inline-form" data-vis="{{ V }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="reject_pending_user">
+                <input type="hidden" name="user_id" value="{{ pending.id }}">
+                <button type="submit" class="btn danger" data-vis="{{ V }}">Reject</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="hint" data-vis="{{ V }}">No profiles are waiting for approval.</p>
+    {% endif %}
+  </article>
+  {% endif %}
+
   {# ── TILE 1: Create / Invite ── #}
   <article class="card tile tile-users-create" data-vis="{{ V }}">
     {{ card_heading("", "Create Profile") }}
@@ -102,6 +149,20 @@
         {% endif %}
       </p>
       <button type="submit" data-vis="{{ V }}">Create User</button>
+    </form>
+    <form method="post" class="form-grid top-gap" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="bulk_create_users">
+      <div style="grid-column:1/-1;" data-vis="{{ V }}">
+        {{ card_heading("BULK ADD", "Queue Many Profiles For Approval", "One line per person: Name, username, role, phone(optional)") }}
+      </div>
+      <label style="grid-column:1/-1;" data-vis="{{ V }}">Bulk rows
+        <textarea name="bulk_rows" rows="8" placeholder="Nikita Dargode, nikita, site_admin, 9876543210&#10;Prashant Patil, prashant, site_admin&#10;Driver One, driver.one, operator" data-vis="{{ V }}"></textarea>
+      </label>
+      <p class="hint" style="grid-column:1/-1;" data-vis="{{ V }}">
+        Bulk-added profiles land in a pending queue first. Admins can then approve them one by one and get a temporary password at approval time.
+      </p>
+      <button type="submit" data-vis="{{ V }}">Queue Bulk Profiles</button>
     </form>
     {% else %}
     <p class="hint" data-vis="{{ V }}">Restricted.</p>

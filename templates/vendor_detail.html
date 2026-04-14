@@ -7,10 +7,32 @@
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">← Vendors</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">{{ vendor.name }}</h2>
-    <span class="badge {% if vendor.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+    <span class="badge {% if vendor.approval_status == 'pending_approval' %}status-queued{% elif vendor.approval_status == 'rejected' %}status-archived{% elif vendor.is_active %}status-active{% else %}status-archived{% endif %}" data-vis="{{ V }}">
+      {% if vendor.approval_status == 'pending_approval' %}
+      Pending Approval
+      {% elif vendor.approval_status == 'rejected' %}
+      Rejected
+      {% else %}
       {{ "Active" if vendor.is_active else "Inactive" }}
+      {% endif %}
     </span>
   </div>
+  {% if can_approve_vendors and vendor.approval_status == 'pending_approval' %}
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('vendor_approval_action', vendor_id=vendor.id) }}" class="inline-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="approval_action" value="approve">
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Approve Vendor</button>
+    </form>
+    <form method="post" action="{{ url_for('vendor_approval_action', vendor_id=vendor.id) }}" class="inline-form" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="approval_action" value="reject">
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <button type="submit" class="btn danger" data-vis="{{ V }}">Reject Vendor</button>
+    </form>
+  </div>
+  {% endif %}
 </header>
 
 <section class="inst-tiles" data-vis="{{ V }}">
@@ -38,6 +60,8 @@
       ("Bank", (vendor.bank_name or '') ~ (' — ' ~ vendor.bank_account if vendor.bank_account else '')),
       ("IFSC", vendor.ifsc_code or '—'),
       ("Registered", vendor.created_at[:10] if vendor.created_at else '—'),
+      ("Approval", vendor.approval_status.replace('_', ' ').title() if vendor.approval_status else 'Approved'),
+      ("Approved By", vendor.approved_by_name or '—'),
     ]) }}
     {% if vendor.notes %}
     <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">

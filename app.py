@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import math
@@ -4930,6 +4931,7 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN role_manual_notice TEXT NOT NULL DEFAULT ''")
             except:
                 pass
+        user_columns = {col[1] for col in cur.execute("PRAGMA table_info(users)").fetchall()}
 
         # Office / location flair — short free-text like "Kothrud HQ",
         # "MITWPU Campus", "Loni Kalbhor Mini", "Remote". Rendered as a
@@ -4940,6 +4942,8 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN office_location TEXT NOT NULL DEFAULT ''")
             except:
                 pass
+
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_invite_status ON users(invite_status, active)")
 
         # Phase 6 W6.1 — Indexes for hot query paths.
         # Every query that filters by status, instrument, requester, or
@@ -5387,13 +5391,18 @@ def init_db() -> None:
                 ifsc_code TEXT NOT NULL DEFAULT '',
                 upi_id TEXT NOT NULL DEFAULT '',
                 is_active INTEGER NOT NULL DEFAULT 1,
+                approval_status TEXT NOT NULL DEFAULT 'approved',
                 notes TEXT NOT NULL DEFAULT '',
                 created_by_user_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL DEFAULT '',
-                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+                approved_by_user_id INTEGER,
+                approved_at TEXT,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+                FOREIGN KEY (approved_by_user_id) REFERENCES users(id)
             );
             CREATE INDEX IF NOT EXISTS idx_vendors_active ON vendors(is_active);
             CREATE INDEX IF NOT EXISTS idx_vendors_category ON vendors(category);
+            CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active);
 
             CREATE TABLE IF NOT EXISTS purchase_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5432,6 +5441,23 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_po_submitted_by ON purchase_orders(submitted_by_user_id);
             CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders(created_at);
         """)
+        vendor_columns = {col[1] for col in cur.execute("PRAGMA table_info(vendors)").fetchall()}
+        if "approval_status" not in vendor_columns:
+            try:
+                cur.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
+            except Exception:
+                pass
+        if "approved_by_user_id" not in vendor_columns:
+            try:
+                cur.execute("ALTER TABLE vendors ADD COLUMN approved_by_user_id INTEGER REFERENCES users(id)")
+            except Exception:
+                pass
+        if "approved_at" not in vendor_columns:
+            try:
+                cur.execute("ALTER TABLE vendors ADD COLUMN approved_at TEXT")
+            except Exception:
+                pass
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
 
         # ── CA Audit module ──────────────────────────────────────
         cur.executescript("""
@@ -17863,6 +17889,45 @@ def _admin_users_permissions(user) -> dict[str, bool]:
     }
 
 
+def _parse_bulk_user_rows(raw_text: str) -> tuple[list[dict[str, str]], list[str]]:
+    rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    cleaned = (raw_text or "").strip()
+    if not cleaned:
+        return rows, ["Add at least one line in the format: Name, username, role"]
+    reader = csv.reader(cleaned.splitlines())
+    allowed_roles = set(allowed_user_creation_roles())
+    seen_emails: set[str] = set()
+    for idx, raw_row in enumerate(reader, start=1):
+        parts = [part.strip() for part in raw_row]
+        if not any(parts):
+            continue
+        if len(parts) < 3:
+            errors.append(f"Line {idx}: use Name, username, role")
+            continue
+        name, email, role = parts[0], parts[1].lower(), parts[2]
+        phone = parts[3] if len(parts) > 3 else ""
+        if not name or not email or not role:
+            errors.append(f"Line {idx}: name, username, and role are required")
+            continue
+        if role not in allowed_roles:
+            errors.append(f"Line {idx}: role '{role}' is not available here")
+            continue
+        if email in seen_emails:
+            errors.append(f"Line {idx}: duplicate username '{email}' in this batch")
+            continue
+        seen_emails.add(email)
+        rows.append({
+            "name": name,
+            "email": email,
+            "role": role,
+            "phone": phone,
+        })
+    if not rows and not errors:
+        errors.append("No valid rows found in the bulk import box.")
+    return rows, errors
+
+
 def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
     if request.method != "POST":
         return False
@@ -17897,6 +17962,91 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
                 f"Member code: {member_code}.",
                 "success",
             )
+    elif action == "bulk_create_users":
+        if not permissions["can_create_users"]:
+            abort(403)
+        parsed_rows, errors = _parse_bulk_user_rows(request.form.get("bulk_rows", ""))
+        if errors:
+            flash("Bulk add could not start: " + " | ".join(errors[:5]), "error")
+            return True
+        created = 0
+        skipped: list[str] = []
+        for row in parsed_rows:
+            if query_one("SELECT id FROM users WHERE email = ?", (row["email"],)) is not None:
+                skipped.append(row["email"])
+                continue
+            temp_password = generate_temp_password()
+            member_code = generate_member_code(row["name"], row["role"])
+            execute(
+                """
+                INSERT INTO users (
+                    name, email, password_hash, role, invited_by, invite_status,
+                    active, member_code, must_change_password, phone
+                )
+                VALUES (?, ?, ?, ?, ?, 'pending_approval', 0, ?, 1, ?)
+                """,
+                (
+                    row["name"],
+                    row["email"],
+                    generate_password_hash(temp_password, method="pbkdf2:sha256"),
+                    row["role"],
+                    user["id"],
+                    member_code,
+                    row["phone"],
+                ),
+            )
+            new_user = query_one("SELECT id FROM users WHERE email = ?", (row["email"],))
+            log_action(
+                user["id"],
+                "user",
+                new_user["id"] if new_user else 0,
+                "user_created_pending_approval",
+                {"email": row["email"], "role": row["role"], "member_code": member_code},
+            )
+            created += 1
+        message = f"{created} profile(s) added to the approval queue."
+        if skipped:
+            message += " Skipped existing: " + ", ".join(skipped[:5])
+        flash(message, "success" if created else "error")
+    elif action == "approve_pending_user":
+        if not permissions["can_create_users"]:
+            abort(403)
+        target_id = int(request.form.get("user_id", "0") or "0")
+        target = query_one("SELECT * FROM users WHERE id = ?", (target_id,))
+        if not target or target["invite_status"] != "pending_approval":
+            flash("That profile is no longer waiting for approval.", "error")
+            return True
+        temp_password = generate_temp_password()
+        execute(
+            """
+            UPDATE users
+               SET invite_status = 'active',
+                   active = 1,
+                   must_change_password = 1,
+                   password_hash = ?
+             WHERE id = ?
+            """,
+            (generate_password_hash(temp_password, method="pbkdf2:sha256"), target_id),
+        )
+        log_action(user["id"], "user", target_id, "user_approved", {"email": target["email"]})
+        flash(
+            f"Approved {target['email']}. Temporary password: {temp_password}",
+            "success",
+        )
+    elif action == "reject_pending_user":
+        if not permissions["can_create_users"]:
+            abort(403)
+        target_id = int(request.form.get("user_id", "0") or "0")
+        target = query_one("SELECT * FROM users WHERE id = ?", (target_id,))
+        if not target or target["invite_status"] != "pending_approval":
+            flash("That profile is no longer waiting for approval.", "error")
+            return True
+        execute(
+            "UPDATE users SET invite_status = 'rejected', active = 0 WHERE id = ?",
+            (target_id,),
+        )
+        log_action(user["id"], "user", target_id, "user_rejected", {"email": target["email"]})
+        flash(f"Rejected {target['email']}.", "success")
     elif action == "delete_member":
         member_id = int(request.form["user_id"])
         member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
@@ -17974,6 +18124,15 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         f"FROM users {member_where} ORDER BY name LIMIT ?",
         tuple(member_params) + (MEMBERS_CAP,),
     )
+    pending_users = query_all(
+        """
+        SELECT id, name, email, role, invite_status, active, member_code, phone
+          FROM users
+         WHERE invite_status = 'pending_approval'
+         ORDER BY id DESC
+         LIMIT 100
+        """
+    )
     return {
         "members": members,
         "members_total": members_total,
@@ -17981,6 +18140,7 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         "members_query": member_q,
         "admins": admins,
         "owners": owners,
+        "pending_users": pending_users,
         "lab_profile_mode": lab_profile_mode_active(),
     }
 
@@ -18001,6 +18161,7 @@ def admin_users():
         members_query=list_payload["members_query"],
         admins=list_payload["admins"],
         owners=list_payload["owners"],
+        pending_users=list_payload["pending_users"],
         can_create_users=permissions["can_create_users"],
         can_delete_members=permissions["can_delete_members"],
         can_elevate_members=permissions["can_elevate_members"],
@@ -18775,6 +18936,27 @@ def _user_can_manage_payments(user) -> bool:
     return bool(user_role_set(user) & {"finance_admin", "super_admin", "site_admin", "ca_auditor"})
 
 
+def _user_can_approve_vendors(user) -> bool:
+    if not user:
+        return False
+    if is_owner(user):
+        return True
+    return bool(user_role_set(user) & {"finance_admin", "super_admin", "site_admin"})
+
+
+def _ensure_vendor_approval_columns() -> None:
+    db = get_db()
+    cols = {row["name"] for row in db.execute("PRAGMA table_info(vendors)").fetchall()}
+    if "approval_status" not in cols:
+        db.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
+    if "approved_by_user_id" not in cols:
+        db.execute("ALTER TABLE vendors ADD COLUMN approved_by_user_id INTEGER REFERENCES users(id)")
+    if "approved_at" not in cols:
+        db.execute("ALTER TABLE vendors ADD COLUMN approved_at TEXT")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
+    db.commit()
+
+
 @app.route("/vendors")
 @login_required
 def vendor_list():
@@ -18783,16 +18965,25 @@ def vendor_list():
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
+    _ensure_vendor_approval_columns()
     vendors = query_all("""
         SELECT v.*, u.name AS created_by_name,
+               approver.name AS approved_by_name,
                (SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = v.id) AS po_count,
                (SELECT COALESCE(SUM(amount), 0) FROM purchase_orders
                 WHERE vendor_id = v.id AND status IN ('paid','receipt_uploaded')) AS total_paid
           FROM vendors v
           LEFT JOIN users u ON u.id = v.created_by_user_id
+          LEFT JOIN users approver ON approver.id = v.approved_by_user_id
          ORDER BY v.is_active DESC, v.name ASC
     """)
-    return render_template("vendors.html", vendors=vendors)
+    pending_vendors = [v for v in vendors if row_value(v, "approval_status", "approved") == "pending_approval"]
+    return render_template(
+        "vendors.html",
+        vendors=vendors,
+        pending_vendors=pending_vendors,
+        can_approve_vendors=_user_can_approve_vendors(user),
+    )
 
 
 @app.route("/vendors/new", methods=["GET", "POST"])
@@ -18803,16 +18994,22 @@ def vendor_new():
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
+    _ensure_vendor_approval_columns()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if not name:
             flash("Vendor name is required.", "error")
             return redirect(url_for("vendor_new"))
+        submit_mode = (request.form.get("submit_mode") or "pending_approval").strip()
+        approval_status = "approved" if submit_mode == "approved" and _user_can_approve_vendors(user) else "pending_approval"
+        approved_at = now_iso() if approval_status == "approved" else None
+        approved_by_user_id = user["id"] if approval_status == "approved" else None
         vid = execute(
             """INSERT INTO vendors (name, contact_person, phone, email, gstin, pan,
                address, category, bank_account, bank_name, ifsc_code, upi_id,
-               notes, created_by_user_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               notes, created_by_user_id, created_at, approval_status,
+               approved_by_user_id, approved_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (name, request.form.get("contact_person", "").strip(),
              request.form.get("phone", "").strip(),
              request.form.get("email", "").strip(),
@@ -18825,11 +19022,25 @@ def vendor_new():
              request.form.get("ifsc_code", "").strip(),
              request.form.get("upi_id", "").strip(),
              request.form.get("notes", "").strip(),
-             user["id"], now_iso()))
-        log_action(user["id"], "vendor", vid, "vendor_created", {"name": name})
-        flash(f"Vendor '{name}' registered.", "success")
+             user["id"], now_iso(), approval_status, approved_by_user_id, approved_at))
+        log_action(
+            user["id"],
+            "vendor",
+            vid,
+            "vendor_created",
+            {"name": name, "approval_status": approval_status},
+        )
+        flash(
+            f"Vendor '{name}' {'registered' if approval_status == 'approved' else 'submitted for approval'}.",
+            "success",
+        )
         return redirect(url_for("vendor_list"))
-    return render_template("vendor_form.html", vendor=None, categories=PO_CATEGORIES)
+    return render_template(
+        "vendor_form.html",
+        vendor=None,
+        categories=PO_CATEGORIES,
+        can_approve_vendors=_user_can_approve_vendors(user),
+    )
 
 
 @app.route("/vendors/<int:vendor_id>")
@@ -18840,7 +19051,17 @@ def vendor_detail(vendor_id):
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
-    vendor = query_one("SELECT * FROM vendors WHERE id = ?", (vendor_id,))
+    _ensure_vendor_approval_columns()
+    vendor = query_one(
+        """
+        SELECT v.*, creator.name AS created_by_name, approver.name AS approved_by_name
+          FROM vendors v
+          LEFT JOIN users creator ON creator.id = v.created_by_user_id
+          LEFT JOIN users approver ON approver.id = v.approved_by_user_id
+         WHERE v.id = ?
+        """,
+        (vendor_id,),
+    )
     if not vendor:
         abort(404)
     orders = query_all("""
@@ -18851,8 +19072,60 @@ def vendor_detail(vendor_id):
          ORDER BY po.created_at DESC LIMIT 50
     """, (vendor_id,))
     total_paid = sum(o["amount"] for o in orders if o["status"] in ("paid", "receipt_uploaded"))
-    return render_template("vendor_detail.html", vendor=vendor, orders=orders,
-                           total_paid=total_paid)
+    return render_template(
+        "vendor_detail.html",
+        vendor=vendor,
+        orders=orders,
+        total_paid=total_paid,
+        can_approve_vendors=_user_can_approve_vendors(user),
+    )
+
+
+@app.route("/vendors/<int:vendor_id>/approval", methods=["POST"])
+@login_required
+def vendor_approval_action(vendor_id: int):
+    if not portal_route_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_approve_vendors(user):
+        abort(403)
+    _ensure_vendor_approval_columns()
+    vendor = query_one("SELECT * FROM vendors WHERE id = ?", (vendor_id,))
+    if not vendor:
+        abort(404)
+    action = (request.form.get("approval_action") or "").strip()
+    if action == "approve":
+        execute(
+            """
+            UPDATE vendors
+               SET approval_status = 'approved',
+                   is_active = 1,
+                   approved_by_user_id = ?,
+                   approved_at = ?
+             WHERE id = ?
+            """,
+            (user["id"], now_iso(), vendor_id),
+        )
+        log_action(user["id"], "vendor", vendor_id, "vendor_approved", {"name": vendor["name"]})
+        flash(f"Approved vendor '{vendor['name']}'.", "success")
+    elif action == "reject":
+        execute(
+            """
+            UPDATE vendors
+               SET approval_status = 'rejected',
+                   is_active = 0,
+                   approved_by_user_id = ?,
+                   approved_at = ?
+             WHERE id = ?
+            """,
+            (user["id"], now_iso(), vendor_id),
+        )
+        log_action(user["id"], "vendor", vendor_id, "vendor_rejected", {"name": vendor["name"]})
+        flash(f"Rejected vendor '{vendor['name']}'.", "success")
+    else:
+        flash("Choose a valid vendor approval action.", "error")
+    next_url = request.form.get("next") or url_for("vendor_list")
+    return redirect(next_url)
 
 
 @app.route("/payments")
@@ -18931,7 +19204,10 @@ def vendor_payment_new():
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
-    vendors = query_all("SELECT id, name, category FROM vendors WHERE is_active = 1 ORDER BY name")
+    _ensure_vendor_approval_columns()
+    vendors = query_all(
+        "SELECT id, name, category FROM vendors WHERE is_active = 1 AND COALESCE(approval_status, 'approved') = 'approved' ORDER BY name"
+    )
     companies = _get_companies()
     if request.method == "POST":
         vendor_id = int(request.form.get("vendor_id", "0"))

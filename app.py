@@ -2444,39 +2444,22 @@ def stats_payload_for_scope(
     clauses, params = scoped_stats_filters(user, instrument_id=instrument_id, group_name=group_name)
     metric_clauses, metric_params, report_window = apply_report_window(clauses, params, "sr.completed_at", active_report_filters)
     where_sql = f" AND {' AND '.join(metric_clauses)}" if metric_clauses else ""
-    daily = query_all(
-        """
-        SELECT substr(sr.completed_at, 1, 10) AS bucket, COUNT(*) AS jobs, COALESCE(SUM(sr.sample_count), 0) AS samples
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL
-        GROUP BY substr(completed_at, 1, 10)
-        ORDER BY bucket DESC
-        """.replace("GROUP BY", f"{where_sql}\n        GROUP BY"),
-        tuple(metric_params),
-    )
-    weekly = query_all(
-        """
-        SELECT strftime('%Y-W%W', substr(sr.completed_at, 1, 19)) AS bucket, COUNT(*) AS jobs, COALESCE(SUM(sr.sample_count), 0) AS samples
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL
-        GROUP BY strftime('%Y-W%W', substr(sr.completed_at, 1, 19))
-        ORDER BY bucket DESC
-        """.replace("GROUP BY", f"{where_sql}\n        GROUP BY"),
-        tuple(metric_params),
-    )
-    monthly = query_all(
-        """
-        SELECT substr(sr.completed_at, 1, 7) AS bucket, COUNT(*) AS jobs, COALESCE(SUM(sr.sample_count), 0) AS samples
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL
-        GROUP BY substr(sr.completed_at, 1, 7)
-        ORDER BY bucket DESC
-        """.replace("GROUP BY", f"{where_sql}\n        GROUP BY"),
-        tuple(metric_params),
-    )
+    def completed_buckets(bucket_sql: str) -> list[sqlite3.Row]:
+        return query_all(
+            f"""
+            SELECT {bucket_sql} AS bucket, COUNT(*) AS jobs, COALESCE(SUM(sr.sample_count), 0) AS samples
+            FROM sample_requests sr
+            JOIN instruments i ON i.id = sr.instrument_id
+            WHERE sr.status = 'completed' AND sr.completed_at IS NOT NULL{where_sql}
+            GROUP BY {bucket_sql}
+            ORDER BY bucket DESC
+            """,
+            tuple(metric_params),
+        )
+
+    daily = completed_buckets("substr(sr.completed_at, 1, 10)")
+    weekly = completed_buckets("strftime('%Y-W%W', substr(sr.completed_at, 1, 19))")
+    monthly = completed_buckets("substr(sr.completed_at, 1, 7)")
     today = datetime.utcnow().date()
     week_start = today - timedelta(days=today.weekday())
     last_week_start = week_start - timedelta(days=7)
@@ -2533,19 +2516,21 @@ def stats_payload_for_scope(
         """,
         tuple(request_params),
     )
+    completed_summary = query_one(
+        f"""
+        SELECT COUNT(*) AS completed_jobs,
+               COALESCE(SUM(sr.sample_count), 0) AS completed_samples,
+               ROUND(COALESCE(AVG(sr.sample_count), 0), 2) AS avg_samples_per_completed_job
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        WHERE sr.status = 'completed'{where_sql}
+        """,
+        tuple(metric_params),
+    ) or {"completed_jobs": 0, "completed_samples": 0, "avg_samples_per_completed_job": 0}
     summary = {
-        "completed_jobs": query_one(
-            f"SELECT COUNT(*) AS c FROM sample_requests sr JOIN instruments i ON i.id = sr.instrument_id WHERE sr.status = 'completed'{' AND ' + ' AND '.join(metric_clauses) if metric_clauses else ''}",
-            tuple(metric_params),
-        )["c"],
-        "completed_samples": query_one(
-            f"SELECT COALESCE(SUM(sr.sample_count), 0) AS c FROM sample_requests sr JOIN instruments i ON i.id = sr.instrument_id WHERE sr.status = 'completed'{' AND ' + ' AND '.join(metric_clauses) if metric_clauses else ''}",
-            tuple(metric_params),
-        )["c"],
-        "avg_samples_per_completed_job": query_one(
-            f"SELECT ROUND(COALESCE(AVG(sr.sample_count), 0), 2) AS c FROM sample_requests sr JOIN instruments i ON i.id = sr.instrument_id WHERE sr.status = 'completed'{' AND ' + ' AND '.join(metric_clauses) if metric_clauses else ''}",
-            tuple(metric_params),
-        )["c"],
+        "completed_jobs": completed_summary["completed_jobs"],
+        "completed_samples": completed_summary["completed_samples"],
+        "avg_samples_per_completed_job": completed_summary["avg_samples_per_completed_job"],
         "avg_jobs_per_day": round(sum(row["jobs"] for row in daily) / len(daily), 2) if daily else 0,
         "avg_samples_per_day": round(sum(row["samples"] for row in daily) / len(daily), 2) if daily else 0,
         "avg_jobs_per_week": round(sum(row["jobs"] for row in weekly) / len(weekly), 2) if weekly else 0,

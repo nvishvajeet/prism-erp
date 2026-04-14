@@ -3013,6 +3013,20 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
     return profile
 
 
+def can_access_finance(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    roles = user_role_set(user)
+    return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+
+def can_manage_notices(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    roles = user_role_set(user)
+    return bool(roles & {"super_admin", "site_admin"}) or is_owner(user)
+
+
 def can_manage_members(user: sqlite3.Row | None) -> bool:
     return bool(user_access_profile(user)["can_manage_members"])
 
@@ -4948,6 +4962,8 @@ def instrument_group_member_ids(group_id: int) -> list[int]:
 def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
+    finance_access = can_access_finance(user)
+    noticeboard_manage_access = can_manage_notices(user)
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "admin@lab.local"
     V = "requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
     # Instruments for nav hover dropdown (only if user has instrument area access)
@@ -4959,6 +4975,8 @@ def inject_globals():
         )
         nav_instruments = _all_nav[:15]
         nav_instruments_truncated = len(_all_nav) > 15
+    nav_unread_inbox = unread_message_count(user) if user else 0
+    nav_notice_count = len(active_notices_for_user(user)) if user else 0
     return {
         "V": V,
         "current_user": user,
@@ -4984,6 +5002,10 @@ def inject_globals():
         "can_access_schedule_user": bool(access_profile["can_access_schedule"]),
         "can_access_calendar_user": bool(access_profile["can_access_calendar"]),
         "can_access_stats_user": bool(access_profile["can_access_stats"]),
+        "can_access_finance_user": finance_access,
+        "can_access_inbox_user": bool(user),
+        "can_access_noticeboard_user": bool(user),
+        "can_manage_notices_user": noticeboard_manage_access,
         "request_display_status": request_display_status,
         "request_status_group": request_status_group,
         "request_status_summary": request_status_summary,
@@ -5001,6 +5023,8 @@ def inject_globals():
         "instrument_photo_src": instrument_photo_src,
         "request_card_policy_user": lambda request_row: request_card_policy(user, request_row),
         "request_card_can_view_field_user": lambda request_row, field_name: request_card_field_allowed(user, request_row, field_name),
+        "nav_unread_inbox": nav_unread_inbox,
+        "nav_notice_count": nav_notice_count,
     }
 
 
@@ -5419,10 +5443,7 @@ NOTICE_ROLE_TARGETS = (
 def _user_can_post_notice(user: sqlite3.Row | None) -> bool:
     """Gate notice posting to owner / site_admin / super_admin. All
     three are legit 'site messaging authority' roles."""
-    if not user:
-        return False
-    roles = user_role_set(user)
-    return bool(roles & {"super_admin", "site_admin"}) or is_owner(user)
+    return can_manage_notices(user)
 
 
 @app.route("/admin/notices", methods=["GET"])
@@ -5840,10 +5861,7 @@ def finance_portal():
 
 
 def _user_can_view_finance(user: sqlite3.Row | None) -> bool:
-    if not user:
-        return False
-    roles = user_role_set(user)
-    return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+    return can_access_finance(user)
 
 
 @app.route("/finance/grants")
@@ -6029,6 +6047,26 @@ def sitemap():
             {"title": "Navigation", "entries": core_items},
             {"title": "Account", "entries": core_info},
         ],
+    })
+
+    modules_items = [
+        {"label": "Inbox", "hint": f"{unread_message_count(user)} unread messages", "type": "link", "href": url_for("inbox")},
+        {"label": "Compose Message", "hint": "Send a direct message to any active user", "type": "link", "href": url_for("message_compose")},
+        {"label": "Noticeboard", "hint": f"{len(active_notices_for_user(user))} active notices in scope", "type": "link", "href": url_for("admin_notices")},
+    ]
+    if can_access_finance(user):
+        finance_grant_count = db.execute("SELECT COUNT(*) FROM grants").fetchone()[0]
+        modules_items.append({
+            "label": "Finance",
+            "hint": f"{finance_grant_count} grants and invoice controls",
+            "type": "link",
+            "href": url_for("finance_portal"),
+        })
+    sections.append({
+        "key": "modules",
+        "title": "Modules",
+        "icon": "◼",
+        "groups": [{"title": "Workspace", "entries": modules_items}],
     })
 
     # Operations section — if user has instrument/schedule access

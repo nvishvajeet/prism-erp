@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#3b6d99" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a2230" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="PRISM">
+  <meta name="apple-mobile-web-app-title" content="Catalyst">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='mitwpu-logo.webp') }}">
-  <title>{{ title or "Lab Scheduler MVP" }}</title>
+  <title>{{ title or "Catalyst ERP" }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
     (function () {
@@ -60,7 +60,7 @@
   <a class="skip-nav" href="#main-content">Skip to main content</a>
   <header class="topbar" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
-      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Lab Scheduler MVP</a></h1>
+      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">CATALYST</a></h1>
     </div>
     {% if current_user %}
     <div class="topbar-right" data-vis="{{ V }}">
@@ -88,6 +88,11 @@
     {% if not access_profile_user.can_access_instruments %}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
     <a class="{% if endpoint in ['schedule','schedule_actions'] %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_pending_counts.queue }} items waiting on you">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
+    <a class="{% if endpoint in ['inbox', 'message_detail', 'message_compose'] %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_unread_inbox %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_unread_inbox }} unread messages">{{ nav_unread_inbox }}</span>{% endif %}</a>
+    <a class="{% if endpoint == 'admin_notices' %}nav-active{% endif %}" href="{{ url_for('admin_notices') }}" data-vis="{{ V }}">Noticeboard{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_notice_count }} active notices">{{ nav_notice_count }}</span>{% endif %}</a>
+    {% if can_access_finance_user %}
+    <a class="{% if endpoint in ['finance_portal', 'finance_grants_list', 'finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+    {% endif %}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>
     <a class="nav-button subtle" href="{{ url_for('new_request') }}" data-vis="{{ V }}" title="Create a new request (Alt+N)">New Request</a>
@@ -125,6 +130,15 @@
     {% endif %}
     {% if can_access_stats_user %}
     <a class="{% if endpoint in ['stats', 'visualizations', 'instrument_visualization', 'group_visualization'] %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
+    {% endif %}
+    {% if can_access_finance_user %}
+    <a class="{% if endpoint in ['finance_portal', 'finance_grants_list', 'finance_grant_detail'] %}nav-active{% endif %}" href="{{ url_for('finance_portal') }}" data-vis="{{ V }}">Finance</a>
+    {% endif %}
+    {% if can_access_inbox_user %}
+    <a class="{% if endpoint in ['inbox', 'message_detail', 'message_compose'] %}nav-active{% endif %}" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox{% if nav_unread_inbox %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_unread_inbox }} unread messages">{{ nav_unread_inbox }}</span>{% endif %}</a>
+    {% endif %}
+    {% if can_access_noticeboard_user %}
+    <a class="{% if endpoint == 'admin_notices' %}nav-active{% endif %}" href="{{ url_for('admin_notices') }}" data-vis="{{ V }}">Noticeboard{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}" title="{{ nav_notice_count }} active notices">{{ nav_notice_count }}</span>{% endif %}</a>
     {% endif %}
     <a class="{% if endpoint == 'sitemap' %}nav-active{% endif %}" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">Settings</a>
     <a class="{% if endpoint == 'docs' %}nav-active{% endif %}" href="{{ url_for('docs') }}" data-vis="{{ V }}">Docs</a>

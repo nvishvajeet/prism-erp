@@ -57,6 +57,17 @@
           </select>
         </div>
 
+        {% if own_firms %}
+        <div class="finance-form-field" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Billing Firm (which GST entity issues this invoice)</label>
+          <select name="company_id" data-vis="{{ V }}">
+            {% for f in own_firms %}
+            <option value="{{ f.id }}" {% if f.id == default_firm_id %}selected{% endif %} data-vis="{{ V }}">{{ f.name }}{% if f.gstin %} &mdash; {{ f.gstin }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
         <div class="finance-form-field tile-full-width" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Notes</label>
           <textarea name="notes" rows="3" placeholder="Internal notes (optional)" data-vis="{{ V }}"></textarea>

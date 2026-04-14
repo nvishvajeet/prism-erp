@@ -44,6 +44,15 @@
           </select>
         </label>
         <label data-vis="{{ V }}">Department <input type="text" name="department" placeholder="e.g. School of Engineering" data-vis="{{ V }}"></label>
+        {% if own_firms %}
+        <label data-vis="{{ V }}">Receiving Firm (GST entity the grant flows through)
+          <select name="company_id" data-vis="{{ V }}">
+            {% for f in own_firms %}
+            <option value="{{ f.id }}" {% if loop.first %}selected{% endif %} data-vis="{{ V }}">{{ f.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
         <label data-vis="{{ V }}">Notes <input type="text" name="notes" placeholder="Optional" data-vis="{{ V }}"></label>
         <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create Grant</button>
       </form>

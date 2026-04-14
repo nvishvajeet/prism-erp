@@ -10103,6 +10103,11 @@ def finance_invoice_new():
     requests_list = query_all(
         "SELECT id, request_no, title FROM sample_requests WHERE sample_origin = 'external' ORDER BY created_at DESC LIMIT 100"
     )
+    own_firms = query_all(
+        "SELECT id, name, short_name, gstin FROM companies "
+        "WHERE is_active = 1 AND is_own_firm = 1 ORDER BY id"
+    )
+    default_firm_id = own_firms[0]["id"] if own_firms else 1
 
     if request.method == "POST":
         request_id = request.form.get("request_id", "").strip()
@@ -10110,6 +10115,10 @@ def finance_invoice_new():
         amount_str = request.form.get("amount_due", "0").strip()
         grant_id_str = request.form.get("grant_id", "").strip()
         notes = request.form.get("notes", "").strip()
+        try:
+            company_id = int(request.form.get("company_id", default_firm_id) or default_firm_id)
+        except ValueError:
+            company_id = default_firm_id
 
         try:
             amount_due = float(amount_str)
@@ -10119,6 +10128,8 @@ def finance_invoice_new():
                 "finance_invoice_form.html",
                 grants_list=grants_list,
                 requests_list=requests_list,
+                own_firms=own_firms,
+                default_firm_id=default_firm_id,
                 mode="new",
             )
 
@@ -10128,6 +10139,8 @@ def finance_invoice_new():
                 "finance_invoice_form.html",
                 grants_list=grants_list,
                 requests_list=requests_list,
+                own_firms=own_firms,
+                default_firm_id=default_firm_id,
                 mode="new",
             )
 
@@ -10142,6 +10155,8 @@ def finance_invoice_new():
                 "finance_invoice_form.html",
                 grants_list=grants_list,
                 requests_list=requests_list,
+                own_firms=own_firms,
+                default_firm_id=default_firm_id,
                 mode="new",
             )
 
@@ -10154,6 +10169,8 @@ def finance_invoice_new():
                     "finance_invoice_form.html",
                     grants_list=grants_list,
                     requests_list=requests_list,
+                    own_firms=own_firms,
+                    default_firm_id=default_firm_id,
                     mode="new",
                 )
             if warning:
@@ -10163,9 +10180,9 @@ def finance_invoice_new():
         inv_id = execute(
             """INSERT INTO invoices
                (request_id, project_id, amount_due, status, issued_at, due_at, notes,
-                invoice_number, description, created_by_user_id, grant_id)
-               VALUES (?, NULL, ?, 'pending', ?, NULL, ?, ?, ?, ?, ?)""",
-            (req_id, amount_due, now_iso(), notes, invoice_number, description, user["id"], grant_id),
+                invoice_number, description, created_by_user_id, grant_id, company_id)
+               VALUES (?, NULL, ?, 'pending', ?, NULL, ?, ?, ?, ?, ?, ?)""",
+            (req_id, amount_due, now_iso(), notes, invoice_number, description, user["id"], grant_id, company_id),
         )
         sync_request_to_peer_aggregates(
             get_db(),
@@ -10197,6 +10214,8 @@ def finance_invoice_new():
         "finance_invoice_form.html",
         grants_list=grants_list,
         requests_list=requests_list,
+        own_firms=own_firms,
+        default_firm_id=default_firm_id,
         mode="new",
     )
 
@@ -10511,12 +10530,16 @@ def finance_grants_list():
         grant_type = request.form.get("grant_type", "external").strip()
         department = request.form.get("department", "").strip()
         notes = request.form.get("notes", "").strip()
+        try:
+            company_id = int(request.form.get("company_id", 1) or 1)
+        except ValueError:
+            company_id = 1
         new_id = execute(
             """INSERT INTO grants (code, name, sponsor, total_budget, start_date, end_date,
-               grant_type, department, notes, status, pi_user_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+               grant_type, department, notes, status, pi_user_id, created_at, company_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)""",
             (code, name, sponsor, total_budget, start_date, end_date,
-             grant_type, department, notes, user["id"], now_iso()),
+             grant_type, department, notes, user["id"], now_iso(), company_id),
         )
         get_db().commit()
         log_action(user["id"], "grant", new_id, "grant_created", {"code": code, "name": name, "budget": total_budget})
@@ -10578,10 +10601,15 @@ def finance_grants_list():
     totals["total_budget_fmt"] = "₹{:,.0f}".format(totals["total_budget"] or 0)
     totals["total_paid_fmt"] = "₹{:,.0f}".format(totals["total_paid"] or 0)
     totals["total_remaining_fmt"] = "₹{:,.0f}".format(totals["total_remaining"])
+    own_firms = query_all(
+        "SELECT id, name, short_name FROM companies "
+        "WHERE is_active = 1 AND is_own_firm = 1 ORDER BY id"
+    )
     return render_template(
         "finance_grants.html",
         grants=rows,
         totals=totals,
+        own_firms=own_firms,
     )
 
 

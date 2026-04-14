@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | docs-lightening | 2026-04-14 17:26 CEST | `app.py`, `CLAIMS.md` | `refactor: lighten docs controller` |
 
 ## Stale-claim recovery
 

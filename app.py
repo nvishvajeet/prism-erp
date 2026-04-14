@@ -14721,15 +14721,181 @@ def processed_history():
     return redirect(url_for("schedule", **args))
 
 
-@app.route("/users/<int:user_id>", methods=["GET", "POST"])
-@login_required
-def user_profile(user_id: int):
-    viewer = current_user()
-    target_user = query_one("SELECT id, name, email, role, invite_status, active, member_code FROM users WHERE id = ?", (user_id,))
+def _user_profile_target(viewer, user_id: int):
+    target_user = query_one(
+        "SELECT id, name, email, role, invite_status, active, member_code FROM users WHERE id = ?",
+        (user_id,),
+    )
     if target_user is None:
         abort(404)
     if not can_view_user_profile(viewer, target_user):
         abort(403)
+    return target_user
+
+
+def _user_profile_activity_payload(viewer, user_id: int) -> dict[str, object]:
+    scope_clauses, scope_params = request_scope_sql(viewer, "sr")
+    rows = query_all(
+        f"""
+        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
+               op.name AS operator_name,
+               COALESCE(COUNT(ra.id), 0) AS attachment_count
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN users op ON op.id = sr.assigned_operator_id
+        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
+        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
+        GROUP BY sr.id
+        ORDER BY sr.created_at DESC
+        LIMIT 25
+        """,
+        (*scope_params, user_id),
+    )
+    handled_rows = query_all(
+        f"""
+        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
+               op.name AS operator_name,
+               COALESCE(COUNT(ra.id), 0) AS attachment_count
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        LEFT JOIN users op ON op.id = sr.assigned_operator_id
+        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
+        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
+        GROUP BY sr.id
+        ORDER BY COALESCE(sr.completed_at, sr.updated_at, sr.created_at) DESC
+        LIMIT 25
+        """,
+        (*scope_params, user_id, user_id),
+    )
+    originated_count = query_one(
+        f"SELECT COUNT(*) AS c FROM sample_requests sr WHERE {' AND '.join(scope_clauses + ['sr.created_by_user_id = ?'])}",
+        (*scope_params, user_id),
+    )["c"]
+    submitted_summary = query_one(
+        f"""
+        SELECT COUNT(*) AS total_jobs,
+               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
+               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
+               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
+        FROM sample_requests sr
+        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
+        """,
+        (*scope_params, user_id),
+    )
+    handled_summary = query_one(
+        f"""
+        SELECT COUNT(*) AS total_jobs,
+               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
+               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
+               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
+        FROM sample_requests sr
+        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
+        """,
+        (*scope_params, user_id, user_id),
+    )
+    return {
+        "rows": rows,
+        "handled_rows": handled_rows,
+        "originated_count": originated_count,
+        "submitted_summary": submitted_summary,
+        "handled_summary": handled_summary,
+    }
+
+
+def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[str, object]:
+    can_edit_user_value = (
+        can_manage_members(viewer)
+        and (not is_owner(target_user) or is_owner(viewer))
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+    )
+    instrument_roster: list[sqlite3.Row] = []
+    instrument_categories: list[str] = []
+    assigned_admin_ids: set[int] = set()
+    assigned_operator_ids: set[int] = set()
+    assigned_faculty_ids: set[int] = set()
+    assigned_requester_ids: set[int] = set()
+    if can_edit_user_value:
+        instrument_roster = query_all(
+            "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
+        )
+        assigned_admin_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_operator_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_faculty_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (user_id,)
+            )
+        }
+        assigned_requester_ids = {
+            row["instrument_id"] for row in query_all(
+                "SELECT instrument_id FROM instrument_requesters WHERE user_id = ?", (user_id,)
+            )
+        }
+        instrument_categories = sorted({(row["category"] or "Uncategorized") for row in instrument_roster})
+    return {
+        "can_edit_user": can_edit_user_value,
+        "instrument_roster": instrument_roster,
+        "instrument_categories": instrument_categories,
+        "assigned_admin_ids": assigned_admin_ids,
+        "assigned_operator_ids": assigned_operator_ids,
+        "assigned_faculty_ids": assigned_faculty_ids,
+        "assigned_requester_ids": assigned_requester_ids,
+    }
+
+
+def _user_profile_role_payload(viewer, target_user, can_edit_user_value: bool) -> dict[str, object]:
+    role_choices: list[tuple[str, str]] = []
+    if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
+        base_roles = [
+            "requester",
+            "operator",
+            "instrument_admin",
+            "faculty_in_charge",
+            "professor_approver",
+            "finance_admin",
+        ]
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        if viewer["role"] == "super_admin":
+            base_roles += ["site_admin", "super_admin"]
+        role_choices = [(role, role_display_name(role)) for role in base_roles]
+    layered_role_choices = [
+        ("operator", "Operator"),
+        ("instrument_admin", "Instrument Admin"),
+        ("faculty_in_charge", "Faculty in Charge"),
+        ("professor_approver", "Professor Approver"),
+        ("finance_admin", "Finance Admin"),
+    ] + (
+        [("site_admin", "Site Admin")]
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        if viewer["role"] == "super_admin" else []
+    )
+    return {
+        "role_choices": role_choices,
+        "target_role_set": user_role_set(target_user),
+        "layered_role_choices": layered_role_choices,
+    }
+
+
+def _user_profile_reset_password_info(user_id: int):
+    reset_pw_info = session.pop("_reset_pw", None) if request.method == "GET" else None
+    if reset_pw_info and reset_pw_info.get("user_id") != user_id:
+        return None
+    return reset_pw_info
+
+
+@app.route("/users/<int:user_id>", methods=["GET", "POST"])
+@login_required
+def user_profile(user_id: int):
+    viewer = current_user()
+    target_user = _user_profile_target(viewer, user_id)
     if request.method == "POST":
         action = request.form.get("action", "").strip()
         if action == "remove_access":
@@ -15000,127 +15166,20 @@ def user_profile(user_id: int):
             flash("Instrument assignments saved.", "success")
             return redirect(url_for("user_profile", user_id=user_id))
 
-    scope_clauses, scope_params = request_scope_sql(viewer, "sr")
-    rows = query_all(
-        f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
-               op.name AS operator_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
-        GROUP BY sr.id
-        ORDER BY sr.created_at DESC
-        LIMIT 25
-        """,
-        (*scope_params, user_id),
-    )
-    handled_rows = query_all(
-        f"""
-        SELECT sr.*, i.name AS instrument_name, i.code AS instrument_code,
-               op.name AS operator_name,
-               COALESCE(COUNT(ra.id), 0) AS attachment_count
-        FROM sample_requests sr
-        JOIN instruments i ON i.id = sr.instrument_id
-        LEFT JOIN users op ON op.id = sr.assigned_operator_id
-        LEFT JOIN request_attachments ra ON ra.request_id = sr.id AND ra.is_active = 1
-        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
-        GROUP BY sr.id
-        ORDER BY COALESCE(sr.completed_at, sr.updated_at, sr.created_at) DESC
-        LIMIT 25
-        """,
-        (*scope_params, user_id, user_id),
-    )
-    originated_count = query_one(
-        f"SELECT COUNT(*) AS c FROM sample_requests sr WHERE {' AND '.join(scope_clauses + ['sr.created_by_user_id = ?'])}",
-        (*scope_params, user_id),
-    )["c"]
-    submitted_summary = query_one(
-        f"""
-        SELECT COUNT(*) AS total_jobs,
-               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
-               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
-               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
-        FROM sample_requests sr
-        WHERE {' AND '.join(scope_clauses + ['sr.requester_id = ?'])}
-        """,
-        (*scope_params, user_id),
-    )
-    handled_summary = query_one(
-        f"""
-        SELECT COUNT(*) AS total_jobs,
-               COALESCE(SUM(sr.sample_count), 0) AS total_samples,
-               SUM(CASE WHEN sr.status = 'completed' THEN 1 ELSE 0 END) AS completed_jobs,
-               SUM(CASE WHEN sr.status NOT IN ('completed', 'rejected') THEN 1 ELSE 0 END) AS open_jobs
-        FROM sample_requests sr
-        WHERE {' AND '.join(scope_clauses + ['(sr.assigned_operator_id = ? OR sr.received_by_operator_id = ?)'])}
-        """,
-        (*scope_params, user_id, user_id),
-    )
-    can_edit_user_value = (
-        can_manage_members(viewer)
-        and (not is_owner(target_user) or is_owner(viewer))
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
-    )
-    instrument_roster: list[sqlite3.Row] = []
-    instrument_categories: list[str] = []
-    assigned_admin_ids: set[int] = set()
-    assigned_operator_ids: set[int] = set()
-    assigned_faculty_ids: set[int] = set()
-    assigned_requester_ids: set[int] = set()
-    if can_edit_user_value:
-        instrument_roster = query_all(
-            "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
-        )
-        assigned_admin_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_admins WHERE user_id = ?", (user_id,)
-            )
-        }
-        assigned_operator_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_operators WHERE user_id = ?", (user_id,)
-            )
-        }
-        assigned_faculty_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_faculty_admins WHERE user_id = ?", (user_id,)
-            )
-        }
-        assigned_requester_ids = {
-            row["instrument_id"] for row in query_all(
-                "SELECT instrument_id FROM instrument_requesters WHERE user_id = ?", (user_id,)
-            )
-        }
-        instrument_categories = sorted({(r["category"] or "Uncategorized") for r in instrument_roster})
-    # Role choices the viewer is allowed to promote/demote this target to.
-    role_choices: list[tuple[str, str]] = []
-    if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
-        base_roles = ["requester", "operator", "instrument_admin", "faculty_in_charge",
-                      "professor_approver", "finance_admin"]
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if viewer["role"] == "super_admin":
-            base_roles += ["site_admin", "super_admin"]
-        role_choices = [(r, role_display_name(r)) for r in base_roles]
-    # Pop the one-time reset PIN info from the session so it renders
-    # exactly once on this page load.  Keep it in session until GET
-    # so the redirect after POST still has it.
-    reset_pw_info = session.pop("_reset_pw", None) if request.method == "GET" else None
-    # Only show if it matches this user — avoids leaking across tabs.
-    if reset_pw_info and reset_pw_info.get("user_id") != user_id:
-        reset_pw_info = None
+    activity_payload = _user_profile_activity_payload(viewer, user_id)
+    assignment_payload = _user_profile_assignment_payload(viewer, target_user, user_id)
+    role_payload = _user_profile_role_payload(viewer, target_user, assignment_payload["can_edit_user"])
+    reset_pw_info = _user_profile_reset_password_info(user_id)
+    instrument_groups = instrument_groups_all()
     return render_template(
         "user_detail.html",
         target_user=target_user,
         reset_pw_info=reset_pw_info,
-        rows=rows,
-        handled_rows=handled_rows,
-        submitted_summary=submitted_summary,
-        handled_summary=handled_summary,
-        originated_count=originated_count,
+        rows=activity_payload["rows"],
+        handled_rows=activity_payload["handled_rows"],
+        submitted_summary=activity_payload["submitted_summary"],
+        handled_summary=activity_payload["handled_summary"],
+        originated_count=activity_payload["originated_count"],
         is_self=viewer["id"] == target_user["id"],
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
@@ -15131,34 +15190,24 @@ def user_profile(user_id: int):
             # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
             and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
         ),
-        can_edit_user=can_edit_user_value,
-        instrument_roster=instrument_roster,
-        instrument_categories=instrument_categories,
-        assigned_admin_ids=assigned_admin_ids,
-        assigned_operator_ids=assigned_operator_ids,
-        assigned_faculty_ids=assigned_faculty_ids,
-        assigned_requester_ids=assigned_requester_ids,
-        role_choices=role_choices,
-        target_role_set=user_role_set(target_user),
-        layered_role_choices=[
-            ("operator", "Operator"),
-            ("instrument_admin", "Instrument Admin"),
-            ("faculty_in_charge", "Faculty in Charge"),
-            ("professor_approver", "Professor Approver"),
-            ("finance_admin", "Finance Admin"),
-        ] + (
-            [("site_admin", "Site Admin")]
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if viewer["role"] == "super_admin" else []
-        ),
-        instrument_groups=instrument_groups_all(),
+        can_edit_user=assignment_payload["can_edit_user"],
+        instrument_roster=assignment_payload["instrument_roster"],
+        instrument_categories=assignment_payload["instrument_categories"],
+        assigned_admin_ids=assignment_payload["assigned_admin_ids"],
+        assigned_operator_ids=assignment_payload["assigned_operator_ids"],
+        assigned_faculty_ids=assignment_payload["assigned_faculty_ids"],
+        assigned_requester_ids=assignment_payload["assigned_requester_ids"],
+        role_choices=role_payload["role_choices"],
+        target_role_set=role_payload["target_role_set"],
+        layered_role_choices=role_payload["layered_role_choices"],
+        instrument_groups=instrument_groups,
         # Authoritative {group_id: [instrument_ids]} map for the
         # group-quick-grant buttons. Uses the real junction table
         # instead of the category heuristic so groups curated by
         # admins (rather than auto-seeded from category) work too.
         instrument_group_members={
             int(g["id"]): instrument_group_member_ids(int(g["id"]))
-            for g in instrument_groups_all()
+            for g in instrument_groups
         },
     )
 

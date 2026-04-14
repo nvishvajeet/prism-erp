@@ -66,7 +66,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | dashboard-lightening | 2026-04-14 17:15 CEST | `app.py`, `docs/ARCHITECTURE_LIGHTENING.md`, `CLAIMS.md` | `refactor: lighten dashboard controller` |
 
 ## Stale-claim recovery
 

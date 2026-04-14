@@ -7640,16 +7640,8 @@ def _ai_dashboard_advice_cached(user):
         return session.get("ai_advisor", [{"text": "Welcome! Check your notifications.", "href": "/notifications", "priority": "low"}])
 
 
-@app.route("/")
-@login_required
-def index():
-    user = current_user()
-    db = get_db()
-    recent_page = page_value(int(request.args.get("recent_page", "1") or 1))
-    clauses, params = request_scope_sql(user, "sr")
-    where_sql = f" AND {' AND '.join(clauses)}" if clauses else ""
-    queue_statuses = ("sample_submitted", "sample_received", "scheduled", "in_progress")
-    counts = {
+def _dashboard_counts(user, db, where_sql: str, params: tuple, queue_statuses: tuple[str, ...]) -> dict[str, int]:
+    return {
         "instruments": scoped_instrument_count(user),
         "open_requests": (
             db.execute(
@@ -7669,7 +7661,9 @@ def index():
             tuple(params),
         ).fetchone()[0],
     }
-    recent_per_page = 5
+
+
+def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, recent_per_page: int) -> dict[str, object]:
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester" and not has_instrument_area_access(user):
         recent_total = db.execute(
@@ -7692,58 +7686,70 @@ def index():
             """,
             (user["id"], recent_per_page, (recent_page - 1) * recent_per_page),
         )
-    else:
-        queue_where_clauses = list(clauses) + ["sr.status IN ('sample_submitted', 'sample_received', 'scheduled', 'in_progress', 'completed')"]
-        queue_where_sql = "WHERE " + " AND ".join(queue_where_clauses)
-        recent_total = db.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM sample_requests sr
-            JOIN instruments i ON i.id = sr.instrument_id
-            JOIN users r ON r.id = sr.requester_id
-            LEFT JOIN users c ON c.id = sr.created_by_user_id
-            LEFT JOIN users u ON u.id = sr.assigned_operator_id
-            {queue_where_sql}
-            """,
-            tuple(params),
-        ).fetchone()[0]
-        recent_total_pages = max(1, math.ceil(recent_total / recent_per_page))
-        recent_page = min(recent_page, recent_total_pages)
-        requests_rows = query_all(
-            """
-            SELECT sr.*, i.name AS instrument_name, u.name AS operator_name, r.name AS requester_name,
-                   c.name AS originator_name, c.role AS originator_role
-            FROM sample_requests sr
-            JOIN instruments i ON i.id = sr.instrument_id
-            JOIN users r ON r.id = sr.requester_id
-            LEFT JOIN users c ON c.id = sr.created_by_user_id
-            LEFT JOIN users u ON u.id = sr.assigned_operator_id
-            """
-            + queue_where_sql
-            + """
-            ORDER BY
-              CASE sr.status
-                WHEN 'sample_submitted' THEN 1
-                WHEN 'sample_received' THEN 2
-                WHEN 'scheduled' THEN 3
-                WHEN 'in_progress' THEN 4
-                WHEN 'completed' THEN 5
-                ELSE 6
-              END,
-              sr.created_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            tuple(params) + (recent_per_page, (recent_page - 1) * recent_per_page),
-        )
+        return {
+            "requests": requests_rows,
+            "recent_page": recent_page,
+            "recent_total_pages": recent_total_pages,
+        }
+    queue_where_clauses = list(clauses) + ["sr.status IN ('sample_submitted', 'sample_received', 'scheduled', 'in_progress', 'completed')"]
+    queue_where_sql = "WHERE " + " AND ".join(queue_where_clauses)
+    recent_total = db.execute(
+        f"""
+        SELECT COUNT(*)
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        JOIN users r ON r.id = sr.requester_id
+        LEFT JOIN users c ON c.id = sr.created_by_user_id
+        LEFT JOIN users u ON u.id = sr.assigned_operator_id
+        {queue_where_sql}
+        """,
+        tuple(params),
+    ).fetchone()[0]
+    recent_total_pages = max(1, math.ceil(recent_total / recent_per_page))
+    recent_page = min(recent_page, recent_total_pages)
+    requests_rows = query_all(
+        """
+        SELECT sr.*, i.name AS instrument_name, u.name AS operator_name, r.name AS requester_name,
+               c.name AS originator_name, c.role AS originator_role
+        FROM sample_requests sr
+        JOIN instruments i ON i.id = sr.instrument_id
+        JOIN users r ON r.id = sr.requester_id
+        LEFT JOIN users c ON c.id = sr.created_by_user_id
+        LEFT JOIN users u ON u.id = sr.assigned_operator_id
+        """
+        + queue_where_sql
+        + """
+        ORDER BY
+          CASE sr.status
+            WHEN 'sample_submitted' THEN 1
+            WHEN 'sample_received' THEN 2
+            WHEN 'scheduled' THEN 3
+            WHEN 'in_progress' THEN 4
+            WHEN 'completed' THEN 5
+            ELSE 6
+          END,
+          sr.created_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        tuple(params) + (recent_per_page, (recent_page - 1) * recent_per_page),
+    )
+    return {
+        "requests": requests_rows,
+        "recent_page": recent_page,
+        "recent_total_pages": recent_total_pages,
+    }
+
+
+def _dashboard_queue_payload(user, where_sql: str, params: tuple) -> dict[str, object]:
     instruments = query_all("SELECT * FROM instruments ORDER BY name")
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester" and not has_instrument_area_access(user):
         instruments = []
     instrument_fifo_queue: list[dict] = []
-    instrument_fifo_total: int = 0
+    instrument_fifo_total = 0
     pending_receipt_lookup_rows: list[sqlite3.Row] = []
     quick_intake_rows: list[sqlite3.Row] = []
-    quick_intake_total: int = 0
+    quick_intake_total = 0
     if has_instrument_area_access(user):
         fifo_rows = query_all(
             f"""
@@ -7766,7 +7772,7 @@ def index():
         for row in fifo_rows:
             key = (row["instrument_id"], row["instrument_name"])
             grouped_fifo.setdefault(key, []).append(row)
-        _all_fifo = [
+        all_fifo = [
             {
                 "instrument_id": instrument_id,
                 "instrument_name": instrument_name,
@@ -7774,14 +7780,88 @@ def index():
             }
             for (instrument_id, instrument_name), rows in grouped_fifo.items()
         ]
-        instrument_fifo_queue = _all_fifo[:9]  # Dashboard shows max 9 cards
-        instrument_fifo_total = len(_all_fifo)
-        pending_receipt_lookup_rows = [
-            row for row in fifo_rows if row["status"] == "sample_submitted"
-        ][:5]
-        # Quick Intake cards: up to 6 rows across all active statuses
+        instrument_fifo_queue = all_fifo[:9]
+        instrument_fifo_total = len(all_fifo)
+        pending_receipt_lookup_rows = [row for row in fifo_rows if row["status"] == "sample_submitted"][:5]
         quick_intake_rows = list(fifo_rows)[:6]
         quick_intake_total = len(fifo_rows)
+    return {
+        "instruments": instruments,
+        "instrument_fifo_queue": instrument_fifo_queue,
+        "instrument_fifo_total": instrument_fifo_total,
+        "pending_receipt_lookup_rows": pending_receipt_lookup_rows,
+        "quick_intake_rows": quick_intake_rows,
+        "quick_intake_total": quick_intake_total,
+    }
+
+
+def _dashboard_attendance_streak(user, db) -> int:
+    attendance_streak = 0
+    if module_enabled("attendance"):
+        try:
+            streak_rows = db.execute(
+                "SELECT date FROM attendance WHERE user_id = ? AND status = 'present' AND date >= date('now', '-7 days') ORDER BY date DESC",
+                (user["id"],),
+            ).fetchall()
+            if streak_rows:
+                from datetime import date as _date
+                today = _date.today()
+                for i, row in enumerate(streak_rows):
+                    expected = (today - timedelta(days=i)).isoformat()
+                    if row[0] == expected:
+                        attendance_streak += 1
+                    else:
+                        break
+        except Exception:
+            return 0
+    return attendance_streak
+
+
+def _dashboard_cross_module_tiles(user) -> dict[str, object]:
+    dash_fleet_status = None
+    dash_payroll_due = None
+    if is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"}):
+        if module_enabled("vehicles"):
+            today_iso = date.today().isoformat()
+            expiring_cutoff = (date.today() + timedelta(days=30)).isoformat()
+            month_start = date.today().replace(day=1).isoformat()
+            dash_fleet_status = {
+                "active_vehicles": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE status = 'active'") or {"c": 0})["c"],
+                "fuel_this_month": (query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs WHERE log_type = 'fuel' AND log_date >= ?", (month_start,)) or {"total": 0})["total"],
+                "insurance_expiring": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE insurance_expiry IS NOT NULL AND insurance_expiry <= ? AND insurance_expiry >= ?", (expiring_cutoff, today_iso)) or {"c": 0})["c"],
+            }
+        if module_enabled("personnel"):
+            today = date.today()
+            cur_year = today.year
+            cur_month = f"{today.month:02d}"
+            dash_payroll_due = {
+                "unpaid_count": (query_one(
+                    "SELECT COUNT(*) AS c FROM salary_config sc WHERE sc.user_id NOT IN "
+                    "(SELECT sp.user_id FROM salary_payments sp WHERE sp.year = ? AND sp.month = ? AND sp.status = 'paid')",
+                    (cur_year, cur_month)) or {"c": 0})["c"],
+                "pending_amount": (query_one(
+                    "SELECT COALESCE(SUM(net_pay), 0) AS total FROM salary_payments WHERE year = ? AND month = ? AND status = 'pending'",
+                    (cur_year, cur_month)) or {"total": 0})["total"],
+            }
+    return {
+        "dash_fleet_status": dash_fleet_status,
+        "dash_payroll_due": dash_payroll_due,
+    }
+
+
+@app.route("/")
+@login_required
+def index():
+    user = current_user()
+    db = get_db()
+    recent_page = page_value(int(request.args.get("recent_page", "1") or 1))
+    clauses, params = request_scope_sql(user, "sr")
+    where_sql = f" AND {' AND '.join(clauses)}" if clauses else ""
+    queue_statuses = ("sample_submitted", "sample_received", "scheduled", "in_progress")
+    counts = _dashboard_counts(user, db, where_sql, tuple(params), queue_statuses)
+    recent_per_page = 5
+    recent_payload = _dashboard_recent_requests(user, db, clauses, tuple(params), recent_page, recent_per_page)
+    queue_payload = _dashboard_queue_payload(user, where_sql, tuple(params))
     dashboard_metrics = dashboard_analytics(user) if can_access_stats(user) else None
     req_pulse = requester_pulse(user)
     profile = user_access_profile(user)
@@ -7804,66 +7884,21 @@ def index():
             LIMIT 5
             """,
         )
-
-    # ── Attendance streak (consecutive present days, up to last 7) ──
-    attendance_streak = 0
-    if module_enabled("attendance"):
-        try:
-            streak_rows = db.execute(
-                "SELECT date FROM attendance WHERE user_id = ? AND status = 'present' AND date >= date('now', '-7 days') ORDER BY date DESC",
-                (user["id"],),
-            ).fetchall()
-            if streak_rows:
-                from datetime import date as _date
-                today = _date.today()
-                for i, r in enumerate(streak_rows):
-                    expected = (today - timedelta(days=i)).isoformat()
-                    if r[0] == expected:
-                        attendance_streak += 1
-                    else:
-                        break
-        except Exception:
-            attendance_streak = 0
-
-    # ── Cross-module dashboard tiles: Fleet Status + Payroll Due ──
-    dash_fleet_status = None
-    dash_payroll_due = None
-    if is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"}):
-        if module_enabled("vehicles"):
-            _today_iso = date.today().isoformat()
-            _30d = (date.today() + timedelta(days=30)).isoformat()
-            _month_start = date.today().replace(day=1).isoformat()
-            dash_fleet_status = {
-                "active_vehicles": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE status = 'active'") or {"c": 0})["c"],
-                "fuel_this_month": (query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs WHERE log_type = 'fuel' AND log_date >= ?", (_month_start,)) or {"total": 0})["total"],
-                "insurance_expiring": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE insurance_expiry IS NOT NULL AND insurance_expiry <= ? AND insurance_expiry >= ?", (_30d, _today_iso)) or {"c": 0})["c"],
-            }
-        if module_enabled("personnel"):
-            _today = date.today()
-            _cur_year = _today.year
-            _cur_month = f"{_today.month:02d}"
-            dash_payroll_due = {
-                "unpaid_count": (query_one(
-                    "SELECT COUNT(*) AS c FROM salary_config sc WHERE sc.user_id NOT IN "
-                    "(SELECT sp.user_id FROM salary_payments sp WHERE sp.year = ? AND sp.month = ? AND sp.status = 'paid')",
-                    (_cur_year, _cur_month)) or {"c": 0})["c"],
-                "pending_amount": (query_one(
-                    "SELECT COALESCE(SUM(net_pay), 0) AS total FROM salary_payments WHERE year = ? AND month = ? AND status = 'pending'",
-                    (_cur_year, _cur_month)) or {"total": 0})["total"],
-            }
+    attendance_streak = _dashboard_attendance_streak(user, db)
+    cross_module_tiles = _dashboard_cross_module_tiles(user)
 
     return render_template(
         "dashboard.html",
         counts=counts,
-        requests=requests_rows,
-        recent_page=recent_page,
-        recent_total_pages=recent_total_pages,
-        instruments=instruments,
-        instrument_fifo_queue=instrument_fifo_queue,
-        instrument_fifo_total=instrument_fifo_total if has_instrument_area_access(user) else 0,
-        pending_receipt_lookup_rows=pending_receipt_lookup_rows if can_operate_queue else [],
-        quick_intake_rows=quick_intake_rows if can_operate_queue else [],
-        quick_intake_total=quick_intake_total if can_operate_queue else 0,
+        requests=recent_payload["requests"],
+        recent_page=recent_payload["recent_page"],
+        recent_total_pages=recent_payload["recent_total_pages"],
+        instruments=queue_payload["instruments"],
+        instrument_fifo_queue=queue_payload["instrument_fifo_queue"],
+        instrument_fifo_total=queue_payload["instrument_fifo_total"] if has_instrument_area_access(user) else 0,
+        pending_receipt_lookup_rows=queue_payload["pending_receipt_lookup_rows"] if can_operate_queue else [],
+        quick_intake_rows=queue_payload["quick_intake_rows"] if can_operate_queue else [],
+        quick_intake_total=queue_payload["quick_intake_total"] if can_operate_queue else 0,
         operators=operators,
         can_operate_queue=can_operate_queue,
         role_switches=DEMO_ROLE_SWITCHES,
@@ -7875,8 +7910,8 @@ def index():
         dash_action_items=_dashboard_action_items(user),
         dash_at_a_glance=_dashboard_at_a_glance(user),
         attendance_streak=attendance_streak,
-        dash_fleet_status=dash_fleet_status,
-        dash_payroll_due=dash_payroll_due,
+        dash_fleet_status=cross_module_tiles["dash_fleet_status"],
+        dash_payroll_due=cross_module_tiles["dash_payroll_due"],
         ai_advice=session.get("ai_advisor") if session.get("ai_advisor") and not request.args.get("refresh_advice") else _ai_dashboard_advice_cached(user),
     )
 

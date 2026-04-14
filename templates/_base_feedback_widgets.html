@@ -7,9 +7,11 @@
         <strong data-vis="{{ V }}">Quick Feedback</strong>
         <button id="feedbackClose" class="feedback-close" data-vis="{{ V }}">✕</button>
       </div>
-      <form method="post" action="{{ url_for('quick_entry') }}" class="feedback-form" data-vis="{{ V }}">
+      <form method="post" action="{{ url_for('site_feedback_submit') }}" class="feedback-form" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="source" value="feedback">
+        <input type="hidden" name="page" value="{{ request.path }}">
+        <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <textarea name="text" id="feedbackText" rows="3" placeholder="Type or speak your request..." data-vis="{{ V }}"></textarea>
         <div class="feedback-actions" data-vis="{{ V }}">
           <button type="button" id="feedbackMic" class="btn" data-vis="{{ V }}">🎤</button>

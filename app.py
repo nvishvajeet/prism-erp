@@ -21076,10 +21076,10 @@ def compute_detail(job_id: int):
         abort(403)
     input_files = query_all("SELECT * FROM job_input_files WHERE job_id=? ORDER BY id", (job_id,))
     output_files = query_all("SELECT * FROM job_output_files WHERE job_id=? ORDER BY filename", (job_id,))
-    model_info = OLLAMA_MODELS.get(job["model"], {})
+    model_info = COMPUTE_MODELS.get(job["model"], {})
     return render_template("compute_detail.html", job=job,
                            can_manage=can_manage, is_mine=is_mine,
-                           model_info=model_info, models=OLLAMA_MODELS,
+                           model_info=model_info, models=COMPUTE_MODELS,
                            input_files=input_files, output_files=output_files)
 
 
@@ -21422,6 +21422,21 @@ def expense_receipt_review(receipt_id):
 
 FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
 
+
+def _append_feedback_entry(*, user: sqlite3.Row | None, text: str, page: str, source: str = "feedback") -> None:
+    """Persist a lightweight feedback/report note for later review."""
+    user_label = f"{user['name']} ({user['role']})" if user else "anonymous"
+    entry = (
+        f"\n## {now_iso()}\n\n"
+        f"**User:** {user_label}  \n"
+        f"**Page:** `{page or '?'}`  \n"
+        f"**Source:** `{source}`  \n\n"
+        f"{text.strip()}\n"
+    )
+    FEEDBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
+        f.write(entry)
+
 @app.route("/debug/feedback", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -21437,7 +21452,6 @@ def debug_feedback():
         return jsonify(ok=False, error="no text"), 400
 
     user = current_user()
-    user_label = f"{user['name']} ({user['role']})" if user else "anonymous"
     page = data.get("page", "?")
     ts = data.get("timestamp", datetime.now().isoformat())
     grid = "grid visible" if data.get("grid_visible") else "grid off"
@@ -21450,19 +21464,33 @@ def debug_feedback():
         for c in clicks:
             click_lines += f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` ({c.get('page', '?')})\n"
 
-    entry = (
-        f"\n## {ts}\n\n"
-        f"**User:** {user_label}  \n"
-        f"**Page:** `{page}` ({grid})  \n"
-        f"{click_lines}\n"
-        f"{text}\n"
+    _append_feedback_entry(
+        user=user,
+        text=f"{text}\n\n{click_lines}".strip(),
+        page=f"{page} ({grid})",
+        source="debug-feedback",
     )
 
-    FEEDBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
-        f.write(entry)
-
     return jsonify(ok=True, saved_to=str(FEEDBACK_LOG))
+
+
+@app.route("/feedback", methods=["POST"])
+@login_required
+def site_feedback_submit():
+    """Submit lightweight feedback from the global feedback widget."""
+    user = current_user()
+    raw_text = request.form.get("text", "").strip()
+    page = (request.form.get("page") or request.path).strip() or "?"
+    source = (request.form.get("source") or "feedback").strip() or "feedback"
+    return_to = (request.form.get("return_to") or request.referrer or url_for("index")).strip()
+    if raw_text:
+        _append_feedback_entry(user=user, text=raw_text, page=page, source=source)
+        flash("Feedback sent. We logged it for review.", "success")
+    else:
+        flash("Please add a short note before sending feedback.", "error")
+    if return_to.startswith("/"):
+        return redirect(return_to)
+    return redirect(url_for("index"))
 
 
 # ── Feature: Global Search ───────────────────────────────────────────

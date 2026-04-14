@@ -472,9 +472,13 @@
     document.addEventListener('DOMContentLoaded', function () {
       window.PaginatedPane.initAll();
 
-      /* ── Role-visibility filter ── */
+      /* ── Role-visibility filter ──
+         Owner is a super-super-user: bypass the filter entirely so even
+         elements tagged only for a specific role (e.g. data-vis="requester")
+         still render for owner. Fixes blank-page bug where role="owner" +
+         role-specific data-vis tags hid every structural element. */
       var role = (document.body.getAttribute('data-user-role') || '').trim();
-      if (role) {
+      if (role && role !== 'owner') {
         document.querySelectorAll('[data-vis]').forEach(function (el) {
           var allowed = el.getAttribute('data-vis').split(/\s+/);
           if (allowed.indexOf('all') === -1 && allowed.indexOf(role) === -1) {

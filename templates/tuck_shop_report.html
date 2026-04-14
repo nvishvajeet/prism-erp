@@ -73,7 +73,28 @@
   {# ── UPI Transactions for Bank Matching ── #}
   {% if upi_transactions or upi_sales %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("UPI TRANSACTION LOG", "For bank statement reconciliation") }}
+    {{ card_heading("UPI TRANSACTION LOG", "Tick each row as you verify it against the bank statement") }}
+
+    {# Reconciliation progress + bulk upload #}
+    <div style="padding:0.5rem 0.75rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;" data-vis="{{ V }}">
+      <div data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ upi_matched }}/{{ upi_total }}</strong>
+        <span class="hint" data-vis="{{ V }}">matched</span>
+        &nbsp;·&nbsp;
+        <strong data-vis="{{ V }}">₹{{ "{:,.0f}".format(upi_matched_amount) }}</strong>
+        <span class="hint" data-vis="{{ V }}">of ₹{{ "{:,.0f}".format(upi_expected_amount) }} reconciled</span>
+      </div>
+      <form method="post" action="{{ url_for('tuck_shop_bank_reconcile') }}"
+            enctype="multipart/form-data"
+            style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;"
+            data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="date" value="{{ report_date }}">
+        <input type="file" name="statement" accept=".csv,.txt" required data-vis="{{ V }}">
+        <button type="submit" class="btn" data-vis="{{ V }}">Auto-match from bank CSV</button>
+      </form>
+    </div>
+
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -94,11 +115,18 @@
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(t.amount_paid) }}</td>
           <td data-vis="{{ V }}">{{ t.meal_type|title }} — {{ t.student_name or "Walk-in" }}</td>
           <td data-vis="{{ V }}">
-            {% if t.bank_matched %}
-            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Matched</span>
-            {% else %}
-            <span class="hint" data-vis="{{ V }}">—</span>
-            {% endif %}
+            <label style="display:inline-flex;gap:0.35rem;align-items:center;cursor:pointer;" data-vis="{{ V }}">
+              <input type="checkbox"
+                     class="bank-match-toggle"
+                     data-type="token"
+                     data-ref-key="{{ t.token_number }}"
+                     data-issue-date="{{ report_date }}"
+                     {% if t.bank_matched %}checked{% endif %}
+                     data-vis="{{ V }}">
+              <span class="bank-match-label hint" data-vis="{{ V }}">
+                {% if t.bank_matched %}matched{% else %}pending{% endif %}
+              </span>
+            </label>
           </td>
         </tr>
         {% endfor %}
@@ -110,11 +138,18 @@
           <td class="num" data-vis="{{ V }}">₹{{ "{:,.0f}".format(s.total_amount) }}</td>
           <td data-vis="{{ V }}">{{ s.sale_time[:5] if s.sale_time else "" }} — {{ s.cashier_name or "" }}</td>
           <td data-vis="{{ V }}">
-            {% if s.bank_matched %}
-            <span class="badge" style="background:var(--tone-green);color:var(--bg);" data-vis="{{ V }}">Matched</span>
-            {% else %}
-            <span class="hint" data-vis="{{ V }}">—</span>
-            {% endif %}
+            <label style="display:inline-flex;gap:0.35rem;align-items:center;cursor:pointer;" data-vis="{{ V }}">
+              <input type="checkbox"
+                     class="bank-match-toggle"
+                     data-type="sale"
+                     data-ref-key="{{ s.id }}"
+                     data-issue-date="{{ report_date }}"
+                     {% if s.bank_matched %}checked{% endif %}
+                     data-vis="{{ V }}">
+              <span class="bank-match-label hint" data-vis="{{ V }}">
+                {% if s.bank_matched %}matched{% else %}pending{% endif %}
+              </span>
+            </label>
           </td>
         </tr>
         {% endfor %}
@@ -122,10 +157,47 @@
     </table>
     <div style="padding:0.5rem 0.75rem;" data-vis="{{ V }}">
       <p class="hint" data-vis="{{ V }}">
-        Match these UPI refs against the bank statement. Future: upload bank PDF for auto-matching.
+        Tick a row once you've found its UPI ref on the bank statement —
+        or upload the statement CSV above to auto-tick everything that matches.
       </p>
     </div>
   </article>
+
+  <script>
+  (function(){
+    var toggles = document.querySelectorAll('.bank-match-toggle');
+    if (!toggles.length) return;
+    toggles.forEach(function(cb){
+      cb.addEventListener('change', function(){
+        var label = cb.parentNode.querySelector('.bank-match-label');
+        var prev = cb.checked ? 'pending' : 'matched';
+        if (label) label.textContent = 'saving...';
+        fetch('{{ url_for("tuck_shop_api_bank_match") }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            type: cb.dataset.type,
+            ref_key: cb.dataset.refKey,
+            issue_date: cb.dataset.issueDate,
+            matched: cb.checked ? 1 : 0
+          })
+        }).then(function(r){ return r.json(); }).then(function(data){
+          if (data && data.ok) {
+            if (label) label.textContent = cb.checked ? 'matched' : 'pending';
+          } else {
+            cb.checked = !cb.checked;
+            if (label) label.textContent = prev;
+            alert((data && data.error) || 'Save failed');
+          }
+        }).catch(function(){
+          cb.checked = !cb.checked;
+          if (label) label.textContent = prev;
+          alert('Network error — try again');
+        });
+      });
+    });
+  })();
+  </script>
   {% endif %}
 
   {# ── Top Items ── #}

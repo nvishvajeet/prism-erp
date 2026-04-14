@@ -368,6 +368,7 @@ MODULE_REGISTRY = {
             "tuck_shop_api_record_sale", "tuck_shop_api_issue_token",
             "tuck_shop_api_redeem_token", "tuck_shop_api_void_token",
             "tuck_shop_api_pending_tokens", "tuck_shop_api_today_stats",
+            "tuck_shop_api_bank_match", "tuck_shop_bank_reconcile",
             "tuck_shop_item_edit", "tuck_shop_item_toggle",
         },
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
@@ -22809,10 +22810,25 @@ def tuck_shop_daily_report():
            ORDER BY ts.sale_time""",
         (report_date,),
     )
+    # Bank-reconciliation progress (per-day, across tokens + POS sales)
+    upi_total = len(upi_transactions) + len(upi_sales)
+    upi_matched = sum(1 for t in upi_transactions if t["bank_matched"]) + \
+                  sum(1 for s in upi_sales if s["bank_matched"])
+    upi_matched_amount = (
+        sum((t["amount_paid"] or 0) for t in upi_transactions if t["bank_matched"]) +
+        sum((s["total_amount"] or 0) for s in upi_sales if s["bank_matched"])
+    )
+    upi_expected_amount = (
+        sum((t["amount_paid"] or 0) for t in upi_transactions) +
+        sum((s["total_amount"] or 0) for s in upi_sales)
+    )
     return render_template("tuck_shop_report.html",
                            report_date=report_date, sales_summary=sales_summary,
                            token_summary=token_summary, top_items=top_items,
-                           upi_transactions=upi_transactions, upi_sales=upi_sales)
+                           upi_transactions=upi_transactions, upi_sales=upi_sales,
+                           upi_total=upi_total, upi_matched=upi_matched,
+                           upi_matched_amount=upi_matched_amount,
+                           upi_expected_amount=upi_expected_amount)
 
 
 @app.route("/tuck-shop/api/token/void", methods=["POST"])
@@ -22953,6 +22969,131 @@ def tuck_shop_api_today_stats():
         (today,),
     )
     return jsonify(dict(stats) if stats else {})
+
+
+@app.route("/tuck-shop/api/bank-match", methods=["POST"])
+@login_required
+def tuck_shop_api_bank_match():
+    """AJAX: Toggle bank_matched on a token or POS sale after an auditor
+    verifies the UPI ref against the bank statement.
+
+    Body: {"type": "token"|"sale", "ref_key": <token_number or sale_id>,
+           "issue_date": "YYYY-MM-DD", "matched": 0|1}
+    """
+    user = current_user()
+    if not _tuck_shop_access(user):
+        return jsonify({"ok": False, "error": "Access denied"}), 403
+    data = request.get_json(force=True)
+    kind = (data.get("type") or "").strip()
+    matched = 1 if int(data.get("matched", 0)) else 0
+    issue_date = (data.get("issue_date") or "").strip()
+    match_ts = now_iso() if matched else None
+    if kind == "token":
+        token_number = int(data.get("ref_key") or 0)
+        if not token_number or not issue_date:
+            return jsonify({"ok": False, "error": "token_number + issue_date required"}), 400
+        execute(
+            """UPDATE tuck_shop_tokens
+               SET bank_matched = ?, bank_match_date = ?
+               WHERE token_number = ? AND issue_date = ?""",
+            (matched, match_ts, token_number, issue_date),
+        )
+    elif kind == "sale":
+        sale_id = int(data.get("ref_key") or 0)
+        if not sale_id:
+            return jsonify({"ok": False, "error": "sale_id required"}), 400
+        execute(
+            """UPDATE tuck_shop_sales
+               SET bank_matched = ?, bank_match_date = ?
+               WHERE id = ?""",
+            (matched, match_ts, sale_id),
+        )
+    else:
+        return jsonify({"ok": False, "error": "type must be 'token' or 'sale'"}), 400
+    return jsonify({"ok": True, "matched": matched})
+
+
+@app.route("/tuck-shop/bank-reconcile", methods=["POST"])
+@login_required
+def tuck_shop_bank_reconcile():
+    """Bulk bank reconciliation — upload a bank statement CSV and auto-match
+    rows whose payment_ref appears anywhere in the statement.
+
+    Intentionally lenient: reads the whole file as lowercased text and any
+    tuck-shop UPI ref (token or POS sale) for the given date that appears
+    as a substring is flagged matched. Unmatched rows are left alone for
+    manual review.
+    """
+    user = current_user()
+    if not _tuck_shop_access(user):
+        abort(403)
+    report_date = (request.form.get("date") or "").strip()
+    if not report_date:
+        from datetime import date as _date
+        report_date = _date.today().isoformat()
+    f = request.files.get("statement")
+    if not f or not f.filename:
+        flash("Choose a bank statement CSV first.", "error")
+        return redirect(url_for("tuck_shop_daily_report", date=report_date))
+    raw = f.read(2 * 1024 * 1024)  # 2 MB cap
+    try:
+        text = raw.decode("utf-8", errors="replace")
+    except Exception:
+        flash("Could not read file as text — upload a CSV.", "error")
+        return redirect(url_for("tuck_shop_daily_report", date=report_date))
+    haystack = text.lower()
+    tokens = query_all(
+        """SELECT token_number, payment_ref FROM tuck_shop_tokens
+           WHERE issue_date = ? AND payment_method = 'qr'
+             AND payment_ref != '' AND bank_matched = 0""",
+        (report_date,),
+    )
+    sales = query_all(
+        """SELECT id, payment_ref FROM tuck_shop_sales
+           WHERE sale_date = ? AND payment_method = 'qr'
+             AND payment_ref != '' AND bank_matched = 0""",
+        (report_date,),
+    )
+    match_ts = now_iso()
+    token_hits = 0
+    for t in tokens:
+        ref = (t["payment_ref"] or "").strip().lower()
+        if ref and ref in haystack:
+            execute(
+                """UPDATE tuck_shop_tokens
+                   SET bank_matched = 1, bank_match_date = ?
+                   WHERE token_number = ? AND issue_date = ?""",
+                (match_ts, t["token_number"], report_date),
+            )
+            token_hits += 1
+    sale_hits = 0
+    for s in sales:
+        ref = (s["payment_ref"] or "").strip().lower()
+        if ref and ref in haystack:
+            execute(
+                """UPDATE tuck_shop_sales
+                   SET bank_matched = 1, bank_match_date = ?
+                   WHERE id = ?""",
+                (match_ts, s["id"]),
+            )
+            sale_hits += 1
+    total = token_hits + sale_hits
+    unmatched = (len(tokens) - token_hits) + (len(sales) - sale_hits)
+    if total:
+        flash(
+            f"Auto-matched {total} UPI entr{'y' if total == 1 else 'ies'} "
+            f"({token_hits} token{'s' if token_hits != 1 else ''}, "
+            f"{sale_hits} POS sale{'s' if sale_hits != 1 else ''}). "
+            f"{unmatched} still unmatched — review manually.",
+            "success",
+        )
+    else:
+        flash(
+            "No UPI refs from this date appeared in the statement. "
+            "Check the date picker and try again, or tick matches manually.",
+            "info",
+        )
+    return redirect(url_for("tuck_shop_daily_report", date=report_date))
 
 
 # ─── AI Hover Pane — real-time assistant on every page ─────────────────

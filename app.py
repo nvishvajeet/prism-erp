@@ -432,6 +432,11 @@ def _active_portal_modules() -> set:
     return set(cfg["modules"])
 
 
+def module_visible_in_active_portal(name: str) -> bool:
+    """Check if a module is globally enabled and belongs to the active portal."""
+    return module_enabled(name) and name in _active_portal_modules()
+
+
 def _active_portal_config() -> dict | None:
     """Get the config dict for the active portal, or None."""
     slug = session.get("active_portal")
@@ -7158,33 +7163,33 @@ def _role_manual_intro(user: sqlite3.Row, reason: str | None = None, notice: str
 def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: str = "") -> dict[str, object]:
     access = user_access_profile(user)
     modules = []
-    if module_enabled("instruments") and access.get("can_access_instruments"):
+    if module_visible_in_active_portal("instruments") and access.get("can_access_instruments"):
         modules.append(("Instruments", "Manage instruments, metadata, teams, downtime, approvals, pricing, and the request ecosystem around them."))
-    if module_enabled("queue") and access.get("can_access_schedule"):
+    if module_visible_in_active_portal("queue") and access.get("can_access_schedule"):
         modules.append(("Queue", "Take up work, receive samples, assign operators, schedule runs, and keep the active deck moving."))
-    if module_enabled("calendar") and access.get("can_access_calendar"):
+    if module_visible_in_active_portal("calendar") and access.get("can_access_calendar"):
         modules.append(("Calendar", "See scheduled work, downtime, and date-driven operational commitments."))
-    if module_enabled("stats") and access.get("can_access_stats"):
+    if module_visible_in_active_portal("stats") and access.get("can_access_stats"):
         modules.append(("Stats", "Read throughput, utilization, and turnaround patterns before changing operations."))
-    if module_enabled("finance") and access.get("can_view_finance_stage"):
+    if module_visible_in_active_portal("finance") and access.get("can_view_finance_stage"):
         modules.append(("Finance", "Review grants, invoices, payments, and budget discipline across the organization."))
-    if module_enabled("attendance") and access.get("_is_lab_staff"):
+    if module_visible_in_active_portal("attendance") and access.get("_is_lab_staff"):
         modules.append(("Attendance", "Mark presence, manage leave, and keep personnel state accurate."))
-    if module_enabled("receipts") and access.get("can_access_receipts"):
+    if module_visible_in_active_portal("receipts") and access.get("can_access_receipts"):
         modules.append(("Receipts", "Submit or review expenses that eventually feed finance."))
-    if module_enabled("personnel") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
+    if module_visible_in_active_portal("personnel") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
         modules.append(("Personnel", "Manage staff records, salary configuration, and payroll context."))
-    if module_enabled("vehicles") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
+    if module_visible_in_active_portal("vehicles") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
         modules.append(("Fleet", "Track vehicles, running cost, and driver assignment."))
-    if module_enabled("compute"):
+    if module_visible_in_active_portal("compute"):
         modules.append(("Compute", "Send prompts to Ollama AI models, review results, and rerun jobs."))
-    if module_enabled("inbox"):
+    if module_visible_in_active_portal("inbox"):
         modules.append(("Inbox", "Use direct communication for follow-ups that should not live in a public workflow tile."))
-    if module_enabled("notifications"):
+    if module_visible_in_active_portal("notifications"):
         modules.append(("Notifications", "Use alerts as your change feed for approvals, completion, failures, and notices."))
-    if module_enabled("todos"):
+    if module_visible_in_active_portal("todos"):
         modules.append(("Tasks", "Capture small pieces of work that should not disappear into chat or memory."))
-    if module_enabled("letters") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin") or user_has_role(user, "instrument_admin")):
+    if module_visible_in_active_portal("letters") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin") or user_has_role(user, "instrument_admin")):
         modules.append(("Letters", "Produce official correspondence without leaving the ERP."))
 
     role = row_value(user, "role", "")
@@ -7249,9 +7254,9 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
         pane_guides.append(("Queue and request panes", "Use queue for movement decisions and request detail for per-job context, conversation, attachments, and audit-safe updates."))
     if access.get("can_view_finance_stage"):
         pane_guides.append(("Finance panes", "Read grant health, invoice state, and payment progress together before changing financial state."))
-    if module_enabled("compute"):
+    if module_visible_in_active_portal("compute"):
         pane_guides.append(("Compute panes", "Use the job list to see status, submit new AI prompts, and review results on the detail page."))
-    if module_enabled("attendance") and access.get("_is_lab_staff"):
+    if module_visible_in_active_portal("attendance") and access.get("_is_lab_staff"):
         pane_guides.append(("Attendance panes", "Use self-marking for everyday presence and the team/admin panes for leave and staffing visibility."))
 
     return {
@@ -7431,6 +7436,7 @@ def inject_globals():
         "org_name": ORG_NAME,
         "org_tagline": ORG_TAGLINE,
         "module_enabled": module_enabled,
+        "portal_module_enabled": module_visible_in_active_portal,
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,
@@ -10333,11 +10339,14 @@ def sitemap():
     core_items = [
         {"label": "Home", "hint": "Dashboard and overview", "type": "link", "href": url_for("index")},
         {"label": "New Request", "hint": "Submit a new sample request", "type": "link", "href": url_for("new_request")},
-        {"label": "Notifications", "hint": "All active notices", "type": "link", "href": url_for("notifications_page")},
-        {"label": "Inbox", "hint": "Direct messages", "type": "link", "href": url_for("inbox")},
-        {"label": "Attendance & Leave", "hint": "Mark attendance, apply for leave", "type": "link", "href": url_for("attendance_page")},
         {"label": "My Profile", "hint": "View and manage your account", "type": "link", "href": url_for("user_profile", user_id=user["id"])},
     ]
+    if module_visible_in_active_portal("notifications"):
+        core_items.append({"label": "Notifications", "hint": "All active notices", "type": "link", "href": url_for("notifications_page")})
+    if module_visible_in_active_portal("inbox"):
+        core_items.append({"label": "Inbox", "hint": "Direct messages", "type": "link", "href": url_for("inbox")})
+    if module_visible_in_active_portal("attendance"):
+        core_items.append({"label": "Attendance & Leave", "hint": "Mark attendance, apply for leave", "type": "link", "href": url_for("attendance_page")})
     core_info = [
         {"label": "Logged in as", "type": "text", "value": user["name"]},
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
@@ -10364,7 +10373,7 @@ def sitemap():
             open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
             ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
             ops_items.append({"label": "Completed Jobs", "hint": "View processed history", "type": "link", "href": url_for("schedule", bucket="completed")})
-        if access_profile.get("can_view_finance_stage") or is_owner(user):
+        if module_visible_in_active_portal("finance") and (access_profile.get("can_view_finance_stage") or is_owner(user)):
             ops_items.append({"label": "Finance Portal", "hint": "Billing, invoices, grants", "type": "link", "href": url_for("finance_portal")})
         sections.append({
             "key": "operations",
@@ -10397,9 +10406,10 @@ def sitemap():
             {"label": "User Management", "hint": f"{user_count} active, {invited_count} pending invites", "type": "link", "href": url_for("admin_users")},
             {"label": "Notices", "hint": "Post site-wide announcements", "type": "link", "href": url_for("admin_notices")},
             {"label": "Calibrations Due", "hint": "NABL compliance — upcoming calibrations", "type": "link", "href": url_for("admin_calibrations_upcoming")},
-            {"label": "Leave Queue", "hint": "Approve/reject leave requests", "type": "link", "href": url_for("admin_leave_queue")},
-            {"label": "Attendance Overview", "hint": "Daily attendance for all staff", "type": "link", "href": url_for("admin_attendance_calendar")},
         ]
+        if module_visible_in_active_portal("attendance"):
+            admin_items.append({"label": "Leave Queue", "hint": "Approve/reject leave requests", "type": "link", "href": url_for("admin_leave_queue")})
+            admin_items.append({"label": "Attendance Overview", "hint": "Daily attendance for all staff", "type": "link", "href": url_for("admin_attendance_calendar")})
         system_items = [
             {"label": "Server Port", "type": "text", "value": "5055"},
             {"label": "Database", "type": "text", "value": "SQLite (local)"},

@@ -39,7 +39,7 @@
   </article>
   {% endif %}
 
-  {% if module_enabled('notifications') %}
+  {% if portal_module_enabled('notifications') %}
   <article class="card tile tile-span-3 tile-dash-noticeboard tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("ATTENTION", (active_notices|length|string ~ " active") if active_notices else "All caught up") }}
     {% if active_notices %}
@@ -101,7 +101,7 @@
   {% endif %}
 
   {# ── TILE: Quick Attendance — moved up from bottom ── #}
-  {% if module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
+  {% if portal_module_enabled('attendance') and (access_profile_user.can_access_instruments or is_owner_user) %}
   <article class="card tile tile-span-3 tile-dash-attendance tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("TODAY", "Attendance") }}
     <div class="attendance-quick-row" data-vis="{{ V }}">
@@ -121,7 +121,7 @@
   {% endif %}
 
   {# ── TILE: Fleet Status — active vehicles, fuel, insurance ── #}
-  {% if dash_fleet_status %}
+  {% if portal_module_enabled('vehicles') and dash_fleet_status %}
   <article class="card tile tile-span-3 tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("OPS", "Fleet Status") }}
     {{ kpi_grid([
@@ -133,7 +133,7 @@
   {% endif %}
 
   {# ── TILE: Payroll Due — unpaid staff, pending amount ── #}
-  {% if dash_payroll_due %}
+  {% if portal_module_enabled('personnel') and dash_payroll_due %}
   <article class="card tile tile-span-3 tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("OPS", "Payroll Due") }}
     {{ kpi_grid([
@@ -215,7 +215,7 @@
   {% endif %}
 
   {# ── TILE 3: Quick Intake — card-based view of active samples ── #}
-  {% if module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
+  {% if portal_module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
   <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
     {% call card_heading("INTAKE", "Quick Intake") %}
       <a class="text-link" href="{{ url_for('schedule', bucket='sample_submitted') }}" data-vis="{{ V }}">Open Queue</a>
@@ -268,7 +268,7 @@
     </div>
     {% endif %}
   </article>
-  {% elif module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
+  {% elif portal_module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
   <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
     {{ card_heading("INTAKE", "Quick Intake") }}
     <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">All caught up — no samples awaiting action</p>
@@ -301,7 +301,7 @@
   {% endif %}
 
   {# ── TILE 6: Your Jobs — requester / non-admin landing shortcut ── #}
-  {% if module_enabled('queue') and not has_instrument_area_access_user %}
+{% if portal_module_enabled('queue') and not has_instrument_area_access_user %}
   <article class="card tile tile-span-3 tile-dash-your-jobs tile-dash-support" data-vis="{{ V }}">
     {{ card_heading("QUEUE", "Your Jobs") }}
     <div class="link-row" data-vis="{{ V }}">
@@ -313,7 +313,7 @@
 
 </section>
 
-{% if module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
+{% if portal_module_enabled('queue') and has_instrument_area_access_user and quick_intake_rows %}
 <script>
   (function () {
     const input = document.getElementById("quickIntakeSearch");

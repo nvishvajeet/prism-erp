@@ -39,6 +39,31 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
+
+# ── Demo-variant flip switch ───────────────────────────────────────
+# See comment in the stable branch; same semantics on alpha. Each demo
+# instance runs from its own git worktree on its own port with its own
+# SQLite DB. Widget in base.html reads DEMO_VARIANT to highlight the
+# active pill and DEMO_VARIANT_URLS to link to the other channels.
+DEMO_VARIANT = os.environ.get("CATALYST_DEMO_VARIANT", "stable").strip().lower() or "stable"
+_DEFAULT_DEMO_VARIANT_URLS = {
+    "stable": "https://localhost:5055",
+    "beta":   "https://localhost:5057",
+    "alpha":  "https://localhost:5058",
+}
+_variant_urls_override = os.environ.get("CATALYST_DEMO_VARIANT_URLS", "").strip()
+if _variant_urls_override:
+    DEMO_VARIANT_URLS = {}
+    for _pair in _variant_urls_override.split(","):
+        if "=" in _pair:
+            _k, _v = _pair.split("=", 1)
+            DEMO_VARIANT_URLS[_k.strip().lower()] = _v.strip()
+    for _k, _v in _DEFAULT_DEMO_VARIANT_URLS.items():
+        DEMO_VARIANT_URLS.setdefault(_k, _v)
+else:
+    DEMO_VARIANT_URLS = dict(_DEFAULT_DEMO_VARIANT_URLS)
+DEMO_VARIANT_LABELS = {"stable": "Stable", "beta": "Beta", "alpha": "Alpha"}
+
 RUNTIME_BOOTSTRAP_VERSION = "2026-04-14-runtime-v1"
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
 _ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -4977,10 +5002,21 @@ def inject_globals():
         nav_instruments_truncated = len(_all_nav) > 15
     nav_unread_inbox = unread_message_count(user) if user else 0
     nav_notice_count = len(active_notices_for_user(user)) if user else 0
+    demo_variant_pills = []
+    if DEMO_MODE:
+        for _vkey in ("stable", "beta", "alpha"):
+            demo_variant_pills.append({
+                "key": _vkey,
+                "label": DEMO_VARIANT_LABELS.get(_vkey, _vkey.title()),
+                "url": DEMO_VARIANT_URLS.get(_vkey, ""),
+                "active": (_vkey == DEMO_VARIANT),
+            })
     return {
         "V": V,
         "current_user": user,
         "demo_mode": DEMO_MODE,
+        "demo_variant": DEMO_VARIANT,
+        "demo_variant_pills": demo_variant_pills,
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,

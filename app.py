@@ -12338,142 +12338,17 @@ def request_detail(request_id: int):
             log_action(user["id"], "sample_request", request_id, "issue_reopened", {"issue_id": issue_id})
             flash("Issue reopened.", "success")
             return redirect(url_for("request_detail", request_id=request_id))
-        if action == "upload_attachment":
-            if not can_upload_files:
-                abort(403)
-            uploaded_file = request.files.get("attachment")
-            attachment_type = request.form.get("attachment_type", "other")
-            note = request.form.get("note", "").strip()
-            if attachment_type not in attachment_type_choices():
-                attachment_type = "other"
-            try:
-                save_uploaded_attachment(sample_request, uploaded_file, user["id"], attachment_type, note)
-                write_request_metadata_snapshot(request_id)
-                flash("Attachment uploaded.", "success")
-            except ValueError as exc:
-                flash(str(exc), "error")
-            return redirect(url_for("request_detail", request_id=request_id))
-
-        if action == "update_request_metadata" and can_manage:
-            # In-place edit of user-editable request fields by lab admins.
-            # Limited to fields a manager would legitimately correct: sample
-            # title, sample name, sample count, and the working remark. All
-            # other lifecycle / status moves go through admin_set_status.
-            # Writes an audit-log event so the change lands in the request
-            # timeline like any other admin action. Completed jobs are
-            # blocked below by the completion_locked gate.
-            if sample_request["completion_locked"]:
-                flash("Completed jobs are locked and cannot be edited.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            new_title = (request.form.get("title") or sample_request["title"]).strip() or sample_request["title"]
-            new_sample_name = (request.form.get("sample_name") or sample_request["sample_name"]).strip() or sample_request["sample_name"]
-            try:
-                new_sample_count = max(1, int(request.form.get("sample_count") or sample_request["sample_count"]))
-            except (TypeError, ValueError):
-                new_sample_count = sample_request["sample_count"]
-            new_remarks = (request.form.get("remarks") or sample_request["remarks"] or "").strip()
-            execute(
-                """
-                UPDATE sample_requests
-                SET title = ?, sample_name = ?, sample_count = ?, remarks = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (new_title, new_sample_name, new_sample_count, new_remarks, now_iso(), request_id),
-            )
-            log_action(
-                user["id"],
-                "sample_request",
-                request_id,
-                "request_metadata_updated",
-                {
-                    "title": new_title,
-                    "sample_name": new_sample_name,
-                    "sample_count": new_sample_count,
-                    "remarks_preview": new_remarks[:160],
-                },
-            )
-            write_request_metadata_snapshot(request_id)
-            flash("Request details updated.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-
-        if action == "admin_set_status" and can_manage:
-            new_status = request.form.get("new_status", "").strip()
-            remarks = request.form.get("remarks", "").strip()
-            scheduled_for = request.form.get("scheduled_for", "").strip()
-            allowed_statuses = {
-                "submitted",
-                "under_review",
-                "awaiting_sample_submission",
-                "sample_submitted",
-                "sample_received",
-                "scheduled",
-                "in_progress",
-                "completed",
-                "rejected",
-            }
-            if new_status not in allowed_statuses:
-                flash("Choose a valid status.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            db = get_db()
-            if new_status == "under_review" and not approval_steps:
-                create_approval_chain(db, request_id, sample_request["instrument_id"])
-            now_value = now_iso()
-            update_fields = {
-                "status": new_status,
-                "remarks": remarks if remarks else sample_request["remarks"],
-                "updated_at": now_value,
-                "completion_locked": 1 if new_status == "completed" else 0,
-                "completed_at": now_value if new_status == "completed" else None,
-            }
-            if new_status == "sample_submitted":
-                update_fields["submitted_to_lab_at"] = sample_request["submitted_to_lab_at"] or now_value
-                update_fields["sample_submitted_at"] = sample_request["sample_submitted_at"] or now_value
-            if new_status in {"sample_received", "scheduled", "in_progress", "completed"}:
-                update_fields["sample_received_at"] = sample_request["sample_received_at"] or now_value
-                update_fields["received_by_operator_id"] = sample_request["received_by_operator_id"] or user["id"]
-            if new_status == "scheduled":
-                update_fields["scheduled_for"] = scheduled_for or sample_request["scheduled_for"] or now_value
-            if new_status == "completed":
-                update_fields.update(completion_override_fields(sample_request, user["id"], now_value))
-                execute(
-                    "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Completed from admin status control' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
-                    (now_value, request_id),
-                )
-            columns = ", ".join(f"{key} = ?" for key in update_fields)
-            execute(
-                f"UPDATE sample_requests SET {columns} WHERE id = ?",
-                tuple(update_fields.values()) + (request_id,),
-            )
-            if new_status == "completed":
-                log_completion_override_events(
-                    user["id"],
-                    sample_request,
-                    update_fields,
-                    now_value,
-                    "status_changed",
-                    {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
-                )
-                send_completion_inbox_message(user["id"], sample_request)
-            else:
-                log_action(
-                    user["id"],
-                    "sample_request",
-                    request_id,
-                    "status_changed",
-                    {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
-                )
-            write_request_metadata_snapshot(request_id)
-            # ── Workflow notification: status changed ──
-            try:
-                notify(sample_request["requester_id"], "request",
-                       f"Request {sample_request['request_no']} updated",
-                       f"Status changed to {new_status}",
-                       url_for("request_detail", request_id=request_id),
-                       "sample_request", request_id)
-            except Exception:
-                pass
-            flash("Status updated.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
+        admin_action_response = _handle_request_detail_admin_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            can_manage=can_manage,
+            can_upload_files=can_upload_files,
+            approval_steps=approval_steps,
+        )
+        if admin_action_response is not None:
+            return admin_action_response
 
         if sample_request["completion_locked"]:
             flash("Completed jobs are locked. Add amendments through a controlled workflow later.", "error")
@@ -12940,6 +12815,152 @@ def request_detail(request_id: int):
             actionable_step_ids=actionable_step_ids,
         ),
     )
+
+
+def _handle_request_detail_admin_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    can_manage: bool,
+    can_upload_files: bool,
+    approval_steps,
+):
+    if action == "upload_attachment":
+        if not can_upload_files:
+            abort(403)
+        uploaded_file = request.files.get("attachment")
+        attachment_type = request.form.get("attachment_type", "other")
+        note = request.form.get("note", "").strip()
+        if attachment_type not in attachment_type_choices():
+            attachment_type = "other"
+        try:
+            save_uploaded_attachment(sample_request, uploaded_file, user["id"], attachment_type, note)
+            write_request_metadata_snapshot(request_id)
+            flash("Attachment uploaded.", "success")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "update_request_metadata" and can_manage:
+        if sample_request["completion_locked"]:
+            flash("Completed jobs are locked and cannot be edited.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        new_title = (request.form.get("title") or sample_request["title"]).strip() or sample_request["title"]
+        new_sample_name = (request.form.get("sample_name") or sample_request["sample_name"]).strip() or sample_request["sample_name"]
+        try:
+            new_sample_count = max(1, int(request.form.get("sample_count") or sample_request["sample_count"]))
+        except (TypeError, ValueError):
+            new_sample_count = sample_request["sample_count"]
+        new_remarks = (request.form.get("remarks") or sample_request["remarks"] or "").strip()
+        execute(
+            """
+            UPDATE sample_requests
+            SET title = ?, sample_name = ?, sample_count = ?, remarks = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (new_title, new_sample_name, new_sample_count, new_remarks, now_iso(), request_id),
+        )
+        log_action(
+            user["id"],
+            "sample_request",
+            request_id,
+            "request_metadata_updated",
+            {
+                "title": new_title,
+                "sample_name": new_sample_name,
+                "sample_count": new_sample_count,
+                "remarks_preview": new_remarks[:160],
+            },
+        )
+        write_request_metadata_snapshot(request_id)
+        flash("Request details updated.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "admin_set_status" and can_manage:
+        new_status = request.form.get("new_status", "").strip()
+        remarks = request.form.get("remarks", "").strip()
+        scheduled_for = request.form.get("scheduled_for", "").strip()
+        allowed_statuses = {
+            "submitted",
+            "under_review",
+            "awaiting_sample_submission",
+            "sample_submitted",
+            "sample_received",
+            "scheduled",
+            "in_progress",
+            "completed",
+            "rejected",
+        }
+        if new_status not in allowed_statuses:
+            flash("Choose a valid status.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        db = get_db()
+        if new_status == "under_review" and not approval_steps:
+            create_approval_chain(db, request_id, sample_request["instrument_id"])
+        now_value = now_iso()
+        update_fields = {
+            "status": new_status,
+            "remarks": remarks if remarks else sample_request["remarks"],
+            "updated_at": now_value,
+            "completion_locked": 1 if new_status == "completed" else 0,
+            "completed_at": now_value if new_status == "completed" else None,
+        }
+        if new_status == "sample_submitted":
+            update_fields["submitted_to_lab_at"] = sample_request["submitted_to_lab_at"] or now_value
+            update_fields["sample_submitted_at"] = sample_request["sample_submitted_at"] or now_value
+        if new_status in {"sample_received", "scheduled", "in_progress", "completed"}:
+            update_fields["sample_received_at"] = sample_request["sample_received_at"] or now_value
+            update_fields["received_by_operator_id"] = sample_request["received_by_operator_id"] or user["id"]
+        if new_status == "scheduled":
+            update_fields["scheduled_for"] = scheduled_for or sample_request["scheduled_for"] or now_value
+        if new_status == "completed":
+            update_fields.update(completion_override_fields(sample_request, user["id"], now_value))
+            execute(
+                "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Completed from admin status control' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
+                (now_value, request_id),
+            )
+        columns = ", ".join(f"{key} = ?" for key in update_fields)
+        execute(
+            f"UPDATE sample_requests SET {columns} WHERE id = ?",
+            tuple(update_fields.values()) + (request_id,),
+        )
+        if new_status == "completed":
+            log_completion_override_events(
+                user["id"],
+                sample_request,
+                update_fields,
+                now_value,
+                "status_changed",
+                {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
+            )
+            send_completion_inbox_message(user["id"], sample_request)
+        else:
+            log_action(
+                user["id"],
+                "sample_request",
+                request_id,
+                "status_changed",
+                {"from_status": sample_request["status"], "to_status": new_status, "remarks": remarks, "scheduled_for": scheduled_for},
+            )
+        write_request_metadata_snapshot(request_id)
+        try:
+            notify(
+                sample_request["requester_id"],
+                "request",
+                f"Request {sample_request['request_no']} updated",
+                f"Status changed to {new_status}",
+                url_for("request_detail", request_id=request_id),
+                "sample_request",
+                request_id,
+            )
+        except Exception:
+            pass
+        flash("Status updated.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    return None
 
 
 # ─────────────────────────────────────────────────────────────

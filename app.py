@@ -3270,38 +3270,67 @@ def sync_instrument_assignments(table: str, instrument_id: int, user_ids: list[i
 
 
 def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], list]:
+    try:
+        cache = g.setdefault("_request_scope_sql", {})
+    except RuntimeError:
+        cache = None
+    cache_key = None
+    if cache is not None:
+        cache_key = (int(user["id"]), alias)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            clauses, params = cached
+            return list(clauses), list(params)
     clauses: list[str] = []
     params: list = []
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
-        return clauses, params
+        result = (tuple(clauses), tuple(params))
+        if cache is not None and cache_key is not None:
+            cache[cache_key] = result
+        return list(result[0]), list(result[1])
     instrument_ids = assigned_instrument_ids(user)
     if instrument_ids:
         placeholders = ",".join("?" for _ in instrument_ids)
         clauses.append(f"{alias}.instrument_id IN ({placeholders})")
         params.extend(instrument_ids)
-        return clauses, params
+        result = (tuple(clauses), tuple(params))
+        if cache is not None and cache_key is not None:
+            cache[cache_key] = result
+        return list(result[0]), list(result[1])
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "requester":
         clauses.append(f"{alias}.requester_id = ?")
         params.append(user["id"])
-        return clauses, params
+        result = (tuple(clauses), tuple(params))
+        if cache is not None and cache_key is not None:
+            cache[cache_key] = result
+        return list(result[0]), list(result[1])
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "finance_admin":
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
             f"EXISTS (SELECT 1 FROM approval_steps aps WHERE aps.sample_request_id = {alias}.id AND aps.approver_role = 'finance')"
         )
-        return clauses, params
+        result = (tuple(clauses), tuple(params))
+        if cache is not None and cache_key is not None:
+            cache[cache_key] = result
+        return list(result[0]), list(result[1])
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] == "professor_approver":
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
             f"EXISTS (SELECT 1 FROM approval_steps aps WHERE aps.sample_request_id = {alias}.id AND aps.approver_role = 'professor')"
         )
-        return clauses, params
+        result = (tuple(clauses), tuple(params))
+        if cache is not None and cache_key is not None:
+            cache[cache_key] = result
+        return list(result[0]), list(result[1])
     clauses.append("1 = 0")
-    return clauses, params
+    result = (tuple(clauses), tuple(params))
+    if cache is not None and cache_key is not None:
+        cache[cache_key] = result
+    return list(result[0]), list(result[1])
 
 
 def scoped_instrument_count(user: sqlite3.Row) -> int:

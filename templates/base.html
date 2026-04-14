@@ -17,6 +17,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
     (function () {
+      // Early theme bootstrap — runs in <head> before <body> paints so we
+      // never flash the wrong theme on navigation. Must read from the SAME
+      // place CatalystPrefs.set() writes to (localStorage key
+      // "catalyst_pref_theme"), otherwise the user's toggle choice doesn't
+      // survive a page load.
+      //
+      // The legacy "labTheme" key + an optional cookie of the same name are
+      // kept as fallbacks for older sessions that haven't migrated yet.
       function readCookie(name) {
         var prefix = name + "=";
         return document.cookie.split(";").map(function (part) { return part.trim(); }).reduce(function (found, part) {
@@ -24,7 +32,12 @@
           return part.indexOf(prefix) === 0 ? decodeURIComponent(part.slice(prefix.length)) : null;
         }, null);
       }
-      const stored = readCookie("catalyst_pref_theme") || localStorage.getItem("labTheme");
+      var stored = null;
+      try { stored = localStorage.getItem("catalyst_pref_theme"); } catch (e) {}
+      if (!stored) stored = readCookie("catalyst_pref_theme");
+      if (!stored) {
+        try { stored = localStorage.getItem("labTheme"); } catch (e) {}
+      }
       const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       const theme = stored || (systemDark ? "dark" : "light");
       document.documentElement.setAttribute("data-theme", theme);
@@ -295,9 +308,8 @@
   {# ── AI Hover Pane — extracted to partial ── #}
   {% include "_base_ai_pane.html" %}
   <script>
-    /* ── Privacy-first preference cookies — serve, not track ── */
+    /* ── Local preference storage only — no cookie banner, no tracking ── */
     window.CatalystPrefs = (function () {
-      var consentCookie = "catalyst_pref_cookies";
       var keyPrefix = "catalyst_pref_";
       var knownKeys = ["theme", "pane_heights", "dash_collapsed", "queue_view"];
       var legacyMap = {
@@ -307,40 +319,32 @@
         "queue_view": "labQueueView"
       };
 
-      function readCookie(name) {
-        var prefix = name + "=";
-        var parts = document.cookie ? document.cookie.split(";") : [];
-        for (var i = 0; i < parts.length; i += 1) {
-          var part = parts[i].trim();
-          if (part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
-        }
-        return null;
+      function readValue(name) {
+        try { return localStorage.getItem(name); } catch (e) { return null; }
       }
 
-      function writeCookie(name, value, days) {
-        var maxAge = Math.max(0, Math.floor(days * 24 * 60 * 60));
-        document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; max-age=" + maxAge + "; SameSite=Lax";
+      function writeValue(name, value) {
+        try { localStorage.setItem(name, value); } catch (e) {}
       }
 
-      function clearCookie(name) {
-        document.cookie = name + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+      function clearValue(name) {
+        try { localStorage.removeItem(name); } catch (e) {}
       }
 
       function consentState() {
-        return readCookie(consentCookie);
+        return "accepted";
       }
 
       function canPersist() {
-        return consentState() === "accepted";
+        return true;
       }
 
       function get(key) {
-        return canPersist() ? readCookie(keyPrefix + key) : null;
+        return readValue(keyPrefix + key);
       }
 
       function set(key, value) {
-        if (!canPersist()) return false;
-        writeCookie(keyPrefix + key, value, 365);
+        writeValue(keyPrefix + key, value);
         try {
           if (legacyMap[key]) localStorage.removeItem(legacyMap[key]);
         } catch (e) {}
@@ -361,8 +365,8 @@
         Object.keys(legacyMap).forEach(function (key) {
           try {
             var legacy = localStorage.getItem(legacyMap[key]);
-            if (legacy && !readCookie(keyPrefix + key)) {
-              writeCookie(keyPrefix + key, legacy, 365);
+            if (legacy && !readValue(keyPrefix + key)) {
+              writeValue(keyPrefix + key, legacy);
             }
             if (legacy) localStorage.removeItem(legacyMap[key]);
           } catch (e) {}
@@ -370,16 +374,14 @@
       }
 
       function clearPrefs() {
-        knownKeys.forEach(function (key) { clearCookie(keyPrefix + key); });
+        knownKeys.forEach(function (key) { clearValue(keyPrefix + key); });
       }
 
       function accept() {
-        writeCookie(consentCookie, "accepted", 365);
         migrateLegacy();
       }
 
       function decline() {
-        writeCookie(consentCookie, "declined", 180);
         clearPrefs();
       }
 
@@ -516,17 +518,10 @@
       const media = window.matchMedia("(prefers-color-scheme: dark)");
       const toggle = document.getElementById("themeToggle");
       const prefs = window.CatalystPrefs;
-      const banner = document.getElementById("prefCookieBanner");
-      const acceptBtn = document.getElementById("prefCookieAccept");
-      const declineBtn = document.getElementById("prefCookieDecline");
       const initialConsent = prefs ? prefs.consentState() : null;
 
       if (prefs && initialConsent === "accepted") {
         prefs.migrateLegacy();
-      }
-
-      if (banner && !initialConsent) {
-        banner.hidden = false;
       }
 
       function applyTheme(theme) {
@@ -547,8 +542,14 @@
 
       if (toggle) {
         toggle.addEventListener("click", function () {
-          const next = currentTheme() === "dark" ? "light" : "dark";
+          // Invert the theme currently painted on <html>, not currentTheme()
+          // — the data-theme attribute is the source of truth for what the
+          // user is actually looking at, so the toggle flip is always
+          // visually correct even if prefs storage is flaky.
+          const painted = document.documentElement.getAttribute("data-theme") || currentTheme();
+          const next = painted === "dark" ? "light" : "dark";
           if (prefs) prefs.set("theme", next);
+          try { localStorage.setItem("catalyst_pref_theme", next); } catch (e) {}
           applyTheme(next);
         });
       }
@@ -559,21 +560,6 @@
           applyTheme(media.matches ? "dark" : "light");
         }
       });
-
-      if (acceptBtn && prefs) {
-        acceptBtn.addEventListener("click", function () {
-          prefs.accept();
-          prefs.set("theme", document.documentElement.getAttribute("data-theme") || currentTheme());
-          banner.hidden = true;
-        });
-      }
-
-      if (declineBtn && prefs) {
-        declineBtn.addEventListener("click", function () {
-          prefs.decline();
-          banner.hidden = true;
-        });
-      }
     })();
 
     /* ── Toast auto-dismiss + close button ── */
@@ -627,16 +613,6 @@
     </div>
   </div>
   {% endif %}
-  <aside id="prefCookieBanner" class="pref-cookie-banner" hidden>
-    <div class="pref-cookie-copy">
-      <strong>Preference cookies only.</strong>
-      CATALYST can remember your theme, panel sizes, and view choices to make the UI smoother. No analytics, ads, or cross-site tracking.
-    </div>
-    <div class="pref-cookie-actions">
-      <button type="button" class="link-button subtle" id="prefCookieDecline">Only essential</button>
-      <button type="button" class="nav-button subtle" id="prefCookieAccept">Allow preferences</button>
-    </div>
-  </aside>
   <script>
     /* ── Instrument dropdown mobile support + ARIA ── */
     (function () {

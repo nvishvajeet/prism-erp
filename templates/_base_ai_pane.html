@@ -35,7 +35,7 @@
         <textarea id="aiPaneInput" rows="2" placeholder="Ask AI anything…"
                   style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
                   data-vis="{{ V }}"></textarea>
-        <button id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Send</button>
+        <button type="button" id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Send</button>
       </div>
       <p class="hint" style="margin-top:0.25rem;font-size:0.65rem;" data-vis="{{ V }}">
         Drop files here • Shift+Enter for newline • Enter to send{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}

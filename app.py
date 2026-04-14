@@ -144,11 +144,12 @@ DEMO_ROLE_SWITCHES = {
 ERP_PORTALS = {
     "lab": {
         "name": "Lab R&D",
-        "tagline": "Instruments · Queue · Requests · Finance",
+        "tagline": "Instruments · Queue · Requests · Finance · Attendance",
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "schedule", "requests", "finance", "admin",
+            "instruments", "schedule", "requests", "finance",
+            "attendance", "inbox", "notifications", "todos", "admin",
         ],
     },
     "hq": {
@@ -280,8 +281,11 @@ MODULE_REGISTRY = {
             "admin_leave_queue", "admin_attendance_calendar",
             "qr_attendance_kiosk", "qr_attendance_scan", "qr_my_code",
         },
-        # Only lab staff who physically attend — operators + instrument_admins.
-        "nav_access": lambda ap, is_owner: ap.get("_is_lab_staff"),
+        # Everyone signed in gets their own attendance panel — the page
+        # renders their personal month view, leave balances, and (if they
+        # manage a team) team approvals. Lab staff, HQ staff, owners,
+        # drivers, and faculty can all "check in" / see their record.
+        "nav_access": lambda ap, is_owner: True,
     },
     "todos": {
         "label": "Tasks",

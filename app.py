@@ -505,6 +505,13 @@ def portal_text(default_text: str, *, lab: str, portal_slug: str | None = None) 
     return lab if lab_portal_active(portal_slug) else default_text
 
 
+# Expose portal_text as a Jinja global so templates rendered via paths that
+# bypass the context processor (or macros imported without `with context`)
+# can still call it. Fixes intermittent UndefinedError: 'portal_text' is
+# undefined observed on GET / at 15:45-15:51 UTC 2026-04-14 in server-live.log.
+app.jinja_env.globals["portal_text"] = portal_text
+
+
 def portal_route_enabled(module_name: str) -> bool:
     """Route-level module gate that respects the active portal boundary."""
     return module_visible_in_active_portal(module_name)
@@ -8372,7 +8379,7 @@ def index():
         public_portals = [
             {
                 "slug": "lab",
-                "label": "Lab R&D",
+                "label": "Lab",
                 "title": "MITWPU Central Instrumentation Facility",
                 "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
                 "href": url_for("login", portal="lab"),
@@ -8380,11 +8387,11 @@ def index():
             },
             {
                 "slug": "hq",
-                "label": "Ravikiran Group HQ",
-                "title": "Personal / Group HQ Workspace",
-                "tagline": "Private HQ portal — finance, grants, admin, and cross-lab oversight.",
+                "label": "Private",
+                "title": "Private Workspace",
+                "tagline": "Restricted operations workspace for finance, admin, and internal coordination.",
                 "href": url_for("login", portal="hq"),
-                "cta": "Enter HQ ERP",
+                "cta": "Enter Private Portal",
             },
         ]
         demo_info = {
@@ -9078,6 +9085,10 @@ def _save_message_attachments(message_id: int, files, now_iso: str):
 def _line_manager_id_for_user(user_id: int) -> int | None:
     row = query_one("SELECT manager_id FROM reporting_structure WHERE user_id = ?", (user_id,))
     return row_value(row, "manager_id")
+
+
+def _attendance_admin_scope(user: sqlite3.Row) -> bool:
+    return bool(user_role_set(user) & {"super_admin", "site_admin", "finance_admin"}) or is_owner(user)
 
 
 def _complaint_admin_user_ids() -> list[int]:
@@ -10352,7 +10363,7 @@ def finance_grants_list():
         return redirect(url_for("finance_grant_detail", grant_id=new_id))
 
     rows = query_all(
-        """
+        f"""
         SELECT
           g.id, g.code, g.name, g.sponsor, g.total_budget,
           g.start_date, g.end_date, g.status, g.notes,

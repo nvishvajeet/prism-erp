@@ -249,6 +249,49 @@ body {
   align-items: center;
   gap: 0.8rem;
 }
+
+/* ── Demo channel flip switch ──
+   Segmented-control pill group in the topbar. Only ever rendered
+   when DEMO_MODE is on (hidden on catalysterp.org entirely), so we
+   don't hedge the styling — this is always a local-demo affordance. */
+.demo-variant-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-elev, #fff) 85%, transparent);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.demo-variant-switch-label {
+  opacity: 0.6;
+  letter-spacing: 0.08em;
+  padding: 0 0.35rem 0 0.2rem;
+}
+.demo-variant-pill {
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  color: var(--ink);
+  text-decoration: none;
+  line-height: 1.2;
+  transition: background 120ms ease, color 120ms ease;
+}
+.demo-variant-pill:hover {
+  background: color-mix(in srgb, var(--accent, #2563eb) 14%, transparent);
+}
+.demo-variant-pill-active {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-weight: 600;
+}
+.demo-variant-pill-active:hover {
+  background: var(--accent, #2563eb);
+}
+:root[data-theme="dark"] .demo-variant-switch {
+  background: color-mix(in srgb, #ffffff 6%, transparent);
+}
 .user-controls {
   display: flex;
   flex-wrap: wrap;

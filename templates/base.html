@@ -73,6 +73,24 @@
       <a href="{{ url_for('portal_picker') }}" class="text-link" style="font-size:0.75rem;margin-left:0.5rem;opacity:0.8;" data-vis="{{ V }}">{{ active_portal.icon }} {{ active_portal.name }}</a>
       {% endif %}
     </div>
+    {# ── Demo channel flip switch ──
+       Lives between brand and user-box in the topbar. Visible only
+       when DEMO_MODE is on, so catalysterp.org (live) never shows it.
+       Each pill links to the gunicorn instance running that channel's
+       git worktree — stable, beta, alpha. Per-pill URLs are configured
+       via CATALYST_DEMO_VARIANT_URLS at launch, defaulting to
+       localhost:5055 / 5057 / 5058. #}
+    {% if demo_mode and demo_variant_pills %}
+    <div class="demo-variant-switch" role="group" aria-label="Demo channel" data-vis="{{ V }}">
+      <span class="demo-variant-switch-label" data-vis="{{ V }}">CHANNEL</span>
+      {% for pill in demo_variant_pills %}
+      <a class="demo-variant-pill{% if pill.active %} demo-variant-pill-active{% endif %}"
+         href="{{ pill.url }}"
+         title="Switch to {{ pill.label }} — {{ pill.url }}"
+         data-variant="{{ pill.key }}" data-vis="{{ V }}">{{ pill.label }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if current_user %}
     <div class="topbar-right" data-vis="{{ V }}">
       <div class="userbox" data-vis="{{ V }}">
@@ -111,13 +129,13 @@
            href="{{ nav.url }}" aria-haspopup="true" aria-expanded="false" data-vis="{{ V }}">{{ nav.label }}</a>
         <div class="nav-menu" role="menu" aria-label="{{ nav.label }}" data-vis="{{ V }}">
           <a href="{{ nav.url }}" data-vis="{{ V }}"><strong>All Instruments</strong></a>
-          {% if module_enabled('queue') and can_access_schedule_user %}
+          {% if portal_module_enabled('schedule') and can_access_schedule_user %}
           <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %} ({{ nav_pending_counts.queue }}){% endif %}</a>
           {% endif %}
-          {% if module_enabled('calendar') and can_access_calendar_user %}
+          {% if portal_module_enabled('calendar') and can_access_calendar_user %}
           <a href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
           {% endif %}
-          {% if module_enabled('stats') and can_access_stats_user %}
+          {% if portal_module_enabled('stats') and can_access_stats_user %}
           <a href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
           {% endif %}
           <a href="{{ url_for('new_request') }}" data-vis="{{ V }}">New Request</a>
@@ -158,7 +176,7 @@
     <a href="{{ url_for('quick_entry') }}" class="nav-quick-entry" title="Quick Entry" data-vis="{{ V }}">⚡</a>
 
     {# Notifications — right side of nav #}
-    {% if module_enabled('notifications') %}
+    {% if portal_module_enabled('notifications') %}
     <div class="nav-dropdown notif-dropdown notif-hover-dropdown" data-vis="{{ V }}">
       <a class="nav-trigger {% if endpoint == 'notifications_page' %}nav-active{% endif %}"
          href="{{ url_for('notifications_page') }}" data-vis="{{ V }}">🔔{% if nav_notice_count %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_notice_count }}</span>{% endif %}</a>

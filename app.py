@@ -18,7 +18,7 @@ from functools import wraps
 from io import BytesIO
 from pathlib import Path
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
 from flask_wtf.csrf import CSRFProtect
 from openpyxl import Workbook
 from werkzeug.utils import secure_filename
@@ -54,6 +54,40 @@ DATA_DEMO_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
+
+# ── Demo-variant flip switch ───────────────────────────────────────
+# Each local demo instance (stable / beta / alpha) runs its own gunicorn
+# on its own port from its own git worktree. The topbar widget in
+# base.html reads DEMO_VARIANT to highlight the active pill and uses
+# DEMO_VARIANT_URLS to link to the other two. DEMO_VARIANT_URLS is a
+# compile-time default that can be overridden at launch via
+# CATALYST_DEMO_VARIANT_URLS="stable=https://localhost:5055,beta=...,alpha=..."
+# so the ports are not locked in the source. Live (catalysterp.org) sets
+# LAB_SCHEDULER_DEMO_MODE=0 and the widget is skipped entirely.
+DEMO_VARIANT = os.environ.get("CATALYST_DEMO_VARIANT", "stable").strip().lower() or "stable"
+_DEFAULT_DEMO_VARIANT_URLS = {
+    "stable": "https://localhost:5055",
+    "beta":   "https://localhost:5057",
+    "alpha":  "https://localhost:5058",
+}
+_variant_urls_override = os.environ.get("CATALYST_DEMO_VARIANT_URLS", "").strip()
+if _variant_urls_override:
+    DEMO_VARIANT_URLS = {}
+    for _pair in _variant_urls_override.split(","):
+        if "=" in _pair:
+            _k, _v = _pair.split("=", 1)
+            DEMO_VARIANT_URLS[_k.strip().lower()] = _v.strip()
+    # Keep defaults for any variant not listed in the override.
+    for _k, _v in _DEFAULT_DEMO_VARIANT_URLS.items():
+        DEMO_VARIANT_URLS.setdefault(_k, _v)
+else:
+    DEMO_VARIANT_URLS = dict(_DEFAULT_DEMO_VARIANT_URLS)
+DEMO_VARIANT_LABELS = {
+    "stable": "Stable",
+    "beta":   "Beta",
+    "alpha":  "Alpha",
+}
+
 ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 _ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
@@ -102,13 +136,11 @@ DEMO_ROLE_SWITCHES = {
 ERP_PORTALS = {
     "lab": {
         "name": "Lab R&D",
-        "tagline": "Instruments · Samples · Grants · Compute",
+        "tagline": "Instruments · Queue · Requests · Profiles",
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "schedule", "requests", "grants",
-            "finance", "compute", "inbox", "notifications",
-            "todos", "admin",
+            "instruments", "schedule", "requests", "admin",
         ],
     },
     "hq": {
@@ -445,6 +477,67 @@ def _active_portal_config() -> dict | None:
     return None
 
 
+def active_portal_slug() -> str | None:
+    if not has_request_context():
+        return None
+    slug = session.get("active_portal")
+    return slug if slug in ERP_PORTALS else None
+
+
+def lab_profile_mode_active() -> bool:
+    return active_portal_slug() == "lab"
+
+
+def portal_role_display_name(role: str | None, portal_slug: str | None = None) -> str:
+    role_key = role or ""
+    slug = portal_slug
+    if slug is None:
+        slug = active_portal_slug()
+    if slug == "lab":
+        aliases = {
+            "super_admin": "Dean",
+            "site_admin": "Conductor",
+        }
+        if role_key in aliases:
+            return aliases[role_key]
+    return ROLE_DISPLAY_NAMES.get(role_key, role_key.replace("_", " ").title())
+
+
+def lab_profile_role_choices() -> list[tuple[str, str]]:
+    return [
+        ("site_admin", portal_role_display_name("site_admin", "lab")),
+        ("super_admin", portal_role_display_name("super_admin", "lab")),
+    ]
+
+
+def allowed_user_creation_roles() -> set[str]:
+    if lab_profile_mode_active():
+        return {"site_admin", "super_admin"}
+    return {
+        "requester", "operator", "instrument_admin", "faculty_in_charge",
+        "professor_approver", "finance_admin", "site_admin", "super_admin",
+    }
+
+
+def allowed_user_role_change_roles(viewer) -> list[str]:
+    if lab_profile_mode_active():
+        base_roles = ["site_admin"]
+        if is_owner(viewer) or viewer["role"] == "super_admin":
+            base_roles.append("super_admin")
+        return base_roles
+    base_roles = [
+        "requester",
+        "operator",
+        "instrument_admin",
+        "faculty_in_charge",
+        "professor_approver",
+        "finance_admin",
+    ]
+    if viewer["role"] == "super_admin":
+        base_roles += ["site_admin", "super_admin"]
+    return base_roles
+
+
 def build_nav_items(user, access_profile, is_owner):
     """Build sorted list of nav item dicts from MODULE_REGISTRY.
 
@@ -462,7 +555,7 @@ def build_nav_items(user, access_profile, is_owner):
         if not module_enabled(key):
             continue
         # Portal filter: only show modules belonging to the active portal
-        if key not in portal_modules and key not in ("admin", "inbox", "notifications", "todos"):
+        if key not in portal_modules and key != "admin":
             continue
         access_fn = meta.get("nav_access")
         if access_fn and not access_fn(access_profile, is_owner):
@@ -7150,7 +7243,7 @@ ROLE_MANUAL_HEADLINES = {
 
 
 def role_display_name(role: str | None) -> str:
-    return ROLE_DISPLAY_NAMES.get(role or "", (role or "").replace("_", " ").title())
+    return portal_role_display_name(role)
 
 
 def role_next_action(role: str | None) -> str:
@@ -7172,6 +7265,79 @@ def _role_manual_intro(user: sqlite3.Row, reason: str | None = None, notice: str
 
 def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: str = "") -> dict[str, object]:
     access = user_access_profile(user)
+    if lab_profile_mode_active():
+        role = row_value(user, "role", "")
+        manual_map = {
+            "super_admin": {
+                "headline": "You set the direction of the lab: people, instruments, permissions, and standards.",
+                "responsibilities": [
+                    "Keep the lab surface minimal and trustworthy for MITWPU work.",
+                    "Approve new profiles, instrument additions, and structural changes before they spread.",
+                    "Use AI to define the next profile or instrument only when the operating need is clear.",
+                ],
+                "first_steps": [
+                    "Open Home and review the live queue and instrument state.",
+                    "Open Settings → Users to confirm only the intended lab profiles are active.",
+                    "Open Instruments and check that each machine profile is accurate before adding anything new.",
+                ],
+                "modules": [
+                    ("Instruments", "Each instrument page is its own operating profile: metadata, team, queue, maintenance, and controls live there."),
+                    ("Queue", "Use the queue to watch active requests, unblock stalled work, and keep movement visible."),
+                    ("Requests", "Each request card is the audit trail for a sample from intake to completion."),
+                    ("Profiles", "Human profiles are intentionally few: Dean and Conductor. Add more only when the lab truly needs them."),
+                ],
+                "pane_guides": [
+                    ("Instrument pages", "Treat each instrument as a first-class profile. Keep its metadata, assignments, and instructions current."),
+                    ("Queue and request cards", "Use these as the live operating ledger. If work happened, it should be visible here."),
+                    ("AI profile creation", "Use AI to draft the next profile or machine setup, then review before making it live."),
+                ],
+                "next_action": "Start at Home, then confirm Users and Instruments are still clean.",
+            },
+            "site_admin": {
+                "headline": "You conduct the daily rhythm of the lab: intake, queue movement, instrument readiness, and follow-through.",
+                "responsibilities": [
+                    "Keep requests moving and surface issues early when a sample or instrument is blocked.",
+                    "Maintain instrument pages so the lab can operate from one source of truth.",
+                    "Use AI to create the next profile or machine setup only when it reduces repeated manual work.",
+                ],
+                "first_steps": [
+                    "Open Queue and look for anything waiting too long.",
+                    "Open Instruments and verify the machines you rely on are ready and correctly assigned.",
+                    "Open Settings only when you need to adjust people or create a new profile.",
+                ],
+                "modules": [
+                    ("Queue", "This is your primary operating pane for new requests, status movement, and coordination."),
+                    ("Instruments", "Each instrument page is where assignments, instructions, maintenance, and operating detail belong."),
+                    ("Requests", "Use request cards for sample-specific communication, files, and status changes."),
+                    ("Profiles", "The lab keeps only a few human profiles. Most operational structure should live on the instrument pages."),
+                ],
+                "pane_guides": [
+                    ("Queue", "Use it to move work, not to store decisions in your head."),
+                    ("Request cards", "Every sample should have a clear trail: what arrived, what changed, and what still needs action."),
+                    ("Instrument pages", "When reality changes, update the instrument profile rather than spreading notes elsewhere."),
+                ],
+                "next_action": "Start at Queue, then check the instruments that own today’s work.",
+            },
+        }
+        manual = manual_map.get(role, {
+            "headline": "You have a specific operating slice of the lab ERP.",
+            "responsibilities": [],
+            "first_steps": [],
+            "modules": [],
+            "pane_guides": [],
+            "next_action": "",
+        })
+        return {
+            "role_label": role_display_name(role),
+            "headline": manual["headline"],
+            "intro": _role_manual_intro(user, reason=reason, notice=notice),
+            "next_action": manual["next_action"],
+            "responsibilities": manual["responsibilities"],
+            "first_steps": manual["first_steps"],
+            "modules": manual["modules"],
+            "pane_guides": manual["pane_guides"],
+            "reason": reason or "login",
+        }
     modules = []
     if module_visible_in_active_portal("instruments") and access.get("can_access_instruments"):
         modules.append(("Instruments", "Manage instruments, metadata, teams, downtime, approvals, pricing, and the request ecosystem around them."))
@@ -7444,10 +7610,22 @@ def inject_globals():
         )
         nav_instruments = _all_nav[:15]
         nav_instruments_truncated = len(_all_nav) > 15
+    # Variant pills for the demo-only flip switch (skipped on live).
+    demo_variant_pills = []
+    if DEMO_MODE:
+        for _vkey in ("stable", "beta", "alpha"):
+            demo_variant_pills.append({
+                "key": _vkey,
+                "label": DEMO_VARIANT_LABELS.get(_vkey, _vkey.title()),
+                "url": DEMO_VARIANT_URLS.get(_vkey, ""),
+                "active": (_vkey == DEMO_VARIANT),
+            })
     return {
         "V": V,
         "current_user": user,
         "demo_mode": DEMO_MODE,
+        "demo_variant": DEMO_VARIANT,
+        "demo_variant_pills": demo_variant_pills,
         "org_name": ORG_NAME,
         "org_tagline": ORG_TAGLINE,
         "module_enabled": module_enabled,
@@ -10396,7 +10574,7 @@ def sitemap():
     core_info = [
         {"label": "Logged in as", "type": "text", "value": user["name"]},
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        {"label": "Role", "type": "badge", "value": user["role"].replace("_", " ").title(), "status": "submitted"},
+        {"label": "Role", "type": "badge", "value": role_display_name(user["role"]), "status": "submitted"},
         {"label": "Username", "type": "text", "value": user["email"]},
     ]
     sections.append({
@@ -12021,6 +12199,7 @@ def _new_request_form_context(user: sqlite3.Row) -> dict[str, object]:
         "can_submit_for_others": can_submit_for_others,
         "requester_candidates": requester_candidates,
         "prefill": prefill,
+        "lab_portal_mode": lab_profile_mode_active(),
     }
 
 
@@ -12073,6 +12252,7 @@ def _validate_new_request_post(user: sqlite3.Row, can_submit_for_others: bool) -
         return None, redirect(url_for("new_request"))
 
     sample_origin = request.form.get("sample_origin", "internal")
+    lab_mode = lab_profile_mode_active()
     return {
         "instrument_id": instrument_id,
         "instrument": instrument,
@@ -12081,10 +12261,10 @@ def _validate_new_request_post(user: sqlite3.Row, can_submit_for_others: bool) -
         "sample_count": sample_count,
         "description": request.form.get("description", "").strip(),
         "sample_origin": sample_origin,
-        "receipt_number": request.form.get("receipt_number", "").strip() or generate_receipt_reference(sample_origin),
-        "amount_due": float(request.form.get("amount_due") or 0),
-        "amount_paid": float(request.form.get("amount_paid") or 0),
-        "finance_status": request.form.get("finance_status", "n/a"),
+        "receipt_number": "" if lab_mode else (request.form.get("receipt_number", "").strip() or generate_receipt_reference(sample_origin)),
+        "amount_due": 0.0 if lab_mode else float(request.form.get("amount_due") or 0),
+        "amount_paid": 0.0 if lab_mode else float(request.form.get("amount_paid") or 0),
+        "finance_status": "n/a" if lab_mode else request.form.get("finance_status", "n/a"),
         "priority": request.form.get("priority", "normal"),
         "requester_id": requester_id,
         "requester_row": requester_row,
@@ -15327,19 +15507,9 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
 def _user_profile_role_payload(viewer, target_user, can_edit_user_value: bool) -> dict[str, object]:
     role_choices: list[tuple[str, str]] = []
     if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
-        base_roles = [
-            "requester",
-            "operator",
-            "instrument_admin",
-            "faculty_in_charge",
-            "professor_approver",
-            "finance_admin",
-        ]
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if viewer["role"] == "super_admin":
-            base_roles += ["site_admin", "super_admin"]
+        base_roles = allowed_user_role_change_roles(viewer)
         role_choices = [(role, role_display_name(role)) for role in base_roles]
-    layered_role_choices = [
+    layered_role_choices = [] if lab_profile_mode_active() else [
         ("operator", "Operator"),
         ("instrument_admin", "Instrument Admin"),
         ("faculty_in_charge", "Faculty in Charge"),
@@ -15347,7 +15517,6 @@ def _user_profile_role_payload(viewer, target_user, can_edit_user_value: bool) -
         ("finance_admin", "Finance Admin"),
     ] + (
         [("site_admin", "Site Admin")]
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         if viewer["role"] == "super_admin" else []
     )
     return {
@@ -15433,11 +15602,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         if is_owner(target_user) or target_user["id"] == viewer["id"]:
             abort(403)
         new_role = (request.form.get("new_role") or "").strip()
-        all_roles = {
-            "requester", "operator", "instrument_admin",
-            "faculty_in_charge", "professor_approver", "finance_admin",
-            "site_admin", "super_admin",
-        }
+        all_roles = set(allowed_user_role_change_roles(viewer))
         is_xhr = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         if new_role not in all_roles:
             if is_xhr:
@@ -15618,6 +15783,7 @@ def user_profile(user_id: int):
         assigned_operator_ids=assignment_payload["assigned_operator_ids"],
         assigned_faculty_ids=assignment_payload["assigned_faculty_ids"],
         assigned_requester_ids=assignment_payload["assigned_requester_ids"],
+        lab_profile_mode=lab_profile_mode_active(),
         role_choices=role_payload["role_choices"],
         target_role_set=role_payload["target_role_set"],
         layered_role_choices=role_payload["layered_role_choices"],
@@ -17150,6 +17316,9 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
         email = request.form["email"].strip().lower()
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         role = request.form["role"]
+        if role not in allowed_user_creation_roles():
+            flash("That profile type is not available in this portal.", "error")
+            return True
         temp_password = generate_temp_password()
         existing_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
         if existing_user is not None:
@@ -17184,7 +17353,7 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
             abort(403)
         member_id = int(request.form["user_id"])
         new_role = request.form["new_role"].strip()
-        allowed_roles = {"operator", "instrument_admin", "site_admin", "finance_admin", "professor_approver"}
+        allowed_roles = set(allowed_user_role_change_roles(user))
         if new_role not in allowed_roles:
             abort(403)
         member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
@@ -17209,12 +17378,22 @@ def _admin_users_list_payload() -> dict[str, object]:
     # admin knows how many aren't being shown.
     MEMBERS_CAP = 200
     member_q = (request.args.get("q") or "").strip()
-    admin_rows = query_all(
-        "SELECT id, name, email, role, invite_status, active, member_code "
-        "FROM users "
-        "WHERE role != 'requester' "
-        "ORDER BY role, name"
-    )
+    if lab_profile_mode_active():
+        owner_placeholders = ",".join("?" for _ in OWNER_EMAILS)
+        admin_rows = query_all(
+            f"SELECT id, name, email, role, invite_status, active, member_code "
+            f"FROM users "
+            f"WHERE active = 1 AND (role IN ('site_admin', 'super_admin') OR LOWER(email) IN ({owner_placeholders})) "
+            f"ORDER BY CASE WHEN LOWER(email) IN ({owner_placeholders}) THEN 0 ELSE 1 END, role, name",
+            tuple(OWNER_EMAILS) + tuple(OWNER_EMAILS),
+        )
+    else:
+        admin_rows = query_all(
+            "SELECT id, name, email, role, invite_status, active, member_code "
+            "FROM users "
+            "WHERE active = 1 AND role != 'requester' "
+            "ORDER BY role, name"
+        )
     owners = [row for row in admin_rows if row["email"].strip().lower() in OWNER_EMAILS]
     admins = [row for row in admin_rows if row["email"].strip().lower() not in OWNER_EMAILS]
     member_where = "WHERE role = 'requester'"
@@ -17239,6 +17418,7 @@ def _admin_users_list_payload() -> dict[str, object]:
         "members_query": member_q,
         "admins": admins,
         "owners": owners,
+        "lab_profile_mode": lab_profile_mode_active(),
     }
 
 
@@ -17261,6 +17441,8 @@ def admin_users():
         can_create_users=permissions["can_create_users"],
         can_delete_members=permissions["can_delete_members"],
         can_elevate_members=permissions["can_elevate_members"],
+        lab_profile_mode=list_payload["lab_profile_mode"],
+        lab_role_choices=lab_profile_role_choices(),
     )
 
 
@@ -17302,10 +17484,7 @@ def admin_onboard():
         portal_slugs = request.form.getlist("portals") or ["lab"]
         instrument_ids = [int(x) for x in request.form.getlist("instrument_ids") if x.isdigit()]
 
-        allowed_roles = {
-            "requester", "operator", "instrument_admin", "faculty_in_charge",
-            "professor_approver", "finance_admin", "site_admin", "super_admin",
-        }
+        allowed_roles = allowed_user_creation_roles()
         if role not in allowed_roles:
             flash(f"Role {role!r} is not recognised.", "error")
             return redirect(url_for("admin_onboard"))
@@ -17378,7 +17557,7 @@ def admin_onboard():
 
     return render_template(
         "admin_onboard.html",
-        role_options=[
+        role_options=lab_profile_role_choices() if lab_profile_mode_active() else [
             ("requester", role_display_name("requester")),
             ("operator", role_display_name("operator")),
             ("instrument_admin", role_display_name("instrument_admin")),
@@ -17388,8 +17567,9 @@ def admin_onboard():
             ("site_admin", role_display_name("site_admin")),
             ("super_admin", role_display_name("super_admin")),
         ],
-        portal_options=[(slug, data["name"]) for slug, data in ERP_PORTALS.items()],
+        portal_options=[("lab", ERP_PORTALS["lab"]["name"])] if lab_profile_mode_active() else [(slug, data["name"]) for slug, data in ERP_PORTALS.items()],
         instruments=instruments,
+        lab_profile_mode=lab_profile_mode_active(),
     )
 
 
@@ -21485,13 +21665,14 @@ def global_search():
     q = request.args.get("q", "").strip()
     shortcuts = [
         {"label": "Dashboard", "hint": "See current workload and action items.", "url": url_for("index")},
-        {"label": "Inbox", "hint": "Messages and internal coordination.", "url": url_for("inbox")},
     ]
+    if module_visible_in_active_portal("inbox"):
+        shortcuts.append({"label": "Inbox", "hint": "Messages and internal coordination.", "url": url_for("inbox")})
     if can_access_schedule(user):
         shortcuts.append({"label": "Queue", "hint": "Work the live request stream.", "url": url_for("schedule")})
     if has_instrument_area_access(user):
         shortcuts.append({"label": "Instruments", "hint": "Browse machine status and queues.", "url": url_for("instruments")})
-    if module_enabled("finance") and _user_can_view_finance(user):
+    if module_visible_in_active_portal("finance") and _user_can_view_finance(user):
         shortcuts.append({"label": "Finance", "hint": "Grants, invoices, and spend.", "url": url_for("finance_portal")})
     if len(q) < 2:
         return render_template("search.html", query=q, results=[], sections=[], total_results=0, shortcuts=shortcuts, title="Search")
@@ -21511,7 +21692,7 @@ def global_search():
         for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 6", (like, like))
     ]
     grants_found = []
-    if module_enabled("finance") and _user_can_view_finance(user):
+    if module_visible_in_active_portal("finance") and _user_can_view_finance(user):
         grants_found = [
             {"type": "Grant", "title": r["name"], "code": r["code"], "meta": "Grant", "url": url_for("finance_grant_detail", grant_id=r["id"])}
             for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
@@ -23745,7 +23926,7 @@ Available actions (return ONE):
 - bulk_sample_intake: {instrument, samples: [{name, description}], requester_name} — intake multiple samples at once. "Take samples A, B, C for XRD" → creates draft requests for each.
 - attach_results: {request_id_or_title, result_notes} — operator attaches results file and notes to a request. AI extracts metadata from the file, marks request as completed pending approval.
 - create_instrument: {name, code, category, location, daily_capacity, description, manufacturer, model_number} — admin setup: add a new instrument. Creates it in 'pending_admin_approval' status. Admin says "Add new FESEM in Lab 3, capacity 5/day" → draft instrument created → admin activates it.
-- create_account: {name, email, role, phone} — admin setup: create a new user account. Creates invite-pending user with a temp password. Role must be one of: requester, operator, instrument_admin, finance_admin, professor_approver, site_admin.
+- create_account: {name, email, role, phone} — admin setup: create a new user account. Creates invite-pending user with a temp password. In the Lab portal only use role = site_admin or super_admin (visible to users as Conductor or Dean).
 - create_custom_field: {instrument_name, field_name, field_type (text/number/select/date), required, options} — admin setup: add a custom field to an instrument's request form.
 - create_approval_workflow: {instrument_name, steps: [{role, order}]} — admin setup: define approval chain for an instrument. Steps are roles in order: professor_approver, operator, instrument_admin, finance_admin.
 - mark_attendance: {target_name, status (present/absent/half), date} — admin marks someone's attendance
@@ -24232,10 +24413,10 @@ def _ai_pane_run_advanced_actions(
         existing = query_one("SELECT id FROM users WHERE email = ?", (email,))
         if existing:
             return {"entity_created": "", "summary": f"User {email} already exists."}
-        allowed_roles = {"requester", "operator", "instrument_admin", "site_admin", "finance_admin", "professor_approver", "super_admin"}
+        allowed_roles = allowed_user_creation_roles()
         role = action_data.get("role", "requester")
         if role not in allowed_roles:
-            role = "requester"
+            role = "site_admin" if lab_profile_mode_active() else "requester"
         temp_password = generate_temp_password()
         member_code = generate_member_code(action_data["name"], role)
         new_id = execute(
@@ -24245,7 +24426,7 @@ def _ai_pane_run_advanced_actions(
             (action_data["name"], email, generate_password_hash(temp_password, method="pbkdf2:sha256"),
              role, user["id"], member_code, action_data.get("phone", "")),
         )
-        summary = (f"Account created: {action_data['name']} ({email}, {role}). "
+        summary = (f"Account created: {action_data['name']} ({email}, {role_display_name(role)}). "
                    f"Temp password: {temp_password} — share securely, they must change on first login. "
                    f"Member code: {member_code}")
         execute("UPDATE command_queue SET status='completed', result_entity_type='user', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",

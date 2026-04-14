@@ -8154,9 +8154,14 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
     if not user:
         return []
     roles = user_role_set(user)
+    portal_modules = _active_portal_modules()
+
+    def portal_has(*module_names: str) -> bool:
+        return any(name in portal_modules for name in module_names)
+
     actions: list[dict] = []
     # Requester — "submit a request" is the headline
-    if "requester" in roles or "faculty_in_charge" in roles:
+    if ("requester" in roles or "faculty_in_charge" in roles) and portal_has("requests", "queue", "schedule"):
         actions.append({
             "label": "New sample request",
             "href": url_for("new_request"),
@@ -8170,7 +8175,7 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             "accent": "ghost",
         })
     # Operator — "today's queue" is the headline
-    if "operator" in roles:
+    if "operator" in roles and portal_has("queue", "schedule", "instruments"):
         actions.append({
             "label": "Today's queue",
             "href": url_for("schedule") + "?today=1",
@@ -8184,7 +8189,7 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             "accent": "ghost",
         })
     # Approver / finance — "pending my approval" is the headline
-    if "professor_approver" in roles or "finance_admin" in roles:
+    if ("professor_approver" in roles or "finance_admin" in roles) and portal_has("queue", "schedule", "finance"):
         actions.append({
             "label": "Pending my approval",
             "href": url_for("schedule") + "?pending_me=1",
@@ -8192,7 +8197,7 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             "accent": "primary",
         })
     # Finance-specific: direct portal card for anyone who can see it
-    if roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user):
+    if portal_has("finance") and (roles & {"finance_admin", "super_admin", "site_admin"} or is_owner(user)):
         actions.append({
             "label": "Finance portal",
             "href": url_for("finance_portal"),
@@ -8200,19 +8205,20 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
             "accent": "ghost",
         })
     # Instrument / site / super admin — admin surface
-    if roles & {"instrument_admin", "site_admin", "super_admin"}:
+    if roles & {"instrument_admin", "site_admin", "super_admin"} and portal_has("queue", "schedule"):
         actions.append({
             "label": "Queue",
             "href": url_for("schedule"),
             "eyebrow": "OPS",
             "accent": "primary",
         })
-        actions.append({
-            "label": "Dev panel",
-            "href": url_for("dev_panel"),
-            "eyebrow": "CONTROL",
-            "accent": "ghost",
-        })
+        if portal_has("admin"):
+            actions.append({
+                "label": "Dev panel",
+                "href": url_for("dev_panel"),
+                "eyebrow": "CONTROL",
+                "accent": "ghost",
+            })
     # Cap at 4 actions so the tile stays tight; de-dupe by label.
     seen = set()
     uniq = []
@@ -8228,19 +8234,21 @@ def quick_actions_for_user(user: sqlite3.Row | None) -> list[dict]:
         unread = unread_message_count(user)
     except Exception:
         unread = 0
-    uniq.append({
-        "label": "Inbox" if unread == 0 else f"Inbox · {unread}",
-        "href": url_for("inbox"),
-        "eyebrow": "MESSAGES",
-        "accent": "ghost" if unread == 0 else "primary",
-    })
+    if portal_has("inbox"):
+        uniq.append({
+            "label": "Inbox" if unread == 0 else f"Inbox · {unread}",
+            "href": url_for("inbox"),
+            "eyebrow": "MESSAGES",
+            "accent": "ghost" if unread == 0 else "primary",
+        })
     # v2.2.1 — Notifications quick action
-    uniq.append({
-        "label": "Notifications",
-        "href": url_for("notifications_page"),
-        "eyebrow": "ALERTS",
-        "accent": "ghost",
-    })
+    if portal_has("notifications"):
+        uniq.append({
+            "label": "Notifications",
+            "href": url_for("notifications_page"),
+            "eyebrow": "ALERTS",
+            "accent": "ghost",
+        })
     return uniq[:6]
 
 
@@ -10612,6 +10620,11 @@ def demo_switch_role(role_key: str):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # If the caller already has a valid session, don't re-render the login
+    # form — just bounce them to home. Otherwise a stale cookie + the
+    # role-vis filter in base.html would hide the form for that role.
+    if request.method == "GET" and current_user() is not None:
+        return redirect(url_for("index"))
     if request.method == "POST":
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
@@ -10638,6 +10651,11 @@ def login():
             session["user_id"] = user["id"]
             session.permanent = True
             log_action(user["id"], "auth", user["id"], "login", {"ip": request.remote_addr or ""})
+            portals = _user_portals(user["id"])
+            if len(portals) == 1:
+                session["active_portal"] = portals[0]["slug"]
+            else:
+                session.pop("active_portal", None)
             # W1.3.8 password hygiene: if the admin issued a temporary
             # password (create_user or reset_password), force the user
             # to set their own before they can use the app.
@@ -10656,10 +10674,7 @@ def login():
             )
             flash(f"Signed in as {user['name']}.", "success")
             # Check ERP portals — auto-enter if single portal, show picker if multiple
-            portals = _user_portals(user["id"])
-            if len(portals) == 1:
-                session["active_portal"] = portals[0]["slug"]
-            elif len(portals) > 1:
+            if len(portals) > 1:
                 return redirect(url_for("portal_picker"))
             # else: no portals assigned → show all modules (backwards compat)
             return redirect(url_for("role_manual"))
@@ -15107,6 +15122,13 @@ def change_password():
         log_action(user["id"], "user", user["id"], "password_changed", {})
         flash("Password changed successfully.", "success")
         queue_role_manual(user["id"], reason="password_changed")
+        portals = _user_portals(user["id"])
+        if len(portals) == 1:
+            session["active_portal"] = portals[0]["slug"]
+        else:
+            session.pop("active_portal", None)
+        if len(portals) > 1:
+            return redirect(url_for("portal_picker"))
         return redirect(url_for("role_manual"))
     return render_template("change_password.html", title="Change Password")
 

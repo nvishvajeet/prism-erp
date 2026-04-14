@@ -811,7 +811,7 @@ def log_action_at(actor_id: int | None, entity_type: str, entity_id: int, action
 
 def verify_audit_chain(entity_type: str, entity_id: int) -> bool:
     rows = query_all(
-        """
+        f"""
         SELECT action, payload_json, prev_hash, entry_hash
         FROM audit_logs
         WHERE entity_type = ? AND entity_id = ?
@@ -3198,27 +3198,7 @@ def generate_export_workbook(
     rows = query_all(
         f"""
         SELECT sr.request_no, sr.status, sr.priority, sr.sample_name, sr.sample_count, sr.sample_origin,
-               (SELECT receipt_number FROM payments p
-                 JOIN invoices inv ON inv.id = p.invoice_id
-                 WHERE inv.request_id = sr.id
-                 ORDER BY p.paid_at DESC LIMIT 1) AS receipt_number,
-               COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
-                           WHERE inv.request_id = sr.id), 0) AS amount_due,
-               COALESCE((SELECT SUM(p.amount) FROM payments p
-                           JOIN invoices inv ON inv.id = p.invoice_id
-                           WHERE inv.request_id = sr.id), 0) AS amount_paid,
-               CASE
-                 WHEN NOT EXISTS (SELECT 1 FROM invoices WHERE request_id = sr.id) THEN 'n/a'
-                 WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
-                                  JOIN invoices inv ON inv.id = p.invoice_id
-                                  WHERE inv.request_id = sr.id), 0) = 0 THEN 'pending'
-                 WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
-                                  JOIN invoices inv ON inv.id = p.invoice_id
-                                  WHERE inv.request_id = sr.id), 0)
-                      < COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
-                                    WHERE inv.request_id = sr.id), 0) THEN 'partial'
-                 ELSE 'paid'
-               END AS finance_status,
+               {_request_finance_snapshot_sql("sr")},
                sr.created_at,
                sr.sample_submitted_at, sr.sample_received_at, sr.scheduled_for, sr.completed_at,
                sr.remarks, sr.results_summary,
@@ -6070,15 +6050,12 @@ def computed_finance_for_request(
     Empty/zero defaults when no invoice exists yet (e.g. internal
     request with no billing)."""
     row = db.execute(
-        """
+        f"""
         SELECT inv.id AS invoice_id,
-               COALESCE(inv.amount_due, 0) AS amount_due,
-               COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = inv.id), 0) AS amount_paid,
-               (SELECT receipt_number FROM payments
-                 WHERE invoice_id = inv.id
-                 ORDER BY paid_at DESC LIMIT 1) AS receipt_number
-          FROM invoices inv
-         WHERE inv.request_id = ?
+               {_request_finance_snapshot_sql("sr")}
+          FROM sample_requests sr
+          LEFT JOIN invoices inv ON inv.request_id = sr.id
+         WHERE sr.id = ?
          LIMIT 1
         """,
         (request_id,),
@@ -6100,6 +6077,58 @@ def computed_finance_for_request(
         "finance_status": status,
         "receipt_number": row["receipt_number"] or "",
     }
+
+
+def _request_finance_snapshot_sql(request_alias: str = "sr") -> str:
+    """Shared SELECT fragment for request-linked finance fields."""
+    return f"""
+        (SELECT receipt_number FROM payments p
+          JOIN invoices inv ON inv.id = p.invoice_id
+         WHERE inv.request_id = {request_alias}.id
+         ORDER BY p.paid_at DESC LIMIT 1) AS receipt_number,
+        COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
+                   WHERE inv.request_id = {request_alias}.id), 0) AS amount_due,
+        COALESCE((SELECT SUM(p.amount) FROM payments p
+                   JOIN invoices inv ON inv.id = p.invoice_id
+                  WHERE inv.request_id = {request_alias}.id), 0) AS amount_paid,
+        CASE
+          WHEN NOT EXISTS (SELECT 1 FROM invoices WHERE request_id = {request_alias}.id) THEN 'n/a'
+          WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
+                           JOIN invoices inv ON inv.id = p.invoice_id
+                          WHERE inv.request_id = {request_alias}.id), 0) = 0 THEN 'pending'
+          WHEN COALESCE((SELECT SUM(p.amount) FROM payments p
+                           JOIN invoices inv ON inv.id = p.invoice_id
+                          WHERE inv.request_id = {request_alias}.id), 0)
+               < COALESCE((SELECT SUM(inv.amount_due) FROM invoices inv
+                             WHERE inv.request_id = {request_alias}.id), 0) THEN 'partial'
+          ELSE 'paid'
+        END AS finance_status
+    """
+
+
+def _grant_matches_request_sql(
+    grant_expr: str,
+    *,
+    request_alias: str = "sr",
+    invoice_alias: str = "inv",
+) -> str:
+    """Predicate for rows linked to a grant via invoice or project allocation."""
+    return f"""
+        (
+            EXISTS (
+                SELECT 1
+                  FROM grant_allocations ga
+                 WHERE ga.project_id = {request_alias}.project_id
+                   AND ga.grant_id = {grant_expr}
+            )
+            OR EXISTS (
+                SELECT 1
+                  FROM invoices {invoice_alias}
+                 WHERE {invoice_alias}.request_id = {request_alias}.id
+                   AND {invoice_alias}.grant_id = {grant_expr}
+            )
+        )
+    """
 
 
 def sync_request_to_peer_aggregates(
@@ -9829,41 +9858,18 @@ def finance_grants_list():
               FROM payments p
               JOIN invoices inv ON inv.id = p.invoice_id
               JOIN sample_requests sr ON sr.id = inv.request_id
-             WHERE inv.grant_id = g.id
-                OR EXISTS (
-                    SELECT 1
-                      FROM grant_allocations ga
-                     WHERE ga.project_id = sr.project_id
-                       AND ga.grant_id = g.id
-                )
+             WHERE {_grant_matches_request_sql("g.id", request_alias="sr", invoice_alias="inv2")}
           ), 0) AS spend_paid,
           COALESCE((
             SELECT SUM(inv.amount_due)
               FROM invoices inv
               JOIN sample_requests sr ON sr.id = inv.request_id
-             WHERE inv.grant_id = g.id
-                OR EXISTS (
-                    SELECT 1
-                      FROM grant_allocations ga
-                     WHERE ga.project_id = sr.project_id
-                       AND ga.grant_id = g.id
-                )
+             WHERE {_grant_matches_request_sql("g.id", request_alias="sr", invoice_alias="inv2")}
           ), 0) AS spend_billed,
           COALESCE((
             SELECT COUNT(DISTINCT sr.id)
               FROM sample_requests sr
-             WHERE EXISTS (
-                    SELECT 1
-                      FROM grant_allocations ga
-                     WHERE ga.project_id = sr.project_id
-                       AND ga.grant_id = g.id
-                )
-                OR EXISTS (
-                    SELECT 1
-                      FROM invoices inv
-                     WHERE inv.request_id = sr.id
-                       AND inv.grant_id = g.id
-                )
+             WHERE {_grant_matches_request_sql("g.id", request_alias="sr")}
           ), 0) AS sample_count
         FROM grants g
         LEFT JOIN users pi ON pi.id = g.pi_user_id
@@ -10014,7 +10020,7 @@ def finance_grant_detail(grant_id: int):
     )
     all_users = query_all("SELECT id, name, email FROM users ORDER BY name")
     charged = query_all(
-        """
+        f"""
         SELECT
           sr.id, sr.request_no, sr.title, sr.sample_name, sr.created_at, sr.sample_origin,
           COALESCE(inv.amount_due, 0) AS amount_due,
@@ -10036,13 +10042,7 @@ def finance_grant_detail(grant_id: int):
         LEFT JOIN invoices inv ON inv.request_id = sr.id
         JOIN instruments i ON i.id = sr.instrument_id
         LEFT JOIN users u ON u.id = sr.requester_id
-        WHERE EXISTS (
-                SELECT 1
-                  FROM grant_allocations ga
-                 WHERE ga.project_id = sr.project_id
-                   AND ga.grant_id = ?
-            )
-           OR COALESCE(inv.grant_id, 0) = ?
+        WHERE {_grant_matches_request_sql("?", request_alias="sr")}
         ORDER BY sr.created_at DESC
         LIMIT 200
         """,

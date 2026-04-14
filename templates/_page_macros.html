@@ -302,6 +302,7 @@
 {% macro queue_action_stack(row, operators, post_action, can_accept=True, can_assign=True, hidden_inputs={}) -%}
 {% set row_id = row['id'] %}
 {% set current_op = row['assigned_operator_id'] if 'assigned_operator_id' in row.keys() else None %}
+{% set _lab_mode = lab_portal_mode %}
 <div class="queue-action-stack" data-vis="{{ V }}">
   {% if can_accept %}
   <form method="post" action="{{ post_action }}" class="queue-action-form queue-action-accept" data-vis="{{ V }}">
@@ -309,7 +310,7 @@
     <input type="hidden" name="action" value="mark_received">
     <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-    <button type="submit" class="queue-action-btn accept" data-vis="{{ V }}">Accept Sample</button>
+    <button type="submit" class="queue-action-btn accept" data-vis="{{ V }}">{{ "Confirm Receipt" if _lab_mode else "Accept Sample" }}</button>
   </form>
   {% endif %}
   {% if can_assign %}
@@ -319,12 +320,12 @@
     <input type="hidden" name="request_id" value="{{ row_id }}">
     {% for k, v in hidden_inputs.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
     <select name="assigned_operator_id" class="queue-action-operator" data-vis="{{ V }}">
-      <option value="" data-vis="{{ V }}">Assign…</option>
+      <option value="" data-vis="{{ V }}">{{ "Assign lead…" if _lab_mode else "Assign…" }}</option>
       {% for op in operators %}
       <option value="{{ op['id'] }}"{% if current_op == op['id'] %} selected{% endif %} data-vis="{{ V }}">{{ op['name'] }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="queue-action-btn assign" data-vis="{{ V }}">Assign</button>
+    <button type="submit" class="queue-action-btn assign" data-vis="{{ V }}">{{ "Assign Lead" if _lab_mode else "Assign" }}</button>
   </form>
   {% endif %}
 </div>

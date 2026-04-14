@@ -16,7 +16,7 @@
 <a href="{{ _back_url }}" class="hover-back-btn" title="{{ _back_title }}">←</a>
 {% endblock %}
 {% block content %}
-{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
+{% set _lab_mode = lab_portal_mode %}
 
 <section data-vis="{{ V }}">
   <div class="breadcrumb-trail" data-vis="{{ V }}">

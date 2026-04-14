@@ -3,7 +3,7 @@
 {% from "_page_macros.html" import page_intro, card_heading with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
-{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
+{% set _lab_mode = lab_portal_mode %}
 {% call page_intro("", target_user["name"]) %}
   {% if is_self %}
   <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">My History</a>

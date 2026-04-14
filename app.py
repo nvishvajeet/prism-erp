@@ -484,16 +484,22 @@ def active_portal_slug() -> str | None:
     return slug if slug in ERP_PORTALS else None
 
 
+def lab_portal_active(portal_slug: str | None = None) -> bool:
+    slug = active_portal_slug() if portal_slug is None else portal_slug
+    return slug == "lab"
+
+
 def lab_profile_mode_active() -> bool:
-    return active_portal_slug() == "lab"
+    return lab_portal_active()
+
+
+def portal_text(default_text: str, *, lab: str, portal_slug: str | None = None) -> str:
+    return lab if lab_portal_active(portal_slug) else default_text
 
 
 def portal_role_display_name(role: str | None, portal_slug: str | None = None) -> str:
     role_key = role or ""
-    slug = portal_slug
-    if slug is None:
-        slug = active_portal_slug()
-    if slug == "lab":
+    if lab_portal_active(portal_slug):
         aliases = {
             "super_admin": "Dean",
             "site_admin": "Conductor",
@@ -986,23 +992,39 @@ def build_request_status(db: sqlite3.Connection, request_id: int) -> str:
     return "awaiting_sample_submission"
 
 
+REQUEST_STATUS_LABELS_DEFAULT = {
+    "submitted": "Submitted",
+    "under_review": "Under Review",
+    "awaiting_sample_submission": "Awaiting Sample Submission",
+    "sample_submitted": "Sample Submitted",
+    "sample_received": "Sample Received",
+    "scheduled": "Scheduled",
+    "in_progress": "In Progress",
+    "draft_ai": "AI Draft",
+    "results_pending_approval": "Results Pending",
+}
+
+REQUEST_STATUS_LABELS_LAB = {
+    **REQUEST_STATUS_LABELS_DEFAULT,
+    "under_review": "Lab Review",
+    "awaiting_sample_submission": "Awaiting Dropoff",
+    "sample_submitted": "Awaiting Receipt",
+    "sample_received": "Ready to Schedule",
+    "in_progress": "Running",
+}
+
+
 def request_display_status(status: str) -> str:
-    labels = {
-        "submitted": "Submitted",
-        "under_review": "Under Review",
-        "awaiting_sample_submission": "Awaiting Sample Submission",
-        "sample_submitted": "Sample Submitted",
-        "sample_received": "Sample Received",
-        "scheduled": "Scheduled",
-        "in_progress": "In Progress",
-        "draft_ai": "AI Draft",
-        "results_pending_approval": "Results Pending",
-    }
+    labels = REQUEST_STATUS_LABELS_LAB if lab_portal_active() else REQUEST_STATUS_LABELS_DEFAULT
     return labels.get(status, status.replace("_", " ").title())
 
 
 def approval_role_label(role: str | None) -> str:
     labels = {
+        "finance": "Lab Review",
+        "professor": "Dean Review",
+        "operator": "Instrument Lead",
+    } if lab_portal_active() else {
         "finance": "Finance",
         "professor": "Professor",
         "operator": "Operator",
@@ -1073,6 +1095,16 @@ def handle_invalid_status_transition(exc: InvalidStatusTransition):
 
 def request_status_group(status: str | None) -> str:
     status = status or ""
+    if lab_portal_active():
+        if status in {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled"}:
+            return "Active"
+        if status == "in_progress":
+            return "Running"
+        if status == "completed":
+            return "Completed"
+        if status in {"rejected"}:
+            return "Closed"
+        return "Open"
     if status in {"submitted", "under_review", "awaiting_sample_submission", "sample_submitted", "sample_received", "scheduled"}:
         return "Pending"
     if status == "in_progress":
@@ -1084,9 +1116,56 @@ def request_status_group(status: str | None) -> str:
     return "Open"
 
 
-def request_status_summary(request_row: sqlite3.Row | dict, approval_steps: list[sqlite3.Row | dict] | None = None) -> str:
-    status = (request_row["status"] if request_row else "") or ""
-    instrument_mode = instrument_intake_mode(request_row) if request_row else "accepting"
+def _request_status_summary_lab(
+    status: str,
+    request_row: sqlite3.Row | dict,
+    approval_steps: list[sqlite3.Row | dict] | None,
+    instrument_mode: str,
+) -> str:
+    if status == "submitted":
+        return "Request is recorded and waiting to enter lab review."
+    if status == "under_review":
+        pending_step = None
+        for step in approval_steps or []:
+            if step["status"] == "rejected":
+                return f"{approval_role_label(step['approver_role'])} stopped this request."
+            if step["status"] != "approved":
+                pending_step = step
+                break
+        if pending_step:
+            return f"Waiting on {approval_role_label(pending_step['approver_role']).lower()}."
+        return "Pending lab review."
+    if status == "awaiting_sample_submission":
+        if instrument_mode != "accepting":
+            return "The lab is not accepting dropoffs right now."
+        return "Approved. Waiting for the sample to reach the lab."
+    if status == "sample_submitted":
+        return "Sample has been announced. A lab lead should confirm receipt."
+    if status == "sample_received":
+        return "Sample received. Ready for scheduling."
+    if status == "scheduled":
+        scheduled_for = request_row["scheduled_for"] if request_row else None
+        if scheduled_for:
+            return f"Run scheduled for {format_dt(scheduled_for)}."
+        return "Run scheduled."
+    if status == "in_progress":
+        return "Run is currently in progress."
+    if status == "completed":
+        completed_at = request_row["completed_at"] if request_row else None
+        if completed_at:
+            return f"Run completed on {format_dt(completed_at)}."
+        return "Run completed."
+    if status == "rejected":
+        return "Request was closed without processing."
+    return "Request is active."
+
+
+def _request_status_summary_default(
+    status: str,
+    request_row: sqlite3.Row | dict,
+    approval_steps: list[sqlite3.Row | dict] | None,
+    instrument_mode: str,
+) -> str:
     if status == "submitted":
         return "Request is submitted and waiting for the lab to start accepting new jobs."
     if status == "under_review":
@@ -1123,6 +1202,13 @@ def request_status_summary(request_row: sqlite3.Row | dict, approval_steps: list
     if status == "rejected":
         return "Request was rejected and will not be processed."
     return "Request is active."
+
+
+def request_status_summary(request_row: sqlite3.Row | dict, approval_steps: list[sqlite3.Row | dict] | None = None) -> str:
+    status = (request_row["status"] if request_row else "") or ""
+    instrument_mode = instrument_intake_mode(request_row) if request_row else "accepting"
+    builder = _request_status_summary_lab if lab_portal_active() else _request_status_summary_default
+    return builder(status, request_row, approval_steps, instrument_mode)
 
 
 def request_lifecycle_steps(request_row: sqlite3.Row | dict, approval_steps: list[sqlite3.Row | dict] | None = None) -> list[dict[str, str | bool]]:
@@ -7635,6 +7721,8 @@ def inject_globals():
         "access_profile_user": access_profile,
         "role_display_name": role_display_name,
         "role_next_action": role_next_action,
+        "portal_text": portal_text,
+        "lab_portal_mode": lab_portal_active(),
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_display": role_display_name(user["role"]) if user else "",
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).

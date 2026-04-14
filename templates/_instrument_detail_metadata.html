@@ -1,6 +1,6 @@
 {# Partial: Metadata Edit tile — included by instrument_detail.html #}
 {% from "_page_macros.html" import card_heading with context %}
-{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
+{% set _lab_mode = lab_portal_mode %}
 
   {% if can_edit %}
   <section class="card tile tile-full-width tile-edit" id="metaEditTile" data-vis="{{ V }}">

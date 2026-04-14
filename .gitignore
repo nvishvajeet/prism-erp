@@ -18,6 +18,7 @@ FOCS-submission/
 cert.pem
 key.pem
 .env
+.env.*
 
 # IDE
 *.code-workspace

@@ -34,13 +34,14 @@
 {%- endmacro %}
 
 {% macro requester_block(row, show_originator=False, show_email=False) -%}
+{% set _lab_mode = lab_portal_mode %}
 {% if request_card_can_view_field_user(row, 'requester_identity') %}
 <span data-vis="{{ V }}">{{ person_name_link(row['requester_id'], row['requester_name']) }}</span>
 {% if show_email and row["requester_email"] %}
 <div data-vis="{{ V }}"><small data-vis="{{ V }}">{{ row["requester_email"] }}</small></div>
 {% endif %}
 {% if show_originator %}
-<div data-vis="{{ V }}"><small data-vis="{{ V }}">Originator: {% if row["created_by_user_id"] %}{{ person_name_link(row['created_by_user_id'], row["originator_name"] or row["requester_name"]) }}{% else %}{{ row["originator_name"] or row["requester_name"] }}{% endif %}</small></div>
+<div data-vis="{{ V }}"><small data-vis="{{ V }}">{{ "Created by" if _lab_mode else "Originator" }}: {% if row["created_by_user_id"] %}{{ person_name_link(row['created_by_user_id'], row["originator_name"] or row["requester_name"]) }}{% else %}{{ row["originator_name"] or row["requester_name"] }}{% endif %}</small></div>
 {% endif %}
 {% else %}
 <span class="hint" data-vis="{{ V }}">Restricted</span>
@@ -48,10 +49,11 @@
 {%- endmacro %}
 
 {% macro operator_block(row) -%}
+{% set _lab_mode = lab_portal_mode %}
 {% if request_card_can_view_field_user(row, 'operator_identity') %}
 <span data-vis="{{ V }}">{{ person_name_link(row['assigned_operator_id'], row["operator_name"]) }}</span>
 {% else %}
-<span class="hint" data-vis="{{ V }}">Restricted</span>
+<span class="hint" data-vis="{{ V }}">{{ "Unassigned" if _lab_mode else "Restricted" }}</span>
 {% endif %}
 {%- endmacro %}
 

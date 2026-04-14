@@ -3041,30 +3041,6 @@ def calendar_filter_values() -> dict[str, str]:
     }
 
 
-def row_anchor_date(row: sqlite3.Row) -> date | None:
-    for field in ("scheduled_for", "completed_at", "sample_received_at", "sample_submitted_at", "created_at"):
-        value = row[field] if field in row.keys() else None
-        if value:
-            return parse_date_param(str(value)[:10])
-    return None
-
-
-def row_matches_period(row: sqlite3.Row, period: str) -> bool:
-    if period == "all":
-        return True
-    anchor = row_anchor_date(row)
-    if anchor is None:
-        return period == "all"
-    today = datetime.utcnow().date()
-    if period == "week":
-        start = today - timedelta(days=today.weekday())
-        end = start + timedelta(days=6)
-        return start <= anchor <= end
-    if period == "month":
-        return anchor.year == today.year and anchor.month == today.month
-    return True
-
-
 def request_history_query(
     where_clauses: list[str] | None = None,
     params: list | None = None,
@@ -9351,6 +9327,48 @@ def _complaint_admin_user_ids() -> list[int]:
     return [row["id"] for row in rows]
 
 
+def _inbox_prospective_actions(target_user_id: int) -> list[dict]:
+    """AI action queue — prospective drafts awaiting this user's decision.
+
+    Silent-skip if the table doesn't exist yet (fresh install, not all
+    deploys have run init_db since the v3.1 seed).
+    """
+    try:
+        action_rows = query_all(
+            """SELECT pa.id, pa.action_type, pa.status, pa.payload_json,
+                      pa.file_name, pa.created_at, pa.approver_stage,
+                      pa.submitted_by_user_id, u.name AS submitter_name,
+                      ar.label AS action_label, ar.target_table
+                 FROM ai_prospective_actions pa
+                 LEFT JOIN users u ON u.id = pa.submitted_by_user_id
+                 LEFT JOIN ai_action_routes ar ON ar.action_type = pa.action_type
+                WHERE pa.assigned_approver_id = ?
+                  AND pa.status = 'awaiting_review'
+                ORDER BY pa.created_at DESC
+                LIMIT 20""",
+            (target_user_id,),
+        )
+    except sqlite3.OperationalError:
+        return []
+    out: list[dict] = []
+    for r in action_rows:
+        try:
+            payload = json.loads(row_value(r, "payload_json", "{}") or "{}")
+        except Exception:
+            payload = {}
+        out.append({
+            "id": r["id"],
+            "action_type": r["action_type"],
+            "label": row_value(r, "action_label") or r["action_type"].replace("_", " ").title(),
+            "prompt": payload.get("prompt", ""),
+            "file_name": row_value(r, "file_name", ""),
+            "submitter_name": row_value(r, "submitter_name", "—"),
+            "stage": row_value(r, "approver_stage", ""),
+            "created_at": r["created_at"],
+        })
+    return out
+
+
 @app.route("/inbox", methods=["GET"])
 @login_required
 def inbox():
@@ -9485,42 +9503,7 @@ def inbox():
         })
     inbox_notifications.sort(key=lambda item: item["is_read"])
     notification_unread = sum(1 for item in inbox_notifications if not item["is_read"])
-    # AI action queue — prospective drafts awaiting this user's decision.
-    # Silent-skip if the table doesn't exist yet (fresh install, not
-    # all deploys have run init_db since the v3.1 seed).
-    prospective_actions: list[dict] = []
-    try:
-        action_rows = query_all(
-            """SELECT pa.id, pa.action_type, pa.status, pa.payload_json,
-                      pa.file_name, pa.created_at, pa.approver_stage,
-                      pa.submitted_by_user_id, u.name AS submitter_name,
-                      ar.label AS action_label, ar.target_table
-                 FROM ai_prospective_actions pa
-                 LEFT JOIN users u ON u.id = pa.submitted_by_user_id
-                 LEFT JOIN ai_action_routes ar ON ar.action_type = pa.action_type
-                WHERE pa.assigned_approver_id = ?
-                  AND pa.status = 'awaiting_review'
-                ORDER BY pa.created_at DESC
-                LIMIT 20""",
-            (target_user_id,),
-        )
-        for r in action_rows:
-            try:
-                payload = json.loads(row_value(r, "payload_json", "{}") or "{}")
-            except Exception:
-                payload = {}
-            prospective_actions.append({
-                "id": r["id"],
-                "action_type": r["action_type"],
-                "label": row_value(r, "action_label") or r["action_type"].replace("_", " ").title(),
-                "prompt": payload.get("prompt", ""),
-                "file_name": row_value(r, "file_name", ""),
-                "submitter_name": row_value(r, "submitter_name", "—"),
-                "stage": row_value(r, "approver_stage", ""),
-                "created_at": r["created_at"],
-            })
-    except sqlite3.OperationalError:
-        prospective_actions = []
+    prospective_actions = _inbox_prospective_actions(target_user_id)
     return render_template(
         "inbox.html",
         messages=rows,
@@ -22525,15 +22508,6 @@ def _run_hpc_job(job_id: int):
                 execute("UPDATE compute_jobs SET status='failed', error=?, completed_at=? WHERE id=?", (str(exc)[:500], now_iso(), job_id))
         except Exception:
             pass
-
-
-def batch_process_compute_queue():
-    """Process all queued compute jobs (AI prompt type). Cron-callable."""
-    with app.app_context():
-        queued = query_all("SELECT id FROM compute_jobs WHERE status = 'queued' AND (job_type = 'ai_prompt' OR job_type IS NULL) ORDER BY created_at")
-        for job in queued:
-            _run_compute_job(job["id"])
-        return len(queued)
 
 
 _compute_queue_started = False

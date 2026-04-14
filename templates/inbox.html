@@ -31,20 +31,20 @@
   <article class="card tile tile-full-width tile-action-queue" data-vis="{{ V }}">
     {{ card_heading("ACTION QUEUE", prospective_actions|length|string ~ " awaiting your decision") }}
     <p class="hint" data-vis="{{ V }}">AI extracted these from uploaded receipts / voice prompts and routed them to you for verification. Nothing has been written to the real tables yet — your approve click is the gate.</p>
-    <ul class="action-queue-list" data-vis="{{ V }}" style="list-style:none;padding:0;margin:0.5rem 0 0 0;">
+    <ul class="action-queue-list" data-vis="{{ V }}">
       {% for a in prospective_actions %}
-      <li class="action-queue-row" data-vis="{{ V }}" style="border:1px solid var(--border-subtle,#e1e4ea);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
-        <div data-vis="{{ V }}" style="flex:1;min-width:14rem;">
-          <div data-vis="{{ V }}" style="display:flex;gap:0.5rem;align-items:center;">
+      <li class="action-queue-row" data-vis="{{ V }}">
+        <div class="action-queue-body" data-vis="{{ V }}">
+          <div class="action-queue-meta" data-vis="{{ V }}">
             <span class="badge status-queued" data-vis="{{ V }}">🤖 {{ a.label }}</span>
             <span class="hint" data-vis="{{ V }}">from <strong data-vis="{{ V }}">{{ a.submitter_name }}</strong> · {{ a.created_at[:16]|replace("T"," ") }}</span>
           </div>
-          {% if a.prompt %}<p data-vis="{{ V }}" style="margin:0.35rem 0 0 0;">{{ a.prompt }}</p>{% endif %}
-          {% if a.file_name %}<p class="hint" data-vis="{{ V }}" style="margin:0.25rem 0 0 0;">📎 {{ a.file_name }}</p>{% endif %}
+          {% if a.prompt %}<p class="action-queue-prompt" data-vis="{{ V }}">{{ a.prompt }}</p>{% endif %}
+          {% if a.file_name %}<p class="hint action-queue-file" data-vis="{{ V }}">📎 {{ a.file_name }}</p>{% endif %}
         </div>
-        <form method="post" action="{{ url_for('ai_action_decide', action_id=a.id) }}" class="control-flex-actions" data-vis="{{ V }}" style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <form method="post" action="{{ url_for('ai_action_decide', action_id=a.id) }}" class="action-queue-form" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="text" name="note" placeholder="Note (optional for approve, required for reject)" data-vis="{{ V }}" style="flex:1;min-width:12rem;">
+          <input type="text" name="note" class="action-queue-note" placeholder="Note (optional for approve, required for reject)" data-vis="{{ V }}">
           <button type="submit" name="decision" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
           <button type="submit" name="decision" value="reject" class="btn btn-danger" data-vis="{{ V }}">Reject</button>
         </form>

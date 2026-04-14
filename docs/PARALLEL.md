@@ -18,6 +18,21 @@ and the pre-receive sanity wave on the central bare — multiple
 agents can work the trunk in parallel and the worst failure mode
 is a temporary push rejection that the agent fixes and retries.
 
+## Fast mode first
+
+CATALYST defaults to **single-writer fast mode**.
+
+- if one write agent owns the repo, `CLAIMS.md` is empty, and the lane
+  is bounded, skip claim-only commits
+- still run `git status --short` first
+- still run the mandatory smoke gate before commit
+- still push immediately after the commit
+- the moment a second write agent appears, switch to the full
+  parallel-write protocol below
+
+Fast mode is the default because most work should not pay parallel
+coordination overhead when there is no parallel writer.
+
 ## The three safety layers
 
 **Layer 1 — advisory lock (`CLAIMS.md`).** Agents declare which
@@ -84,7 +99,7 @@ and the git hygiene rules below.
 
 | aspect                         | read agent | write agent |
 |--------------------------------|------------|-------------|
-| claim row in `CLAIMS.md`       | **not required**, skip it | **required** (unless single-operator serial mode and board is empty) |
+| claim row in `CLAIMS.md`       | **not required**, skip it | **required** in parallel-write mode; skip in single-writer fast mode |
 | concurrent count limit         | **unlimited** | max **3** concurrent |
 | 60-minute cutoff               | still applies | applies |
 | git hygiene rules              | don't apply (no commits) | all 10 rules apply |
@@ -378,7 +393,7 @@ follows this loop. Every step is mandatory. Skip nothing.
    `grep <key-symbol> <target-file>`. Two agents have already
    wasted a cycle claiming tasks that were already done; don't
    be the third.
-6. **Claim it.** Append a new row to `CLAIMS.md`. Use the same
+6. **Claim it if you are in parallel-write mode.** Append a new row to `CLAIMS.md`. Use the same
    ISO-8601 local-time format as the other rows. Then:
    ```
    git add CLAIMS.md

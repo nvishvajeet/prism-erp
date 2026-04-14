@@ -234,13 +234,31 @@ git push origin v1.3.0-stable-release
 
 Commit rhythm is Level 1. Do not restate it here.
 
+Fast-path single-writer recipe:
+
+```bash
+cd ~/Documents/Scheduler/Main
+git status --short
+git pull origin v1.3.0-stable-release
+
+# ... make one bounded change ...
+
+.venv/bin/python scripts/smoke_test.py
+git add <files>
+git commit -m "<type>: <subject>" -m "Co-Authored-By: Codex <noreply@openai.com>"
+git push origin v1.3.0-stable-release
+```
+
 ### 3.7  Fast mode — ALWAYS ON
 
 **All agents work in fast mode by default.** This is not optional.
 
-- **No ceremony commits.** Skip claim-only commits for small,
-  single-file changes. Use claims only when touching 3+ files
-  that other agents might also need.
+- **Single-writer path is the default.** If one write agent owns
+  the repo and `CLAIMS.md` is empty, skip claim-only commits and
+  use the fast-path recipe above.
+- **Parallel-write path is explicit.** The moment a second write
+  agent appears, or a lane needs a hot shared file, leave fast
+  mode and switch to the full claim protocol.
 - **Pre-receive hook is fast** (~1s smoke on branch pushes).
   Full sanity only runs on tag pushes or `CATALYST_FULL_GATE=1`.
 - **Batch related changes** into one commit. Don't split a
@@ -262,7 +280,9 @@ coordination protocol is **advisory lock + git rebase +
 pre-receive sanity wave** — read `docs/PARALLEL.md` for the
 full spec. Minimum rules a fresh agent must obey:
 
-1. **Before any non-trivial work, claim your files.** Append a
+1. **If another write agent exists, claim your files before editing.**
+   In single-writer fast mode, skip this. In parallel-write mode,
+   append a
    row to `CLAIMS.md` at the repo root with your agent id, the
    task id (lane-prefixed), an ISO-8601 timestamp, and the
    files you intend to touch. Commit **`CLAIMS.md` alone** with
@@ -280,7 +300,8 @@ full spec. Minimum rules a fresh agent must obey:
    `--no-verify`.
 4. **Release the claim in the same commit as the work.** Remove
    your row from `CLAIMS.md` and include it in the same
-   commit that ships the work; never leave a row behind.
+   commit that ships the work; never leave a row behind. This
+   step applies only when you entered parallel-write mode.
 5. **Honour stale claims.** A row older than ~2 h with no
    matching `git log` activity is stale, but **do not silently
    clear it** — surface to the user first.

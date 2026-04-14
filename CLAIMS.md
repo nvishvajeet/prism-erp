@@ -34,6 +34,17 @@
 11. If the pre-receive sanity wave rejects the push, fix and
     retry; never `--no-verify`, never force-push.
 
+## Fast mode
+
+Use fast mode only when one write agent owns the repo and the board is
+empty.
+
+- skip the claim commit for short single-lane work
+- still run `git status --short` first
+- still run the mandatory smoke gate before commit
+- still push immediately after the commit
+- if a second writer appears, exit fast mode and go back to full claims
+
 ## Abort protocol (cutoff, operator kill, or scope blow-up)
 
 When an agent cannot ship within the 60-minute cutoff, or the

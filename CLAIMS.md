@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | finance-query-architecture-burn | 2026-04-14 16:25 CEST | `app.py`, `CLAIMS.md` | `refactor: unify finance query fragments` |
 
 ## Stale-claim recovery
 

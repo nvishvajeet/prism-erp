@@ -3,6 +3,7 @@
 {% from "_page_macros.html" import page_intro, card_heading with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
+{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
 {% call page_intro("", target_user["name"]) %}
   {% if is_self %}
   <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">My History</a>
@@ -109,7 +110,7 @@
 </section>
 {% endif %}
 
-{% if can_edit_user and layered_role_choices %}
+{% if can_edit_user and layered_role_choices and not _lab_mode %}
 <section class="card tile tile-user-extra-roles" data-vis="{{ V }}">
   {% call card_heading("", "Additional Roles") %}
     <button type="button" class="link-button" data-toggle-target="#userExtraRolesForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
@@ -147,26 +148,36 @@
 
 {% if can_edit_user and instrument_roster %}
 <section class="card tile tile-user-instruments" data-vis="{{ V }}">
-  {% call card_heading("", "Instrument Access") %}
+  {% call card_heading("", "Instrument Responsibility" if _lab_mode else "Instrument Access") %}
     <button type="button" class="link-button" data-toggle-target="#userInstrumentsForm" data-toggle-alt="Hide" aria-expanded="false" data-vis="{{ V }}">Edit</button>
   {% endcall %}
+  {% if _lab_mode %}
+  <p class="tile-lead" data-vis="{{ V }}">Use this panel to define where this profile is responsible in the lab. Conductor assignments control daily queue handling, while Dean assignments keep oversight on selected instruments.</p>
+  {% else %}
   <p class="tile-lead" data-vis="{{ V }}">This user is currently assigned to
     <strong>{{ assigned_admin_ids|length }}</strong> instrument(s) as admin,
     <strong>{{ assigned_operator_ids|length }}</strong> as operator, and
     <strong>{{ assigned_faculty_ids|length }}</strong> as faculty in charge. Edit to grant or revoke access by instrument or by category.</p>
+  {% endif %}
   <form method="post" class="meta-edit-form top-gap" id="userInstrumentsForm" hidden data-vis="{{ V }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="update_user_instruments">
-    <p class="hint" data-vis="{{ V }}">Select the lane(s) for each instrument. Use the category quick-grant buttons to assign a whole group at once.</p>
+    <p class="hint" data-vis="{{ V }}">
+      {% if _lab_mode %}
+      Select which instruments this profile leads or oversees. Use the category shortcuts to apply the same responsibility across a whole cluster.
+      {% else %}
+      Select the lane(s) for each instrument. Use the category quick-grant buttons to assign a whole group at once.
+      {% endif %}
+    </p>
     {% if instrument_groups %}
     <div class="group-quick-grant" data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Quick-grant a whole group:</span>
+      <span class="hint" data-vis="{{ V }}">{{ "Quick-assign a whole group:" if _lab_mode else "Quick-grant a whole group:" }}</span>
       {% for grp in instrument_groups %}
       <button type="button" class="link-button group-grant"
               data-group-ids="{{ instrument_group_members.get(grp['id'], [])|tojson }}"
               data-group-lane="operator_ids"
               data-vis="{{ V }}">
-        {{ grp['name'] }} → Operator
+        {{ grp['name'] }} → {{ "Conductor" if _lab_mode else "Operator" }}
       </button>
       {% endfor %}
     </div>
@@ -175,10 +186,10 @@
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Instrument</th>
-          <th class="lane-col" data-vis="{{ V }}">Admin</th>
-          <th class="lane-col" data-vis="{{ V }}">Operator</th>
-          <th class="lane-col" data-vis="{{ V }}">Faculty</th>
-          <th class="lane-col" data-vis="{{ V }}">Subscriber</th>
+          <th class="lane-col" data-vis="{{ V }}">{{ "Dean" if _lab_mode else "Admin" }}</th>
+          <th class="lane-col" data-vis="{{ V }}">{{ "Conductor" if _lab_mode else "Operator" }}</th>
+          <th class="lane-col" data-vis="{{ V }}">{{ "Oversight" if _lab_mode else "Faculty" }}</th>
+          <th class="lane-col" data-vis="{{ V }}">{{ "Watch" if _lab_mode else "Subscriber" }}</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
@@ -186,8 +197,8 @@
         <tr class="assignment-category-row" data-vis="{{ V }}">
           <td colspan="5" data-vis="{{ V }}">
             <strong data-vis="{{ V }}">{{ category }}</strong>
-            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="operator_ids" data-vis="{{ V }}">Grant all as operator</button>
-            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="admin_ids" data-vis="{{ V }}">Grant all as admin</button>
+            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="operator_ids" data-vis="{{ V }}">Grant all as {{ "conductor" if _lab_mode else "operator" }}</button>
+            <button type="button" class="link-button category-grant" data-assignment-category="{{ category }}" data-assignment-lane="admin_ids" data-vis="{{ V }}">Grant all as {{ "dean" if _lab_mode else "admin" }}</button>
             <button type="button" class="link-button category-grant danger" data-assignment-category="{{ category }}" data-assignment-lane="clear" data-vis="{{ V }}">Clear</button>
           </td>
         </tr>
@@ -214,7 +225,7 @@
 <section class="card compact" data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
     <div data-vis="{{ V }}">
-      <h2 data-vis="{{ V }}">Member Access</h2>
+      <h2 data-vis="{{ V }}">{{ "Profile Access" if _lab_mode else "Member Access" }}</h2>
     </div>
   </div>
   <form method="post" class="inline-form" data-vis="{{ V }}">

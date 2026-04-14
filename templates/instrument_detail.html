@@ -4,6 +4,7 @@
 {% block breadcrumb_instrument %}{{ instrument["name"] }}{% endblock %}
 {% block hover_back %}{% endblock %}
 {% block content %}
+{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
 
 {# ─── Header ─────────────────────────────────────────── #}
 <header class="inst-header" data-vis="{{ V }}">
@@ -70,10 +71,10 @@
 
   {# ── Tile: Team (operators + faculty) ── #}
   <section class="card tile tile-full-width tile-team" data-vis="{{ V }}">
-    {{ card_heading("", "Team") }}
+    {{ card_heading("", "Instrument Responsibility" if _lab_mode else "Team") }}
     <div class="team-columns" data-vis="{{ V }}">
       <div class="team-col" data-vis="{{ V }}">
-        <h3 class="section-kicker" data-vis="{{ V }}">Operators</h3>
+        <h3 class="section-kicker" data-vis="{{ V }}">{{ "Instrument Leads" if _lab_mode else "Operators" }}</h3>
         {% if selected_operator_rows %}
         <div class="person-chip-stack" data-vis="{{ V }}">
           {% for p in selected_operator_rows %}
@@ -85,7 +86,7 @@
         {% endif %}
       </div>
       <div class="team-col" data-vis="{{ V }}">
-        <h3 class="section-kicker" data-vis="{{ V }}">Faculty In Charge</h3>
+        <h3 class="section-kicker" data-vis="{{ V }}">{{ "Dean Oversight" if _lab_mode else "Faculty In Charge" }}</h3>
         {% if selected_faculty_rows %}
         <div class="person-chip-stack" data-vis="{{ V }}">
           {% for p in selected_faculty_rows %}
@@ -96,7 +97,7 @@
         <p class="hint" data-vis="{{ V }}">None assigned</p>
         {% endif %}
       </div>
-      {% if selected_requester_rows %}
+      {% if selected_requester_rows and not _lab_mode %}
       <div class="team-col" data-vis="{{ V }}">
         <h3 class="section-kicker" data-vis="{{ V }}">Subscribers</h3>
         <div class="person-chip-stack" data-vis="{{ V }}">
@@ -108,7 +109,7 @@
       {% endif %}
     </div>
     {% if can_edit %}
-    <p class="tile-footnote" data-vis="{{ V }}">Edit assignments from the <a class="text-link" href="#metaEditTile" data-vis="{{ V }}">Metadata</a> tile.</p>
+    <p class="tile-footnote" data-vis="{{ V }}">{{ "Edit responsibility from the " if _lab_mode else "Edit assignments from the " }}<a class="text-link" href="#metaEditTile" data-vis="{{ V }}">Metadata</a> tile.</p>
     {% endif %}
   </section>
 
@@ -151,7 +152,7 @@
   {% if can_edit_approval_config %}
   <section class="card tile tile-span-3 tile-approval" data-vis="{{ V }}">
     {{ card_heading("", "Approval Sequence") }}
-    <p class="tile-lead" data-vis="{{ V }}">Up to 6 steps. Requests advance through each role in order.</p>
+    <p class="tile-lead" data-vis="{{ V }}">{{ "Requests move through review and handoff steps in order." if _lab_mode else "Up to 6 steps. Requests advance through each role in order." }}</p>
     <ol class="approval-flow" data-vis="{{ V }}">
       {% if approval_config %}
       {% for step in approval_config %}
@@ -165,11 +166,11 @@
       {% endfor %}
       {% else %}
       <li class="approval-flow-empty" data-vis="{{ V }}">
-        <small class="hint" data-vis="{{ V }}">Using default: Finance → Faculty → Operator</small>
+        <small class="hint" data-vis="{{ V }}">{{ "Using default: Lab review → Instrument assignment → Run" if _lab_mode else "Using default: Finance → Faculty → Operator" }}</small>
       </li>
       {% endif %}
     </ol>
-    <a class="text-link" href="{{ url_for('instrument_form_control', instrument_id=instrument['id']) }}" data-vis="{{ V }}">Configure Approval &amp; Fields &rarr;</a>
+    <a class="text-link" href="{{ url_for('instrument_form_control', instrument_id=instrument['id']) }}" data-vis="{{ V }}">{{ "Configure flow & fields" if _lab_mode else "Configure Approval &amp; Fields" }} &rarr;</a>
   </section>
   {% endif %}
 
@@ -191,7 +192,7 @@
   {# ── Tile: Notify instrument subscribers (v2.2.0) ── #}
   {% if can_edit %}
   <section class="card tile tile-span-3 tile-notify" data-vis="{{ V }}">
-    {{ card_heading("", "Notify Subscribers") }}
+    {{ card_heading("", "Send Instrument Notice" if _lab_mode else "Notify Subscribers") }}
     <form method="post" action="{{ url_for('instrument_notify', instrument_id=instrument['id']) }}" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
       <label data-vis="{{ V }}">Subject

@@ -2,6 +2,7 @@
 {% from "_request_macros.html" import request_identity, instrument_name_link, requester_block, operator_block, status_block, meta_link, attachment_list with context %}
 {% from "_page_macros.html" import paginated_pane, card_heading, status_pills_row, queue_action_stack, empty_state with context %}
 {% block content %}
+{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
 
 {# Filter state preserved on every per-row action post #}
 {% set queue_hidden = {
@@ -22,7 +23,7 @@
     <div class="tile-filters-body" data-vis="{{ V }}">
       <label class="queue-search" data-vis="{{ V }}">
         <span class="hint" data-vis="{{ V }}">Search</span>
-        <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="Request, sample, requester, operator" data-vis="{{ V }}">
+        <input type="text" id="queueSearch" value="{{ filters.q }}" placeholder="{{ 'Request, sample, submitter, instrument lead' if _lab_mode else 'Request, sample, requester, operator' }}" data-vis="{{ V }}">
       </label>
       {% if instrument_selector_enabled %}
       <label data-vis="{{ V }}">
@@ -89,9 +90,9 @@
       <input type="hidden" name="request_ids" id="bulkRequestIds" value="">
       <input type="hidden" name="back" value="{{ queue_back_url }}">
       <label data-vis="{{ V }}">
-        <span class="hint" data-vis="{{ V }}">Assign to operator</span>
+        <span class="hint" data-vis="{{ V }}">{{ "Assign to instrument lead" if _lab_mode else "Assign to operator" }}</span>
         <select name="assigned_operator_id" required data-vis="{{ V }}">
-          <option value="" data-vis="{{ V }}">Choose operator…</option>
+          <option value="" data-vis="{{ V }}">{{ "Choose instrument lead…" if _lab_mode else "Choose operator…" }}</option>
           {% for operator in operators %}
           <option value="{{ operator['id'] }}" data-vis="{{ V }}">{{ operator["name"] }}</option>
           {% endfor %}
@@ -131,7 +132,7 @@
           <th data-vis="{{ V }}">Request</th>
           <th data-vis="{{ V }}">Instrument</th>
           <th data-vis="{{ V }}">Status</th>
-          <th data-vis="{{ V }}">Requester</th>
+          <th data-vis="{{ V }}">{{ "Submitted By" if _lab_mode else "Requester" }}</th>
           <th data-vis="{{ V }}">Time</th>
           <th data-vis="{{ V }}">File</th>
           {% if can_operate_queue %}<th data-vis="{{ V }}">Action</th>{% endif %}

@@ -688,6 +688,28 @@
     })();
   </script>
   <script>
+    /* ── Global clickable-row handler ──
+       Any <tr class="clickable-row" data-href="..."> navigates on click.
+       Event-delegated so it covers every page without per-template JS.
+       Skips clicks on <a>, <button>, <input>, <select>, <textarea>, or
+       elements with class="no-row-nav" so inline controls still work. */
+    (function () {
+      document.addEventListener('click', function (e) {
+        var row = e.target && e.target.closest && e.target.closest('tr.clickable-row[data-href]');
+        if (!row) return;
+        // Let inline interactive elements handle their own clicks.
+        if (e.target.closest('a, button, input, select, textarea, label, .no-row-nav')) return;
+        var href = row.getAttribute('data-href');
+        if (!href) return;
+        if (e.metaKey || e.ctrlKey || e.button === 1) {
+          window.open(href, '_blank');
+        } else {
+          window.location.href = href;
+        }
+      });
+    })();
+  </script>
+  <script>
     /* ── Generic click-to-reveal toggle ──
        Wire any element carrying `data-toggle-target="#id"` so that clicking it
        shows/hides the referenced element and keeps aria-expanded in sync. The

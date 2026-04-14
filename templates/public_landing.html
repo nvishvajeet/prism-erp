@@ -2,26 +2,37 @@
 {% block content %}
 <section class="inst-tiles" data-vis="{{ V }}">
   <div class="card tile tile-full-width" data-vis="{{ V }}" style="padding:2rem 1.5rem;">
-    <p class="hint" data-vis="{{ V }}" style="text-transform:uppercase;letter-spacing:0.18em;margin:0 0 0.75rem;">Catalyst Entry</p>
-    <h2 data-vis="{{ V }}" style="margin:0 0 0.75rem;">Choose where you want to go</h2>
+    <p class="hint" data-vis="{{ V }}" style="text-transform:uppercase;letter-spacing:0.18em;margin:0 0 0.75rem;">Catalyst ERP</p>
+    <h2 data-vis="{{ V }}" style="margin:0 0 0.75rem;">Choose your ERP house</h2>
     <p class="hint" data-vis="{{ V }}" style="max-width:48rem;margin:0;">
-      The live entry is being simplified. MITWPU users should go to the Lab Scheduler ERP.
+      Catalyst runs two ERP portals on this tenant. Pick the one you belong to &mdash;
+      you can switch later from the top bar if you are assigned to both.
     </p>
   </div>
 
   {% for portal in public_portals %}
-  <article class="card tile tile-span-3{% if portal.slug == 'hq' %} tile-accent-amber{% endif %}" data-vis="{{ V }}" style="padding:1.75rem;">
-    {% if portal.label %}
+  <article class="card tile tile-span-3{% if portal.slug == 'hq' %} tile-accent-amber{% endif %}" data-vis="{{ V }}" style="padding:1.75rem;display:flex;flex-direction:column;">
     <p class="hint" data-vis="{{ V }}" style="text-transform:uppercase;letter-spacing:0.18em;margin:0 0 0.6rem;">{{ portal.label }}</p>
-    {% endif %}
-    {% if portal.title %}
     <h3 data-vis="{{ V }}" style="margin:0 0 0.6rem;">{{ portal.title }}</h3>
-    {% endif %}
-    <p class="hint" data-vis="{{ V }}" style="min-height:3.5rem;">{{ portal.tagline }}</p>
+    <p class="hint" data-vis="{{ V }}" style="min-height:3.5rem;flex:1;">{{ portal.tagline }}</p>
     <div class="link-row" data-vis="{{ V }}" style="margin-top:1rem;">
-      <a class="btn {% if portal.slug == 'hq' %}btn{% else %}btn-primary{% endif %}" href="{{ portal.href }}" data-vis="{{ V }}">{{ portal.cta }}</a>
+      <a class="btn btn-primary" href="{{ portal.href }}" data-vis="{{ V }}">{{ portal.cta }}</a>
     </div>
   </article>
   {% endfor %}
+
+  {% if demo_info %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}" style="padding:1.5rem 1.75rem;background:#f6f8fb;">
+    <p class="hint" data-vis="{{ V }}" style="text-transform:uppercase;letter-spacing:0.18em;margin:0 0 0.5rem;">Just exploring?</p>
+    <h3 data-vis="{{ V }}" style="margin:0 0 0.5rem;">Try the demo account</h3>
+    <p class="hint" data-vis="{{ V }}" style="margin:0 0 0.75rem;">
+      A shared demo operator account is available for visitors who want to look around without a real invite.
+      Credentials: <code>{{ demo_info.email }}</code> &middot; password <code>{{ demo_info.password }}</code>.
+    </p>
+    <div class="link-row" data-vis="{{ V }}">
+      <a class="btn" href="{{ demo_info.href }}" data-vis="{{ V }}">One-click demo login</a>
+    </div>
+  </article>
+  {% endif %}
 </section>
 {% endblock %}

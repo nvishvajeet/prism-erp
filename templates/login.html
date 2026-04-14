@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-{# Demo prefill: visiting /login?demo=1 prefills admin@lab.local / 12345
-   into the form so public-demo visitors coming from the portfolio site
-   land one click away from a signed-in CATALYST tour. Only active in
-   DEMO_MODE; operational deployments ignore the query param server-side
-   (see _render_login_demo_prefill in app.py). #}
-{% set _demo_prefill = (request.args.get('demo') == '1') and demo_mode %}
+{# Demo prefill: visiting /login?demo=1 prefills the public demo account
+   (DEMO_PUBLIC_EMAIL) and shared password "12345" so visitors from the
+   landing page can take a one-click tour. Works in both demo and
+   operational deployments; the seeded credential differs per
+   environment — see DEMO_PUBLIC_EMAIL in app.py. #}
+{% set _demo_prefill = request.args.get('demo') == '1' %}
 {% set _portal_name = login_portal.name if login_portal else "CATALYST" %}
 {% set _portal_hint = {
   'lab': 'MITWPU users: sign in to the Lab Scheduler ERP.',
@@ -25,7 +25,7 @@
   <form method="post" class="form-grid" data-vis="all">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
     <label data-vis="all">Username or email
-      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" value="" data-vis="all">
+      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
     </label>
     <label data-vis="all">Password
       <input type="password" name="password" required value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">

@@ -119,6 +119,14 @@ OWNER_EMAILS = {
 # Vendor payment auto-approval: POs under this amount skip manual approval
 VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESHOLD", "0"))
 
+# Public-demo credential advertised on the landing page and pre-filled into
+# /login?demo=1. Operational deployments override via DEMO_PUBLIC_EMAIL env
+# var; the built-in default is the live demo operator account (Anika).
+DEMO_PUBLIC_EMAIL = os.environ.get(
+    "DEMO_PUBLIC_EMAIL",
+    "anika.op@mitwpu.edu.in" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner@catalyst.local",
+)
+
 DEMO_ROLE_SWITCHES = {
     "owner": {"label": "Owner", "email": "owner@catalyst.local"},
     "super_admin": {"label": "Super Admin", "email": "dean@catalyst.local"},
@@ -7741,6 +7749,7 @@ def inject_globals():
         "V": V,
         "current_user": user,
         "demo_mode": DEMO_MODE,
+        "demo_public_email": DEMO_PUBLIC_EMAIL,
         "demo_variant": DEMO_VARIANT,
         "demo_variant_pills": demo_variant_pills,
         "org_name": ORG_NAME,
@@ -8293,25 +8302,31 @@ def index():
         public_portals = [
             {
                 "slug": "lab",
-                "label": "MITWPU Lab ERP",
+                "label": "Lab R&D",
                 "title": "MITWPU Central Instrumentation Facility",
                 "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
                 "href": url_for("login", portal="lab"),
-                "cta": "Enter Lab Scheduler",
+                "cta": "Enter Lab ERP",
             },
             {
                 "slug": "hq",
-                "label": "",
-                "title": "",
-                "tagline": "Alternate internal entry point for private operations and demo access.",
+                "label": "Ravikiran Group HQ",
+                "title": "Personal / Group HQ Workspace",
+                "tagline": "Private HQ portal — finance, grants, admin, and cross-lab oversight.",
                 "href": url_for("login", portal="hq"),
-                "cta": "Alternate Entry",
+                "cta": "Enter HQ ERP",
             },
         ]
+        demo_info = {
+            "href": url_for("login", demo="1"),
+            "email": DEMO_PUBLIC_EMAIL,
+            "password": "12345",
+        }
         return render_template(
             "public_landing.html",
             title="CATALYST",
             public_portals=public_portals,
+            demo_info=demo_info,
         )
     db = get_db()
     recent_page = page_value(int(request.args.get("recent_page", "1") or 1))

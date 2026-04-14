@@ -121,10 +121,10 @@ VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESH
 
 # Public-demo credential advertised on the landing page and pre-filled into
 # /login?demo=1. Operational deployments override via DEMO_PUBLIC_EMAIL env
-# var; the built-in default is the live demo operator account (Anika).
+# var; the built-in default is the Nikita super-admin account (password 12345).
 DEMO_PUBLIC_EMAIL = os.environ.get(
     "DEMO_PUBLIC_EMAIL",
-    "anika.op@mitwpu.edu.in" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner@catalyst.local",
+    "nikita" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner@catalyst.local",
 )
 
 DEMO_ROLE_SWITCHES = {
@@ -132,7 +132,7 @@ DEMO_ROLE_SWITCHES = {
     "super_admin": {"label": "Super Admin", "email": "dean@catalyst.local"},
     "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@catalyst.local"},
     "site_admin": {"label": "Site Admin", "email": "siteadmin@catalyst.local"},
-    "operator": {"label": "Operator", "email": "anika@catalyst.local"},
+    "operator": {"label": "Operator", "email": "rahul.misal@catalyst.local"},
     "member": {"label": "Member", "email": "user1@catalyst.local"},
     "finance": {"label": "Finance", "email": "meera@catalyst.local"},
     "professor": {"label": "Approver", "email": "approver@catalyst.local"},
@@ -144,21 +144,21 @@ DEMO_ROLE_SWITCHES = {
 ERP_PORTALS = {
     "lab": {
         "name": "Lab R&D",
-        "tagline": "Instruments · Queue · Requests · Profiles",
+        "tagline": "Instruments · Queue · Requests · Finance",
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "schedule", "requests", "admin",
+            "instruments", "schedule", "requests", "finance", "admin",
         ],
     },
     "hq": {
-        "name": "Ravikiran Group HQ",
-        "tagline": "Mess · Tuck Shop · Attendance · Vehicles · Payroll · HR",
+        "name": "Private Workspace",
+        "tagline": "Finance · Vendors · Attendance · Vehicles · Payroll · HR",
         "icon": "🏢",
         "color": "green",
         "modules": [
             "mess", "tuck_shop", "attendance", "vehicles",
-            "payroll", "personnel", "finance", "filing",
+            "payroll", "personnel", "finance", "vendor_payments", "filing",
             "inbox", "notifications", "todos", "admin",
         ],
     },
@@ -746,6 +746,7 @@ def close_db(_exc: object) -> None:
         db.close()
 
 
+@app.route("/health")
 @app.route("/api/health")
 def health_check():
     """Health check endpoint — returns system status as JSON.
@@ -4909,6 +4910,16 @@ def init_db() -> None:
             except:
                 pass
 
+        # Office / location flair — short free-text like "Kothrud HQ",
+        # "MITWPU Campus", "Loni Kalbhor Mini", "Remote". Rendered as a
+        # subtle chip next to the user's name in directory and detail
+        # views so people know which office the person works from.
+        if "office_location" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN office_location TEXT NOT NULL DEFAULT ''")
+            except:
+                pass
+
         # Phase 6 W6.1 — Indexes for hot query paths.
         # Every query that filters by status, instrument, requester, or
         # joins approval_steps/audit_logs/request_attachments hits these.
@@ -6144,26 +6155,25 @@ def _seed_demo_companies() -> None:
     db.row_factory = sqlite3.Row
     try:
         existing = db.execute("SELECT COUNT(*) AS c FROM companies").fetchone()["c"]
-        if existing > 0:
-            return
         now = now_iso()
         cur = db.cursor()
 
-        companies = [
-            ("Ravikiran Mess & Catering", "Ravikiran",
-             "Primary university mess and catering business. ~8 crore/year. Feeds 3000+ students daily.",),
-            ("Gopal Doodh Dairy", "Gopal",
-             "Dairy supply and distribution. Supplies milk, paneer, curd to Ravikiran and external clients.",),
-            ("Raj Services", "Raj",
-             "General services company. Staffing, housekeeping, maintenance contracts.",),
-            ("SuryaJyoti", "SuryaJyoti",
-             "Sister company. Shared admin and finance with the group.",),
-        ]
-        for name, short, note in companies:
-            cur.execute(
-                "INSERT INTO companies (name, short_name, owner_note, created_at) VALUES (?,?,?,?)",
-                (name, short, note, now))
-        db.commit()
+        if existing == 0:
+            companies = [
+                ("Ravikiran Mess & Catering", "Ravikiran",
+                 "Primary university mess and catering business. ~8 crore/year. Feeds 3000+ students daily.",),
+                ("Gopal Doodh Dairy", "Gopal",
+                 "Dairy supply and distribution. Supplies milk, paneer, curd to Ravikiran and external clients.",),
+                ("Raj Services", "Raj",
+                 "General services company. Staffing, housekeeping, maintenance contracts.",),
+                ("SuryaJyoti", "SuryaJyoti",
+                 "Sister company. Shared admin and finance with the group.",),
+            ]
+            for name, short, note in companies:
+                cur.execute(
+                    "INSERT INTO companies (name, short_name, owner_note, created_at) VALUES (?,?,?,?)",
+                    (name, short, note, now))
+            db.commit()
 
         # Add company_id columns to vendors and purchase_orders if missing
         for table in ("vendors", "purchase_orders"):
@@ -7037,6 +7047,10 @@ def seed_data() -> None:
         "satyajeetn",
         "user1@catalyst.local", "user2@catalyst.local", "user3@catalyst.local",
         "user4@catalyst.local", "user5@catalyst.local",
+        # 2026-04-14 · Real team
+        "nikita", "prashant",
+        "rahul.misal@catalyst.local", "sonal@catalyst.local",
+        "balaji.phunde@catalyst.local", "mangesh.ghule@catalyst.local",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -7044,10 +7058,65 @@ def seed_data() -> None:
     )
     db.commit()
 
+    # ── 2026-04-14 · Real team roster (idempotent — runs every boot) ──
+    # Lifted above the "existing users → return" guard so new real
+    # team members land in pre-existing demo DBs too. INSERT OR IGNORE
+    # makes it safe to run on every startup.
+    #
+    # Shape:  (name, email, role, office_location, portals)
+    real_team = [
+        ("Nikita Nagargoje",   "nikita",                        "super_admin",
+         "Kothrud HQ",                 ["lab", "hq"]),
+        ("Prashant Nagargoje", "prashant",                      "super_admin",
+         "Kothrud HQ",                 ["lab", "hq"]),
+        ("Rahul Misal",        "rahul.misal@catalyst.local",    "operator",
+         "Kothrud HQ · Ravikiran",     ["hq"]),
+        ("Sonal",              "sonal@catalyst.local",          "operator",
+         "Kothrud HQ · Ravikiran",     ["hq"]),
+        ("Balaji Phunde",      "balaji.phunde@catalyst.local",  "operator",
+         "Ravikiran Fleet · Driver",   ["hq"]),
+        ("Mangesh Ghule",      "mangesh.ghule@catalyst.local",  "operator",
+         "Ravikiran Fleet · Driver",   ["hq"]),
+    ]
+    for name, email, role, office, _portals in real_team:
+        db.execute(
+            """INSERT OR IGNORE INTO users
+                 (name, email, password_hash, role, invite_status,
+                  must_change_password, office_location)
+               VALUES (?, ?, ?, ?, 'active', 1, ?)""",
+            (name, email, demo_pw_hash, role, office),
+        )
+        db.execute(
+            "UPDATE users SET office_location = ? WHERE email = ? AND (office_location IS NULL OR office_location = '')",
+            (office, email),
+        )
+    db.commit()
+
+    portal_rows = db.execute("SELECT id, slug FROM erp_portals").fetchall()
+    portal_id_by_slug = {r["slug"]: r["id"] for r in portal_rows}
+    for name, email, role, _office, portals in real_team:
+        urow = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if not urow:
+            continue
+        uid = urow["id"]
+        default_slug = portals[0]
+        for slug in portals:
+            pid = portal_id_by_slug.get(slug)
+            if pid is None:
+                continue
+            portal_role = "owner" if role == "super_admin" else "member"
+            db.execute(
+                """INSERT OR IGNORE INTO erp_user_portals
+                     (user_id, portal_id, portal_role, is_default, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (uid, pid, portal_role, 1 if slug == default_slug else 0, now_iso()),
+            )
     db.commit()
 
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
-    if existing:
+    if existing > len(real_team):
+        # DB already has the broader demo roster — skip re-seeding the
+        # large core_users + instruments + requests payload below.
         db.close()
         return
 
@@ -7086,6 +7155,9 @@ def seed_data() -> None:
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
             (name, email, demo_pw_hash, role),
         )
+
+    # (Real-team roster lives above the existing-users guard so it lands
+    # in pre-seeded demo DBs too — see earlier block.)
 
     # ── v2.0.3 — Demo instrument inventory ──
     # 21 instruments across the imaging, spectroscopy, mechanical-test,
@@ -15820,19 +15892,22 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             abort(403)
         new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
         new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
+        existing_office = target_user["office_location"] if "office_location" in target_user.keys() else ""
+        new_office = (request.form.get("office_location", existing_office) or "").strip()
         new_active = 1 if request.form.get("active") == "on" else 0
         if target_user["id"] == viewer["id"]:
             new_active = 1
         execute(
-            "UPDATE users SET name = ?, member_code = ?, active = ? WHERE id = ?",
-            (new_name, new_member_code, new_active, user_id),
+            "UPDATE users SET name = ?, member_code = ?, office_location = ?, active = ? WHERE id = ?",
+            (new_name, new_member_code, new_office, new_active, user_id),
         )
         log_action(
             viewer["id"],
             "user",
             user_id,
             "user_metadata_updated",
-            {"name": new_name, "member_code": new_member_code, "active": new_active},
+            {"name": new_name, "member_code": new_member_code,
+             "office_location": new_office, "active": new_active},
         )
         flash(f"Profile updated for {new_name}.", "success")
         return redirect(url_for("user_profile", user_id=user_id))

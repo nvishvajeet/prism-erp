@@ -22,10 +22,26 @@
       <section class="meta-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Identity</h3>
         <dl class="detail-grid" data-vis="{{ V }}">
-          <dt data-vis="{{ V }}">Name</dt><dd data-vis="{{ V }}">{{ target_user["name"] }}</dd>
+          <dt data-vis="{{ V }}">Name</dt>
+          <dd data-vis="{{ V }}">
+            {{ target_user["name"] }}
+            {% if target_user["office_location"] %}
+            <span class="office-chip" data-vis="{{ V }}"
+                  style="display:inline-block;margin-left:0.5rem;
+                         padding:0.12rem 0.55rem;border-radius:999px;
+                         font-size:0.72rem;font-weight:600;
+                         background:#eef3f8;color:#264b75;
+                         border:1px solid rgba(38,75,117,0.18);
+                         letter-spacing:0.02em;white-space:nowrap;">
+              📍 {{ target_user["office_location"] }}
+            </span>
+            {% endif %}
+          </dd>
           <dt data-vis="{{ V }}">Username</dt><dd data-vis="{{ V }}">{{ target_user["email"] }}</dd>
           <dt data-vis="{{ V }}">Member Code</dt><dd data-vis="{{ V }}">{{ target_user["member_code"] or "-" }}</dd>
           <dt data-vis="{{ V }}">Role</dt><dd data-vis="{{ V }}">{{ role_display_name(target_user["role"]) }}</dd>
+          <dt data-vis="{{ V }}">Office</dt>
+          <dd data-vis="{{ V }}">{{ target_user["office_location"] or "—" }}</dd>
         </dl>
       </section>
       <section class="meta-section" data-vis="{{ V }}">
@@ -43,6 +59,7 @@
       <div class="meta-edit-grid" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Name<input type="text" name="name" value="{{ target_user['name'] }}" required></label>
         <label data-vis="{{ V }}">Member Code<input type="text" name="member_code" value="{{ target_user['member_code'] or '' }}" placeholder="Lab code"></label>
+        <label data-vis="{{ V }}">Office / Location<input type="text" name="office_location" value="{{ target_user['office_location'] or '' }}" placeholder="e.g. Kothrud HQ · Ravikiran"></label>
       </div>
       <label class="check-option top-gap" data-vis="{{ V }}">
         <input type="checkbox" name="active" {% if target_user['active'] %}checked{% endif %}{% if is_self %} disabled{% endif %}>
@@ -251,7 +268,7 @@
   <div style="display:flex; align-items:center; gap:0.75rem; margin:0.75rem 0;" data-vis="{{ V }}">
     <code id="resetPin" style="font-size:1.5rem; letter-spacing:0.15em; padding:0.4rem 0.8rem; background:var(--panel-strong); border:1px solid var(--line); border-radius:6px; user-select:all;">{{ reset_pw_info.temp_password }}</code>
     <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('resetPin').textContent.trim()).then(function(){this.textContent='Copied!'}.bind(this))" data-vis="{{ V }}" style="white-space:nowrap;">Copy PIN</button>
-    <a href="{{ url_for('download_reset_password_eml', user_id=reset_pw_info.user_id, tp=reset_pw_info.temp_password) }}" class="button" data-vis="{{ V }}" style="white-space:nowrap;">Download .eml</a>
+    <a href="{{ url_for('download_reset_password_eml', user_id=reset_pw_info.user_id) }}" class="button" data-vis="{{ V }}" style="white-space:nowrap;">Download .eml</a>
   </div>
 </section>
 {% endif %}

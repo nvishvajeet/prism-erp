@@ -12273,6 +12273,149 @@ def build_request_detail_template_context(
     }
 
 
+def _handle_request_detail_note_actions(user, request_id: int, sample_request, action: str):
+    if action not in {"save_note", "post_message"}:
+        return None
+    if not can_post_message(user, sample_request):
+        abort(403)
+    note_kind = request.form.get("note_kind", "").strip()
+    if action == "post_message" and not note_kind:
+        note_kind = "requester_note" if sample_request["requester_id"] == user["id"] else "operator_note"
+    if note_kind not in {item[0] for item in COMMUNICATION_NOTE_TYPES}:
+        flash("Invalid note type.", "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if not can_edit_request_note(user, sample_request, note_kind):
+        abort(403)
+    message_body = request.form.get("note_body", request.form.get("message_body", "")).strip()
+    uploaded_file = request.files.get("attachment")
+    has_attachment = bool(uploaded_file and (uploaded_file.filename or "").strip())
+    if not message_body and not has_attachment:
+        flash("Reply cannot be empty.", "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if action == "save_note":
+        execute(
+            "UPDATE request_messages SET is_active = 0 WHERE request_id = ? AND note_kind = ?",
+            (request_id, note_kind),
+        )
+    message_id = execute(
+        """
+        INSERT INTO request_messages (request_id, sender_user_id, note_kind, message_body, created_at, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
+        """,
+        (request_id, user["id"], note_kind, message_body, now_iso()),
+    )
+    if has_attachment:
+        try:
+            save_uploaded_attachment(
+                sample_request,
+                uploaded_file,
+                user["id"],
+                "other",
+                "Attached in conversation",
+                request_message_id=message_id,
+            )
+        except ValueError as exc:
+            execute("DELETE FROM request_messages WHERE id = ?", (message_id,))
+            flash(str(exc), "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+    write_request_metadata_snapshot(request_id)
+    log_action(
+        user["id"],
+        "sample_request",
+        request_id,
+        "communication_note_saved",
+        {"note_kind": note_kind, "message_preview": message_body[:120]},
+    )
+    flash("Reply added." if action == "post_message" else f"{note_kind_label(note_kind)} updated.", "success")
+    return redirect(url_for("request_detail", request_id=request_id))
+
+
+def _handle_request_detail_issue_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    can_flag_issue: bool,
+    can_respond_issue: bool,
+):
+    if action not in {"flag_issue", "respond_issue", "resolve_issue", "reopen_issue"}:
+        return None
+    if action == "flag_issue":
+        if not can_flag_issue:
+            abort(403)
+        issue_message = request.form.get("issue_message", "").strip()
+        if not issue_message:
+            flash("Please describe the issue before flagging it.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        execute(
+            """
+            INSERT INTO request_issues (request_id, created_by_user_id, issue_message, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (request_id, user["id"], issue_message, now_iso()),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_flagged", {"issue_preview": issue_message[:160]})
+        flash("Issue flagged for this sample.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    issue_id = int(request.form.get("issue_id") or 0)
+    issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
+    if issue is None:
+        abort(404)
+    if action == "respond_issue":
+        if not can_respond_issue:
+            abort(403)
+        response_message = request.form.get("response_message", "").strip()
+        if not response_message:
+            flash("Please add a response before saving it.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        execute(
+            """
+            UPDATE request_issues
+            SET response_message = ?, responded_at = ?, responded_by_user_id = ?
+            WHERE id = ?
+            """,
+            (response_message, now_iso(), user["id"], issue_id),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_response_saved", {"response_preview": response_message[:160]})
+        flash("Issue response saved.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if action == "resolve_issue":
+        if not can_respond_issue:
+            abort(403)
+        resolution_message = request.form.get("response_message", "").strip() or issue["response_message"] or "Resolved by lab."
+        execute(
+            """
+            UPDATE request_issues
+            SET response_message = ?, responded_at = COALESCE(responded_at, ?), responded_by_user_id = COALESCE(responded_by_user_id, ?),
+                status = 'resolved', resolved_at = ?, resolved_by_user_id = ?
+            WHERE id = ?
+            """,
+            (resolution_message, now_iso(), user["id"], now_iso(), user["id"], issue_id),
+        )
+        write_request_metadata_snapshot(request_id)
+        log_action(user["id"], "sample_request", request_id, "issue_resolved", {"resolution_preview": resolution_message[:160]})
+        flash("Issue marked as resolved.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if sample_request["requester_id"] != user["id"]:
+        abort(403)
+    execute(
+        """
+        UPDATE request_issues
+        SET status = 'open', resolved_at = NULL, resolved_by_user_id = NULL
+        WHERE id = ?
+        """,
+        (issue_id,),
+    )
+    write_request_metadata_snapshot(request_id)
+    log_action(user["id"], "sample_request", request_id, "issue_reopened", {"issue_id": issue_id})
+    flash("Issue reopened.", "success")
+    return redirect(url_for("request_detail", request_id=request_id))
+
+
 @app.route("/requests/<int:request_id>", methods=["GET", "POST"])
 @login_required
 def request_detail(request_id: int):
@@ -12290,132 +12433,19 @@ def request_detail(request_id: int):
 
     if request.method == "POST":
         action = request.form["action"]
-        if action in {"save_note", "post_message"}:
-            if not can_post_message(user, sample_request):
-                abort(403)
-            note_kind = request.form.get("note_kind", "").strip()
-            if action == "post_message" and not note_kind:
-                note_kind = "requester_note" if sample_request["requester_id"] == user["id"] else "operator_note"
-            if note_kind not in {item[0] for item in COMMUNICATION_NOTE_TYPES}:
-                flash("Invalid note type.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if not can_edit_request_note(user, sample_request, note_kind):
-                abort(403)
-            message_body = request.form.get("note_body", request.form.get("message_body", "")).strip()
-            uploaded_file = request.files.get("attachment")
-            has_attachment = bool(uploaded_file and (uploaded_file.filename or "").strip())
-            if not message_body and not has_attachment:
-                flash("Reply cannot be empty.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if action == "save_note":
-                execute(
-                    "UPDATE request_messages SET is_active = 0 WHERE request_id = ? AND note_kind = ?",
-                    (request_id, note_kind),
-                )
-            message_id = execute(
-                """
-                INSERT INTO request_messages (request_id, sender_user_id, note_kind, message_body, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, 1)
-                """,
-                (request_id, user["id"], note_kind, message_body, now_iso()),
-            )
-            if has_attachment:
-                try:
-                    save_uploaded_attachment(
-                        sample_request,
-                        uploaded_file,
-                        user["id"],
-                        "other",
-                        "Attached in conversation",
-                        request_message_id=message_id,
-                    )
-                except ValueError as exc:
-                    execute("DELETE FROM request_messages WHERE id = ?", (message_id,))
-                    flash(str(exc), "error")
-                    return redirect(url_for("request_detail", request_id=request_id))
-            write_request_metadata_snapshot(request_id)
-            log_action(
-                user["id"],
-                "sample_request",
-                request_id,
-                "communication_note_saved",
-                {"note_kind": note_kind, "message_preview": message_body[:120]},
-            )
-            flash("Reply added." if action == "post_message" else f"{note_kind_label(note_kind)} updated.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        if action in {"flag_issue", "respond_issue", "resolve_issue", "reopen_issue"}:
-            if action == "flag_issue":
-                if not can_flag_issue:
-                    abort(403)
-                issue_message = request.form.get("issue_message", "").strip()
-                if not issue_message:
-                    flash("Please describe the issue before flagging it.", "error")
-                    return redirect(url_for("request_detail", request_id=request_id))
-                execute(
-                    """
-                    INSERT INTO request_issues (request_id, created_by_user_id, issue_message, created_at)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (request_id, user["id"], issue_message, now_iso()),
-                )
-                write_request_metadata_snapshot(request_id)
-                log_action(user["id"], "sample_request", request_id, "issue_flagged", {"issue_preview": issue_message[:160]})
-                flash("Issue flagged for this sample.", "success")
-                return redirect(url_for("request_detail", request_id=request_id))
-            issue_id = int(request.form.get("issue_id") or 0)
-            issue = query_one("SELECT * FROM request_issues WHERE id = ? AND request_id = ?", (issue_id, request_id))
-            if issue is None:
-                abort(404)
-            if action == "respond_issue":
-                if not can_respond_issue:
-                    abort(403)
-                response_message = request.form.get("response_message", "").strip()
-                if not response_message:
-                    flash("Please add a response before saving it.", "error")
-                    return redirect(url_for("request_detail", request_id=request_id))
-                execute(
-                    """
-                    UPDATE request_issues
-                    SET response_message = ?, responded_at = ?, responded_by_user_id = ?
-                    WHERE id = ?
-                    """,
-                    (response_message, now_iso(), user["id"], issue_id),
-                )
-                write_request_metadata_snapshot(request_id)
-                log_action(user["id"], "sample_request", request_id, "issue_response_saved", {"response_preview": response_message[:160]})
-                flash("Issue response saved.", "success")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if action == "resolve_issue":
-                if not can_respond_issue:
-                    abort(403)
-                resolution_message = request.form.get("response_message", "").strip() or issue["response_message"] or "Resolved by lab."
-                execute(
-                    """
-                    UPDATE request_issues
-                    SET response_message = ?, responded_at = COALESCE(responded_at, ?), responded_by_user_id = COALESCE(responded_by_user_id, ?),
-                        status = 'resolved', resolved_at = ?, resolved_by_user_id = ?
-                    WHERE id = ?
-                    """,
-                    (resolution_message, now_iso(), user["id"], now_iso(), user["id"], issue_id),
-                )
-                write_request_metadata_snapshot(request_id)
-                log_action(user["id"], "sample_request", request_id, "issue_resolved", {"resolution_preview": resolution_message[:160]})
-                flash("Issue marked as resolved.", "success")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if sample_request["requester_id"] != user["id"]:
-                abort(403)
-            execute(
-                """
-                UPDATE request_issues
-                SET status = 'open', resolved_at = NULL, resolved_by_user_id = NULL
-                WHERE id = ?
-                """,
-                (issue_id,),
-            )
-            write_request_metadata_snapshot(request_id)
-            log_action(user["id"], "sample_request", request_id, "issue_reopened", {"issue_id": issue_id})
-            flash("Issue reopened.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
+        note_action_response = _handle_request_detail_note_actions(user, request_id, sample_request, action)
+        if note_action_response is not None:
+            return note_action_response
+        issue_action_response = _handle_request_detail_issue_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            can_flag_issue=can_flag_issue,
+            can_respond_issue=can_respond_issue,
+        )
+        if issue_action_response is not None:
+            return issue_action_response
         admin_action_response = _handle_request_detail_admin_actions(
             user,
             request_id,

@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | worker-node-integration | 2026-04-14 18:01 CEST | `scripts/worker_node.py`, `CLAIMS.md` | `feat: add bounded worker node runner` |
 
 ## Stale-claim recovery
 

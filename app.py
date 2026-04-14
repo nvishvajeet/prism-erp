@@ -16922,8 +16922,7 @@ def leave_request_new():
 def admin_leave_queue():
     """Admin view: all pending leave requests across the facility."""
     user = current_user()
-    roles = user_role_set(user)
-    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+    if not _attendance_admin_scope(user):
         abort(403)
     pending = query_all(
         """
@@ -16957,8 +16956,7 @@ def admin_leave_queue():
 def admin_leave_approve(leave_id: int):
     """Approve a leave request."""
     user = current_user()
-    roles = user_role_set(user)
-    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+    if not _attendance_admin_scope(user):
         abort(403)
     execute(
         "UPDATE leave_requests SET status = 'approved', approved_by_user_id = ?, approved_at = ? WHERE id = ? AND status = 'pending'",
@@ -16974,8 +16972,7 @@ def admin_leave_approve(leave_id: int):
 def admin_leave_reject(leave_id: int):
     """Reject a leave request."""
     user = current_user()
-    roles = user_role_set(user)
-    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+    if not _attendance_admin_scope(user):
         abort(403)
     reason = request.form.get("reason", "").strip()
     execute(
@@ -16992,8 +16989,7 @@ def admin_leave_reject(leave_id: int):
 def admin_attendance_calendar():
     """Admin view: attendance overview for all users on a given date."""
     user = current_user()
-    roles = user_role_set(user)
-    if not (roles & {"super_admin", "site_admin"} or is_owner(user)):
+    if not _attendance_admin_scope(user):
         abort(403)
     from datetime import date as _date
     target_date = request.args.get("date", _date.today().isoformat()).strip()
@@ -21822,9 +21818,30 @@ def expense_receipt_review(receipt_id):
 FEEDBACK_LOG = Path(__file__).resolve().parent / "logs" / "debug_feedback.md"
 
 
-def _append_feedback_entry(*, user: sqlite3.Row | None, text: str, page: str, source: str = "feedback") -> None:
-    """Persist a lightweight feedback/report note for later review."""
-    user_label = f"{user['name']} ({user['role']})" if user else "anonymous"
+def _append_feedback_entry(
+    *,
+    user: sqlite3.Row | None,
+    text: str,
+    page: str,
+    source: str = "feedback",
+    context_json: str = "",
+) -> None:
+    """Persist a lightweight feedback/report note for later review.
+
+    Owner identity is masked in the log ("Admin" not the real name)
+    so shared feedback logs don't leak the owner handle.
+
+    context_json, when present, carries a JSON blob from the client
+    feedback widget with cursor xy, viewport, last-hovered CSS
+    selector, and any manual snapshots captured via the C hotkey.
+    It is fenced as ```context so the downstream AI crawler can
+    parse it directly without regex-fighting the markdown.
+    """
+    if user:
+        _masked_name = OWNER_DISPLAY_NAME if is_owner(user) else user["name"]
+        user_label = f"{_masked_name} ({user['role']})"
+    else:
+        user_label = "anonymous"
     entry = (
         f"\n## {now_iso()}\n\n"
         f"**User:** {user_label}  \n"
@@ -21832,6 +21849,12 @@ def _append_feedback_entry(*, user: sqlite3.Row | None, text: str, page: str, so
         f"**Source:** `{source}`  \n\n"
         f"{text.strip()}\n"
     )
+    ctx = (context_json or "").strip()
+    if ctx:
+        # Cap payload size so a runaway client can't blow up the log.
+        if len(ctx) > 4000:
+            ctx = ctx[:4000] + "\n…truncated…"
+        entry += f"\n```context\n{ctx}\n```\n"
     FEEDBACK_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FEEDBACK_LOG, "a", encoding="utf-8") as f:
         f.write(entry)
@@ -21881,9 +21904,13 @@ def site_feedback_submit():
     raw_text = request.form.get("text", "").strip()
     page = (request.form.get("page") or request.path).strip() or "?"
     source = (request.form.get("source") or "feedback").strip() or "feedback"
+    context_json = (request.form.get("context_json") or "").strip()
     return_to = (request.form.get("return_to") or request.referrer or url_for("index")).strip()
     if raw_text:
-        _append_feedback_entry(user=user, text=raw_text, page=page, source=source)
+        _append_feedback_entry(
+            user=user, text=raw_text, page=page, source=source,
+            context_json=context_json,
+        )
         flash("Feedback sent. We logged it for review.", "success")
     else:
         flash("Please add a short note before sending feedback.", "error")

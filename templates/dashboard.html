@@ -153,11 +153,11 @@
         <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.open_count }}</strong>
       </div>
       <div class="req-pulse-cell" data-vis="{{ V }}">
-        <span class="req-pulse-label" data-vis="{{ V }}">Awaiting operator</span>
+        <span class="req-pulse-label" data-vis="{{ V }}">{{ "Awaiting instrument lead" if active_portal and active_portal.slug == 'lab' else "Awaiting operator" }}</span>
         <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.awaiting_operator_count }}</strong>
       </div>
       <div class="req-pulse-cell req-pulse-cell-ready{% if req_pulse.ready_count %} req-pulse-cell-ready-active{% endif %}" data-vis="{{ V }}">
-        <span class="req-pulse-label" data-vis="{{ V }}">Ready for pickup</span>
+        <span class="req-pulse-label" data-vis="{{ V }}">{{ "Ready for run" if active_portal and active_portal.slug == 'lab' else "Ready for pickup" }}</span>
         <strong class="req-pulse-value" data-vis="{{ V }}">{{ req_pulse.ready_count }}</strong>
       </div>
       <div class="req-pulse-cell" data-vis="{{ V }}">
@@ -224,7 +224,7 @@
       Receive what just arrived. Keep the deck moving without leaving the dashboard.
     </p>
     <label class="quick-intake-search" data-vis="{{ V }}">
-      <input type="text" id="quickIntakeSearch" placeholder="Search by number, name, or requester…" data-vis="{{ V }}">
+      <input type="text" id="quickIntakeSearch" placeholder="{{ 'Search by number, sample, or submitter…' if active_portal and active_portal.slug == 'lab' else 'Search by number, name, or requester…' }}" data-vis="{{ V }}">
     </label>
     <div class="quick-intake-grid" id="quickIntakeBody" data-vis="{{ V }}">
       {% for row in quick_intake_rows %}

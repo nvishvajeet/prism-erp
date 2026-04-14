@@ -11131,15 +11131,11 @@ def instruments():
     )
 
 
-@app.route("/instruments/<int:instrument_id>", methods=["GET", "POST"])
-@login_required
-def instrument_detail(instrument_id: int):
-    user = current_user()
+def _instrument_detail_context(user, instrument_id: int) -> dict[str, object]:
     if not user_access_profile(user)["can_access_instruments"]:
         abort(403)
     if not can_open_instrument_detail(user, instrument_id):
         abort(403)
-
     instrument = query_one(
         """
         SELECT i.*,
@@ -11160,7 +11156,6 @@ def instrument_detail(instrument_id: int):
     )
     if instrument is None:
         abort(404)
-
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_edit = user["role"] in {"super_admin", "site_admin"} or can_manage_instrument(user["id"], instrument_id, user["role"])
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
@@ -11171,220 +11166,234 @@ def instrument_detail(instrument_id: int):
     can_restore_instrument = user["role"] == "super_admin"
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_add_downtime_here = user["role"] == "super_admin" or can_manage_instrument(user["id"], instrument_id, user["role"])
-    if request.method == "POST":
-        action = request.form.get("action", "update_metadata")
-        if action == "update_metadata":
-            if not can_edit:
-                abort(403)
-            code = request.form.get("code", instrument["code"]).strip() or instrument["code"]
-            category = request.form.get("category", instrument["category"] or "").strip()
-            location = request.form.get("location", instrument["location"]).strip() or instrument["location"]
-            manufacturer = request.form.get("manufacturer", instrument["manufacturer"]).strip()
-            model_number = request.form.get("model_number", instrument["model_number"]).strip()
-            machine_photo_url = instrument["machine_photo_url"]
-            uploaded_photo = request.files.get("machine_photo_file")
-            if uploaded_photo and (uploaded_photo.filename or "").strip():
-                try:
-                    machine_photo_url = save_instrument_image(instrument_id, uploaded_photo)
-                except ValueError as exc:
-                    flash(str(exc), "error")
-                    return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-            link_values = []
-            for idx in range(1, 6):
-                value = request.form.get(f"reference_link_{idx}", "").strip()
-                if value:
-                    link_values.append(value)
-            reference_links = instrument["reference_links"]
-            notes = request.form.get("notes", instrument["notes"]).strip()
-            prior_accepting = int(instrument["accepting_requests"] or 0)
-            intake_mode = request.form.get("intake_mode", "accepting").strip()
-            accepting_requests, soft_accept_enabled = intake_mode_flags(intake_mode)
-            if can_edit_assignments:
-                instrument_admin_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_admins WHERE instrument_id = ?", (instrument_id,))]
-                operator_ids = [int(value) for value in request.form.getlist("operator_ids") if value.strip()]
-                faculty_admin_ids = [int(value) for value in request.form.getlist("faculty_admin_ids") if value.strip()]
-            else:
-                instrument_admin_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_admins WHERE instrument_id = ?", (instrument_id,))]
-                operator_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_operators WHERE instrument_id = ?", (instrument_id,))]
-                faculty_admin_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_faculty_admins WHERE instrument_id = ?", (instrument_id,))]
-            execute(
-                """
-                UPDATE instruments
-                SET code = ?, category = ?, location = ?, manufacturer = ?, model_number = ?, machine_photo_url = ?, reference_links = ?, notes = ?, accepting_requests = ?, soft_accept_enabled = ?
-                WHERE id = ?
-                """,
-                (code, category, location, manufacturer, model_number, machine_photo_url, reference_links, notes, accepting_requests, soft_accept_enabled, instrument_id),
-            )
-            log_action(
-                user["id"],
-                "instrument",
-                instrument_id,
-                "instrument_metadata_updated",
-                {
-                    "code": code,
-                    "location": location,
-                    "manufacturer": manufacturer,
-                    "model_number": model_number,
-                    "machine_photo_url": machine_photo_url,
-                    "reference_links": reference_links,
-                    "notes": notes,
-                    "intake_mode": intake_mode,
-                },
-            )
-            if can_edit_assignments:
-                sync_instrument_assignments("instrument_admins", instrument_id, instrument_admin_ids)
-                sync_instrument_assignments("instrument_operators", instrument_id, operator_ids)
-                sync_instrument_assignments("instrument_faculty_admins", instrument_id, faculty_admin_ids)
-            released_count = 0
-            if not prior_accepting and accepting_requests:
-                released_count = release_submitted_requests_for_instrument(instrument_id, user["id"])
-            flash(
-                "Instrument page updated." + (f" Released {released_count} queued request(s) into review." if released_count else ""),
-                "success",
-            )
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "update_operation":
-            if not can_edit:
-                abort(403)
-            prior_accepting = int(instrument["accepting_requests"] or 0)
-            intake_mode = request.form.get("intake_mode", "accepting").strip()
-            event_at = datetime.utcnow().isoformat(timespec="seconds")
-            accepting_requests, soft_accept_enabled = intake_mode_flags(intake_mode)
-            execute(
-                "UPDATE instruments SET accepting_requests = ?, soft_accept_enabled = ? WHERE id = ?",
-                (accepting_requests, soft_accept_enabled, instrument_id),
-            )
-            released_count = 0
-            if not prior_accepting and accepting_requests:
-                released_count = release_submitted_requests_for_instrument(instrument_id, user["id"])
-            log_action(
-                user["id"],
-                "instrument",
-                instrument_id,
-                "instrument_operation_updated",
-                {"intake_mode": intake_mode},
-            )
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return jsonify(
-                    {
-                        "ok": True,
-                        "intake_mode": intake_mode,
-                        "label": intake_mode_label(intake_mode),
-                        "released_count": released_count,
-                        "actor_name": user["name"],
-                        "event_title": "Operation changed",
-                        "event_detail": intake_mode_label(intake_mode),
-                        "event_at": format_dt(event_at),
-                    }
-                )
-            flash(
-                "Instrument operation updated." + (f" Released {released_count} queued request(s) into review." if released_count else ""),
-                "success",
-            )
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "archive_instrument":
-            if not can_archive_instrument:
-                abort(403)
-            confirm_code = request.form.get("confirm_code", "").strip()
-            if confirm_code != instrument["code"]:
-                flash("Enter the exact instrument code to archive this instrument.", "error")
-                return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-            execute("UPDATE instruments SET status = 'archived' WHERE id = ?", (instrument_id,))
-            log_action(user["id"], "instrument", instrument_id, "instrument_archived", {"name": instrument["name"], "code": instrument["code"]})
-            flash("Instrument archived.", "success")
-            return redirect(url_for("instruments"))
-        if action == "restore_instrument":
-            if not can_restore_instrument:
-                abort(403)
-            execute("UPDATE instruments SET status = 'active' WHERE id = ?", (instrument_id,))
-            log_action(user["id"], "instrument", instrument_id, "instrument_restored", {"name": instrument["name"], "code": instrument["code"]})
-            flash("Instrument restored to active inventory.", "success")
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "add_downtime":
-            if not can_add_downtime_here:
-                abort(403)
-            start_time = request.form.get("start_time", "").strip()
-            end_time = request.form.get("end_time", "").strip()
-            reason = request.form.get("reason", "").strip()
-            if not start_time or not end_time or end_time <= start_time:
-                flash("Downtime end must be after start.", "error")
-                return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-            execute(
-                """
-                INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, created_by_user_id, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, 1)
-                """,
-                (instrument_id, start_time, end_time, reason, user["id"], now_iso()),
-            )
-            log_action(user["id"], "instrument", instrument_id, "downtime_added", {"start_time": start_time, "end_time": end_time, "reason": reason})
-            flash("Downtime block added.", "success")
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "save_approval_config":
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if not (is_owner(user) or user["role"] == "super_admin"):
-                abort(403)
-            db = get_db()
-            # Preserve notify_submitter settings before deleting rows
-            old_notify = {}
-            for row in db.execute(
-                "SELECT step_order, approver_role, notify_submitter FROM instrument_approval_config WHERE instrument_id = ?",
-                (instrument_id,),
-            ).fetchall():
-                old_notify[(row["step_order"], row["approver_role"])] = row["notify_submitter"]
-            db.execute("DELETE FROM instrument_approval_config WHERE instrument_id = ?", (instrument_id,))
-            step_order = 1
-            valid_roles = {"finance", "professor", "operator"}
-            for idx in range(1, 7):
-                role = request.form.get(f"step_role_{idx}", "").strip()
-                if not role or role not in valid_roles:
-                    continue
-                user_id_raw = request.form.get(f"step_user_{idx}", "").strip()
-                approver_user_id = int(user_id_raw) if user_id_raw else None
-                notify = old_notify.get((step_order, role), 0)
-                db.execute(
-                    "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id, notify_submitter) VALUES (?, ?, ?, ?, ?)",
-                    (instrument_id, step_order, role, approver_user_id, notify),
-                )
-                step_order += 1
-            db.commit()
-            log_action(user["id"], "instrument", instrument_id, "approval_config_updated", {"step_count": step_order - 1})
-            flash("Approval sequence saved.", "success")
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "add_inventory_item":
-            if not can_edit:
-                abort(403)
-            item_name = request.form.get("item_name", "").strip()
-            inv_category = request.form.get("inv_category", "consumable").strip()
-            quantity = int(request.form.get("quantity", 0) or 0)
-            minimum_quantity = int(request.form.get("minimum_quantity", 0) or 0)
-            unit = request.form.get("unit", "units").strip() or "units"
-            unit_cost = float(request.form.get("unit_cost", 0) or 0)
-            inv_notes = request.form.get("inv_notes", "").strip()
-            if not item_name:
-                flash("Item name is required.", "error")
-                return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-            execute(
-                """
-                INSERT INTO instrument_inventory
-                    (instrument_id, item_name, category, quantity, minimum_quantity, unit, unit_cost, last_restocked_at, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (instrument_id, item_name, inv_category, quantity, minimum_quantity, unit, unit_cost, now_iso(), inv_notes),
-            )
-            log_action(user["id"], "instrument", instrument_id, "inventory_item_added", {"item_name": item_name, "quantity": quantity})
-            flash(f"Inventory item '{item_name}' added.", "success")
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        if action == "update_finance":
-            if not can_edit:
-                abort(403)
-            grant_id = request.form.get("default_grant_id", "").strip()
-            execute("UPDATE instruments SET default_grant_id = ? WHERE id = ?",
-                    (int(grant_id) if grant_id else None, instrument_id))
-            log_action(user["id"], "instrument", instrument_id, "default_grant_updated", {"grant_id": int(grant_id) if grant_id else None})
-            flash("Default grant updated.", "success")
-            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
-        abort(400)
+    return {
+        "instrument": instrument,
+        "can_edit": can_edit,
+        "can_edit_assignments": can_edit_assignments,
+        "can_archive_instrument": can_archive_instrument,
+        "can_restore_instrument": can_restore_instrument,
+        "can_add_downtime_here": can_add_downtime_here,
+    }
 
+
+def _instrument_detail_handle_post(user, instrument_id: int, instrument, context: dict[str, object]):
+    if request.method != "POST":
+        return None
+    can_edit = bool(context["can_edit"])
+    can_edit_assignments = bool(context["can_edit_assignments"])
+    can_archive_instrument = bool(context["can_archive_instrument"])
+    can_restore_instrument = bool(context["can_restore_instrument"])
+    can_add_downtime_here = bool(context["can_add_downtime_here"])
+    action = request.form.get("action", "update_metadata")
+    if action == "update_metadata":
+        if not can_edit:
+            abort(403)
+        code = request.form.get("code", instrument["code"]).strip() or instrument["code"]
+        category = request.form.get("category", instrument["category"] or "").strip()
+        location = request.form.get("location", instrument["location"]).strip() or instrument["location"]
+        manufacturer = request.form.get("manufacturer", instrument["manufacturer"]).strip()
+        model_number = request.form.get("model_number", instrument["model_number"]).strip()
+        machine_photo_url = instrument["machine_photo_url"]
+        uploaded_photo = request.files.get("machine_photo_file")
+        if uploaded_photo and (uploaded_photo.filename or "").strip():
+            try:
+                machine_photo_url = save_instrument_image(instrument_id, uploaded_photo)
+            except ValueError as exc:
+                flash(str(exc), "error")
+                return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        for idx in range(1, 6):
+            request.form.get(f"reference_link_{idx}", "").strip()
+        reference_links = instrument["reference_links"]
+        notes = request.form.get("notes", instrument["notes"]).strip()
+        prior_accepting = int(instrument["accepting_requests"] or 0)
+        intake_mode = request.form.get("intake_mode", "accepting").strip()
+        accepting_requests, soft_accept_enabled = intake_mode_flags(intake_mode)
+        instrument_admin_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_admins WHERE instrument_id = ?", (instrument_id,))]
+        if can_edit_assignments:
+            operator_ids = [int(value) for value in request.form.getlist("operator_ids") if value.strip()]
+            faculty_admin_ids = [int(value) for value in request.form.getlist("faculty_admin_ids") if value.strip()]
+        else:
+            operator_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_operators WHERE instrument_id = ?", (instrument_id,))]
+            faculty_admin_ids = [row["user_id"] for row in query_all("SELECT user_id FROM instrument_faculty_admins WHERE instrument_id = ?", (instrument_id,))]
+        execute(
+            """
+            UPDATE instruments
+            SET code = ?, category = ?, location = ?, manufacturer = ?, model_number = ?, machine_photo_url = ?, reference_links = ?, notes = ?, accepting_requests = ?, soft_accept_enabled = ?
+            WHERE id = ?
+            """,
+            (code, category, location, manufacturer, model_number, machine_photo_url, reference_links, notes, accepting_requests, soft_accept_enabled, instrument_id),
+        )
+        log_action(
+            user["id"],
+            "instrument",
+            instrument_id,
+            "instrument_metadata_updated",
+            {
+                "code": code,
+                "location": location,
+                "manufacturer": manufacturer,
+                "model_number": model_number,
+                "machine_photo_url": machine_photo_url,
+                "reference_links": reference_links,
+                "notes": notes,
+                "intake_mode": intake_mode,
+            },
+        )
+        if can_edit_assignments:
+            sync_instrument_assignments("instrument_admins", instrument_id, instrument_admin_ids)
+            sync_instrument_assignments("instrument_operators", instrument_id, operator_ids)
+            sync_instrument_assignments("instrument_faculty_admins", instrument_id, faculty_admin_ids)
+        released_count = 0
+        if not prior_accepting and accepting_requests:
+            released_count = release_submitted_requests_for_instrument(instrument_id, user["id"])
+        flash(
+            "Instrument page updated." + (f" Released {released_count} queued request(s) into review." if released_count else ""),
+            "success",
+        )
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "update_operation":
+        if not can_edit:
+            abort(403)
+        prior_accepting = int(instrument["accepting_requests"] or 0)
+        intake_mode = request.form.get("intake_mode", "accepting").strip()
+        event_at = datetime.utcnow().isoformat(timespec="seconds")
+        accepting_requests, soft_accept_enabled = intake_mode_flags(intake_mode)
+        execute(
+            "UPDATE instruments SET accepting_requests = ?, soft_accept_enabled = ? WHERE id = ?",
+            (accepting_requests, soft_accept_enabled, instrument_id),
+        )
+        released_count = 0
+        if not prior_accepting and accepting_requests:
+            released_count = release_submitted_requests_for_instrument(instrument_id, user["id"])
+        log_action(
+            user["id"],
+            "instrument",
+            instrument_id,
+            "instrument_operation_updated",
+            {"intake_mode": intake_mode},
+        )
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify(
+                {
+                    "ok": True,
+                    "intake_mode": intake_mode,
+                    "label": intake_mode_label(intake_mode),
+                    "released_count": released_count,
+                    "actor_name": user["name"],
+                    "event_title": "Operation changed",
+                    "event_detail": intake_mode_label(intake_mode),
+                    "event_at": format_dt(event_at),
+                }
+            )
+        flash(
+            "Instrument operation updated." + (f" Released {released_count} queued request(s) into review." if released_count else ""),
+            "success",
+        )
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "archive_instrument":
+        if not can_archive_instrument:
+            abort(403)
+        confirm_code = request.form.get("confirm_code", "").strip()
+        if confirm_code != instrument["code"]:
+            flash("Enter the exact instrument code to archive this instrument.", "error")
+            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        execute("UPDATE instruments SET status = 'archived' WHERE id = ?", (instrument_id,))
+        log_action(user["id"], "instrument", instrument_id, "instrument_archived", {"name": instrument["name"], "code": instrument["code"]})
+        flash("Instrument archived.", "success")
+        return redirect(url_for("instruments"))
+    if action == "restore_instrument":
+        if not can_restore_instrument:
+            abort(403)
+        execute("UPDATE instruments SET status = 'active' WHERE id = ?", (instrument_id,))
+        log_action(user["id"], "instrument", instrument_id, "instrument_restored", {"name": instrument["name"], "code": instrument["code"]})
+        flash("Instrument restored to active inventory.", "success")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "add_downtime":
+        if not can_add_downtime_here:
+            abort(403)
+        start_time = request.form.get("start_time", "").strip()
+        end_time = request.form.get("end_time", "").strip()
+        reason = request.form.get("reason", "").strip()
+        if not start_time or not end_time or end_time <= start_time:
+            flash("Downtime end must be after start.", "error")
+            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        execute(
+            """
+            INSERT INTO instrument_downtime (instrument_id, start_time, end_time, reason, created_by_user_id, created_at, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, 1)
+            """,
+            (instrument_id, start_time, end_time, reason, user["id"], now_iso()),
+        )
+        log_action(user["id"], "instrument", instrument_id, "downtime_added", {"start_time": start_time, "end_time": end_time, "reason": reason})
+        flash("Downtime block added.", "success")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "save_approval_config":
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        if not (is_owner(user) or user["role"] == "super_admin"):
+            abort(403)
+        db = get_db()
+        old_notify = {}
+        for row in db.execute(
+            "SELECT step_order, approver_role, notify_submitter FROM instrument_approval_config WHERE instrument_id = ?",
+            (instrument_id,),
+        ).fetchall():
+            old_notify[(row["step_order"], row["approver_role"])] = row["notify_submitter"]
+        db.execute("DELETE FROM instrument_approval_config WHERE instrument_id = ?", (instrument_id,))
+        step_order = 1
+        valid_roles = {"finance", "professor", "operator"}
+        for idx in range(1, 7):
+            role = request.form.get(f"step_role_{idx}", "").strip()
+            if not role or role not in valid_roles:
+                continue
+            user_id_raw = request.form.get(f"step_user_{idx}", "").strip()
+            approver_user_id = int(user_id_raw) if user_id_raw else None
+            notify = old_notify.get((step_order, role), 0)
+            db.execute(
+                "INSERT INTO instrument_approval_config (instrument_id, step_order, approver_role, approver_user_id, notify_submitter) VALUES (?, ?, ?, ?, ?)",
+                (instrument_id, step_order, role, approver_user_id, notify),
+            )
+            step_order += 1
+        db.commit()
+        log_action(user["id"], "instrument", instrument_id, "approval_config_updated", {"step_count": step_order - 1})
+        flash("Approval sequence saved.", "success")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "add_inventory_item":
+        if not can_edit:
+            abort(403)
+        item_name = request.form.get("item_name", "").strip()
+        inv_category = request.form.get("inv_category", "consumable").strip()
+        quantity = int(request.form.get("quantity", 0) or 0)
+        minimum_quantity = int(request.form.get("minimum_quantity", 0) or 0)
+        unit = request.form.get("unit", "units").strip() or "units"
+        unit_cost = float(request.form.get("unit_cost", 0) or 0)
+        inv_notes = request.form.get("inv_notes", "").strip()
+        if not item_name:
+            flash("Item name is required.", "error")
+            return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+        execute(
+            """
+            INSERT INTO instrument_inventory
+                (instrument_id, item_name, category, quantity, minimum_quantity, unit, unit_cost, last_restocked_at, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (instrument_id, item_name, inv_category, quantity, minimum_quantity, unit, unit_cost, now_iso(), inv_notes),
+        )
+        log_action(user["id"], "instrument", instrument_id, "inventory_item_added", {"item_name": item_name, "quantity": quantity})
+        flash(f"Inventory item '{item_name}' added.", "success")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    if action == "update_finance":
+        if not can_edit:
+            abort(403)
+        grant_id = request.form.get("default_grant_id", "").strip()
+        execute("UPDATE instruments SET default_grant_id = ? WHERE id = ?",
+                (int(grant_id) if grant_id else None, instrument_id))
+        log_action(user["id"], "instrument", instrument_id, "default_grant_updated", {"grant_id": int(grant_id) if grant_id else None})
+        flash("Default grant updated.", "success")
+        return redirect(url_for("instrument_detail", instrument_id=instrument_id))
+    abort(400)
+
+
+def _instrument_detail_read_model(user, instrument, instrument_id: int) -> dict[str, object]:
     queue_sql, queue_params = request_history_query(["sr.instrument_id = ?"], [instrument_id], {})
     instrument_rows_all = query_all(queue_sql, tuple(queue_params))
     queue_rank = {
@@ -11429,10 +11438,7 @@ def instrument_detail(instrument_id: int):
         key=instrument_queue_sort_key,
     )[:7]
     instrument_queue_counts = {key: len(value) for key, value in instrument_queue.items()}
-    pending_count = sum(
-        instrument_queue_counts[key]
-        for key in ("submitted", "approvals", "awaiting_sample", "pending_receipt", "ready", "active")
-    )
+    pending_count = sum(instrument_queue_counts[key] for key in ("submitted", "approvals", "awaiting_sample", "pending_receipt", "ready", "active"))
     today = datetime.utcnow().date()
     last_week_end = today - timedelta(days=today.weekday() + 1)
     last_week_start = last_week_end - timedelta(days=6)
@@ -11490,105 +11496,123 @@ def instrument_detail(instrument_id: int):
         "average_samples_per_week": average_samples_per_week,
         "average_return_hours": turnaround_avg_row["avg_return_hours"] if turnaround_avg_row else None,
     }
-    operator_candidates = query_all(
-        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
-    )
-    faculty_candidates = query_all(
-        "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('requester', 'professor_approver', 'site_admin', 'super_admin') ORDER BY name"
-    )
     selected_operator_ids = {
         row["user_id"] for row in query_all("SELECT user_id FROM instrument_operators WHERE instrument_id = ?", (instrument_id,))
     }
     selected_faculty_ids = {
         row["user_id"] for row in query_all("SELECT user_id FROM instrument_faculty_admins WHERE instrument_id = ?", (instrument_id,))
     }
-    selected_operator_rows = query_all(
-        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_operator_ids)}) ORDER BY name",
-        tuple(sorted(selected_operator_ids)),
-    ) if selected_operator_ids else []
-    selected_faculty_rows = query_all(
-        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_faculty_ids)}) ORDER BY name",
-        tuple(sorted(selected_faculty_ids)),
-    ) if selected_faculty_ids else []
-    # v2.2.0 — subscribed requesters
     selected_requester_ids = {
         row["user_id"] for row in query_all(
             "SELECT user_id FROM instrument_requesters WHERE instrument_id = ?",
             (instrument_id,),
         )
     }
-    selected_requester_rows = query_all(
-        f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_requester_ids)}) ORDER BY name",
-        tuple(sorted(selected_requester_ids)),
-    ) if selected_requester_ids else []
     instrument_logs = query_all(
         "SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id WHERE entity_type = 'instrument' AND entity_id = ? ORDER BY al.id",
         (instrument_id,),
     )
-    approval_config = query_all(
-        """
-        SELECT iac.*, u.name AS approver_name
-        FROM instrument_approval_config iac
-        LEFT JOIN users u ON u.id = iac.approver_user_id
-        WHERE iac.instrument_id = ?
-        ORDER BY iac.step_order
-        """,
-        (instrument_id,),
-    )
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_edit_approval_config = is_owner(user) or user["role"] == "super_admin"
-    approval_role_candidates = query_all(
-        "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
-    )
-    # Upcoming downtime for this instrument
-    upcoming_downtime = query_all(
-        """
-        SELECT idt.*, u.name AS creator_name
-        FROM instrument_downtime idt
-        LEFT JOIN users u ON u.id = idt.created_by_user_id
-        WHERE idt.instrument_id = ? AND idt.is_active = 1
-          AND idt.end_time >= datetime('now')
-        ORDER BY idt.start_time ASC
-        LIMIT 10
-        """,
-        (instrument_id,),
-    )
-
-    return render_template(
-        "instrument_detail.html",
-        instrument=instrument,
-        can_edit=can_edit,
-        can_edit_assignments=can_edit_assignments,
-        can_archive_instrument=can_archive_instrument,
-        can_restore_instrument=can_restore_instrument,
-        can_add_downtime_here=can_add_downtime_here,
-        instrument_queue=instrument_queue,
-        instrument_queue_counts=instrument_queue_counts,
-        queue_preview_rows=queue_preview_rows,
-        queue_metrics=queue_metrics,
-        can_view_history=can_view_instrument_history(user, instrument_id),
-        operator_candidates=operator_candidates,
-        faculty_candidates=faculty_candidates,
-        selected_operator_ids=selected_operator_ids,
-        selected_faculty_ids=selected_faculty_ids,
-        selected_operator_rows=selected_operator_rows,
-        selected_faculty_rows=selected_faculty_rows,
-        selected_requester_rows=selected_requester_rows,
-        instrument_timeline_entries=instrument_timeline_entries(instrument, instrument_logs),
-        intake_mode=instrument_intake_mode(instrument),
-        intake_mode_label=intake_mode_label,
-        approval_config=approval_config,
-        can_edit_approval_config=can_edit_approval_config,
-        approval_role_candidates=approval_role_candidates,
-        operators=query_all(
-            "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
+    return {
+        "instrument_queue": instrument_queue,
+        "instrument_queue_counts": instrument_queue_counts,
+        "queue_preview_rows": queue_preview_rows,
+        "queue_metrics": queue_metrics,
+        "operator_candidates": query_all(
+            "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
         ),
-        upcoming_downtime=upcoming_downtime,
-        inventory_items=query_all(
+        "faculty_candidates": query_all(
+            "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('requester', 'professor_approver', 'site_admin', 'super_admin') ORDER BY name"
+        ),
+        "selected_operator_ids": selected_operator_ids,
+        "selected_faculty_ids": selected_faculty_ids,
+        "selected_operator_rows": query_all(
+            f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_operator_ids)}) ORDER BY name",
+            tuple(sorted(selected_operator_ids)),
+        ) if selected_operator_ids else [],
+        "selected_faculty_rows": query_all(
+            f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_faculty_ids)}) ORDER BY name",
+            tuple(sorted(selected_faculty_ids)),
+        ) if selected_faculty_ids else [],
+        "selected_requester_rows": query_all(
+            f"SELECT id, name, email FROM users WHERE id IN ({','.join('?' for _ in selected_requester_ids)}) ORDER BY name",
+            tuple(sorted(selected_requester_ids)),
+        ) if selected_requester_ids else [],
+        "instrument_timeline_entries": instrument_timeline_entries(instrument, instrument_logs),
+        "approval_config": query_all(
+            """
+            SELECT iac.*, u.name AS approver_name
+            FROM instrument_approval_config iac
+            LEFT JOIN users u ON u.id = iac.approver_user_id
+            WHERE iac.instrument_id = ?
+            ORDER BY iac.step_order
+            """,
+            (instrument_id,),
+        ),
+        "approval_role_candidates": query_all(
+            "SELECT id, name, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'professor_approver', 'operator', 'instrument_admin', 'site_admin', 'super_admin') ORDER BY name"
+        ),
+        "upcoming_downtime": query_all(
+            """
+            SELECT idt.*, u.name AS creator_name
+            FROM instrument_downtime idt
+            LEFT JOIN users u ON u.id = idt.created_by_user_id
+            WHERE idt.instrument_id = ? AND idt.is_active = 1
+              AND idt.end_time >= datetime('now')
+            ORDER BY idt.start_time ASC
+            LIMIT 10
+            """,
+            (instrument_id,),
+        ),
+        "inventory_items": query_all(
             "SELECT * FROM instrument_inventory WHERE instrument_id = ? ORDER BY item_name",
             (instrument_id,),
         ),
-        grants=query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
+        "grants": query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
+    }
+
+
+@app.route("/instruments/<int:instrument_id>", methods=["GET", "POST"])
+@login_required
+def instrument_detail(instrument_id: int):
+    user = current_user()
+    context = _instrument_detail_context(user, instrument_id)
+    instrument = context["instrument"]
+    response = _instrument_detail_handle_post(user, instrument_id, instrument, context)
+    if response is not None:
+        return response
+    payload = _instrument_detail_read_model(user, instrument, instrument_id)
+    return render_template(
+        "instrument_detail.html",
+        instrument=instrument,
+        can_edit=context["can_edit"],
+        can_edit_assignments=context["can_edit_assignments"],
+        can_archive_instrument=context["can_archive_instrument"],
+        can_restore_instrument=context["can_restore_instrument"],
+        can_add_downtime_here=context["can_add_downtime_here"],
+        instrument_queue=payload["instrument_queue"],
+        instrument_queue_counts=payload["instrument_queue_counts"],
+        queue_preview_rows=payload["queue_preview_rows"],
+        queue_metrics=payload["queue_metrics"],
+        can_view_history=can_view_instrument_history(user, instrument_id),
+        operator_candidates=payload["operator_candidates"],
+        faculty_candidates=payload["faculty_candidates"],
+        selected_operator_ids=payload["selected_operator_ids"],
+        selected_faculty_ids=payload["selected_faculty_ids"],
+        selected_operator_rows=payload["selected_operator_rows"],
+        selected_faculty_rows=payload["selected_faculty_rows"],
+        selected_requester_rows=payload["selected_requester_rows"],
+        instrument_timeline_entries=payload["instrument_timeline_entries"],
+        intake_mode=instrument_intake_mode(instrument),
+        intake_mode_label=intake_mode_label,
+        approval_config=payload["approval_config"],
+        can_edit_approval_config=is_owner(user) or user["role"] == "super_admin",
+        approval_role_candidates=payload["approval_role_candidates"],
+        operators=query_all(
+            "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
+        ),
+        upcoming_downtime=payload["upcoming_downtime"],
+        inventory_items=payload["inventory_items"],
+        grants=payload["grants"],
     )
 
 

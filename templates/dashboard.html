@@ -334,9 +334,8 @@
 {# ── Dashboard section collapse persistence ── #}
 <script>
   (function () {
-    var key = 'labDashCollapsed';
-    var saved = {};
-    try { saved = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+    var key = 'dash_collapsed';
+    var saved = window.CatalystPrefs ? window.CatalystPrefs.getJSON(key, {}) : {};
 
     document.querySelectorAll('.section-collapse-btn').forEach(function (btn) {
       var section = btn.closest('.card');
@@ -355,7 +354,7 @@
       btn.addEventListener('click', function () {
         var isNowCollapsed = body.style.display !== 'none';
         saved[id] = isNowCollapsed;
-        localStorage.setItem(key, JSON.stringify(saved));
+        if (window.CatalystPrefs) window.CatalystPrefs.setJSON(key, saved);
         apply(isNowCollapsed);
       });
     });

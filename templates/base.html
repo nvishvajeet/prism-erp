@@ -17,7 +17,14 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script>
     (function () {
-      const stored = localStorage.getItem("labTheme");
+      function readCookie(name) {
+        var prefix = name + "=";
+        return document.cookie.split(";").map(function (part) { return part.trim(); }).reduce(function (found, part) {
+          if (found !== null) return found;
+          return part.indexOf(prefix) === 0 ? decodeURIComponent(part.slice(prefix.length)) : null;
+        }, null);
+      }
+      const stored = readCookie("catalyst_pref_theme") || localStorage.getItem("labTheme");
       const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       const theme = stored || (systemDark ? "dark" : "light");
       document.documentElement.setAttribute("data-theme", theme);
@@ -265,16 +272,119 @@
   {# ── AI Hover Pane — extracted to partial ── #}
   {% include "_base_ai_pane.html" %}
   <script>
+    /* ── Privacy-first preference cookies — serve, not track ── */
+    window.CatalystPrefs = (function () {
+      var consentCookie = "catalyst_pref_cookies";
+      var keyPrefix = "catalyst_pref_";
+      var knownKeys = ["theme", "pane_heights", "dash_collapsed", "queue_view"];
+      var legacyMap = {
+        "theme": "labTheme",
+        "pane_heights": "labPaneHeights",
+        "dash_collapsed": "labDashCollapsed",
+        "queue_view": "labQueueView"
+      };
+
+      function readCookie(name) {
+        var prefix = name + "=";
+        var parts = document.cookie ? document.cookie.split(";") : [];
+        for (var i = 0; i < parts.length; i += 1) {
+          var part = parts[i].trim();
+          if (part.indexOf(prefix) === 0) return decodeURIComponent(part.slice(prefix.length));
+        }
+        return null;
+      }
+
+      function writeCookie(name, value, days) {
+        var maxAge = Math.max(0, Math.floor(days * 24 * 60 * 60));
+        document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; max-age=" + maxAge + "; SameSite=Lax";
+      }
+
+      function clearCookie(name) {
+        document.cookie = name + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+      }
+
+      function consentState() {
+        return readCookie(consentCookie);
+      }
+
+      function canPersist() {
+        return consentState() === "accepted";
+      }
+
+      function get(key) {
+        return canPersist() ? readCookie(keyPrefix + key) : null;
+      }
+
+      function set(key, value) {
+        if (!canPersist()) return false;
+        writeCookie(keyPrefix + key, value, 365);
+        try {
+          if (legacyMap[key]) localStorage.removeItem(legacyMap[key]);
+        } catch (e) {}
+        return true;
+      }
+
+      function getJSON(key, fallback) {
+        var raw = get(key);
+        if (!raw) return fallback;
+        try { return JSON.parse(raw); } catch (e) { return fallback; }
+      }
+
+      function setJSON(key, value) {
+        return set(key, JSON.stringify(value));
+      }
+
+      function migrateLegacy() {
+        Object.keys(legacyMap).forEach(function (key) {
+          try {
+            var legacy = localStorage.getItem(legacyMap[key]);
+            if (legacy && !readCookie(keyPrefix + key)) {
+              writeCookie(keyPrefix + key, legacy, 365);
+            }
+            if (legacy) localStorage.removeItem(legacyMap[key]);
+          } catch (e) {}
+        });
+      }
+
+      function clearPrefs() {
+        knownKeys.forEach(function (key) { clearCookie(keyPrefix + key); });
+      }
+
+      function accept() {
+        writeCookie(consentCookie, "accepted", 365);
+        migrateLegacy();
+      }
+
+      function decline() {
+        writeCookie(consentCookie, "declined", 180);
+        clearPrefs();
+      }
+
+      return {
+        consentState: consentState,
+        canPersist: canPersist,
+        get: get,
+        set: set,
+        getJSON: getJSON,
+        setJSON: setJSON,
+        accept: accept,
+        decline: decline,
+        migrateLegacy: migrateLegacy
+      };
+    })();
+
     /* ── Shared paginated-pane engine ── */
     window.PaginatedPane = (function () {
       var registry = {};
-      var storageKey = 'labPaneHeights';
+      var storageKey = 'pane_heights';
 
       function savedHeights() {
-        try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch(e) { return {}; }
+        return window.CatalystPrefs.getJSON(storageKey, {});
       }
       function saveHeight(id, px) {
-        var h = savedHeights(); h[id] = px; localStorage.setItem(storageKey, JSON.stringify(h));
+        var h = savedHeights();
+        h[id] = px;
+        window.CatalystPrefs.setJSON(storageKey, h);
       }
 
       function init(paneId) {
@@ -378,6 +488,19 @@
     (function () {
       const media = window.matchMedia("(prefers-color-scheme: dark)");
       const toggle = document.getElementById("themeToggle");
+      const prefs = window.CatalystPrefs;
+      const banner = document.getElementById("prefCookieBanner");
+      const acceptBtn = document.getElementById("prefCookieAccept");
+      const declineBtn = document.getElementById("prefCookieDecline");
+      const initialConsent = prefs ? prefs.consentState() : null;
+
+      if (prefs && initialConsent === "accepted") {
+        prefs.migrateLegacy();
+      }
+
+      if (banner && !initialConsent) {
+        banner.hidden = false;
+      }
 
       function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
@@ -390,7 +513,7 @@
       }
 
       function currentTheme() {
-        return localStorage.getItem("labTheme") || (media.matches ? "dark" : "light");
+        return (prefs && prefs.get("theme")) || localStorage.getItem("labTheme") || (media.matches ? "dark" : "light");
       }
 
       applyTheme(currentTheme());
@@ -398,16 +521,32 @@
       if (toggle) {
         toggle.addEventListener("click", function () {
           const next = currentTheme() === "dark" ? "light" : "dark";
-          localStorage.setItem("labTheme", next);
+          if (prefs) prefs.set("theme", next);
           applyTheme(next);
         });
       }
 
       media.addEventListener("change", function () {
-        if (!localStorage.getItem("labTheme")) {
+        var storedTheme = (prefs && prefs.get("theme")) || localStorage.getItem("labTheme");
+        if (!storedTheme) {
           applyTheme(media.matches ? "dark" : "light");
         }
       });
+
+      if (acceptBtn && prefs) {
+        acceptBtn.addEventListener("click", function () {
+          prefs.accept();
+          prefs.set("theme", document.documentElement.getAttribute("data-theme") || currentTheme());
+          banner.hidden = true;
+        });
+      }
+
+      if (declineBtn && prefs) {
+        declineBtn.addEventListener("click", function () {
+          prefs.decline();
+          banner.hidden = true;
+        });
+      }
     })();
 
     /* ── Toast auto-dismiss + close button ── */
@@ -459,6 +598,16 @@
     </div>
   </div>
   {% endif %}
+  <aside id="prefCookieBanner" class="pref-cookie-banner" hidden>
+    <div class="pref-cookie-copy">
+      <strong>Preference cookies only.</strong>
+      CATALYST can remember your theme, panel sizes, and view choices to make the UI smoother. No analytics, ads, or cross-site tracking.
+    </div>
+    <div class="pref-cookie-actions">
+      <button type="button" class="link-button subtle" id="prefCookieDecline">Only essential</button>
+      <button type="button" class="nav-button subtle" id="prefCookieAccept">Allow preferences</button>
+    </div>
+  </aside>
   <script>
     /* ── Instrument dropdown mobile support + ARIA ── */
     (function () {

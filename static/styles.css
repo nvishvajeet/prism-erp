@@ -1930,9 +1930,58 @@ th {
   animation: toast-leave 220ms ease-out forwards;
 }
 
+.pref-cookie-banner {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.pref-cookie-copy {
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--ink);
+  max-width: 52rem;
+}
+
+.pref-cookie-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 @keyframes toast-enter {
   from { transform: translateX(110%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  .pref-cookie-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pref-cookie-actions {
+    justify-content: flex-end;
+  }
+}
+
+:root[data-theme="dark"] .pref-cookie-banner {
+  background: rgba(26, 34, 48, 0.94);
+  border-color: var(--line);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
 }
 
 @keyframes toast-leave {

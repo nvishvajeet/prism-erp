@@ -344,12 +344,12 @@
     var table = document.getElementById('centralQueueTable');
     if (!table) return;
     var btns = document.querySelectorAll('.view-toggle');
-    var saved = localStorage.getItem('labQueueView') || 'detailed';
+    var saved = (window.CatalystPrefs && window.CatalystPrefs.get('queue_view')) || 'detailed';
 
     function applyView(mode) {
       table.classList.toggle('queue-compact', mode === 'compact');
       btns.forEach(function (b) { b.classList.toggle('view-toggle-active', b.dataset.view === mode); });
-      localStorage.setItem('labQueueView', mode);
+      if (window.CatalystPrefs) window.CatalystPrefs.set('queue_view', mode);
     }
 
     btns.forEach(function (b) {

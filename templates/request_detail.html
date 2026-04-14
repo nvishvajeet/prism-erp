@@ -16,6 +16,7 @@
 <a href="{{ _back_url }}" class="hover-back-btn" title="{{ _back_title }}">←</a>
 {% endblock %}
 {% block content %}
+{% set _lab_mode = active_portal and active_portal.slug == 'lab' %}
 
 <section data-vis="{{ V }}">
   <div class="breadcrumb-trail" data-vis="{{ V }}">
@@ -34,11 +35,11 @@
 {% if _meta_items.append(('Sample', sample_request["sample_name"] ~ ' (' ~ sample_request["sample_count"] ~ ')')) %}{% endif %}
 {% if card_policy.fields.requester_identity %}
   {% set _requester_html %}{% if can_view_user_profile_id_user(sample_request['requester_id']) %}{{ person_chip(sample_request["requester_name"], user_id=sample_request["requester_id"], size='sm') }}{% else %}{{ sample_request["requester_name"] }}{% endif %}{% endset %}
-  {% if _meta_items.append(('Requester', _requester_html)) %}{% endif %}
+  {% if _meta_items.append((('Submitted By' if _lab_mode else 'Requester'), _requester_html)) %}{% endif %}
 {% endif %}
 {% if card_policy.fields.operator_identity %}
   {% set _operator_html %}{% if sample_request["assigned_operator_id"] and sample_request["operator_name"] %}{% if can_view_user_profile_id_user(sample_request['assigned_operator_id']) %}{{ person_chip(sample_request["operator_name"], user_id=sample_request["assigned_operator_id"], size='sm') }}{% else %}{{ sample_request["operator_name"] }}{% endif %}{% else %}—{% endif %}{% endset %}
-  {% if _meta_items.append(('Operator', _operator_html)) %}{% endif %}
+  {% if _meta_items.append((('Assigned To' if _lab_mode else 'Operator'), _operator_html)) %}{% endif %}
 {% endif %}
 {% if _meta_items.append(('Created', format_dt(sample_request["created_at"]))) %}{% endif %}
 {% if sample_request["sample_submitted_at"] and _meta_items.append(('Sample Submitted', format_dt(sample_request["sample_submitted_at"]))) %}{% endif %}
@@ -95,18 +96,32 @@
 
   {# ── TILE: sample-approval explainer — moved to top for visibility ── #}
   <article class="card tile tile-request-explainer" data-vis="{{ V }}">
-    {{ card_heading("", "How does sample approval work?") }}
+    {{ card_heading("", ("How does lab review work?" if _lab_mode else "How does sample approval work?")) }}
     <details class="explainer-details" data-vis="{{ V }}">
       <summary data-vis="{{ V }}">Show the full pipeline</summary>
       <ol class="explainer-steps" data-vis="{{ V }}">
+        {% if _lab_mode %}
+        <li data-vis="{{ V }}"><strong>Created.</strong> A sample request enters the lab queue and becomes visible on the workflow strip above.</li>
+        <li data-vis="{{ V }}"><strong>Lab review.</strong> The Dean or Conductor reviews whether the request is ready to move and whether the right instrument profile owns it.</li>
+        <li data-vis="{{ V }}"><strong>Instrument assignment.</strong> The request is assigned to the person or machine lane responsible for that instrument, and the sample is marked received once it reaches the lab.</li>
+        <li data-vis="{{ V }}"><strong>Run + results.</strong> The instrument team carries out the work, attaches files, and records the result trail on this page.</li>
+        <li data-vis="{{ V }}"><strong>Completed.</strong> The request becomes the permanent audit record for that sample. Reopening should be rare and deliberate.</li>
+        {% else %}
         <li data-vis="{{ V }}"><strong>Submitted.</strong> The requester creates the request and the lifecycle strip above shows it on the left. Nothing is approved yet.</li>
         <li data-vis="{{ V }}"><strong>Finance review.</strong> The finance admin confirms the grant / account code. If the instrument is charged per use, the rate is locked at this step.</li>
         <li data-vis="{{ V }}"><strong>Professor approval.</strong> The requester's supervising professor signs off on the scientific intent. This step can be skipped if the requester already holds operator-level access.</li>
         <li data-vis="{{ V }}"><strong>Instrument admin schedule.</strong> The operator group owning the instrument picks a slot, marks the sample received, and queues the job. Only users in the operator group for this instrument see this step.</li>
         <li data-vis="{{ V }}"><strong>Run + results.</strong> The operator runs the sample, attaches result files to the Activity tile above, and marks the request complete. The audit chain is updated and the queue advances.</li>
         <li data-vis="{{ V }}"><strong>Completed.</strong> Requester, professor, finance, and operators can all see the result files. A completed request is immutable except for a flagged re-open by the owner role.</li>
+        {% endif %}
       </ol>
-      <p class="hint" data-vis="{{ V }}">This default text is editable by admins in a later patch (v1.3.2). For now, it is the canonical description of how a sample travels through the system.</p>
+      <p class="hint" data-vis="{{ V }}">
+        {% if _lab_mode %}
+        This page is the working record for one sample: intake, assignment, files, issues, and completion should all stay visible here.
+        {% else %}
+        This default text is editable by admins in a later patch (v1.3.2). For now, it is the canonical description of how a sample travels through the system.
+        {% endif %}
+      </p>
     </details>
   </article>
 
@@ -221,7 +236,7 @@
             <label data-vis="{{ V }}">Routing Note
               <input type="text" name="remarks" placeholder="Optional note if this was routed wrong" data-vis="{{ V }}">
             </label>
-            <button type="submit" data-vis="{{ V }}">Assign to Operator</button>
+            <button type="submit" data-vis="{{ V }}">{{ 'Assign to Instrument Lead' if _lab_mode else 'Assign to Operator' }}</button>
           </form>
           {% endif %}
           {% if card_policy.actions.mark_received %}

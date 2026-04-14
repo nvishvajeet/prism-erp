@@ -125,6 +125,7 @@
         </div>
       </section>
 
+      {% if not lab_portal_mode %}
       <section class="form-section" id="financeFieldsCard" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Finance</h3>
         <div class="new-request-inline-grid" data-vis="{{ V }}">
@@ -147,6 +148,7 @@
           </label>
         </div>
       </section>
+      {% endif %}
 
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">File</h3>

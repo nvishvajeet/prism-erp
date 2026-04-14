@@ -24,7 +24,7 @@
           <dt data-vis="{{ V }}">Name</dt><dd data-vis="{{ V }}">{{ target_user["name"] }}</dd>
           <dt data-vis="{{ V }}">Username</dt><dd data-vis="{{ V }}">{{ target_user["email"] }}</dd>
           <dt data-vis="{{ V }}">Member Code</dt><dd data-vis="{{ V }}">{{ target_user["member_code"] or "-" }}</dd>
-          <dt data-vis="{{ V }}">Role</dt><dd data-vis="{{ V }}">{{ target_user["role"].replace("_", " ").title() }}</dd>
+          <dt data-vis="{{ V }}">Role</dt><dd data-vis="{{ V }}">{{ role_display_name(target_user["role"]) }}</dd>
         </dl>
       </section>
       <section class="meta-section" data-vis="{{ V }}">

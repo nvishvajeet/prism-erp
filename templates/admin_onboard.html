@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading with context %}
-{% block title %}Onboard a member — {{ super() }}{% endblock %}
+{% block title %}Onboard a profile — {{ super() }}{% endblock %}
 {% block hover_back %}<a href="{{ url_for('admin_users') }}" class="hover-back-btn" title="Back to Users" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('admin_users') }}" data-vis="{{ V }}">← Users</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">Onboard a member</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Onboard a profile</h2>
     <span class="inst-header-code" data-vis="{{ V }}">One pass — creates account, portal access, instrument access, temp password</span>
   </div>
 </header>
@@ -18,7 +18,7 @@
     {{ card_heading("HOW THIS WORKS", "Two ways to fill the form") }}
     <div style="padding:0.75rem 1rem;line-height:1.6;" data-vis="{{ V }}">
       <ol style="margin:0;padding-left:1.25rem;" data-vis="{{ V }}">
-        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Ask the AI:</strong> open the <strong data-vis="{{ V }}">AI</strong> chat pane (bottom-right of every page), paste a sentence like <em data-vis="{{ V }}">"Dr. Bharat Chaudhari is Dean R&amp;D, oversees all instruments, approves requests"</em>, and it will suggest the right fields. You still click <strong data-vis="{{ V }}">Create</strong> — AI never creates a profile on its own.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Ask the AI:</strong> open the <strong data-vis="{{ V }}">AI</strong> chat pane (bottom-right of every page), paste a sentence like <em data-vis="{{ V }}">"Dr. Bharat Chaudhari is Dean R&amp;D, oversees all instruments"</em>, and it will suggest the right fields. You still click <strong data-vis="{{ V }}">Create</strong> — AI never creates a profile on its own.</li>
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Guided:</strong> walk through the ~15 fields below and fill what you know. Optional fields can stay blank.</li>
       </ol>
       <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">After submit, the temp password flashes once at the top — copy it and share with the member out of band. They will be required to change it on first login.</p>
@@ -99,7 +99,7 @@
           {% endfor %}
         </select>
         <p class="hint" data-vis="{{ V }}">
-          Applied when role is Operator, Operational Admin, or Faculty Admin.
+          Applied when the profile needs direct responsibility over one or more instruments.
           Hold ⌘/Ctrl to pick multiple.
         </p>
       </div>
@@ -122,11 +122,17 @@
     {{ card_heading("SUGGESTED ROLES", "Quick reference") }}
     <div style="padding:0.75rem 1rem;line-height:1.6;" data-vis="{{ V }}">
       <ul style="margin:0;padding-left:1.25rem;" data-vis="{{ V }}">
+        {% if lab_profile_mode %}
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Dean</strong> → full lab stewardship, authority over people, policies, and instrument governance.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Conductor</strong> → runs the lab day to day, coordinates operations, and can use AI to help create the next profiles.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Instrument profiles</strong> stay on the instrument pages themselves, where each machine carries its own metadata, assignments, queue, and controls.</li>
+        {% else %}
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Dean / Faculty oversight</strong> → Faculty Admin (<code class="inline-code" data-vis="{{ V }}">faculty_in_charge</code>). Academic authority across instruments, can approve.</li>
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Department Secretary</strong> → Site Admin (<code class="inline-code" data-vis="{{ V }}">site_admin</code>). Runs the org day-to-day; layer Finance Admin separately if they also clear bills.</li>
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Operator</strong> → picks up samples, moves the queue.</li>
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Approver</strong> → reviews and approves pending requests (no operations).</li>
         <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Lab Member</strong> → default for students + researchers; submits requests.</li>
+        {% endif %}
       </ul>
     </div>
   </article>

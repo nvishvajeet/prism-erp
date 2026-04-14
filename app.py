@@ -2102,6 +2102,24 @@ def can_view_request(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if can_operate_instrument(user["id"], request_row["instrument_id"], user["role"]):
         return True
+    if query_one(
+        """
+        SELECT 1
+        FROM approval_steps aps
+        WHERE aps.sample_request_id = ?
+          AND aps.approver_user_id = ?
+          AND aps.status = 'pending'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM approval_steps prev
+            WHERE prev.sample_request_id = aps.sample_request_id
+              AND prev.step_order < aps.step_order
+              AND prev.status != 'approved'
+          )
+        """,
+        (request_row["id"], user["id"]),
+    ) is not None:
+        return True
     if profile["can_view_finance_stage"]:
         return query_one(
             """
@@ -3699,17 +3717,16 @@ def can_use_role_switcher(user: sqlite3.Row | None) -> bool:
 
 
 def can_approve_step(user: sqlite3.Row, step: sqlite3.Row, instrument_id: int) -> bool:
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] in {"super_admin", "site_admin"}:
+    roles = user_role_set(user)
+    if is_owner(user) or roles & {"super_admin", "site_admin"}:
+        return True
+    if row_value(step, "approver_user_id", None) == user["id"]:
         return True
     if step["approver_role"] == "finance":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        return user["role"] == "finance_admin"
+        return "finance_admin" in roles
     if step["approver_role"] == "professor":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        return user["role"] in {"professor_approver", "super_admin", "site_admin"}
+        return bool(roles & {"professor_approver", "super_admin", "site_admin"})
     if step["approver_role"] == "operator":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         return can_operate_instrument(user["id"], instrument_id, user["role"])
     return False
 
@@ -13062,7 +13079,7 @@ def _handle_request_detail_approval_actions(
                 "approver_role": step["approver_role"],
                 "reload_url": url_for("request_detail", request_id=request_id),
             })
-        return None
+        return redirect(url_for("request_detail", request_id=request_id))
 
     if action == "reject_step":
         step_id = int(request.form["step_id"])
@@ -13111,7 +13128,7 @@ def _handle_request_detail_approval_actions(
                 "approver_role": step["approver_role"],
                 "reload_url": url_for("request_detail", request_id=request_id),
             })
-        return None
+        return redirect(url_for("request_detail", request_id=request_id))
 
     if action == "assign_approver" and can_manage:
         step_id = int(request.form["step_id"])

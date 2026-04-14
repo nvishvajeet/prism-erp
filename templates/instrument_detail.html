@@ -113,7 +113,7 @@
   </section>
 
   {# ── Tile: Finance (finance_admin / super_admin / owner only) ── #}
-  {% if module_enabled('finance') and (is_owner_user or current_user.role in ('finance_admin', 'super_admin', 'site_admin')) %}
+  {% if portal_module_enabled('finance') and (is_owner_user or current_user.role in ('finance_admin', 'super_admin', 'site_admin')) %}
   <section class="card tile tile-span-3" data-vis="{{ V }}">
     {% call card_heading("", "Finance") %}
       {% if instrument.default_grant_id %}

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from ..base import CrawlerStrategy, CrawlResult
 from ..harness import Harness
+import sqlite3
 
 
 class LifecycleStrategy(CrawlerStrategy):
@@ -74,7 +75,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending finance step on new request")
         else:
-            with harness.logged_in("meera@catalyst.local"):
+            with harness.logged_in(self._step_actor_email(harness, finance_step, "meera@catalyst.local")):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -91,7 +92,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending professor step after finance")
         else:
-            with harness.logged_in("approver@catalyst.local"):
+            with harness.logged_in(self._step_actor_email(harness, prof_step, "approver@catalyst.local")):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -112,7 +113,7 @@ class LifecycleStrategy(CrawlerStrategy):
             result.warnings += 1
             result.details.append("no pending operator step after professor")
         else:
-            with harness.logged_in("anika@catalyst.local"):
+            with harness.logged_in(self._step_actor_email(harness, op_step, "anika@catalyst.local")):
                 resp = harness.post(
                     f"/requests/{request_id}",
                     data={"action": "approve_step",
@@ -255,6 +256,30 @@ class LifecycleStrategy(CrawlerStrategy):
                 (request_id, role),
             ).fetchone()
             return row[0] if row else None
+        finally:
+            conn.close()
+
+    def _step_actor_email(self, harness: Harness, step_id: int, fallback_email: str) -> str:
+        """Return the email of the concrete user assigned to `step_id`.
+
+        Approval chains can now route to different seeded personas based on
+        dynamic pool selection, so the lifecycle crawl should follow the
+        actual assignee instead of assuming a fixed email for each lane.
+        """
+        if not harness.temp_db_path:
+            return fallback_email
+        conn = sqlite3.connect(str(harness.temp_db_path))
+        try:
+            row = conn.execute(
+                """
+                SELECT u.email
+                FROM approval_steps aps
+                LEFT JOIN users u ON u.id = aps.approver_user_id
+                WHERE aps.id = ?
+                """,
+                (step_id,),
+            ).fetchone()
+            return row[0] if row and row[0] else fallback_email
         finally:
             conn.close()
 

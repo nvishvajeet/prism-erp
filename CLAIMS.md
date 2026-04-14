@@ -66,6 +66,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | schedule-actions-lightening | 2026-04-14 06:10 CEST | `app.py`, `CLAIMS.md` | `refactor: lighten schedule action controller` |
 
 ## Stale-claim recovery
 

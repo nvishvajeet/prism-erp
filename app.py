@@ -14714,26 +14714,7 @@ def _handle_schedule_board_actions(user, request_id: int, sample_request, action
             flash("Only ready jobs can be placed into the day planner.", "error")
             return _schedule_redirect_response(request_id)
         planner_date = parse_schedule_day(request.form.get("planner_date"))
-        scope_filters = schedule_filter_values()
-        clauses, params = request_scope_sql(user, "sr")
-        if scope_filters.get("requester_id"):
-            clauses.append("sr.requester_id = ?")
-            params.append(int(scope_filters["requester_id"]))
-        base_sql, base_params = request_history_query(clauses, params, scope_filters)
-        rows_all = [row for row in query_all(base_sql, tuple(base_params)) if row_matches_period(row, scope_filters["period"])]
-        same_day_rows = []
-        for row in rows_all:
-            if row["status"] not in {"scheduled", "in_progress"} or not row["scheduled_for"]:
-                continue
-            try:
-                parsed = datetime.fromisoformat(str(row["scheduled_for"]).replace("Z", "+00:00"))
-            except ValueError:
-                try:
-                    parsed = datetime.strptime(str(row["scheduled_for"])[:16], "%Y-%m-%dT%H:%M")
-                except ValueError:
-                    parsed = None
-            if parsed and parsed.date() == planner_date:
-                same_day_rows.append(row)
+        same_day_rows = _schedule_planner_same_day_rows(user, planner_date)
         scheduled_for_raw = (request.form.get("scheduled_for") or "").strip()
         if scheduled_for_raw:
             try:
@@ -14858,6 +14839,27 @@ def _handle_schedule_board_actions(user, request_id: int, sample_request, action
         return _schedule_redirect_response(request_id, bucket_override="all", focus_request=True)
 
     return None
+
+
+def _schedule_planner_same_day_rows(user, planner_date: date) -> list[sqlite3.Row]:
+    scope_filters = schedule_filter_values()
+    clauses, params = request_scope_sql(user, "sr")
+    if scope_filters.get("requester_id"):
+        clauses.append("sr.requester_id = ?")
+        params.append(int(scope_filters["requester_id"]))
+    clauses.append("sr.status IN ('scheduled', 'in_progress')")
+    clauses.append("sr.scheduled_for IS NOT NULL")
+    clauses.append("substr(sr.scheduled_for, 1, 10) = ?")
+    params.append(planner_date.isoformat())
+    return query_all(
+        f"""
+        SELECT sr.id, sr.status, sr.scheduled_for
+        FROM sample_requests sr
+        WHERE {' AND '.join(clauses)}
+        ORDER BY sr.scheduled_for
+        """,
+        tuple(params),
+    )
 
 
 @app.route("/my/history")
@@ -24020,32 +24022,7 @@ def ai_admin_log():
 def quick_entry():
     user = current_user()
     if request.method == "POST":
-        raw_text = request.form.get("text", "").strip()
-        if not raw_text:
-            flash("Say something first!", "error")
-            return redirect(url_for("quick_entry"))
-        source = request.form.get("source", "text")
-        execute(
-            "INSERT INTO command_queue (user_id, raw_text, source, created_at) VALUES (?, ?, ?, ?)",
-            (user["id"], raw_text, source, now_iso()),
-        )
-        pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
-        if pending and pending["c"] >= 25:
-            import threading
-            threading.Thread(target=_process_command_batch, daemon=True).start()
-            flash("Request submitted. Processing now — check back in a few minutes.", "success")
-        else:
-            # Show next processing window: 8am, 2pm, 10pm
-            from datetime import datetime as _dt
-            now = _dt.now()
-            windows = [(8, "8:00 AM"), (14, "2:00 PM"), (22, "10:00 PM")]
-            next_window = "8:00 AM tomorrow"
-            for h, label in windows:
-                if now.hour < h:
-                    next_window = label
-                    break
-            flash("Request submitted and logged. AI processes at 8 AM, 2 PM, and 10 PM — check back by %s." % next_window, "success")
-        return redirect(url_for("quick_entry"))
+        return _handle_quick_entry_submit(user)
 
     # GET: show recent commands
     if is_owner(user) or user["role"] in ("super_admin", "finance_admin"):
@@ -24059,6 +24036,41 @@ def quick_entry():
         )
     pending_count = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
     return render_template("quick_entry.html", commands=commands, pending_count=pending_count["c"] if pending_count else 0)
+
+
+def _next_quick_entry_window_label() -> str:
+    from datetime import datetime as _dt
+
+    now = _dt.now()
+    windows = [(8, "8:00 AM"), (14, "2:00 PM"), (22, "10:00 PM")]
+    for hour, label in windows:
+        if now.hour < hour:
+            return label
+    return "8:00 AM tomorrow"
+
+
+def _handle_quick_entry_submit(user):
+    raw_text = request.form.get("text", "").strip()
+    if not raw_text:
+        flash("Say something first!", "error")
+        return redirect(url_for("quick_entry"))
+    source = request.form.get("source", "text")
+    execute(
+        "INSERT INTO command_queue (user_id, raw_text, source, created_at) VALUES (?, ?, ?, ?)",
+        (user["id"], raw_text, source, now_iso()),
+    )
+    pending = query_one("SELECT COUNT(*) AS c FROM command_queue WHERE status = 'pending'")
+    if pending and pending["c"] >= 25:
+        import threading
+        threading.Thread(target=_process_command_batch, daemon=True).start()
+        flash("Request submitted. Processing now — check back in a few minutes.", "success")
+        return redirect(url_for("quick_entry"))
+    flash(
+        "Request submitted and logged. AI processes at 8 AM, 2 PM, and 10 PM — check back by %s."
+        % _next_quick_entry_window_label(),
+        "success",
+    )
+    return redirect(url_for("quick_entry"))
 
 
 if __name__ == "__main__":

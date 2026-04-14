@@ -19049,6 +19049,50 @@ def _ensure_vendor_approval_columns() -> None:
     db.commit()
 
 
+def _parse_bulk_vendor_rows(raw_text: str) -> tuple[list[dict[str, str]], list[str]]:
+    rows: list[dict[str, str]] = []
+    errors: list[str] = []
+    cleaned = (raw_text or "").strip()
+    if not cleaned:
+        return rows, ["Add at least one line in the format: Vendor, category, contact, phone, email"]
+    valid_categories = {value for value, _ in PO_CATEGORIES}
+    reader = csv.reader(cleaned.splitlines())
+    seen_names: set[str] = set()
+    for idx, raw_row in enumerate(reader, start=1):
+        parts = [part.strip() for part in raw_row]
+        if not any(parts):
+            continue
+        if len(parts) < 2:
+            errors.append(f"Line {idx}: use Vendor, category, contact, phone, email")
+            continue
+        name = parts[0]
+        category = (parts[1] or "general").strip().lower()
+        contact_person = parts[2] if len(parts) > 2 else ""
+        phone = parts[3] if len(parts) > 3 else ""
+        email = parts[4].lower() if len(parts) > 4 and parts[4] else ""
+        if not name:
+            errors.append(f"Line {idx}: vendor name is required")
+            continue
+        if category not in valid_categories:
+            errors.append(f"Line {idx}: category '{category}' is not valid")
+            continue
+        lowered_name = name.lower()
+        if lowered_name in seen_names:
+            errors.append(f"Line {idx}: duplicate vendor '{name}' in this batch")
+            continue
+        seen_names.add(lowered_name)
+        rows.append({
+            "name": name,
+            "category": category,
+            "contact_person": contact_person,
+            "phone": phone,
+            "email": email,
+        })
+    if not rows and not errors:
+        errors.append("No valid vendor rows found in the bulk import box.")
+    return rows, errors
+
+
 @app.route("/vendors")
 @login_required
 def vendor_list():
@@ -19076,6 +19120,57 @@ def vendor_list():
         pending_vendors=pending_vendors,
         can_approve_vendors=_user_can_approve_vendors(user),
     )
+
+
+@app.route("/vendors/bulk", methods=["POST"])
+@login_required
+def vendor_bulk_create():
+    if not portal_route_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    _ensure_vendor_approval_columns()
+    parsed_rows, errors = _parse_bulk_vendor_rows(request.form.get("bulk_rows", ""))
+    if errors:
+        flash("Bulk vendor add could not start: " + " | ".join(errors[:5]), "error")
+        return redirect(url_for("vendor_list"))
+    created = 0
+    skipped: list[str] = []
+    for row in parsed_rows:
+        existing = query_one(
+            "SELECT id FROM vendors WHERE lower(name) = ?",
+            (row["name"].strip().lower(),),
+        )
+        if existing is not None:
+            skipped.append(row["name"])
+            continue
+        vid = execute(
+            """
+            INSERT INTO vendors (
+                name, contact_person, phone, email, gstin, pan, address, category,
+                bank_account, bank_name, ifsc_code, upi_id, notes, created_by_user_id,
+                created_at, approval_status, approved_by_user_id, approved_at
+            )
+            VALUES (?, ?, ?, ?, '', '', '', ?, '', '', '', '', '', ?, ?, 'pending_approval', NULL, NULL)
+            """,
+            (
+                row["name"],
+                row["contact_person"],
+                row["phone"],
+                row["email"],
+                row["category"],
+                user["id"],
+                now_iso(),
+            ),
+        )
+        log_action(user["id"], "vendor", vid, "vendor_created", {"name": row["name"], "approval_status": "pending_approval"})
+        created += 1
+    message = f"{created} vendor(s) added to the approval queue."
+    if skipped:
+        message += " Skipped existing: " + ", ".join(skipped[:5])
+    flash(message, "success" if created else "error")
+    return redirect(url_for("vendor_list"))
 
 
 @app.route("/vendors/new", methods=["GET", "POST"])

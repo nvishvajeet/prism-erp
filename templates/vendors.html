@@ -74,6 +74,20 @@
   {% endif %}
 
   <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("", "Bulk Add Vendors", "One line per vendor: Vendor, category, contact, phone, email") }}
+    <form method="post" action="{{ url_for('vendor_bulk_create') }}" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label style="grid-column:1/-1;" data-vis="{{ V }}">Bulk rows
+        <textarea name="bulk_rows" rows="7" placeholder="Mahalaxmi Transport, logistics, Suresh Patil, 9999999999, mahalaxmi@example.com&#10;Shree Diesel Services, fuel, Rohan, 8888888888&#10;Fresh Farms, provisions, Meera, 7777777777, freshfarms@example.com" data-vis="{{ V }}"></textarea>
+      </label>
+      <p class="hint" style="grid-column:1/-1;" data-vis="{{ V }}">
+        Bulk-added vendors land in the same pending approval queue above, so finance admins can still approve them one by one before use.
+      </p>
+      <button type="submit" class="btn" data-vis="{{ V }}">Queue Bulk Vendors</button>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Vendors") }}
     <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if vendors %}

@@ -377,7 +377,7 @@ MODULE_REGISTRY = {
         "label": "Compute",
         "icon": "\U0001f9e0",
         "nav_order": 11,
-        "description": "AI job submission (Ollama)",
+        "description": "AI job submission (Claude API)",
         "nav_endpoint": "compute_list",
         "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail", "compute_software_list", "compute_software_detail", "compute_inventory", "compute_admin_storage"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
@@ -7192,7 +7192,7 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
     if module_visible_in_active_portal("vehicles") and (is_owner(user) or user_has_role(user, "site_admin") or user_has_role(user, "super_admin")):
         modules.append(("Fleet", "Track vehicles, running cost, and driver assignment."))
     if module_visible_in_active_portal("compute"):
-        modules.append(("Compute", "Send prompts to Ollama AI models, review results, and rerun jobs."))
+        modules.append(("Compute", "Send prompts to Claude AI models, review results, and rerun jobs."))
     if module_visible_in_active_portal("inbox"):
         modules.append(("Inbox", "Use direct communication for follow-ups that should not live in a public workflow tile."))
     if module_visible_in_active_portal("notifications"):
@@ -20095,23 +20095,19 @@ def _generate_tally_csv_multi(vouchers, fy):
 
 
 # ── Compute / HPC Job Scheduler + AI Assistant ──────────────────
-# Dual-mode: (1) AI prompt jobs via Ollama/Claude, (2) HPC jobs —
-# upload code, pick software, timed execution on Mac Mini.
+# Dual-mode: (1) AI prompt jobs via the Anthropic Claude API,
+# (2) HPC jobs — upload code, pick software, timed execution on Mac Mini.
 # AI also: form filling, resource estimation, code conversion, dashboard advice.
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-COMPUTE_BACKEND = os.environ.get("COMPUTE_BACKEND", "ollama")
 
+# Keys here are the Anthropic model IDs passed straight through to the API.
 COMPUTE_MODELS = {
-    "llama3:latest":    {"label": "Llama 3",       "size": "4 GB",  "tone": "green",  "desc": "Fast local model (Ollama)", "backend": "ollama"},
-    "qwen3-coder:30b":  {"label": "Qwen3 Coder",   "size": "18 GB", "tone": "blue",   "desc": "Code generation (Ollama)", "backend": "ollama"},
-    "gpt-oss:120b":     {"label": "GPT-OSS 120B",  "size": "65 GB", "tone": "purple", "desc": "Large local model (Ollama)", "backend": "ollama"},
-    "qwen3-vl:4b":      {"label": "Qwen3 VL",      "size": "3 GB",  "tone": "amber",  "desc": "Vision-language (Ollama)", "backend": "ollama"},
-    "claude-sonnet":    {"label": "Claude Sonnet",  "size": "cloud", "tone": "blue",   "desc": "Fast + smart (Anthropic API)", "backend": "claude"},
-    "claude-haiku":     {"label": "Claude Haiku",   "size": "cloud", "tone": "green",  "desc": "Fastest + cheapest (Anthropic API)", "backend": "claude"},
+    "claude-haiku-4-5-20251001": {"label": "Claude Haiku 4.5", "size": "cloud", "tone": "green",  "desc": "Fastest + cheapest", "backend": "claude"},
+    "claude-sonnet-4-6":         {"label": "Claude Sonnet 4.6", "size": "cloud", "tone": "blue",   "desc": "Balanced speed + intelligence", "backend": "claude"},
+    "claude-opus-4-6":           {"label": "Claude Opus 4.6",   "size": "cloud", "tone": "purple", "desc": "Most capable — for hard problems", "backend": "claude"},
 }
-OLLAMA_MODELS = COMPUTE_MODELS
+DEFAULT_COMPUTE_MODEL = "claude-sonnet-4-6"
 
 # HPC constants
 COMPUTE_DURATIONS = [15, 30, 60, 120]
@@ -20758,7 +20754,7 @@ def ai_advisor_trigger_batch():
 
 
 def _run_compute_job(job_id):
-    """Run a queued AI-prompt job against Ollama or Claude API (legacy mode)."""
+    """Run a queued AI-prompt job against the Anthropic Claude API."""
     import urllib.request as _urllib_req
     job = query_one("SELECT * FROM compute_jobs WHERE id = ?", (job_id,))
     if not job or job["status"] != "queued":
@@ -20767,30 +20763,23 @@ def _run_compute_job(job_id):
     prompt = job["prompt"]
     if job["context"]:
         prompt = "Context:\n" + job["context"] + "\n\nQuestion:\n" + prompt
-    model_info = COMPUTE_MODELS.get(job["model"], {})
-    backend = model_info.get("backend", "ollama")
     try:
-        if backend == "claude" and ANTHROPIC_API_KEY:
-            claude_model = "claude-sonnet-4-20250514" if "sonnet" in job["model"] else "claude-haiku-4-20250414"
-            payload = json.dumps({"model": claude_model, "max_tokens": 4096, "messages": [{"role": "user", "content": prompt}]}).encode()
-            req = _urllib_req.Request("https://api.anthropic.com/v1/messages", data=payload,
-                                     headers={"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"}, method="POST")
-            resp = _urllib_req.urlopen(req, timeout=120)
-            data = json.loads(resp.read())
-            result = data.get("content", [{}])[0].get("text", "")
-            tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
-            duration = 0
-        else:
-            payload = json.dumps({"model": job["model"], "prompt": prompt, "stream": False}).encode()
-            req = _urllib_req.Request(OLLAMA_URL + "/api/generate", data=payload,
-                                     headers={"Content-Type": "application/json"}, method="POST")
-            resp = _urllib_req.urlopen(req, timeout=300)
-            data = json.loads(resp.read())
-            result = data.get("response", "")
-            tokens = data.get("eval_count", 0)
-            duration = data.get("total_duration", 0) // 1_000_000
+        if not ANTHROPIC_API_KEY:
+            raise RuntimeError("ANTHROPIC_API_KEY not configured on server.")
+        # job["model"] is the Anthropic model ID directly (see COMPUTE_MODELS keys).
+        payload = json.dumps({"model": job["model"], "max_tokens": 4096,
+                              "messages": [{"role": "user", "content": prompt}]}).encode()
+        req = _urllib_req.Request("https://api.anthropic.com/v1/messages", data=payload,
+                                 headers={"Content-Type": "application/json",
+                                          "x-api-key": ANTHROPIC_API_KEY,
+                                          "anthropic-version": "2023-06-01"}, method="POST")
+        resp = _urllib_req.urlopen(req, timeout=120)
+        data = json.loads(resp.read())
+        result = data.get("content", [{}])[0].get("text", "")
+        usage = data.get("usage", {})
+        tokens = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         execute("UPDATE compute_jobs SET status='completed', result=?, tokens_used=?, duration_ms=?, completed_at=? WHERE id=?",
-                (result, tokens, duration, now_iso(), job_id))
+                (result, tokens, 0, now_iso(), job_id))
     except Exception as exc:
         execute("UPDATE compute_jobs SET status='failed', error=?, completed_at=? WHERE id=?",
                 (str(exc)[:500], now_iso(), job_id))
@@ -20955,7 +20944,7 @@ def compute_list():
     software_list = query_all("SELECT * FROM software_catalog WHERE is_active=1 ORDER BY name")
     return render_template("compute_dashboard.html",
                            jobs=jobs, status_filter=status_filter, job_type_filter=job_type_filter,
-                           can_manage=can_manage, models=OLLAMA_MODELS,
+                           can_manage=can_manage, models=COMPUTE_MODELS,
                            storage_used_mb=storage_used, storage_cap_mb=COMPUTE_STORAGE_CAP_MB,
                            software_list=software_list, durations=COMPUTE_DURATIONS)
 
@@ -21021,10 +21010,10 @@ def compute_new():
             flash(f"HPC job queued — {sw['name']}, {duration} min. You'll be notified when complete.", "success")
             return redirect(url_for("compute_detail", job_id=job_id))
         else:
-            # ── Legacy AI prompt job ──
-            model = request.form.get("model", "llama3:latest").strip()
-            if model not in OLLAMA_MODELS:
-                model = "llama3:latest"
+            # ── AI prompt job (Claude API) ──
+            model = request.form.get("model", DEFAULT_COMPUTE_MODEL).strip()
+            if model not in COMPUTE_MODELS:
+                model = DEFAULT_COMPUTE_MODEL
             prompt = request.form.get("prompt", "").strip()
             if not prompt:
                 flash("Prompt is required.", "error")
@@ -21036,20 +21025,15 @@ def compute_new():
                    VALUES (?, 'ai_prompt', ?, ?, ?, 'queued', ?)""",
                 (user["id"], model, prompt, context, now_iso()))
             log_action(user["id"], "compute", job_id, "ai_job_submitted", {"model": model})
-            if model in ("gpt-oss:120b",):
-                import threading
-                threading.Thread(target=_run_compute_job, args=(job_id,), daemon=True).start()
-                flash("Job queued — large model, may take minutes.", "success")
+            _run_compute_job(job_id)
+            updated = query_one("SELECT status FROM compute_jobs WHERE id=?", (job_id,))
+            if updated and updated["status"] == "completed":
+                flash("Job completed.", "success")
             else:
-                _run_compute_job(job_id)
-                updated = query_one("SELECT status FROM compute_jobs WHERE id=?", (job_id,))
-                if updated and updated["status"] == "completed":
-                    flash("Job completed.", "success")
-                else:
-                    flash("Job failed — check detail page.", "error")
+                flash("Job failed — check detail page.", "error")
             return redirect(url_for("compute_detail", job_id=job_id))
     pre_software = request.args.get("software")
-    return render_template("compute_form.html", models=OLLAMA_MODELS,
+    return render_template("compute_form.html", models=COMPUTE_MODELS,
                            software_list=software_list, durations=COMPUTE_DURATIONS,
                            pre_software=pre_software)
 

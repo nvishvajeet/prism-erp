@@ -19,6 +19,7 @@
   <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("SCAN ATTENDANCE", "Enter member code or scan QR") }}
     <form method="post" action="{{ url_for('qr_attendance_scan') }}" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}" id="scanForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="control-flex-wrap" data-vis="{{ V }}">
         <label class="control-flex-fill-wide" data-vis="{{ V }}">
           Member Code

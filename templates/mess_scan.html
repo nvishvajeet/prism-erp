@@ -21,6 +21,7 @@
     <div style="display:flex;gap:1rem;padding:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
       {# Left: scan form #}
       <form method="post" class="form-grid" style="flex:1;min-width:280px;" data-vis="{{ V }}" id="scanForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="control-flex-wrap" data-vis="{{ V }}">
           <label class="control-flex-fill-wide" data-vis="{{ V }}">
             Student ID / QR / Roll Number

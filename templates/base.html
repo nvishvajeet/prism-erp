@@ -572,12 +572,14 @@
       });
     })();
   </script>
-  {# Debug tools — always loaded for owner/super_admin accounts.
-     Also loaded for any user via ?debug=1.
+  {# Debug tools — loaded only for owner accounts. The ?debug=1 query
+     param is an owner-only shortcut; other users cannot enable the
+     overlay by URL, otherwise any authenticated user could inject the
+     debug JS by appending ?debug=1 to any page.
      - Grid overlay: press 'g' to toggle numbered grid lines
      - Voice recorder: click Record, speak + click, click Stop
      - Feedback saved to logs/debug_feedback.md for Claude to fix #}
-  {% if request.args.get('debug') == '1' or (is_owner_user|default(false)) %}
+  {% if is_owner_user|default(false) %}
   <script defer src="{{ url_for('static', filename='grid-overlay.js') }}?v=11"></script>
   <script defer src="{{ url_for('static', filename='debug-grid.js') }}?v=11"></script>
   {% endif %}

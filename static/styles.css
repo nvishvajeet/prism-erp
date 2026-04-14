@@ -157,6 +157,11 @@
 
 html {
   scroll-behavior: smooth;
+  /* Reserve the vertical scrollbar gutter on every page, so short pages
+     (no scroll) and long pages (with scroll) have identical content width.
+     Without this, navigating Fleet → Personnel etc. visibly shifts the
+     topbar + nav horizontally by ~15px as the scrollbar appears/disappears. */
+  scrollbar-gutter: stable;
 }
 
 :focus-visible {

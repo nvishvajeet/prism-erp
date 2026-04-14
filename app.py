@@ -16703,10 +16703,7 @@ def request_calendar_card(request_id: int):
     )
 
 
-@app.route("/admin/users", methods=["GET", "POST"])
-@login_required
-def admin_users():
-    user = current_user()
+def _admin_users_permissions(user) -> dict[str, bool]:
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_open_user_admin = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
     if not can_open_user_admin:
@@ -16715,69 +16712,75 @@ def admin_users():
     can_delete_members = is_owner(user)
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_elevate_members = is_owner(user) or user["role"] == "super_admin"
-    if request.method == "POST":
-        action = request.form.get("action", "create_user")
-        if action == "create_user":
-            if not can_create_users:
-                abort(403)
-            name = request.form["name"].strip()
-            email = request.form["email"].strip().lower()
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            role = request.form["role"]
-            # Password hygiene (W1.3.8) — admins do NOT type passwords.
-            # A random temporary password is generated; the admin sees
-            # it once via the flash below and shares it out-of-band;
-            # must_change_password=1 forces the user to set their own
-            # on first successful login. Any submitted `password` field
-            # in the form is deliberately ignored.
-            temp_password = generate_temp_password()
-            existing_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
-            if existing_user is not None:
-                flash(f"User {email} already exists.", "error")
-            else:
-                member_code = generate_member_code(name, role)
-                execute(
-                    """
-                    INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active, member_code, must_change_password)
-                    VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1)
-                    """,
-                    (name, email, generate_password_hash(temp_password, method="pbkdf2:sha256"), role, user["id"], member_code),
-                )
-                log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
-                flash(
-                    f"User {email} created. Temporary password: {temp_password} — "
-                    f"share securely; {name} will be required to change it on first login. "
-                    f"Member code: {member_code}.",
-                    "success",
-                )
-        elif action == "delete_member":
-            member_id = int(request.form["user_id"])
-            member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
-                abort(403)
-            execute("UPDATE users SET active = 0 WHERE id = ?", (member_id,))
-            log_action(user["id"], "user", member_id, "member_deactivated", {"email": member["email"]})
-            flash(f"Member {member['email']} deactivated.", "success")
-        elif action == "elevate_member":
-            if not can_elevate_members:
-                abort(403)
-            member_id = int(request.form["user_id"])
-            new_role = request.form["new_role"].strip()
-            allowed_roles = {"operator", "instrument_admin", "site_admin", "finance_admin", "professor_approver"}
-            if new_role not in allowed_roles:
-                abort(403)
-            member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
-                abort(403)
+    return {
+        "can_create_users": can_create_users,
+        "can_delete_members": can_delete_members,
+        "can_elevate_members": can_elevate_members,
+    }
+
+
+def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
+    if request.method != "POST":
+        return False
+    action = request.form.get("action", "create_user")
+    if action == "create_user":
+        if not permissions["can_create_users"]:
+            abort(403)
+        name = request.form["name"].strip()
+        email = request.form["email"].strip().lower()
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        role = request.form["role"]
+        temp_password = generate_temp_password()
+        existing_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
+        if existing_user is not None:
+            flash(f"User {email} already exists.", "error")
+        else:
+            member_code = generate_member_code(name, role)
             execute(
-                "UPDATE users SET role = ?, invite_status = 'active', active = 1 WHERE id = ?",
-                (new_role, member_id),
+                """
+                INSERT INTO users (name, email, password_hash, role, invited_by, invite_status, active, member_code, must_change_password)
+                VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1)
+                """,
+                (name, email, generate_password_hash(temp_password, method="pbkdf2:sha256"), role, user["id"], member_code),
             )
-            log_action(user["id"], "user", member_id, "member_elevated", {"email": member["email"], "new_role": new_role})
-            flash(f"{member['email']} elevated to {new_role.replace('_', ' ')}.", "success")
-        return redirect(url_for("admin_users"))
+            log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
+            flash(
+                f"User {email} created. Temporary password: {temp_password} — "
+                f"share securely; {name} will be required to change it on first login. "
+                f"Member code: {member_code}.",
+                "success",
+            )
+    elif action == "delete_member":
+        member_id = int(request.form["user_id"])
+        member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
+            abort(403)
+        execute("UPDATE users SET active = 0 WHERE id = ?", (member_id,))
+        log_action(user["id"], "user", member_id, "member_deactivated", {"email": member["email"]})
+        flash(f"Member {member['email']} deactivated.", "success")
+    elif action == "elevate_member":
+        if not permissions["can_elevate_members"]:
+            abort(403)
+        member_id = int(request.form["user_id"])
+        new_role = request.form["new_role"].strip()
+        allowed_roles = {"operator", "instrument_admin", "site_admin", "finance_admin", "professor_approver"}
+        if new_role not in allowed_roles:
+            abort(403)
+        member = query_one("SELECT * FROM users WHERE id = ?", (member_id,))
+        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
+        if member is None or member["role"] != "requester" or is_owner(member) or member["id"] == user["id"]:
+            abort(403)
+        execute(
+            "UPDATE users SET role = ?, invite_status = 'active', active = 1 WHERE id = ?",
+            (new_role, member_id),
+        )
+        log_action(user["id"], "user", member_id, "member_elevated", {"email": member["email"], "new_role": new_role})
+        flash(f"{member['email']} elevated to {new_role.replace('_', ' ')}.", "success")
+    return True
+
+
+def _admin_users_list_payload() -> dict[str, object]:
     # 5000-user scaling fix: admins + owners are always small sets
     # (< ~100 combined) so an unbounded query is fine. Members
     # (canonical role = requester) can grow to thousands — cap at
@@ -16809,17 +16812,35 @@ def admin_users():
         f"FROM users {member_where} ORDER BY name LIMIT ?",
         tuple(member_params) + (MEMBERS_CAP,),
     )
+    return {
+        "members": members,
+        "members_total": members_total,
+        "members_cap": MEMBERS_CAP,
+        "members_query": member_q,
+        "admins": admins,
+        "owners": owners,
+    }
+
+
+@app.route("/admin/users", methods=["GET", "POST"])
+@login_required
+def admin_users():
+    user = current_user()
+    permissions = _admin_users_permissions(user)
+    if _admin_users_handle_post(user, permissions):
+        return redirect(url_for("admin_users"))
+    list_payload = _admin_users_list_payload()
     return render_template(
         "users.html",
-        members=members,
-        members_total=members_total,
-        members_cap=MEMBERS_CAP,
-        members_query=member_q,
-        admins=admins,
-        owners=owners,
-        can_create_users=can_create_users,
-        can_delete_members=can_delete_members,
-        can_elevate_members=can_elevate_members,
+        members=list_payload["members"],
+        members_total=list_payload["members_total"],
+        members_cap=list_payload["members_cap"],
+        members_query=list_payload["members_query"],
+        admins=list_payload["admins"],
+        owners=list_payload["owners"],
+        can_create_users=permissions["can_create_users"],
+        can_delete_members=permissions["can_delete_members"],
+        can_elevate_members=permissions["can_elevate_members"],
     )
 
 

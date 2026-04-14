@@ -12364,99 +12364,17 @@ def request_detail(request_id: int):
         )
         if approval_action_response is not None:
             return approval_action_response
-        if action == "mark_sample_submitted" and sample_request["requester_id"] == user["id"]:
-            if sample_request["status"] != "awaiting_sample_submission":
-                flash("This request is not waiting for physical sample submission.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            if instrument_intake_mode(sample_request) != "accepting":
-                flash("This lab is not accepting sample dropoff right now.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            dropoff_note = request.form.get("sample_dropoff_note", "").strip()
-            assert_status_transition(sample_request["status"], "sample_submitted")
-            execute(
-                """
-                UPDATE sample_requests
-                SET status = 'sample_submitted', submitted_to_lab_at = ?, sample_submitted_at = ?,
-                    sample_dropoff_note = ?, remarks = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (now_iso(), now_iso(), dropoff_note, dropoff_note, now_iso(), request_id),
-            )
-            log_action(user["id"], "sample_request", request_id, "sample_submitted", {"dropoff_note": dropoff_note})
-        elif action == "mark_sample_received" and (can_operate or can_manage):
-            if sample_request["status"] != "sample_submitted":
-                flash("Sample can only be received after member handoff.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            remarks = request.form.get("remarks", "").strip()
-            assert_status_transition(sample_request["status"], "sample_received")
-            execute(
-                """
-                UPDATE sample_requests
-                SET status = 'sample_received', sample_received_at = ?, received_by_operator_id = ?,
-                    remarks = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (now_iso(), user["id"], remarks, now_iso(), request_id),
-            )
-            log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": remarks})
-        elif action == "reassign_operator" and (can_operate or can_manage):
-            operator_id = int(request.form.get("assigned_operator_id") or 0)
-            assignee = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (operator_id,))
-            if not candidate_allowed_for_step(assignee, "operator", sample_request["instrument_id"]):
-                flash("Pick a valid operator or instrument-area admin for this instrument.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            remarks = request.form.get("remarks", "").strip()
-            execute(
-                "UPDATE sample_requests SET assigned_operator_id = ?, remarks = CASE WHEN ? != '' THEN ? ELSE remarks END, updated_at = ? WHERE id = ?",
-                (operator_id, remarks, remarks, now_iso(), request_id),
-            )
-            log_action(
-                user["id"],
-                "sample_request",
-                request_id,
-                "operator_reassigned",
-                {"assigned_operator_id": operator_id, "remarks": remarks},
-            )
-            flash(f"Job reassigned to {assignee['name']}.", "success")
-            return redirect(url_for("request_detail", request_id=request_id))
-        elif action == "schedule" and (can_operate or can_manage):
-            if sample_request["status"] not in {"sample_received", "scheduled", "in_progress"}:
-                flash("Request must be approved and physically received before scheduling.", "error")
-                return redirect(url_for("request_detail", request_id=request_id))
-            scheduled_for = request.form["scheduled_for"]
-            operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
-            remarks = request.form.get("remarks", "").strip()
-            assert_status_transition(sample_request["status"], "scheduled")
-            execute(
-                "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
-                (scheduled_for, operator_id, remarks, now_iso(), request_id),
-            )
-            log_action(user["id"], "sample_request", request_id, "scheduled", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
-        elif action == "admin_schedule_override" and can_manage:
-            scheduled_for = request.form["scheduled_for"]
-            operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
-            remarks = request.form.get("remarks", "").strip()
-            assert_status_transition(sample_request["status"], "scheduled", force=True)
-            execute(
-                """
-                UPDATE sample_requests
-                SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, sample_received_at = COALESCE(sample_received_at, ?),
-                    received_by_operator_id = COALESCE(received_by_operator_id, ?), remarks = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (scheduled_for, operator_id, now_iso(), user["id"], remarks, now_iso(), request_id),
-            )
-            execute(
-                "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Admin override' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
-                (now_iso(), request_id),
-            )
-            log_action(user["id"], "sample_request", request_id, "admin_schedule_override", {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id})
-        elif action == "start" and (can_operate or can_manage):
-            remarks = request.form.get("remarks", "").strip()
-            assert_status_transition(sample_request["status"], "in_progress")
-            execute("UPDATE sample_requests SET status = 'in_progress', remarks = ?, updated_at = ? WHERE id = ?", (remarks, now_iso(), request_id))
-            log_action(user["id"], "sample_request", request_id, "started", {})
-        elif action == "complete" and (can_operate or can_manage):
+        workflow_action_response = _handle_request_detail_workflow_actions(
+            user,
+            request_id,
+            sample_request,
+            action,
+            can_manage=can_manage,
+            can_operate=can_operate,
+        )
+        if workflow_action_response is not None:
+            return workflow_action_response
+        if action == "complete" and (can_operate or can_manage):
             results_summary = request.form["results_summary"].strip()
             remarks = request.form.get("remarks", "").strip()
             # v2.0.0 — finance values come from the form + peer aggregates
@@ -12989,6 +12907,142 @@ def _handle_request_detail_approval_actions(
                 {"step_id": step_id, "approver_role": step["approver_role"], "approver_user_id": approver_user_id},
             )
             flash(f"{approval_role_label(step['approver_role'])} approver updated.", "success")
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    return None
+
+
+def _handle_request_detail_workflow_actions(
+    user,
+    request_id: int,
+    sample_request,
+    action: str,
+    *,
+    can_manage: bool,
+    can_operate: bool,
+):
+    if action == "mark_sample_submitted" and sample_request["requester_id"] == user["id"]:
+        if sample_request["status"] != "awaiting_sample_submission":
+            flash("This request is not waiting for physical sample submission.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        if instrument_intake_mode(sample_request) != "accepting":
+            flash("This lab is not accepting sample dropoff right now.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        dropoff_note = request.form.get("sample_dropoff_note", "").strip()
+        assert_status_transition(sample_request["status"], "sample_submitted")
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'sample_submitted', submitted_to_lab_at = ?, sample_submitted_at = ?,
+                sample_dropoff_note = ?, remarks = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (now_iso(), now_iso(), dropoff_note, dropoff_note, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "sample_submitted", {"dropoff_note": dropoff_note})
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "mark_sample_received" and (can_operate or can_manage):
+        if sample_request["status"] != "sample_submitted":
+            flash("Sample can only be received after member handoff.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "sample_received")
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'sample_received', sample_received_at = ?, received_by_operator_id = ?,
+                remarks = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (now_iso(), user["id"], remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "sample_received", {"remarks": remarks})
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "reassign_operator" and (can_operate or can_manage):
+        operator_id = int(request.form.get("assigned_operator_id") or 0)
+        assignee = query_one("SELECT * FROM users WHERE id = ? AND active = 1", (operator_id,))
+        if not candidate_allowed_for_step(assignee, "operator", sample_request["instrument_id"]):
+            flash("Pick a valid operator or instrument-area admin for this instrument.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        remarks = request.form.get("remarks", "").strip()
+        execute(
+            "UPDATE sample_requests SET assigned_operator_id = ?, remarks = CASE WHEN ? != '' THEN ? ELSE remarks END, updated_at = ? WHERE id = ?",
+            (operator_id, remarks, remarks, now_iso(), request_id),
+        )
+        log_action(
+            user["id"],
+            "sample_request",
+            request_id,
+            "operator_reassigned",
+            {"assigned_operator_id": operator_id, "remarks": remarks},
+        )
+        flash(f"Job reassigned to {assignee['name']}.", "success")
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "schedule" and (can_operate or can_manage):
+        if sample_request["status"] not in {"sample_received", "scheduled", "in_progress"}:
+            flash("Request must be approved and physically received before scheduling.", "error")
+            return redirect(url_for("request_detail", request_id=request_id))
+        scheduled_for = request.form["scheduled_for"]
+        operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled")
+        execute(
+            "UPDATE sample_requests SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, remarks = ?, updated_at = ? WHERE id = ?",
+            (scheduled_for, operator_id, remarks, now_iso(), request_id),
+        )
+        log_action(
+            user["id"],
+            "sample_request",
+            request_id,
+            "scheduled",
+            {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id},
+        )
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "admin_schedule_override" and can_manage:
+        scheduled_for = request.form["scheduled_for"]
+        operator_id = int(request.form.get("assigned_operator_id") or user["id"]) if request.form.get("assigned_operator_id") else user["id"]
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "scheduled", force=True)
+        execute(
+            """
+            UPDATE sample_requests
+            SET status = 'scheduled', scheduled_for = ?, assigned_operator_id = ?, sample_received_at = COALESCE(sample_received_at, ?),
+                received_by_operator_id = COALESCE(received_by_operator_id, ?), remarks = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (scheduled_for, operator_id, now_iso(), user["id"], remarks, now_iso(), request_id),
+        )
+        execute(
+            "UPDATE approval_steps SET status = 'approved', acted_at = COALESCE(acted_at, ?), remarks = CASE WHEN remarks = '' THEN 'Admin override' ELSE remarks END WHERE sample_request_id = ? AND status != 'rejected'",
+            (now_iso(), request_id),
+        )
+        log_action(
+            user["id"],
+            "sample_request",
+            request_id,
+            "admin_schedule_override",
+            {"scheduled_for": scheduled_for, "assigned_operator_id": operator_id},
+        )
+        write_request_metadata_snapshot(request_id)
+        return redirect(url_for("request_detail", request_id=request_id))
+
+    if action == "start" and (can_operate or can_manage):
+        remarks = request.form.get("remarks", "").strip()
+        assert_status_transition(sample_request["status"], "in_progress")
+        execute(
+            "UPDATE sample_requests SET status = 'in_progress', remarks = ?, updated_at = ? WHERE id = ?",
+            (remarks, now_iso(), request_id),
+        )
+        log_action(user["id"], "sample_request", request_id, "started", {})
+        write_request_metadata_snapshot(request_id)
         return redirect(url_for("request_detail", request_id=request_id))
 
     return None

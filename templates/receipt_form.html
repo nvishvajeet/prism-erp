@@ -13,16 +13,30 @@
     {{ card_heading("", "Receipt Details") }}
     <form method="post" enctype="multipart/form-data" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label data-vis="{{ V }}">Title <input type="text" name="title" required placeholder="e.g. Lab reagent purchase" data-vis="{{ V }}"></label>
+      <label data-vis="{{ V }}">Title <input type="text" name="title" required placeholder="e.g. Fuel for Ravikiran fleet" data-vis="{{ V }}"></label>
       <label data-vis="{{ V }}">Amount (₹) <input type="number" name="amount" step="0.01" min="0" required placeholder="0.00" data-vis="{{ V }}"></label>
       <label data-vis="{{ V }}">Date <input type="date" name="receipt_date" required data-vis="{{ V }}"></label>
-      <label data-vis="{{ V }}">Category
+      {% if own_firms %}
+      <label data-vis="{{ V }}">Firm (which company this expense is for)
+        <select name="company_id" data-vis="{{ V }}">
+          {% for f in own_firms %}
+          <option value="{{ f.id }}" {% if f.id == default_firm_id %}selected{% endif %}>{{ f.name }}{% if f.short_name and f.short_name != f.name %} · {{ f.short_name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
+      <label data-vis="{{ V }}">Category <span class="hint" style="font-weight:400;font-size:0.75rem;">(Prashant may re-categorise)</span>
         <select name="category" data-vis="{{ V }}">
           <option value="general">General</option>
+          <option value="fuel">Fuel</option>
+          <option value="maintenance">Maintenance (car / office)</option>
           <option value="travel">Travel</option>
+          <option value="supplies">Supplies / consumables</option>
           <option value="equipment">Equipment</option>
-          <option value="consumables">Consumables</option>
-          <option value="services">Services</option>
+          <option value="utilities">Utilities (electricity, internet, phone)</option>
+          <option value="salaries">Salary / wages</option>
+          <option value="services">Services (legal, CA, IT)</option>
+          <option value="office">Office (rent, supplies)</option>
           <option value="other">Other</option>
         </select>
       </label>

@@ -5231,6 +5231,20 @@ def init_db() -> None:
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_user ON expense_receipts(submitted_by_user_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_status ON expense_receipts(status)")
+        # v1.3.2 — firm attribution + two-stage approval (Prashant → Pournima)
+        for _sql in (
+            "ALTER TABLE expense_receipts ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE expense_receipts ADD COLUMN approval_stage TEXT NOT NULL DEFAULT 'submitted'",
+            "ALTER TABLE expense_receipts ADD COLUMN first_reviewer_id INTEGER",
+            "ALTER TABLE expense_receipts ADD COLUMN first_reviewed_at TEXT",
+            "ALTER TABLE expense_receipts ADD COLUMN first_reviewer_note TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                cur.execute(_sql)
+            except Exception:
+                pass  # column already exists
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_company ON expense_receipts(company_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_receipts_stage   ON expense_receipts(approval_stage)")
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS letters (
@@ -5339,6 +5353,20 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT ''
             );
         """)
+        # v1.3.2 — flag which companies are our own GST-registered firms
+        # (Ravikiran Services, Suryajyoti Services, RK Services) vs rows
+        # that are effectively vendors kept in the same table for history.
+        for _sql in (
+            "ALTER TABLE companies ADD COLUMN is_own_firm INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE grants    ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE invoices  ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1",
+        ):
+            try:
+                cur.execute(_sql)
+            except Exception:
+                pass  # column already exists
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_grants_company   ON grants(company_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_invoices_company ON invoices(company_id)")
 
         # ── Vendor Payments module ─────────────────────────────────
         cur.executescript("""
@@ -21966,23 +21994,36 @@ def receipt_new():
     user = current_user()
     if not portal_route_enabled("receipts"):
         abort(404)
+    own_firms = query_all(
+        "SELECT id, name, short_name FROM companies "
+        "WHERE is_active = 1 AND is_own_firm = 1 ORDER BY id"
+    )
+    default_firm_id = own_firms[0]["id"] if own_firms else 1
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         amount = float(request.form.get("amount", "0") or "0")
         category = request.form.get("category", "general").strip()
         receipt_date = request.form.get("receipt_date", "").strip()
         description = request.form.get("description", "").strip()
+        try:
+            company_id = int(request.form.get("company_id", default_firm_id) or default_firm_id)
+        except ValueError:
+            company_id = default_firm_id
+        # Validate company_id actually exists and is an own firm.
+        firm = query_one("SELECT id FROM companies WHERE id = ? AND is_active = 1", (company_id,))
+        if not firm:
+            company_id = default_firm_id
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("receipt_new"))
-        receipt_image_path = ""
         uploaded = request.files.get("receipt_file")
-        if uploaded and uploaded.filename:
-            filename = secure_filename(uploaded.filename)
-            # Save after getting ID
         cur_id = execute(
-            "INSERT INTO expense_receipts (submitted_by_user_id, title, description, amount, category, receipt_date, receipt_image_path, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (user["id"], title, description, amount, category, receipt_date, "", now_iso()),
+            "INSERT INTO expense_receipts "
+            "(submitted_by_user_id, title, description, amount, category, receipt_date, "
+            " receipt_image_path, company_id, approval_stage, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (user["id"], title, description, amount, category, receipt_date,
+             "", company_id, "submitted", "pending", now_iso()),
         )
         if uploaded and uploaded.filename:
             filename = secure_filename(uploaded.filename)
@@ -21991,10 +22032,23 @@ def receipt_new():
             uploaded.save(save_dir / filename)
             receipt_image_path = f"uploads/receipts/{cur_id}/{filename}"
             execute("UPDATE expense_receipts SET receipt_image_path = ? WHERE id = ?", (receipt_image_path, cur_id))
-        log_action(user["id"], "receipt", cur_id, "receipt_submitted", {"title": title, "amount": amount, "category": category})
-        flash("Receipt submitted.", "success")
+        log_action(user["id"], "receipt", cur_id, "receipt_submitted",
+                   {"title": title, "amount": amount, "category": category, "company_id": company_id})
+        # Notify every reviewer so stage-1 (categorise + firm) can begin.
+        reviewers = query_all(
+            "SELECT id FROM users WHERE id != ? "
+            "AND (role IN ('super_admin','site_admin','finance_admin') OR is_owner = 1)",
+            (user["id"],),
+        )
+        for rv in reviewers:
+            notify(rv["id"], "receipt",
+                   f"New expense to categorise: {title}",
+                   f"{user['name']} submitted ₹{amount:,.0f} — needs category + firm.",
+                   href=url_for("receipt_detail", receipt_id=cur_id),
+                   source_type="receipt", source_id=cur_id)
+        flash("Receipt submitted — routed to Prashant for categorisation.", "success")
         return redirect(url_for("receipt_detail", receipt_id=cur_id))
-    return render_template("receipt_form.html")
+    return render_template("receipt_form.html", own_firms=own_firms, default_firm_id=default_firm_id)
 
 
 @app.route("/receipts/<int:receipt_id>")
@@ -22003,13 +22057,35 @@ def receipt_detail(receipt_id):
     user = current_user()
     if not portal_route_enabled("receipts"):
         abort(404)
-    receipt = query_one("SELECT er.*, u.name AS submitter_name, u.email AS submitter_email, r.name AS reviewer_name FROM expense_receipts er JOIN users u ON u.id = er.submitted_by_user_id LEFT JOIN users r ON r.id = er.reviewed_by_user_id WHERE er.id = ?", (receipt_id,))
+    receipt = query_one(
+        "SELECT er.*, "
+        "       u.name AS submitter_name, u.email AS submitter_email, "
+        "       r.name AS reviewer_name, "
+        "       fr.name AS first_reviewer_name, "
+        "       c.name AS company_name, c.short_name AS company_short, c.gstin AS company_gstin "
+        "FROM expense_receipts er "
+        "JOIN users u ON u.id = er.submitted_by_user_id "
+        "LEFT JOIN users r  ON r.id  = er.reviewed_by_user_id "
+        "LEFT JOIN users fr ON fr.id = er.first_reviewer_id "
+        "LEFT JOIN companies c ON c.id = er.company_id "
+        "WHERE er.id = ?",
+        (receipt_id,),
+    )
     if not receipt:
         abort(404)
     can_review = _user_can_review_receipts(user)
     if not can_review and receipt["submitted_by_user_id"] != user["id"]:
         abort(403)
-    return render_template("receipt_detail.html", receipt=receipt, can_review=can_review)
+    own_firms = query_all(
+        "SELECT id, name, short_name FROM companies "
+        "WHERE is_active = 1 AND is_own_firm = 1 ORDER BY id"
+    )
+    return render_template(
+        "receipt_detail.html",
+        receipt=receipt,
+        can_review=can_review,
+        own_firms=own_firms,
+    )
 
 
 @app.route("/receipts/<int:receipt_id>/file")
@@ -22033,6 +22109,16 @@ def receipt_file(receipt_id):
 @app.route("/receipts/<int:receipt_id>/review", methods=["POST"])
 @login_required
 def expense_receipt_review(receipt_id):
+    """Two-stage review:
+       stage 'submitted'    → 'categorised' via action=categorise (first reviewer,
+                              by convention Prashant: sets category + firm + note).
+       stage 'categorised'  → 'approved'    via action=approve (final approver,
+                              by convention Pournima).
+       any stage            → 'rejected'    via action=reject.
+       Any user who passes _user_can_review_receipts can act on either stage; the
+       UI presents only the appropriate button per stage. Pournima can combine
+       both stages with action=categorise_and_approve.
+    """
     user = current_user()
     if not _user_can_review_receipts(user):
         abort(403)
@@ -22041,18 +22127,97 @@ def expense_receipt_review(receipt_id):
         abort(404)
     action = request.form.get("action", "").strip()
     note = request.form.get("reviewer_note", "").strip()
-    if action == "approve":
-        execute("UPDATE expense_receipts SET status='approved', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+    # Optional overrides from the categorisation form.
+    new_category = request.form.get("category", "").strip() or None
+    new_company_raw = request.form.get("company_id", "").strip()
+    new_company_id = None
+    if new_company_raw:
+        try:
+            new_company_id = int(new_company_raw)
+        except ValueError:
+            new_company_id = None
+
+    stage = receipt["approval_stage"] or "submitted"
+
+    def _apply_categorise():
+        sets = ["approval_stage = 'categorised'",
+                "first_reviewer_id = ?",
+                "first_reviewed_at = ?",
+                "first_reviewer_note = ?"]
+        params = [user["id"], now_iso(), note]
+        if new_category:
+            sets.append("category = ?")
+            params.append(new_category)
+        if new_company_id is not None:
+            sets.append("company_id = ?")
+            params.append(new_company_id)
+        params.append(receipt_id)
+        execute(f"UPDATE expense_receipts SET {', '.join(sets)} WHERE id = ?", params)
+
+    def _apply_approve():
+        execute(
+            "UPDATE expense_receipts "
+            "SET status='approved', approval_stage='approved', "
+            "    reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? "
+            "WHERE id=?",
+            (user["id"], note, now_iso(), receipt_id),
+        )
+
+    if action == "categorise":
+        if stage != "submitted":
+            flash("Already categorised.", "error")
+            return redirect(url_for("receipt_detail", receipt_id=receipt_id))
+        _apply_categorise()
+        log_action(user["id"], "receipt", receipt_id, "receipt_categorised",
+                   {"category": new_category, "company_id": new_company_id, "note": note[:200]})
+        # Notify final approvers.
+        finalists = query_all(
+            "SELECT id FROM users WHERE id != ? "
+            "AND (role IN ('super_admin','site_admin') OR is_owner = 1)",
+            (user["id"],),
+        )
+        for fv in finalists:
+            notify(fv["id"], "receipt",
+                   f"Ready to approve: {receipt['title']}",
+                   f"Categorised as {new_category or receipt['category']} "
+                   f"for firm #{new_company_id or receipt['company_id']} — needs final approval.",
+                   href=url_for("receipt_detail", receipt_id=receipt_id),
+                   source_type="receipt", source_id=receipt_id)
+        flash("Categorised — sent to final approver.", "success")
+    elif action == "categorise_and_approve":
+        _apply_categorise()
+        _apply_approve()
+        log_action(user["id"], "receipt", receipt_id, "receipt_cat_and_approved",
+                   {"category": new_category, "company_id": new_company_id, "note": note[:200]})
+        notify(receipt["submitted_by_user_id"], "receipt",
+               f"Receipt approved: {receipt['title']}",
+               f"Your receipt for ₹{receipt['amount']:,.0f} has been categorised and approved.",
+               href=url_for("receipt_detail", receipt_id=receipt_id),
+               source_type="receipt", source_id=receipt_id)
+        flash("Categorised and approved in one step.", "success")
+    elif action == "approve":
+        if stage == "submitted":
+            flash("This expense still needs categorisation before final approval.", "error")
+            return redirect(url_for("receipt_detail", receipt_id=receipt_id))
+        _apply_approve()
         log_action(user["id"], "receipt", receipt_id, "receipt_approved", {"note": note[:200]})
-        notify(receipt["submitted_by_user_id"], "receipt", f"Receipt approved: {receipt['title']}",
+        notify(receipt["submitted_by_user_id"], "receipt",
+               f"Receipt approved: {receipt['title']}",
                f"Your receipt for ₹{receipt['amount']:,.0f} has been approved.",
                href=url_for("receipt_detail", receipt_id=receipt_id),
                source_type="receipt", source_id=receipt_id)
         flash("Receipt approved.", "success")
     elif action == "reject":
-        execute("UPDATE expense_receipts SET status='rejected', reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? WHERE id=?", (user["id"], note, now_iso(), receipt_id))
+        execute(
+            "UPDATE expense_receipts "
+            "SET status='rejected', approval_stage='rejected', "
+            "    reviewed_by_user_id=?, reviewer_note=?, reviewed_at=? "
+            "WHERE id=?",
+            (user["id"], note, now_iso(), receipt_id),
+        )
         log_action(user["id"], "receipt", receipt_id, "receipt_rejected", {"note": note[:200]})
-        notify(receipt["submitted_by_user_id"], "receipt", f"Receipt rejected: {receipt['title']}",
+        notify(receipt["submitted_by_user_id"], "receipt",
+               f"Receipt rejected: {receipt['title']}",
                f"Your receipt for ₹{receipt['amount']:,.0f} was rejected." + (f" Note: {note[:100]}" if note else ""),
                href=url_for("receipt_detail", receipt_id=receipt_id),
                source_type="receipt", source_id=receipt_id)

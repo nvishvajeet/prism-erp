@@ -18947,6 +18947,287 @@ def filing_destroy_plan():
 # Generate XML/CSV that can be imported into Tally ERP 9 / Tally Prime.
 # Tally uses its own XML format for voucher imports.
 
+def _tally_export_request_filters():
+    """Parse tally export query params into one normalized filter dict."""
+    fy = request.args.get("fy", current_indian_fy())
+    company_raw = request.args.get("company", "").strip()
+    month = request.args.get("month", "").strip()
+    voucher_type = request.args.get("type", "all").strip() or "all"
+    fmt = request.args.get("format", "csv").strip() or "csv"
+    company_id = int(company_raw) if company_raw.isdigit() else None
+    fy_start, fy_end = indian_fy_range(fy)
+    return {
+        "format": fmt,
+        "fy": fy,
+        "fy_start": fy_start,
+        "fy_end": fy_end,
+        "company_filter": company_raw,
+        "company_id": company_id,
+        "month": month,
+        "voucher_type": voucher_type,
+    }
+
+
+def _tally_payment_vouchers(filters: dict) -> list[dict]:
+    conditions = ["po.status IN ('paid','receipt_uploaded')", "po.created_at >= ? AND po.created_at <= ?"]
+    params: list[object] = [filters["fy_start"], filters["fy_end"] + "T23:59:59"]
+    if filters["company_id"]:
+        conditions.append("po.company_id = ?")
+        params.append(filters["company_id"])
+    if filters["month"]:
+        conditions.append("po.created_at LIKE ?")
+        params.append(f"{filters['month']}%")
+    orders = query_all("""
+        SELECT po.*, v.name AS vendor_name, v.gstin AS vendor_gstin,
+               v.pan AS vendor_pan,
+               c.name AS company_name, c.short_name AS company_short,
+               c.gstin AS company_gstin
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+         WHERE """ + " AND ".join(conditions) + """
+         ORDER BY po.created_at
+    """, tuple(params))
+    vouchers = []
+    for po in orders:
+        cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
+        payment_ledger = "Cash" if po.get("payment_method") == "cash" else "Bank Account"
+        vouchers.append({
+            "date": (po["paid_at"] or po["created_at"] or "")[:10],
+            "type": "Payment",
+            "number": f"PO-{po['id']}",
+            "narration": f"PO#{po['id']} - {po['title']} - {po['vendor_name'] or 'Unknown'} - {po['payment_method'] or 'Bank'} - Ref: {po['payment_reference'] or 'N/A'}",
+            "debit_ledger": f"{cat_label} Expenses",
+            "credit_ledger": payment_ledger,
+            "amount": po["amount"],
+            "party_name": po.get("vendor_name") or "",
+            "party_gstin": po.get("vendor_gstin") or "",
+            "party_pan": po.get("vendor_pan") or "",
+            "category": po.get("category") or "general",
+            "payment_method": po.get("payment_method") or "",
+            "payment_reference": po.get("payment_reference") or "",
+            "company": po.get("company_short") or po.get("company_name") or "",
+            "company_gstin": po.get("company_gstin") or "",
+        })
+    return vouchers
+
+
+def _tally_salary_vouchers(filters: dict) -> list[dict]:
+    sal_where = ["sp.status = 'paid'"]
+    sal_params: list[object] = []
+    fy_sy = fy_start_year(filters["fy"])
+    sal_months = [(fy_sy, m) for m in range(4, 13)] + [(fy_sy + 1, m) for m in range(1, 4)]
+    month_conds = " OR ".join(f"(sp.year = {y} AND sp.month = '{m:02d}')" for y, m in sal_months)
+    sal_where.append(f"({month_conds})")
+    if filters["company_id"]:
+        sal_where.append("sp.company_id = ?")
+        sal_params.append(filters["company_id"])
+    salaries = query_all(f"""
+        SELECT sp.*, u.name AS emp_name,
+               c.short_name AS company_short, c.gstin AS company_gstin
+          FROM salary_payments sp
+          LEFT JOIN users u ON u.id = sp.user_id
+          LEFT JOIN companies c ON c.id = sp.company_id
+         WHERE {' AND '.join(sal_where)}
+         ORDER BY sp.year, sp.month, u.name
+    """, tuple(sal_params))
+    vouchers = []
+    for sp in salaries:
+        pay_date = sp["paid_at"][:10] if sp.get("paid_at") else f"{sp['year']}-{sp['month']}-28"
+        narration_parts = [f"Salary {sp['month']}/{sp['year']} - {sp['emp_name']}"]
+        if sp.get("deductions") and sp["deductions"] > 0:
+            narration_parts.append(f"Ded: Rs {sp['deductions']:,.0f}")
+        if sp.get("bonus") and sp["bonus"] > 0:
+            narration_parts.append(f"Bonus: Rs {sp['bonus']:,.0f}")
+        vouchers.append({
+            "date": pay_date,
+            "type": "Journal",
+            "number": f"SAL-{sp['id']}",
+            "narration": " | ".join(narration_parts),
+            "debit_ledger": "Salary Expenses",
+            "credit_ledger": "Bank Account",
+            "amount": sp["net_pay"],
+            "party_name": sp.get("emp_name") or "",
+            "party_gstin": "",
+            "party_pan": "",
+            "category": "salary",
+            "payment_method": "bank_transfer",
+            "payment_reference": "",
+            "company": sp.get("company_short") or "",
+            "company_gstin": sp.get("company_gstin") or "",
+        })
+    return vouchers
+
+
+def _tally_intercompany_vouchers(filters: dict) -> list[dict]:
+    conditions = [
+        "po.is_intercompany = 1",
+        "po.status IN ('paid','receipt_uploaded')",
+        "po.created_at >= ? AND po.created_at <= ?",
+    ]
+    params: list[object] = [filters["fy_start"], filters["fy_end"] + "T23:59:59"]
+    if filters["company_id"]:
+        conditions.append("(po.company_id = ? OR po.counterparty_company_id = ?)")
+        params.extend([filters["company_id"], filters["company_id"]])
+    orders = query_all("""
+        SELECT po.*, v.name AS vendor_name,
+               c.name AS from_company, c.short_name AS from_short, c.gstin AS from_gstin,
+               cc.name AS to_company, cc.short_name AS to_short
+          FROM purchase_orders po
+          LEFT JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+          LEFT JOIN companies cc ON cc.id = po.counterparty_company_id
+         WHERE """ + " AND ".join(conditions) + """
+         ORDER BY po.created_at
+    """, tuple(params))
+    vouchers = []
+    for po in orders:
+        from_co = po.get("from_short") or po.get("from_company") or ""
+        to_co = po.get("to_short") or po.get("to_company") or ""
+        vouchers.append({
+            "date": (po["paid_at"] or po["created_at"] or "")[:10],
+            "type": "Journal",
+            "number": f"IC-{po['id']}",
+            "narration": f"Inter-company: {from_co} -> {to_co} | {po['title']} | PO#{po['id']}",
+            "debit_ledger": f"{to_co} (Sundry Debtors)",
+            "credit_ledger": f"{from_co} (Sundry Creditors)",
+            "amount": po["amount"],
+            "party_name": to_co,
+            "party_gstin": "",
+            "party_pan": "",
+            "category": po.get("category") or "general",
+            "payment_method": "journal",
+            "payment_reference": f"IC-PO-{po['id']}",
+            "company": from_co,
+            "company_gstin": po.get("from_gstin") or "",
+        })
+    return vouchers
+
+
+def _tally_gst_purchase_vouchers(filters: dict) -> list[dict]:
+    conditions = [
+        "po.status IN ('paid','receipt_uploaded')",
+        "v.gstin IS NOT NULL AND v.gstin != ''",
+        "po.created_at >= ? AND po.created_at <= ?",
+    ]
+    params: list[object] = [filters["fy_start"], filters["fy_end"] + "T23:59:59"]
+    if filters["company_id"]:
+        conditions.append("po.company_id = ?")
+        params.append(filters["company_id"])
+    orders = query_all("""
+        SELECT po.*, v.name AS vendor_name, v.gstin AS vendor_gstin,
+               v.pan AS vendor_pan, v.address AS vendor_address,
+               c.short_name AS company_short, c.gstin AS company_gstin
+          FROM purchase_orders po
+          JOIN vendors v ON v.id = po.vendor_id
+          LEFT JOIN companies c ON c.id = po.company_id
+         WHERE """ + " AND ".join(conditions) + """
+         ORDER BY po.created_at
+    """, tuple(params))
+    vouchers = []
+    for po in orders:
+        vendor_state = (po.get("vendor_gstin") or "")[:2]
+        company_state = (po.get("company_gstin") or "")[:2]
+        is_intrastate = vendor_state == company_state and vendor_state
+        base_amount = round(po["amount"] / 1.18, 2) if po["amount"] > 0 else 0
+        gst_amount = round(po["amount"] - base_amount, 2)
+        cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
+        vouchers.append({
+            "date": (po["paid_at"] or po["created_at"] or "")[:10],
+            "type": "Purchase",
+            "number": f"GST-{po['id']}",
+            "narration": f"GST Purchase: {po['vendor_name']} (GSTIN: {po['vendor_gstin']}) | {po['title']} | Base: Rs {base_amount:,.2f} + GST: Rs {gst_amount:,.2f}",
+            "debit_ledger": f"{cat_label} Expenses",
+            "credit_ledger": po.get("vendor_name") or "Sundry Creditors",
+            "amount": po["amount"],
+            "base_amount": base_amount,
+            "gst_amount": gst_amount,
+            "is_intrastate": is_intrastate,
+            "cgst": round(gst_amount / 2, 2) if is_intrastate else 0,
+            "sgst": round(gst_amount / 2, 2) if is_intrastate else 0,
+            "igst": gst_amount if not is_intrastate else 0,
+            "party_name": po.get("vendor_name") or "",
+            "party_gstin": po.get("vendor_gstin") or "",
+            "party_pan": po.get("vendor_pan") or "",
+            "category": po.get("category") or "general",
+            "payment_method": po.get("payment_method") or "",
+            "payment_reference": po.get("payment_reference") or "",
+            "company": po.get("company_short") or "",
+            "company_gstin": po.get("company_gstin") or "",
+        })
+    return vouchers
+
+
+def _collect_tally_vouchers(filters: dict) -> list[dict]:
+    vouchers: list[dict] = []
+    if filters["voucher_type"] in ("all", "payment"):
+        vouchers.extend(_tally_payment_vouchers(filters))
+    if filters["voucher_type"] in ("all", "salary"):
+        vouchers.extend(_tally_salary_vouchers(filters))
+    if filters["voucher_type"] in ("all", "intercompany"):
+        vouchers.extend(_tally_intercompany_vouchers(filters))
+    if filters["voucher_type"] in ("all", "gst_purchase"):
+        vouchers.extend(_tally_gst_purchase_vouchers(filters))
+    vouchers.sort(key=lambda v: v["date"])
+    return vouchers
+
+
+def _available_tally_fys() -> list[str]:
+    fy_rows = query_all("""
+        SELECT DISTINCT strftime('%Y', created_at) AS yr,
+               strftime('%m', created_at) AS mo
+          FROM purchase_orders WHERE created_at IS NOT NULL
+         ORDER BY yr, mo
+    """)
+    fys = set()
+    for row in fy_rows:
+        yr, mo = int(row["yr"]), int(row["mo"])
+        fy_start = yr if mo >= 4 else yr - 1
+        fys.add(f"FY {fy_start}-{(fy_start + 1) % 100:02d}")
+    return sorted(fys, reverse=True)
+
+
+def _tally_fy_counts(fys: list[str]) -> dict[str, dict[str, dict[str, float]]]:
+    counts: dict[str, dict[str, dict[str, float]]] = {}
+    salary_totals = query_one("""
+        SELECT COUNT(*) AS c, COALESCE(SUM(net_pay),0) AS total
+          FROM salary_payments WHERE status = 'paid'
+    """)
+    salary_bucket = {
+        "count": salary_totals["c"] if salary_totals else 0,
+        "total": salary_totals["total"] if salary_totals else 0,
+    }
+    for fy in fys:
+        start_date, end_date = indian_fy_range(fy)
+        po_ct = query_one("""
+            SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
+              FROM purchase_orders
+             WHERE status IN ('paid','receipt_uploaded')
+               AND created_at >= ? AND created_at <= ?
+        """, (start_date, end_date + "T23:59:59"))
+        ic_ct = query_one("""
+            SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
+              FROM purchase_orders
+             WHERE is_intercompany = 1 AND status IN ('paid','receipt_uploaded')
+               AND created_at >= ? AND created_at <= ?
+        """, (start_date, end_date + "T23:59:59"))
+        gst_ct = query_one("""
+            SELECT COUNT(*) AS c, COALESCE(SUM(po.amount),0) AS total
+              FROM purchase_orders po
+              JOIN vendors v ON v.id = po.vendor_id
+             WHERE po.status IN ('paid','receipt_uploaded')
+               AND v.gstin IS NOT NULL AND v.gstin != ''
+               AND po.created_at >= ? AND po.created_at <= ?
+        """, (start_date, end_date + "T23:59:59"))
+        counts[fy] = {
+            "payments": {"count": po_ct["c"] if po_ct else 0, "total": po_ct["total"] if po_ct else 0},
+            "salary": dict(salary_bucket),
+            "intercompany": {"count": ic_ct["c"] if ic_ct else 0, "total": ic_ct["total"] if ic_ct else 0},
+            "gst_purchase": {"count": gst_ct["c"] if gst_ct else 0, "total": gst_ct["total"] if gst_ct else 0},
+        }
+    return counts
+
+
 @app.route("/payments/tally-export")
 @login_required
 def tally_export():
@@ -18958,225 +19239,25 @@ def tally_export():
     user = current_user()
     if not _user_can_manage_payments(user):
         abort(403)
-    fmt = request.args.get("format", "csv")  # csv, tally_xml
-    fy = request.args.get("fy", current_indian_fy())
-    company_filter = request.args.get("company", "")
-    month = request.args.get("month", "")
-    voucher_type = request.args.get("type", "all")  # all, payment, salary, intercompany, gst_purchase
-
-    fy_start, fy_end = indian_fy_range(fy)
+    filters = _tally_export_request_filters()
     companies = _get_companies()
+    all_vouchers = _collect_tally_vouchers(filters)
 
-    # Gather all voucher data
-    all_vouchers = []
-
-    # 1. Payment vouchers (vendor purchases)
-    if voucher_type in ("all", "payment"):
-        conditions = ["po.status IN ('paid','receipt_uploaded')"]
-        params = []
-        conditions.append("po.created_at >= ? AND po.created_at <= ?")
-        params.extend([fy_start, fy_end + "T23:59:59"])
-        if company_filter:
-            conditions.append("po.company_id = ?")
-            params.append(int(company_filter))
-        if month:
-            conditions.append("po.created_at LIKE ?")
-            params.append(f"{month}%")
-        orders = query_all("""
-            SELECT po.*, v.name AS vendor_name, v.gstin AS vendor_gstin,
-                   v.pan AS vendor_pan,
-                   c.name AS company_name, c.short_name AS company_short,
-                   c.gstin AS company_gstin
-              FROM purchase_orders po
-              LEFT JOIN vendors v ON v.id = po.vendor_id
-              LEFT JOIN companies c ON c.id = po.company_id
-             WHERE """ + " AND ".join(conditions) + """
-             ORDER BY po.created_at
-        """, tuple(params))
-        for po in orders:
-            cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
-            payment_ledger = "Cash" if po.get("payment_method") == "cash" else "Bank Account"
-            all_vouchers.append({
-                "date": (po["paid_at"] or po["created_at"] or "")[:10],
-                "type": "Payment",
-                "number": f"PO-{po['id']}",
-                "narration": f"PO#{po['id']} - {po['title']} - {po['vendor_name'] or 'Unknown'} - {po['payment_method'] or 'Bank'} - Ref: {po['payment_reference'] or 'N/A'}",
-                "debit_ledger": f"{cat_label} Expenses",
-                "credit_ledger": payment_ledger,
-                "amount": po["amount"],
-                "party_name": po.get("vendor_name") or "",
-                "party_gstin": po.get("vendor_gstin") or "",
-                "party_pan": po.get("vendor_pan") or "",
-                "category": po.get("category") or "general",
-                "payment_method": po.get("payment_method") or "",
-                "payment_reference": po.get("payment_reference") or "",
-                "company": po.get("company_short") or po.get("company_name") or "",
-                "company_gstin": po.get("company_gstin") or "",
-            })
-
-    # 2. Salary Journal vouchers
-    if voucher_type in ("all", "salary"):
-        sal_params = []
-        sal_where = ["sp.status = 'paid'"]
-        # Map FY to salary year/month ranges (Apr-Mar)
-        fy_sy = fy_start_year(fy)
-        sal_months = [(fy_sy, m) for m in range(4, 13)] + [(fy_sy + 1, m) for m in range(1, 4)]
-        month_conds = " OR ".join(
-            f"(sp.year = {y} AND sp.month = '{m:02d}')" for y, m in sal_months)
-        sal_where.append(f"({month_conds})")
-        if company_filter:
-            sal_where.append("sp.company_id = ?")
-            sal_params.append(int(company_filter))
-        salaries = query_all(f"""
-            SELECT sp.*, u.name AS emp_name,
-                   c.short_name AS company_short, c.gstin AS company_gstin
-              FROM salary_payments sp
-              LEFT JOIN users u ON u.id = sp.user_id
-              LEFT JOIN companies c ON c.id = sp.company_id
-             WHERE {' AND '.join(sal_where)}
-             ORDER BY sp.year, sp.month, u.name
-        """, tuple(sal_params))
-        for sp in salaries:
-            pay_date = sp["paid_at"][:10] if sp.get("paid_at") else f"{sp['year']}-{sp['month']}-28"
-            narration_parts = [f"Salary {sp['month']}/{sp['year']} - {sp['emp_name']}"]
-            if sp.get("deductions") and sp["deductions"] > 0:
-                narration_parts.append(f"Ded: ₹{sp['deductions']:,.0f}")
-            if sp.get("bonus") and sp["bonus"] > 0:
-                narration_parts.append(f"Bonus: ₹{sp['bonus']:,.0f}")
-            all_vouchers.append({
-                "date": pay_date,
-                "type": "Journal",
-                "number": f"SAL-{sp['id']}",
-                "narration": " | ".join(narration_parts),
-                "debit_ledger": "Salary Expenses",
-                "credit_ledger": "Bank Account",
-                "amount": sp["net_pay"],
-                "party_name": sp.get("emp_name") or "",
-                "party_gstin": "",
-                "party_pan": "",
-                "category": "salary",
-                "payment_method": "bank_transfer",
-                "payment_reference": "",
-                "company": sp.get("company_short") or "",
-                "company_gstin": sp.get("company_gstin") or "",
-            })
-
-    # 3. Inter-company Journal vouchers
-    if voucher_type in ("all", "intercompany"):
-        ic_conditions = [
-            "po.is_intercompany = 1",
-            "po.status IN ('paid','receipt_uploaded')",
-            f"po.created_at >= '{fy_start}' AND po.created_at <= '{fy_end}T23:59:59'"
-        ]
-        ic_params = []
-        if company_filter:
-            ic_conditions.append("(po.company_id = ? OR po.counterparty_company_id = ?)")
-            ic_params.extend([int(company_filter), int(company_filter)])
-        ic_orders = query_all("""
-            SELECT po.*, v.name AS vendor_name,
-                   c.name AS from_company, c.short_name AS from_short, c.gstin AS from_gstin,
-                   cc.name AS to_company, cc.short_name AS to_short
-              FROM purchase_orders po
-              LEFT JOIN vendors v ON v.id = po.vendor_id
-              LEFT JOIN companies c ON c.id = po.company_id
-              LEFT JOIN companies cc ON cc.id = po.counterparty_company_id
-             WHERE """ + " AND ".join(ic_conditions) + """
-             ORDER BY po.created_at
-        """, tuple(ic_params))
-        for po in ic_orders:
-            from_co = po.get("from_short") or po.get("from_company") or ""
-            to_co = po.get("to_short") or po.get("to_company") or ""
-            all_vouchers.append({
-                "date": (po["paid_at"] or po["created_at"] or "")[:10],
-                "type": "Journal",
-                "number": f"IC-{po['id']}",
-                "narration": f"Inter-company: {from_co} → {to_co} | {po['title']} | PO#{po['id']}",
-                "debit_ledger": f"{to_co} (Sundry Debtors)",
-                "credit_ledger": f"{from_co} (Sundry Creditors)",
-                "amount": po["amount"],
-                "party_name": to_co,
-                "party_gstin": "",
-                "party_pan": "",
-                "category": po.get("category") or "general",
-                "payment_method": "journal",
-                "payment_reference": f"IC-PO-{po['id']}",
-                "company": from_co,
-                "company_gstin": po.get("from_gstin") or "",
-            })
-
-    # 4. GST Purchase vouchers (for ITC claims — vendors with GSTIN)
-    if voucher_type in ("all", "gst_purchase"):
-        gst_conditions = [
-            "po.status IN ('paid','receipt_uploaded')",
-            "v.gstin IS NOT NULL AND v.gstin != ''",
-            f"po.created_at >= '{fy_start}' AND po.created_at <= '{fy_end}T23:59:59'"
-        ]
-        gst_params = []
-        if company_filter:
-            gst_conditions.append("po.company_id = ?")
-            gst_params.append(int(company_filter))
-        gst_orders = query_all("""
-            SELECT po.*, v.name AS vendor_name, v.gstin AS vendor_gstin,
-                   v.pan AS vendor_pan, v.address AS vendor_address,
-                   c.short_name AS company_short, c.gstin AS company_gstin
-              FROM purchase_orders po
-              JOIN vendors v ON v.id = po.vendor_id
-              LEFT JOIN companies c ON c.id = po.company_id
-             WHERE """ + " AND ".join(gst_conditions) + """
-             ORDER BY po.created_at
-        """, tuple(gst_params))
-        for po in gst_orders:
-            # Determine if intra-state (CGST+SGST) or inter-state (IGST)
-            # State code = first 2 digits of GSTIN
-            vendor_state = (po.get("vendor_gstin") or "")[:2]
-            company_state = (po.get("company_gstin") or "")[:2]
-            is_intrastate = vendor_state == company_state and vendor_state
-            base_amount = round(po["amount"] / 1.18, 2) if po["amount"] > 0 else 0  # Assume 18% GST
-            gst_amount = round(po["amount"] - base_amount, 2)
-            cat_label = dict(PO_CATEGORIES).get(po["category"], po["category"]).title()
-            all_vouchers.append({
-                "date": (po["paid_at"] or po["created_at"] or "")[:10],
-                "type": "Purchase",
-                "number": f"GST-{po['id']}",
-                "narration": f"GST Purchase: {po['vendor_name']} (GSTIN: {po['vendor_gstin']}) | {po['title']} | Base: ₹{base_amount:,.2f} + GST: ₹{gst_amount:,.2f}",
-                "debit_ledger": f"{cat_label} Expenses",
-                "credit_ledger": po.get("vendor_name") or "Sundry Creditors",
-                "amount": po["amount"],
-                "base_amount": base_amount,
-                "gst_amount": gst_amount,
-                "is_intrastate": is_intrastate,
-                "cgst": round(gst_amount / 2, 2) if is_intrastate else 0,
-                "sgst": round(gst_amount / 2, 2) if is_intrastate else 0,
-                "igst": gst_amount if not is_intrastate else 0,
-                "party_name": po.get("vendor_name") or "",
-                "party_gstin": po.get("vendor_gstin") or "",
-                "party_pan": po.get("vendor_pan") or "",
-                "category": po.get("category") or "general",
-                "payment_method": po.get("payment_method") or "",
-                "payment_reference": po.get("payment_reference") or "",
-                "company": po.get("company_short") or "",
-                "company_gstin": po.get("company_gstin") or "",
-            })
-
-    # Sort all by date
-    all_vouchers.sort(key=lambda v: v["date"])
-
-    if fmt == "tally_xml":
-        return _generate_tally_xml_multi(all_vouchers, fy), 200, {
+    if filters["format"] == "tally_xml":
+        return _generate_tally_xml_multi(all_vouchers, filters["fy"]), 200, {
             "Content-Type": "application/xml",
-            "Content-Disposition": f"attachment; filename=tally_{voucher_type}_{fy.replace(' ','_')}.xml"
+            "Content-Disposition": f"attachment; filename=tally_{filters['voucher_type']}_{filters['fy'].replace(' ','_')}.xml"
         }
-    elif fmt == "csv":
-        return _generate_tally_csv_multi(all_vouchers, fy), 200, {
+    if filters["format"] == "csv":
+        return _generate_tally_csv_multi(all_vouchers, filters["fy"]), 200, {
             "Content-Type": "text/csv",
-            "Content-Disposition": f"attachment; filename=tally_{voucher_type}_{fy.replace(' ','_')}.csv"
+            "Content-Disposition": f"attachment; filename=tally_{filters['voucher_type']}_{filters['fy'].replace(' ','_')}.csv"
         }
-    else:
-        return render_template("tally_export.html",
-                               fy=fy, companies=companies,
-                               company_filter=company_filter,
-                               order_count=len(all_vouchers),
-                               current_fy=current_indian_fy())
+    return render_template("tally_export.html",
+                           fy=filters["fy"], companies=companies,
+                           company_filter=filters["company_filter"],
+                           order_count=len(all_vouchers),
+                           current_fy=current_indian_fy())
 
 
 @app.route("/payments/tally-export-page")
@@ -19189,53 +19270,8 @@ def tally_export_page():
     if not _user_can_manage_payments(user):
         abort(403)
     companies = _get_companies()
-    fy_rows = query_all("""
-        SELECT DISTINCT strftime('%Y', created_at) AS yr,
-               strftime('%m', created_at) AS mo
-          FROM purchase_orders WHERE created_at IS NOT NULL
-         ORDER BY yr, mo
-    """)
-    fys = set()
-    for r in fy_rows:
-        yr, mo = int(r["yr"]), int(r["mo"])
-        fy_s = yr if mo >= 4 else yr - 1
-        fys.add(f"FY {fy_s}-{(fy_s + 1) % 100:02d}")
-    fys = sorted(fys, reverse=True)
-
-    # Count by FY and type for preview
-    fy_counts = {}
-    for fy in fys:
-        s, e = indian_fy_range(fy)
-        po_ct = query_one("""
-            SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
-              FROM purchase_orders
-             WHERE status IN ('paid','receipt_uploaded')
-               AND created_at >= ? AND created_at <= ?
-        """, (s, e + "T23:59:59"))
-        sal_ct = query_one("""
-            SELECT COUNT(*) AS c, COALESCE(SUM(net_pay),0) AS total
-              FROM salary_payments WHERE status = 'paid'
-        """)
-        ic_ct = query_one("""
-            SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS total
-              FROM purchase_orders
-             WHERE is_intercompany = 1 AND status IN ('paid','receipt_uploaded')
-               AND created_at >= ? AND created_at <= ?
-        """, (s, e + "T23:59:59"))
-        gst_ct = query_one("""
-            SELECT COUNT(*) AS c, COALESCE(SUM(po.amount),0) AS total
-              FROM purchase_orders po
-              JOIN vendors v ON v.id = po.vendor_id
-             WHERE po.status IN ('paid','receipt_uploaded')
-               AND v.gstin IS NOT NULL AND v.gstin != ''
-               AND po.created_at >= ? AND po.created_at <= ?
-        """, (s, e + "T23:59:59"))
-        fy_counts[fy] = {
-            "payments": {"count": po_ct["c"] if po_ct else 0, "total": po_ct["total"] if po_ct else 0},
-            "salary": {"count": sal_ct["c"] if sal_ct else 0, "total": sal_ct["total"] if sal_ct else 0},
-            "intercompany": {"count": ic_ct["c"] if ic_ct else 0, "total": ic_ct["total"] if ic_ct else 0},
-            "gst_purchase": {"count": gst_ct["c"] if gst_ct else 0, "total": gst_ct["total"] if gst_ct else 0},
-        }
+    fys = _available_tally_fys()
+    fy_counts = _tally_fy_counts(fys)
 
     return render_template("tally_export.html",
                            companies=companies, fys=fys, fy_counts=fy_counts,

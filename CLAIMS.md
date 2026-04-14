@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | schema-contract-burn | 2026-04-14 16:00 CEST | `app.py`, `CLAIMS.md` | `fix: harden schema contracts` |
 
 ## Stale-claim recovery
 

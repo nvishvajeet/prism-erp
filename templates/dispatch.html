@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Dispatch — {{ super() }}{% endblock %}
+
+{% block content %}
+<section class="dispatch-console" data-vis="{{ V }}">
+  <header class="dispatch-header" data-vis="{{ V }}">
+    <h1 class="dispatch-title" data-vis="{{ V }}">Dispatch</h1>
+    <p class="dispatch-sub hint" data-vis="{{ V }}">Approve, act, fire commands — from anywhere.</p>
+  </header>
+
+  {# ── Voice / text command bar — primary phone input ── #}
+  <article class="tile dispatch-command" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">Command</h2>
+    <form method="post" action="{{ url_for('quick_entry') }}" class="dispatch-cmd-form" enctype="multipart/form-data" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="source" value="dispatch">
+      <textarea name="text" id="dispatchInput" rows="3"
+                placeholder="Say or type — e.g. 'New FESEM request for Priya', 'Mark Ravi present', 'Log ₹500 fuel for KA-01-1234'"
+                data-vis="{{ V }}"></textarea>
+      <div class="dispatch-cmd-actions" data-vis="{{ V }}">
+        <button type="button" id="dispatchMic" class="btn btn-large dispatch-mic" data-vis="{{ V }}">🎤 Voice</button>
+        <label class="btn btn-large" data-vis="{{ V }}">
+          📎 File<input type="file" name="attachment" style="display:none;" data-vis="{{ V }}">
+        </label>
+        <button type="submit" class="btn btn-primary btn-large" data-vis="{{ V }}">Send</button>
+      </div>
+    </form>
+    <p class="hint" data-vis="{{ V }}">Commands create drafts — you still confirm before anything goes live.</p>
+  </article>
+
+  {# ── AI drafts needing approval — highest priority ── #}
+  {% if ai_drafts %}
+  <article class="tile dispatch-urgent" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">
+      AI Drafts <span class="badge status-draft_ai" data-vis="{{ V }}">{{ ai_drafts|length }}</span>
+    </h2>
+    <ul class="dispatch-list" data-vis="{{ V }}">
+      {% for d in ai_drafts %}
+      <li class="dispatch-item" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('request_detail', request_id=d['id']) }}" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ d['title'] or d['request_no'] }}</strong>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">
+            {{ d['instrument_name'] or '—' }} · {{ d['requester_name'] or 'self' }}
+          </span>
+        </a>
+        <form method="post" action="{{ url_for('ai_draft_approve', request_id=d['id']) }}" class="dispatch-inline-approve" data-vis="{{ V }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" name="verdict" value="approve" class="btn btn-primary btn-compact" data-vis="{{ V }}">✓</button>
+          <button type="submit" name="verdict" value="reject" class="btn btn-compact dispatch-reject" data-vis="{{ V }}">✕</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Live requests ── #}
+  {% if pending_requests %}
+  <article class="tile" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">
+      Requests <span class="badge" data-vis="{{ V }}">{{ pending_requests|length }}</span>
+    </h2>
+    <ul class="dispatch-list" data-vis="{{ V }}">
+      {% for r in pending_requests %}
+      <li class="dispatch-item" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('request_detail', request_id=r['id']) }}" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ r['title'] or r['request_no'] }}</strong>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">
+            {{ r['instrument_name'] or '—' }} · {{ r['requester_name'] or '—' }} · {{ request_display_status(r['status']) }}
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Pending receipts ── #}
+  {% if pending_receipts %}
+  <article class="tile" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">
+      Expenses <span class="badge" data-vis="{{ V }}">{{ pending_receipts|length }}</span>
+    </h2>
+    <ul class="dispatch-list" data-vis="{{ V }}">
+      {% for er in pending_receipts %}
+      <li class="dispatch-item" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('receipts_list') }}" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">₹{{ '%.0f'|format(er['amount']) }} · {{ er['title'] }}</strong>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">
+            {{ er['category'] }} · {{ er['submitter_name'] or '—' }}
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Your tasks ── #}
+  {% if my_todos %}
+  <article class="tile" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">
+      Your Tasks <span class="badge" data-vis="{{ V }}">{{ my_todos|length }}</span>
+    </h2>
+    <ul class="dispatch-list" data-vis="{{ V }}">
+      {% for t in my_todos %}
+      <li class="dispatch-item" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('todos_list') }}" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">{{ t['title'] }}</strong>
+          <span class="dispatch-meta hint" data-vis="{{ V }}">{{ t['priority']|title }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+
+  {# ── Recent AI interactions ── #}
+  {% if recent_ai %}
+  <article class="tile dispatch-recent" data-vis="{{ V }}">
+    <h2 class="dispatch-section-title" data-vis="{{ V }}">Recent Commands</h2>
+    <ul class="dispatch-list dispatch-list-compact" data-vis="{{ V }}">
+      {% for a in recent_ai %}
+      <li class="dispatch-item-compact" data-vis="{{ V }}">
+        <span data-vis="{{ V }}">{{ a['user_message'][:70] }}{% if a['user_message']|length > 70 %}…{% endif %}</span>
+        <span class="hint" data-vis="{{ V }}">{{ a['action_taken'] or '—' }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endif %}
+</section>
+
+<script>
+(function(){
+  // Voice-to-text for the command textarea
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var mic = document.getElementById('dispatchMic');
+  var input = document.getElementById('dispatchInput');
+  if (!SpeechRecognition || !mic || !input) {
+    if (mic) { mic.style.opacity = '0.4'; mic.title = 'Voice needs Chrome/Safari'; }
+    return;
+  }
+  var rec = new SpeechRecognition();
+  rec.continuous = false; rec.interimResults = false; rec.lang = 'en-US';
+  var listening = false;
+  mic.addEventListener('click', function(){
+    if (listening) { rec.stop(); return; }
+    rec.start(); listening = true; mic.textContent = '🔴 Listening…';
+  });
+  rec.onresult = function(e){
+    input.value = (input.value ? input.value + ' ' : '') + e.results[0][0].transcript;
+    mic.textContent = '🎤 Voice'; listening = false;
+  };
+  rec.onend = function(){ mic.textContent = '🎤 Voice'; listening = false; };
+  rec.onerror = function(){ mic.textContent = '🎤 Voice'; listening = false; };
+})();
+</script>
+{% endblock %}

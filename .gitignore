@@ -2,6 +2,7 @@
 data/
 logs/
 reports/
+tmp/
 __pycache__/
 *.pyc
 .venv/

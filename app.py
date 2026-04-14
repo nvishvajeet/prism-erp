@@ -3326,6 +3326,16 @@ def current_user() -> sqlite3.Row | None:
     return query_one("SELECT * FROM users WHERE id = ?", (user_id,))
 
 
+def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str | None = None) -> str | None:
+    """Return the best active portal slug from the requested slug + assignments."""
+    valid_slugs = {row_value(p, "slug", "") for p in portals}
+    if requested_slug and requested_slug in valid_slugs:
+        return requested_slug
+    if len(portals) == 1:
+        return row_value(portals[0], "slug", "")
+    return None
+
+
 def is_owner(user: sqlite3.Row | None) -> bool:
     return bool(user and user["email"].strip().lower() in OWNER_EMAILS)
 
@@ -7975,9 +7985,32 @@ def _dashboard_cross_module_tiles(user) -> dict[str, object]:
 
 
 @app.route("/")
-@login_required
 def index():
     user = current_user()
+    if not user:
+        public_portals = [
+            {
+                "slug": "lab",
+                "label": "MITWPU Lab ERP",
+                "title": "MITWPU Central Instrumentation Facility",
+                "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
+                "href": url_for("login", portal="lab"),
+                "cta": "Enter Lab Scheduler",
+            },
+            {
+                "slug": "hq",
+                "label": "Ravikiran",
+                "title": "Ravikiran ERP",
+                "tagline": "Operations and business ERP entry point. Demo access can continue here while we simplify the rest.",
+                "href": url_for("login", portal="hq"),
+                "cta": "Enter Ravikiran",
+            },
+        ]
+        return render_template(
+            "public_landing.html",
+            title="CATALYST",
+            public_portals=public_portals,
+        )
     db = get_db()
     recent_page = page_value(int(request.args.get("recent_page", "1") or 1))
     clauses, params = request_scope_sql(user, "sr")
@@ -10623,11 +10656,17 @@ def login():
     # If the caller already has a valid session, don't re-render the login
     # form — just bounce them to home. Otherwise a stale cookie + the
     # role-vis filter in base.html would hide the form for that role.
+    portal_arg = (request.values.get("portal") or "").strip().lower()
+    if portal_arg in ERP_PORTALS:
+        session["requested_portal"] = portal_arg
+    elif request.method == "GET" and "portal" in request.args and portal_arg not in ERP_PORTALS:
+        session.pop("requested_portal", None)
     if request.method == "GET" and current_user() is not None:
         return redirect(url_for("index"))
     if request.method == "POST":
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
+        requested_portal = session.get("requested_portal")
         user = query_one(
             """
             SELECT *
@@ -10650,10 +10689,13 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
+            if requested_portal in ERP_PORTALS:
+                session["requested_portal"] = requested_portal
             log_action(user["id"], "auth", user["id"], "login", {"ip": request.remote_addr or ""})
             portals = _user_portals(user["id"])
-            if len(portals) == 1:
-                session["active_portal"] = portals[0]["slug"]
+            selected_portal = _select_portal_slug(portals, requested_portal)
+            if selected_portal:
+                session["active_portal"] = selected_portal
             else:
                 session.pop("active_portal", None)
             # W1.3.8 password hygiene: if the admin issued a temporary
@@ -10674,7 +10716,7 @@ def login():
             )
             flash(f"Signed in as {user['name']}.", "success")
             # Check ERP portals — auto-enter if single portal, show picker if multiple
-            if len(portals) > 1:
+            if len(portals) > 1 and not selected_portal:
                 return redirect(url_for("portal_picker"))
             # else: no portals assigned → show all modules (backwards compat)
             return redirect(url_for("role_manual"))
@@ -10688,7 +10730,12 @@ def login():
             {"login": login_id, "ip": request.remote_addr or ""},
         )
         flash("Invalid login.", "error")
-    return render_template("login.html")
+    portal_slug = session.get("requested_portal")
+    return render_template(
+        "login.html",
+        login_portal_slug=portal_slug,
+        login_portal=ERP_PORTALS.get(portal_slug),
+    )
 
 
 @app.route("/portals")
@@ -15123,11 +15170,12 @@ def change_password():
         flash("Password changed successfully.", "success")
         queue_role_manual(user["id"], reason="password_changed")
         portals = _user_portals(user["id"])
-        if len(portals) == 1:
-            session["active_portal"] = portals[0]["slug"]
+        selected_portal = _select_portal_slug(portals, session.get("requested_portal"))
+        if selected_portal:
+            session["active_portal"] = selected_portal
         else:
             session.pop("active_portal", None)
-        if len(portals) > 1:
+        if len(portals) > 1 and not selected_portal:
             return redirect(url_for("portal_picker"))
         return redirect(url_for("role_manual"))
     return render_template("change_password.html", title="Change Password")

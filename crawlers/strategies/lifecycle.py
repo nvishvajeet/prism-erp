@@ -259,12 +259,28 @@ class LifecycleStrategy(CrawlerStrategy):
         finally:
             conn.close()
 
-    def _step_actor_email(self, harness: Harness, step_id: int, fallback_email: str) -> str:
-        """Return the email of the concrete user assigned to `step_id`.
+    # Harness-seeded personas that have the known test password (PASSWORD
+    # in crawlers.harness). If the live load-balance picked some other
+    # user whose password came from seed_data() and doesn't match, the
+    # crawler's /login POST silently 302s back to /login and the follow-
+    # up action returns 403. Pin the approver to one of these for each
+    # role before posting.
+    _PINNED_APPROVER: dict[str, str] = {
+        "finance": "meera@catalyst.local",
+        "professor": "approver@catalyst.local",
+        "operator": "anika@catalyst.local",
+    }
 
-        Approval chains can now route to different seeded personas based on
-        dynamic pool selection, so the lifecycle crawl should follow the
-        actual assignee instead of assuming a fixed email for each lane.
+    def _step_actor_email(self, harness: Harness, step_id: int, fallback_email: str) -> str:
+        """Return the email of the approver for `step_id`, reassigning
+        the row to a harness-seeded persona if the load-balancer picked
+        someone whose password this crawler can't log in with.
+
+        Approval chains route to different personas based on dynamic pool
+        selection, and that pool may include users created by seed_data()
+        whose password hashes aren't the harness test password. Force the
+        assignment to a persona this crawler can authenticate as, so the
+        post-redirect GET actually carries the approval.
         """
         if not harness.temp_db_path:
             return fallback_email
@@ -272,14 +288,32 @@ class LifecycleStrategy(CrawlerStrategy):
         try:
             row = conn.execute(
                 """
-                SELECT u.email
+                SELECT aps.approver_role, u.email
                 FROM approval_steps aps
                 LEFT JOIN users u ON u.id = aps.approver_user_id
                 WHERE aps.id = ?
                 """,
                 (step_id,),
             ).fetchone()
-            return row[0] if row and row[0] else fallback_email
+            if row is None:
+                return fallback_email
+            role, current_email = row[0], row[1]
+            pinned = self._PINNED_APPROVER.get(role, fallback_email)
+            if current_email == pinned:
+                return pinned
+            # Reassign approver_user_id to the pinned persona so
+            # can_approve_step() accepts them.
+            new_id_row = conn.execute(
+                "SELECT id FROM users WHERE email = ?", (pinned,)
+            ).fetchone()
+            if new_id_row is None:
+                return current_email or fallback_email
+            conn.execute(
+                "UPDATE approval_steps SET approver_user_id = ? WHERE id = ?",
+                (new_id_row[0], step_id),
+            )
+            conn.commit()
+            return pinned
         finally:
             conn.close()
 

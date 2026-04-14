@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CATALYST mini deploy verifier — LaunchAgent
+
+  Mini only. Runs every 60 seconds and confirms:
+    bare repo HEAD == worktree HEAD == served /api/health-check git_head
+
+  If drift is detected it kickstarts local.catalyst and logs the result.
+
+  Install:
+    cp ops/launchd/local.catalyst.verify.plist ~/Library/LaunchAgents/local.catalyst.verify.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.catalyst.verify.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst.verify
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.catalyst.verify</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vishwajeet/Scheduler/Main/scripts/verify_deploy.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishwajeet/Scheduler/Main</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/deploy-verify.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishwajeet/Scheduler/Main/logs/deploy-verify.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -196,6 +196,39 @@ The deploy is gated by `scripts/smoke_test.py`. If smoke fails the
 `launchctl kickstart` does not run and the old process keeps
 serving.
 
+### 3.1 Mini deploy verifier
+
+The mini should not poll git every second. The primary deploy path
+remains push-triggered via `post-receive`. For trust and fast recovery,
+install a lightweight verifier that runs every minute and confirms:
+
+- bare repo stable branch HEAD
+- checked-out worktree HEAD
+- live `/api/health-check` reported `git_head`
+
+If those drift apart, the verifier kickstarts `local.catalyst` and logs
+the result to `logs/deploy-verify.log`.
+
+Install on the mini:
+
+```bash
+cd ~/Scheduler/Main
+chmod +x scripts/verify_deploy.sh scripts/install_launchd.sh
+./scripts/install_launchd.sh --verify
+tail -f logs/deploy-verify.log
+```
+
+What "good" looks like:
+
+```text
+[2026-04-15 00:20:00] verify bare=fb8a1d12 worktree=fb8a1d12 served=fb8a1d12
+[2026-04-15 00:20:00] verify OK
+```
+
+This verifier is a backstop, not the primary deployment mechanism.
+If it repeatedly reports `STILL DRIFTING`, the hook or launchd service
+state is broken and should be investigated directly.
+
 Promotion model:
 
 - agents build and merge in **dev**

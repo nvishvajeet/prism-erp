@@ -10977,7 +10977,23 @@ def api_health_check():
         db_ok = True
     except Exception:
         db_ok = False
-    return jsonify({"ok": db_ok, "status": "healthy" if db_ok else "degraded"})
+    git_head = ""
+    try:
+        git_head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(BASE_DIR),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        git_head = ""
+    return jsonify(
+        {
+            "ok": db_ok,
+            "status": "healthy" if db_ok else "degraded",
+            "git_head": git_head,
+        }
+    )
 
 
 @app.route("/sitemap")
@@ -15779,8 +15795,8 @@ def change_password():
         if not check_password_hash(user["password_hash"], current_pw):
             flash("Current password is incorrect.", "error")
             return redirect(url_for("change_password"))
-        if len(new_pw) < 8:
-            flash("New password must be at least 8 characters.", "error")
+        if len(new_pw) < 5:
+            flash("New password must be at least 5 characters.", "error")
             return redirect(url_for("change_password"))
         if new_pw != confirm_pw:
             flash("New passwords do not match.", "error")
@@ -18132,8 +18148,8 @@ def activate():
         if user["invite_status"] != "invited":
             flash("This account is not waiting for activation. New users must be added by an admin first.", "error")
             return redirect(url_for("activate"))
-        if len(password) < 8:
-            flash("Password must be at least 8 characters.", "error")
+        if len(password) < 5:
+            flash("Password must be at least 5 characters.", "error")
             return redirect(url_for("activate"))
         execute(
             "UPDATE users SET name = ?, password_hash = ?, invite_status = 'active' WHERE id = ?",

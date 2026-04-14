@@ -10,6 +10,12 @@ automatically.
 | `local.catalyst.plist`         | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
 | `local.catalyst.laptop.plist`  | Dev laptop (`your-user`) | `~/Documents/Scheduler/Main` |
 
+Mini-only helper:
+
+| File | Host | Purpose |
+|---|---|---|
+| `local.catalyst.verify.plist` | Mac mini (`vishwajeet`) | runs `scripts/verify_deploy.sh` every 60s to confirm bare HEAD = worktree HEAD = served HEAD |
+
 ## macOS TCC gotcha — Documents folder access
 
 **The laptop plist will fail silently with `last exit code = 126`
@@ -79,6 +85,21 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:5055/login
 # tail the log (one file for both stdout and stderr)
 tail -f logs/server.log
 ```
+
+## Mini deploy verifier
+
+Install on the mini only:
+
+```bash
+./scripts/install_launchd.sh --verify
+launchctl print gui/$(id -u)/local.catalyst.verify | head -20
+tail -f logs/deploy-verify.log
+```
+
+This verifier does not replace the normal `post-receive` deploy hook.
+It is a recovery lane that checks for deploy drift every minute and
+kickstarts `local.catalyst` if the bare repo, worktree, and served
+health endpoint disagree.
 
 ## Why no reloader
 

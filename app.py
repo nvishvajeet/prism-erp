@@ -16996,6 +16996,135 @@ def admin_users():
     )
 
 
+@app.route("/admin/onboard", methods=["GET", "POST"])
+@login_required
+def admin_onboard():
+    """Streamlined new-member onboarding wizard.
+
+    A focused form that captures what's needed to stand up a profile in
+    one pass. The floating ✨ AI Assistant (already on every page) can
+    auto-fill this form from plain English — paste "Dr. Bharat Chaudhari
+    is Dean R&D, oversees all instruments, approves requests" and the
+    fields populate via /api/ai-fill.
+
+    On submit: creates the user with a temp password + member code,
+    assigns portal memberships and (for operators / instrument_admin /
+    faculty_in_charge) per-instrument access, records designation +
+    department + notes on the audit chain, and flashes the temp password
+    once so it can be shared out of band.
+    """
+    user = current_user()
+    permissions = _admin_users_permissions(user)
+    if not permissions["can_create_users"]:
+        abort(403)
+
+    instruments = query_all(
+        "SELECT id, name, code FROM instruments WHERE status = 'active' ORDER BY name"
+    )
+
+    if request.method == "POST":
+        salutation = request.form.get("salutation", "").strip()
+        name_raw = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        phone = request.form.get("phone", "").strip()
+        role = request.form.get("role", "requester").strip()
+        designation = request.form.get("designation", "").strip()
+        department = request.form.get("department", "").strip()
+        notes = request.form.get("notes", "").strip()
+        portal_slugs = request.form.getlist("portals") or ["lab"]
+        instrument_ids = [int(x) for x in request.form.getlist("instrument_ids") if x.isdigit()]
+
+        allowed_roles = {
+            "requester", "operator", "instrument_admin", "faculty_in_charge",
+            "professor_approver", "finance_admin", "site_admin", "super_admin",
+        }
+        if role not in allowed_roles:
+            flash(f"Role {role!r} is not recognised.", "error")
+            return redirect(url_for("admin_onboard"))
+        if not name_raw or not email:
+            flash("Full name and email are required.", "error")
+            return redirect(url_for("admin_onboard"))
+        if query_one("SELECT id FROM users WHERE email = ?", (email,)) is not None:
+            flash(f"A user with email {email} already exists.", "error")
+            return redirect(url_for("admin_onboard"))
+
+        display_name = f"{salutation} {name_raw}".strip() if salutation else name_raw
+        temp_password = generate_temp_password()
+        member_code = generate_member_code(display_name, role)
+        execute(
+            """INSERT INTO users
+               (name, email, password_hash, role, invited_by,
+                invite_status, active, member_code, must_change_password, phone)
+               VALUES (?,?,?,?,?, 'active', 1, ?, 1, ?)""",
+            (display_name, email,
+             generate_password_hash(temp_password, method="pbkdf2:sha256"),
+             role, user["id"], member_code, phone),
+        )
+        new_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
+        new_id = new_user["id"] if new_user else 0
+
+        # Assign portal memberships (first in list becomes default)
+        for idx, slug in enumerate(portal_slugs):
+            portal = query_one("SELECT id FROM erp_portals WHERE slug = ?", (slug,))
+            if portal:
+                execute(
+                    """INSERT OR IGNORE INTO erp_user_portals
+                       (user_id, portal_id, portal_role, is_default, created_at)
+                       VALUES (?,?,?,?,?)""",
+                    (new_id, portal["id"],
+                     "admin" if role in {"site_admin", "super_admin"} else "member",
+                     1 if idx == 0 else 0, now_iso()),
+                )
+
+        # Assign instruments (operators / instrument_admin / faculty_in_charge)
+        for inst_id in instrument_ids:
+            if role in {"instrument_admin", "faculty_in_charge"}:
+                execute(
+                    "INSERT OR IGNORE INTO instrument_admins (user_id, instrument_id) VALUES (?,?)",
+                    (new_id, inst_id),
+                )
+            elif role == "operator":
+                execute(
+                    "INSERT OR IGNORE INTO instrument_operators (user_id, instrument_id) VALUES (?,?)",
+                    (new_id, inst_id),
+                )
+
+        # Log extras onto audit chain (users table has no designation/department columns)
+        log_action(
+            user["id"], "user", new_id, "user_onboarded",
+            {
+                "email": email, "role": role, "member_code": member_code,
+                "salutation": salutation, "designation": designation,
+                "department": department, "notes": notes,
+                "portals": portal_slugs, "instrument_ids": instrument_ids,
+            },
+        )
+        flash(
+            f"✓ {display_name} onboarded as {role_display_name(role)}. "
+            f"Member code: {member_code}. "
+            f"Temp password: {temp_password} — share out of band; "
+            f"they must change it on first login.",
+            "success",
+        )
+        return redirect(url_for("admin_onboard"))
+
+    return render_template(
+        "admin_onboard.html",
+        role_options=[
+            ("requester", role_display_name("requester")),
+            ("operator", role_display_name("operator")),
+            ("instrument_admin", role_display_name("instrument_admin")),
+            ("faculty_in_charge", role_display_name("faculty_in_charge")),
+            ("professor_approver", role_display_name("professor_approver")),
+            ("finance_admin", role_display_name("finance_admin")),
+            ("site_admin", role_display_name("site_admin")),
+            ("super_admin", role_display_name("super_admin")),
+        ],
+        portal_options=[(slug, data["name"]) for slug, data in ERP_PORTALS.items()],
+        instruments=instruments,
+    )
+
+
 @app.route("/activate", methods=["GET", "POST"])
 def activate():
     if request.method == "POST":

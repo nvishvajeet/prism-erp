@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block title %}Onboard a member — {{ super() }}{% endblock %}
+{% block hover_back %}<a href="{{ url_for('admin_users') }}" class="hover-back-btn" title="Back to Users" data-vis="{{ V }}">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('admin_users') }}" data-vis="{{ V }}">← Users</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Onboard a member</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">One pass — creates account, portal access, instrument access, temp password</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width tile-accent-blue" data-vis="{{ V }}">
+    {{ card_heading("HOW THIS WORKS", "Three ways to fill the form") }}
+    <div style="padding:0.75rem 1rem;line-height:1.6;" data-vis="{{ V }}">
+      <ol style="margin:0;padding-left:1.25rem;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Fast:</strong> click the floating ✨ button (bottom-right), paste a sentence like <em data-vis="{{ V }}">"Dr. Bharat Chaudhari is Dean R&amp;D, oversees all instruments, approves requests"</em>, and hit <strong data-vis="{{ V }}">Fill Form</strong>. Review and submit.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Guided:</strong> walk through the ~15 fields below and fill what you know. Optional fields can stay blank.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Mixed:</strong> AI-fill, tweak a few fields, submit.</li>
+      </ol>
+      <p class="hint" style="margin-top:0.5rem;" data-vis="{{ V }}">After submit, the temp password flashes once at the top — copy it and share with the member out of band. They will be required to change it on first login.</p>
+    </div>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("NEW MEMBER", "Personal details + access") }}
+    <form method="post" action="{{ url_for('admin_onboard') }}" style="padding:0.75rem 1rem;display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div data-vis="{{ V }}">
+        <label for="salutation" data-vis="{{ V }}">Salutation</label>
+        <select name="salutation" id="salutation" data-vis="{{ V }}">
+          <option value="">—</option>
+          <option value="Dr.">Dr.</option>
+          <option value="Prof.">Prof.</option>
+          <option value="Mr.">Mr.</option>
+          <option value="Ms.">Ms.</option>
+          <option value="Mrs.">Mrs.</option>
+        </select>
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="name" data-vis="{{ V }}">Full name <span style="color:var(--tone-red);" data-vis="{{ V }}">*</span></label>
+        <input type="text" name="name" id="name" required autocomplete="name" data-vis="{{ V }}">
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="email" data-vis="{{ V }}">Work email <span style="color:var(--tone-red);" data-vis="{{ V }}">*</span></label>
+        <input type="email" name="email" id="email" required autocomplete="email" data-vis="{{ V }}">
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="phone" data-vis="{{ V }}">Phone (optional)</label>
+        <input type="tel" name="phone" id="phone" placeholder="+91 98XXXXXXXX" autocomplete="tel" data-vis="{{ V }}">
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="designation" data-vis="{{ V }}">Designation / title</label>
+        <input type="text" name="designation" id="designation" placeholder="Dean R&amp;D, Secretary, PhD student…" data-vis="{{ V }}">
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="department" data-vis="{{ V }}">Department</label>
+        <input type="text" name="department" id="department" placeholder="Mechanical, Chemistry, Admin Office…" data-vis="{{ V }}">
+      </div>
+
+      <div data-vis="{{ V }}">
+        <label for="role" data-vis="{{ V }}">Primary role <span style="color:var(--tone-red);" data-vis="{{ V }}">*</span></label>
+        <select name="role" id="role" required data-vis="{{ V }}">
+          {% for value, label in role_options %}
+          <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <p class="hint" data-vis="{{ V }}">Role drives default access. Fine-tune later under Admin → Users.</p>
+      </div>
+
+      <div style="grid-column:1/-1;" data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Portal access</label>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;" data-vis="{{ V }}">
+          {% for slug, name in portal_options %}
+          <label style="display:inline-flex;gap:0.35rem;align-items:center;" data-vis="{{ V }}">
+            <input type="checkbox" name="portals" value="{{ slug }}" {% if slug == 'lab' %}checked{% endif %} data-vis="{{ V }}">
+            <span data-vis="{{ V }}">{{ name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="hint" data-vis="{{ V }}">First ticked portal becomes the default landing page.</p>
+      </div>
+
+      {% if instruments %}
+      <div style="grid-column:1/-1;" data-vis="{{ V }}">
+        <label for="instrument_ids" data-vis="{{ V }}">Instruments they own or operate (optional)</label>
+        <select name="instrument_ids" id="instrument_ids" multiple size="6" style="min-height:8rem;" data-vis="{{ V }}">
+          {% for inst in instruments %}
+          <option value="{{ inst.id }}">{{ inst.name }} ({{ inst.code }})</option>
+          {% endfor %}
+        </select>
+        <p class="hint" data-vis="{{ V }}">
+          Applied when role is Operator, Operational Admin, or Faculty Admin.
+          Hold ⌘/Ctrl to pick multiple.
+        </p>
+      </div>
+      {% endif %}
+
+      <div style="grid-column:1/-1;" data-vis="{{ V }}">
+        <label for="notes" data-vis="{{ V }}">What do they handle? Free notes (optional)</label>
+        <textarea name="notes" id="notes" rows="3" placeholder="e.g. Approves finance clearances, runs weekly instrument review, chairs safety committee." data-vis="{{ V }}"></textarea>
+        <p class="hint" data-vis="{{ V }}">Saved to the audit trail for future reference.</p>
+      </div>
+
+      <div style="grid-column:1/-1;display:flex;gap:0.75rem;justify-content:flex-end;align-items:center;" data-vis="{{ V }}">
+        <a href="{{ url_for('admin_users') }}" class="btn" data-vis="{{ V }}">Cancel</a>
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create profile + temp password</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("SUGGESTED ROLES", "Quick reference") }}
+    <div style="padding:0.75rem 1rem;line-height:1.6;" data-vis="{{ V }}">
+      <ul style="margin:0;padding-left:1.25rem;" data-vis="{{ V }}">
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Dean / Faculty oversight</strong> → Faculty Admin (<code class="inline-code" data-vis="{{ V }}">faculty_in_charge</code>). Academic authority across instruments, can approve.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Department Secretary</strong> → Site Admin (<code class="inline-code" data-vis="{{ V }}">site_admin</code>). Runs the org day-to-day; layer Finance Admin separately if they also clear bills.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Operator</strong> → picks up samples, moves the queue.</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Approver</strong> → reviews and approves pending requests (no operations).</li>
+        <li data-vis="{{ V }}"><strong data-vis="{{ V }}">Lab Member</strong> → default for students + researchers; submits requests.</li>
+      </ul>
+    </div>
+  </article>
+
+</section>
+{% endblock %}

@@ -52,6 +52,13 @@
   <article class="card tile tile-users-create" data-vis="{{ V }}">
     {{ card_heading("", "Create / Invite User") }}
     {% if can_create_users %}
+    <div style="padding:0.5rem 0.75rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Need more than just name + role?</span>
+      <a href="{{ url_for('admin_onboard') }}" class="btn btn-primary" data-vis="{{ V }}">✨ Guided onboarding</a>
+      <span class="hint" data-vis="{{ V }}">— auto-fills from plain English, captures designation, department, portal + instrument access in one pass.</span>
+    </div>
+    {% endif %}
+    {% if can_create_users %}
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="create_user">

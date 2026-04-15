@@ -106,7 +106,7 @@
       <div class="finance-form-grid" data-vis="{{ V }}">
         <div class="finance-form-field" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Amount (remaining: ₹{{ "{:,.2f}".format(remaining) }})</label>
-          <input type="number" name="amount" step="0.01" min="0.01" max="{{ remaining }}" value="{{ remaining }}" required data-vis="{{ V }}">
+          <input type="number" name="amount" aria-label="Payment amount" step="0.01" min="0.01" max="{{ remaining }}" value="{{ remaining }}" required data-vis="{{ V }}">
         </div>
         <div class="finance-form-field" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Method</label>
@@ -119,7 +119,7 @@
         </div>
         <div class="finance-form-field" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Receipt Number</label>
-          <input type="text" name="receipt_number" placeholder="Optional" data-vis="{{ V }}">
+          <input type="text" name="receipt_number" placeholder="Optional" aria-label="Receipt number" data-vis="{{ V }}">
         </div>
         <div class="finance-form-field tile-full-width" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Notes</label>

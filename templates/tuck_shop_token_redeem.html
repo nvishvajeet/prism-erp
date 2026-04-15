@@ -25,7 +25,7 @@
   <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("REDEEM TOKEN", "Type or say the token number → Enter") }}
     <div style="padding:1rem;text-align:center;" data-vis="{{ V }}">
-      <input type="number" id="redeemInput" placeholder="Token #" autofocus
+      <input type="number" id="redeemInput" placeholder="Token #" aria-label="Token number to redeem" autofocus
              style="font-size:3rem;font-weight:900;text-align:center;max-width:12rem;font-family:monospace;letter-spacing:0.2em;"
              min="1" data-vis="{{ V }}">
       <div id="redeemResult" style="margin-top:1rem;min-height:3rem;" data-vis="{{ V }}"></div>

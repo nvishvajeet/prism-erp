@@ -46,8 +46,8 @@
         </a>
         <form method="post" action="{{ url_for('ai_draft_approve', request_id=d['id']) }}" class="dispatch-inline-approve" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" name="verdict" value="approve" class="btn btn-primary btn-compact" data-vis="{{ V }}">✓</button>
-          <button type="submit" name="verdict" value="reject" class="btn btn-compact dispatch-reject" data-vis="{{ V }}">✕</button>
+          <button type="submit" name="verdict" value="approve" aria-label="Approve" class="btn btn-primary btn-compact" data-vis="{{ V }}">✓</button>
+          <button type="submit" name="verdict" value="reject" aria-label="Reject" class="btn btn-compact dispatch-reject" data-vis="{{ V }}">✕</button>
         </form>
       </li>
       {% endfor %}

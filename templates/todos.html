@@ -90,7 +90,7 @@
 {# ── Task list — inbox style ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" data-vis="{{ V }}">
+    <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" aria-label="Search tasks" data-vis="{{ V }}">
     {% if items %}
     {% for item in items %}
     <div class="inbox-row todo-card-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">

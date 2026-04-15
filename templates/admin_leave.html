@@ -54,7 +54,7 @@
             </form>
             <form method="post" action="{{ url_for('admin_leave_reject', leave_id=lr.id) }}" class="inline-form" data-vis="{{ V }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="text" name="reason" placeholder="Reason" data-vis="{{ V }}">
+              <input type="text" name="reason" placeholder="Reason" aria-label="Leave reason" data-vis="{{ V }}">
               <button type="submit" class="btn" data-vis="{{ V }}">Reject</button>
             </form>
           </td>

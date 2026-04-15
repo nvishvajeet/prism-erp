@@ -30,7 +30,7 @@
   {% if students %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ALL STUDENTS", students|length|string ~ " total") }}
-    <input type="text" id="studentSearch" class="table-search-input" placeholder="Search students…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <input type="text" id="studentSearch" class="table-search-input" placeholder="Search students…" aria-label="Search students" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">

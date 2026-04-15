@@ -107,7 +107,7 @@
         </tbody>
       </table>
       <div class="panel-block-standard-bottom control-flex-compact" data-vis="{{ V }}">
-        <input type="text" name="note" placeholder="Audit note (optional)" class="control-flex-fill-wide" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Audit note (optional)" aria-label="Audit note" class="control-flex-fill-wide" data-vis="{{ V }}">
         <button type="submit" name="action" value="audit" class="btn btn-primary control-min-width-lg" data-vis="{{ V }}">
           Audit Selected
         </button>
@@ -233,7 +233,7 @@
         </label>
       </div>
       <label data-vis="{{ V }}">Note
-        <input type="text" name="note" placeholder="Audit certification note…" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Audit certification note…" aria-label="Audit certification note" data-vis="{{ V }}">
       </label>
       <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Sign Off Audit</button>
     </form>
@@ -273,7 +273,7 @@
           <td data-vis="{{ V }}">{{ s.signed_by_name or '—' }}</td>
           <td data-vis="{{ V }}">{{ s.signed_at[:10] if s.signed_at else '—' }}</td>
           <td data-vis="{{ V }}">
-            <a href="{{ url_for('ca_audit_print_signoff', signoff_id=s.id) }}" class="text-link" data-vis="{{ V }}">🖨</a>
+            <a href="{{ url_for('ca_audit_print_signoff', signoff_id=s.id) }}" aria-label="Print" class="text-link" data-vis="{{ V }}">🖨</a>
           </td>
         </tr>
         {% endfor %}

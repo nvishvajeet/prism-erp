@@ -67,7 +67,7 @@
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("SEARCH BY NAME", "When QR/barcode isn't available") }}
     <div style="padding:0.75rem;" data-vis="{{ V }}">
-      <input type="text" id="nameSearch" placeholder="Type student name or roll number…" autocomplete="off" data-vis="{{ V }}" style="width:100%;max-width:25rem;">
+      <input type="text" id="nameSearch" placeholder="Type student name or roll number…" aria-label="Student name or roll number search" autocomplete="off" data-vis="{{ V }}" style="width:100%;max-width:25rem;">
       <div id="searchResults" style="margin-top:0.5rem;" data-vis="{{ V }}"></div>
     </div>
   </article>
@@ -162,7 +162,7 @@
           .then(function(data){
             if(!data.length){ searchResults.innerHTML = '<p class="hint">No matches</p>'; return; }
             searchResults.innerHTML = data.map(function(s){
-              var photoHtml = s.photo_url ? '<img src="' + s.photo_url + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:0.5rem;">' : '';
+              var photoHtml = s.photo_url ? '<img src="' + s.photo_url + '" alt="Student photo" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:0.5rem;">' : '';
               return '<div style="padding:0.4rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;">' +
                 '<span style="display:flex;align-items:center;">' + photoHtml + '<strong>' + s.name + '</strong>&nbsp;<code class="inline-code">' + s.roll_number + '</code>&nbsp;<span class="badge">' + s.department + '</span></span>' +
                 '<button onclick="document.getElementById(\'qrInput\').value=\'' + s.roll_number + '\';document.getElementById(\'scanForm\').submit();" class="btn btn-primary" style="font-size:0.75rem;padding:0.2rem 0.6rem;">Scan In</button>' +

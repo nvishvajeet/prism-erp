@@ -89,7 +89,7 @@
 
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Vendors") }}
-    <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" aria-label="Search vendors" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if vendors %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

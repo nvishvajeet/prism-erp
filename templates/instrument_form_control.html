@@ -60,7 +60,7 @@
       <div id="customFieldsList" data-vis="{{ V }}">
         {% for f in custom_fields %}
         <div class="form-control-field-row" data-vis="{{ V }}">
-          <input type="text" name="field_label_{{ loop.index }}" value="{{ f['field_label'] }}" placeholder="Label" required data-vis="{{ V }}">
+          <input type="text" name="field_label_{{ loop.index }}" value="{{ f['field_label'] }}" placeholder="Label" aria-label="Custom field label" required data-vis="{{ V }}">
           <select name="field_type_{{ loop.index }}" class="fc-type-select" data-vis="{{ V }}">
             <option value="text" {% if f["field_type"] == "text" %}selected{% endif %}>Text</option>
             <option value="number" {% if f["field_type"] == "number" %}selected{% endif %}>Number</option>
@@ -68,7 +68,7 @@
             <option value="file" {% if f["field_type"] == "file" %}selected{% endif %}>File</option>
           </select>
           <label data-vis="{{ V }}"><input type="checkbox" name="field_required_{{ loop.index }}" value="1" {% if f["is_required"] %}checked{% endif %} data-vis="{{ V }}"> Required</label>
-          <input type="text" name="field_options_{{ loop.index }}" value="{{ f['field_options'] }}" placeholder="Options (comma-sep)" class="fc-options-input" data-vis="{{ V }}">
+          <input type="text" name="field_options_{{ loop.index }}" value="{{ f['field_options'] }}" placeholder="Options (comma-sep)" aria-label="Custom field options" class="fc-options-input" data-vis="{{ V }}">
           <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
         </div>
         {% endfor %}
@@ -135,7 +135,7 @@
 
 <template id="fieldRowTemplate">
   <div class="form-control-field-row" data-vis="{{ V }}">
-    <input type="text" name="field_label_IDX" placeholder="Label" required data-vis="{{ V }}">
+    <input type="text" name="field_label_IDX" placeholder="Label" aria-label="Custom field label" required data-vis="{{ V }}">
     <select name="field_type_IDX" class="fc-type-select" data-vis="{{ V }}">
       <option value="text">Text</option>
       <option value="number">Number</option>
@@ -143,7 +143,7 @@
       <option value="file">File</option>
     </select>
     <label data-vis="{{ V }}"><input type="checkbox" name="field_required_IDX" value="1" data-vis="{{ V }}"> Required</label>
-    <input type="text" name="field_options_IDX" placeholder="Options (comma-sep)" class="fc-options-input" data-vis="{{ V }}">
+    <input type="text" name="field_options_IDX" placeholder="Options (comma-sep)" aria-label="Custom field options" class="fc-options-input" data-vis="{{ V }}">
     <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
   </div>
 </template>

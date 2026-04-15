@@ -94,7 +94,7 @@
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ row.label }}</strong></td>
         <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">
           {% if today > 0 %}
-          ₹<input type="number" name="amount_{{ row.tag }}" value="{{ today }}" min="0" step="1000"
+          ₹<input type="number" name="amount_{{ row.tag }}" aria-label="Amount" value="{{ today }}" min="0" step="1000"
                   class="todayAmt" style="width:90px;text-align:right;font-variant-numeric:tabular-nums;background:transparent;border:1px solid transparent;padding:2px 4px;border-radius:4px"
                   title="Edit to override the recommended amount before logging" data-vis="{{ V }}">
           {% else %}

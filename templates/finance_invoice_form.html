@@ -39,12 +39,12 @@
 
         <div class="finance-form-field" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Description</label>
-          <input type="text" name="description" placeholder="Brief description (optional)" maxlength="200" data-vis="{{ V }}">
+          <input type="text" name="description" placeholder="Brief description (optional)" aria-label="Invoice description" maxlength="200" data-vis="{{ V }}">
         </div>
 
         <div class="finance-form-field" data-vis="{{ V }}">
           <label data-vis="{{ V }}">Amount Due (₹)</label>
-          <input type="number" name="amount_due" step="0.01" min="0.01" required placeholder="0.00" data-vis="{{ V }}">
+          <input type="number" name="amount_due" step="0.01" min="0.01" required placeholder="0.00" aria-label="Amount due" data-vis="{{ V }}">
         </div>
 
         <div class="finance-form-field" data-vis="{{ V }}">

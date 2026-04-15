@@ -26,7 +26,7 @@
   {# ── ATTENTION · Fleet Table ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FLEET", "All Vehicles") }}
-    <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" aria-label="Search vehicles" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if vehicles %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

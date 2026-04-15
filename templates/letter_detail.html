@@ -49,11 +49,11 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Title</label>
-        <input type="text" name="title" required value="{{ letter.title }}" data-vis="{{ V }}">
+        <input type="text" name="title" aria-label="Letter title" required value="{{ letter.title }}" data-vis="{{ V }}">
       </div>
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Recipient</label>
-        <input type="text" name="recipient" value="{{ letter.recipient }}" data-vis="{{ V }}">
+        <input type="text" name="recipient" aria-label="Letter recipient" value="{{ letter.recipient }}" data-vis="{{ V }}">
       </div>
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Letterhead</label>

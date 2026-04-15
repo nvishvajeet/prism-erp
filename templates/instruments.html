@@ -113,7 +113,7 @@
   {# ── TILE 2: Active instruments list ── #}
   <article class="card tile tile-inst-active" data-vis="{{ V }}">
     {{ card_heading("", "Active Instruments") }}
-    <input type="text" id="instSearch" class="table-search-input" placeholder="Search instruments…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="instSearch" class="table-search-input" placeholder="Search instruments…" aria-label="Search instruments" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% call paginated_pane('mainInstruments', page_size=100, max_height='none', css_class='instruments-table-shell') %}
     <table class="instruments-table sortable-table" data-vis="{{ V }}">
       <colgroup>

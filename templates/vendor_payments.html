@@ -68,7 +68,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Purchase Orders") }}
-    <input type="text" id="poSearch" class="table-search-input" placeholder="Search orders…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="poSearch" class="table-search-input" placeholder="Search orders…" aria-label="Search purchase orders" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if orders %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

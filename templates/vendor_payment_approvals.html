@@ -55,7 +55,7 @@
     <form method="post" action="{{ url_for('vendor_payment_approve', po_id=po.id) }}" class="form-grid form-inline-shell" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Note
-        <input type="text" name="note" placeholder="Optional note (required for rejection)" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Optional note (required for rejection)" aria-label="Decision note" data-vis="{{ V }}">
       </label>
       <div class="control-flex-actions" data-vis="{{ V }}">
         <button type="submit" name="action" value="approve" class="btn btn-primary control-flex-fill control-min-width-md" data-vis="{{ V }}">
@@ -125,7 +125,7 @@
         </tfoot>
       </table>
       <div class="panel-block-standard-bottom control-flex-compact" data-vis="{{ V }}">
-        <input type="text" name="note" placeholder="Batch note (optional)" class="control-flex-fill-wide" data-vis="{{ V }}">
+        <input type="text" name="note" placeholder="Batch note (optional)" aria-label="Batch note" class="control-flex-fill-wide" data-vis="{{ V }}">
         <button type="submit" class="btn btn-primary control-min-width-xl" data-vis="{{ V }}">
           Batch Approve Selected (₹<span id="batchTotal">{{ "{:,.0f}".format(clubbed_total) }}</span>)
         </button>
@@ -164,7 +164,7 @@
           </td>
           <td data-vis="{{ V }}">{{ o.approved_at[:10] if o.approved_at else '—' }}</td>
           <td data-vis="{{ V }}">
-            <a href="{{ url_for('vendor_payment_print', po_id=o.id) }}" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">🖨</a>
+            <a href="{{ url_for('vendor_payment_print', po_id=o.id) }}" aria-label="Print" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">🖨</a>
           </td>
         </tr>
         {% endfor %}

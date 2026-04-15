@@ -11,7 +11,7 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <form method="get" data-vis="{{ V }}">
-      <input type="date" name="date" value="{{ report_date }}" onchange="this.form.submit()" data-vis="{{ V }}">
+      <input type="date" name="date" aria-label="Report date" value="{{ report_date }}" onchange="this.form.submit()" data-vis="{{ V }}">
     </form>
     <a href="{{ url_for('tuck_shop_report_csv', date=report_date) }}" class="btn" data-vis="{{ V }}">Export CSV</a>
   </div>

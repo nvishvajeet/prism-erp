@@ -201,7 +201,7 @@
 
     {# Global search #}
     <form action="{{ url_for('global_search') }}" method="get" class="nav-search" data-vis="{{ V }}">
-      <input type="search" name="q" placeholder="Search..." value="{{ request.args.get('q','') }}" autocomplete="off" data-vis="{{ V }}">
+      <input type="search" name="q" placeholder="Search..." aria-label="Global search" value="{{ request.args.get('q','') }}" autocomplete="off" data-vis="{{ V }}">
     </form>
     <a href="{{ url_for('quick_entry') }}" class="nav-quick-entry" title="Quick Entry" data-vis="{{ V }}">⚡</a>
 

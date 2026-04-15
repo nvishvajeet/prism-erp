@@ -2093,6 +2093,35 @@ def nav_pending_counts(user) -> dict[str, int]:
                 counts["pending_approvals"] = int(pa)
         except Exception:
             pass
+    # Action Queue count — admin governance slice (account approvals,
+    # AI-extracted drafts, password resets). Mirrors the gate in
+    # MODULE_REGISTRY["queue"].nav_access and _action_queue_items().
+    # Silent-skip if a source table doesn't exist yet.
+    is_admin_role = is_owner(user) or user["role"] in {"super_admin", "site_admin", "instrument_admin"}
+    if is_admin_role:
+        aq = 0
+        try:
+            aq += db.execute(
+                "SELECT COUNT(*) FROM users WHERE invite_status = 'pending_approval'"
+            ).fetchone()[0] or 0
+        except Exception:
+            pass
+        try:
+            aq += db.execute(
+                "SELECT COUNT(*) FROM ai_prospective_actions "
+                "WHERE assigned_approver_id = ? AND status = 'awaiting_review'",
+                (user["id"],),
+            ).fetchone()[0] or 0
+        except Exception:
+            pass
+        try:
+            aq += db.execute(
+                "SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending'"
+            ).fetchone()[0] or 0
+        except Exception:
+            pass
+        if aq:
+            counts["action_queue"] = int(aq)
     return counts
 
 

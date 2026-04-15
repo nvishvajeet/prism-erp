@@ -12200,6 +12200,19 @@ def login():
     # form — just bounce them to home. Otherwise a stale cookie + the
     # role-vis filter in base.html would hide the form for that role.
     portal_arg = (request.values.get("portal") or "").strip().lower()
+
+    # Apex tenant-routing: if someone lands on catalysterp.org/login with
+    # portal=hq or portal=lab, bounce them to the right tenant subdomain.
+    # Apex has no ERP users of its own — its login DB is just the picker shell.
+    host = (request.host or "").lower().split(":")[0]
+    APEX_HOSTS = {"catalysterp.org", "www.catalysterp.org"}
+    TENANT_REDIRECTS = {
+        "lab": "https://mitwpu-rnd.catalysterp.org/login",
+        "hq":  "https://ravikiran.catalysterp.org/login",
+    }
+    if request.method == "GET" and host in APEX_HOSTS and portal_arg in TENANT_REDIRECTS:
+        return redirect(TENANT_REDIRECTS[portal_arg], code=302)
+
     if portal_arg in ERP_PORTALS:
         session["requested_portal"] = portal_arg
     elif request.method == "GET" and "portal" in request.args and portal_arg not in ERP_PORTALS:

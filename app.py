@@ -481,8 +481,12 @@ MODULE_REGISTRY = {
         "nav_order": 99,
         "description": "User management + dev tools",
         "nav_endpoint": "dev_panel",
-        "nav_active_endpoints": {"dev_panel"},
-        "nav_access": lambda ap, is_owner: is_owner,
+        "nav_active_endpoints": {"dev_panel", "admin_users", "user_profile"},
+        # Nav visible to anyone who can manage users, not just the owner.
+        # Fixes "user management portal not seen anymore" for site_admin /
+        # super_admin / instrument_admin roles. The underlying /admin/users
+        # route already permission-gates on can_create_users.
+        "nav_access": lambda ap, is_owner: is_owner or bool(ap.get("can_create_users")) or bool(ap.get("can_view_user_profiles")),
     },
 }
 
@@ -16356,6 +16360,7 @@ def role_manual():
 
 @app.route("/help")
 @app.route("/getting-started")
+@app.route("/getting_started")  # underscore alias — stale bookmarks and Jinja url_for('getting_started') both resolve
 @login_required
 def getting_started():
     """Fast-onboarding landing page. Role-aware 'how to do X in 3

@@ -101,5 +101,4 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Codex | cluster runner orchestration | CLAIMS.md, scripts/cluster_wave.py, ops/continuous_crawlers/README.md | 2026-04-15 15:53 CEST |
 | Codex | bulk user intake + user/vendor approval queues | app.py, templates/users.html, templates/vendors.html, templates/vendor_form.html, templates/vendor_detail.html | 2026-04-14 21:48 CEST |

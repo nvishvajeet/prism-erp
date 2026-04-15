@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| Codex | dev-minute-queue-review-agent | 2026-04-15T09:02:51Z | scripts/install_launchd.sh, ops/launchd/local.catalyst.queue_review.laptop.plist, ops/launchd/README.md | pending |
 
 ## Stale-claim recovery
 

@@ -1,20 +1,15 @@
 {# Instrument Queues tile — extracted from dashboard.html #}
 {% set _lab_mode = lab_portal_mode %}
-{% if portal_module_enabled('queue') and has_instrument_area_access_user and not instrument_fifo_queue %}
+{% if portal_module_enabled('queue') and has_instrument_area_access_user %}
   <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
     {% call card_heading("FLOW", "Instrument Queues") %}
       <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ "Open Lab Queue" if _lab_mode else "Open Queue" }}</a>
     {% endcall %}
+    {% if not instrument_fifo_queue %}
     {{ empty_state("No active instrument queues.",
                    "When new lab requests arrive, they will appear here first." if _lab_mode else "When requests come in, they'll appear here first.",
                    "New Lab Request" if _lab_mode else "New Request", url_for('new_request')) }}
-  </article>
-  {% endif %}
-  {% if portal_module_enabled('queue') and has_instrument_area_access_user and instrument_fifo_queue %}
-  <article class="card tile tile-full-width tile-dash-instrument-queues tile-dash-operational" id="instrument-fifo-pane" data-vis="{{ V }}">
-    {% call card_heading("FLOW", "Instrument Queues") %}
-      <a class="btn-open-queue" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ "Open Lab Queue" if _lab_mode else "Open Queue" }}</a>
-    {% endcall %}
+    {% else %}
     <div class="dash-instrument-grid" data-vis="{{ V }}">
       {% for queue in instrument_fifo_queue %}
       <div class="dash-instrument-card" data-vis="{{ V }}">
@@ -52,6 +47,7 @@
     <div class="dash-instrument-overflow" data-vis="{{ V }}">
       <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ instrument_fifo_total - 9 }} more instruments with active {{ "runs" if _lab_mode else "jobs" }} &rarr;</a>
     </div>
+    {% endif %}
     {% endif %}
   </article>
   {% endif %}

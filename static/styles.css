@@ -10332,6 +10332,44 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   color: var(--ink);
   line-height: 1.35;
 }
+.feedback-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.feedback-preset {
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--accent) 24%);
+  background: color-mix(in srgb, var(--surface) 82%, var(--accent) 18%);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.69rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.feedback-preset:hover {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line) 54%);
+  background: color-mix(in srgb, var(--surface) 70%, var(--accent) 30%);
+}
+.feedback-context-card {
+  border: 1px solid color-mix(in srgb, var(--line) 80%, var(--accent) 20%);
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+  border-radius: 0.85rem;
+  padding: 0.6rem 0.7rem;
+}
+.feedback-context-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.feedback-context-preview {
+  margin: 0;
+  line-height: 1.45;
+  word-break: break-word;
+}
 .feedback-hint kbd {
   display: inline-block; padding: 0 0.3rem; border: 1px solid var(--line);
   border-radius: 4px; background: var(--surface); font-family: inherit;

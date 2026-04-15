@@ -35,6 +35,12 @@
         </span>
       </div>
       <p class="feedback-steps hint" data-vis="{{ V }}">1. Describe the issue. 2. Keep the mic live or use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click to pin the exact spot. 3. Send the report.</p>
+      <div class="feedback-presets" data-vis="{{ V }}">
+        <button type="button" class="feedback-preset" data-feedback-preset="Button is broken. I clicked it and it did not do the expected action." data-vis="{{ V }}">Broken Button</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Layout issue. Something is off-screen, overlapped, or hard to use." data-vis="{{ V }}">Layout Issue</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Readability issue. The text, colors, or contrast are hard to read." data-vis="{{ V }}">Readability</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Flow issue. I am not sure what to do next on this page." data-vis="{{ V }}">Confusing Flow</button>
+      </div>
       <form method="post" action="{{ url_for('site_feedback_submit') }}" class="feedback-form" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="source" value="feedback">
@@ -42,9 +48,14 @@
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
         <textarea name="text" id="feedbackText" rows="3" placeholder="What broke? What did you expect? You can talk, then click the broken area while recording, or use Ctrl/Cmd + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
+        <div class="feedback-context-card" data-vis="{{ V }}">
+          <p class="feedback-context-title" data-vis="{{ V }}">Live Context</p>
+          <p id="feedbackContextPreview" class="feedback-context-preview hint" data-vis="{{ V }}">Page and pinned target will appear here as you test.</p>
+        </div>
         <div class="feedback-actions" data-vis="{{ V }}">
           <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤 Record</button>
           <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯 Pin</button>
+          <button type="button" id="feedbackClear" class="btn" title="Clear draft and pinned clicks" data-vis="{{ V }}">Reset</button>
           <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send Report</button>
         </div>
       </form>
@@ -71,6 +82,9 @@
     var captureMarker = document.getElementById('feedbackCaptureMarker');
     var captureSummary = document.getElementById('feedbackCaptureSummary');
     var toggleState = document.getElementById('feedbackToggleState');
+    var clearBtn = document.getElementById('feedbackClear');
+    var contextPreview = document.getElementById('feedbackContextPreview');
+    var presetButtons = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-preset]'));
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
@@ -89,6 +103,35 @@
       captureSummary.textContent =
         capturedClicks.length + ' pinned click' + (capturedClicks.length === 1 ? '' : 's') +
         ' · last: ' + (last.selector || 'unknown') + ' @ ' + last.page_x + ',' + last.page_y;
+    }
+
+    function updateContextPreview() {
+      if (!contextPreview) return;
+      var base = 'Page: ' + (location.pathname + location.search || '/');
+      if (!capturedClicks.length) {
+        contextPreview.textContent = base + ' · No pinned target yet.';
+        return;
+      }
+      var last = capturedClicks[capturedClicks.length - 1];
+      var parts = [
+        base,
+        'Target: ' + (last.selector || 'unknown'),
+        'Coords: ' + last.page_x + ',' + last.page_y
+      ];
+      if (last.text) parts.push('Text: ' + last.text);
+      contextPreview.textContent = parts.join(' · ');
+    }
+
+    function resetFeedbackDraft(opts) {
+      opts = opts || {};
+      if (text && !opts.keepText) text.value = '';
+      if (ctxInput) ctxInput.value = '';
+      capturedClicks = [];
+      captureCounter = 0;
+      pointerTrail = [];
+      updateCaptureSummary();
+      updateContextPreview();
+      if (!opts.quiet) setStatus('Draft cleared. Start a fresh report.', '');
     }
 
     function syncWidgetViewport() {
@@ -112,6 +155,7 @@
       if (toggleState) toggleState.textContent = listening ? 'Live' : 'Open';
       // Pull focus into the textarea so voice + typing are immediate.
       if (text) { try { text.focus(); } catch(e) {} }
+      updateContextPreview();
     }
     function closePanel() {
       panel.hidden = true;
@@ -317,6 +361,7 @@
       capturedClicks.push(marker);
       if (capturedClicks.length > 20) capturedClicks.shift();
       updateCaptureSummary();
+      updateContextPreview();
       appendCaptureDraft(marker);
       collectContext(null);
       pulseCaptureMarker({x: ev.clientX, y: ev.clientY});
@@ -367,11 +412,25 @@
         text.focus();
       }
       collectContext(descr);
+      updateContextPreview();
       pulseCaptureMarker({x: lastPointer.x, y: lastPointer.y});
       flashCapture('Captured under cursor', 'ok');
       setStatus('Pinned the element under your cursor.', 'live');
     }
     if (captureBtn) captureBtn.addEventListener('click', function(ev){ ev.preventDefault(); captureElementUnderCursor(); });
+    if (clearBtn) clearBtn.addEventListener('click', function(ev){ ev.preventDefault(); resetFeedbackDraft({quiet: false}); });
+    presetButtons.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if (!text) return;
+        var preset = btn.getAttribute('data-feedback-preset') || '';
+        if (!preset) return;
+        if (text.value && !/\s$/.test(text.value)) text.value += ' ';
+        text.value += preset + ' ';
+        openPanel();
+        text.focus();
+        setStatus('Starter text added. Add details, then pin the exact spot.', '');
+      });
+    });
 
     // ── Voice (SpeechRecognition) ─────────────────────────────────
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -448,10 +507,7 @@
         try {
           recognition.start();
           listening = true;
-          pointerTrail = [];
-          capturedClicks = [];
-          captureCounter = 0;
-          updateCaptureSummary();
+          resetFeedbackDraft({keepText: true, quiet: true});
           showVoiceBadge(true);
           mic.textContent = '🔴 Recording';
           mic.title = 'Listening… click to stop.';
@@ -523,11 +579,7 @@
           throw new Error((result.data && (result.data.error || result.data.message)) || 'Feedback could not be saved.');
         }
         if (text) text.value = '';
-        if (ctxInput) ctxInput.value = '';
-        capturedClicks = [];
-        captureCounter = 0;
-        pointerTrail = [];
-        updateCaptureSummary();
+        resetFeedbackDraft({quiet: true});
         setStatus(result.data.message || 'Feedback sent.', '');
         if (panel && !panel.hidden) {
           window.setTimeout(function(){

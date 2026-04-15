@@ -21,7 +21,7 @@
       {% if companies and companies|length > 1 %}
       <label class="control-flex-fill" data-vis="{{ V }}">
         Company
-        <select name="company" data-vis="{{ V }}" onchange="this.form.submit()">
+        <select name="company" data-vis="{{ V }}" class="js-auto-submit-filter">
           <option value="" data-vis="{{ V }}">All Companies</option>
           {% for co in companies %}
           <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
@@ -31,7 +31,7 @@
       {% endif %}
       <label class="control-flex-fill" data-vis="{{ V }}">
         Period
-        <select name="period" data-vis="{{ V }}" onchange="this.form.submit()">
+        <select name="period" data-vis="{{ V }}" class="js-auto-submit-filter">
           <option value="" data-vis="{{ V }}">All Periods</option>
           {% for p in periods %}
           <option value="{{ p }}"{% if period_filter == p %} selected{% endif %} data-vis="{{ V }}">{{ p }}</option>
@@ -326,6 +326,11 @@
 
 <script>
 (function(){
+  document.querySelectorAll('.js-auto-submit-filter').forEach(function(select){
+    select.addEventListener('change', function(){
+      if(select.form) select.form.submit();
+    });
+  });
   // Clickable rows
   document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
     r.addEventListener('click',function(e){

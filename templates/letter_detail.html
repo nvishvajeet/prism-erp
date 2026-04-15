@@ -8,7 +8,7 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">{{ letter.title }}</h2>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    <a href="{{ url_for('letter_print', letter_id=letter.id) }}" class="btn btn-primary" target="_blank" data-vis="{{ V }}">Print as PDF</a>
+    <a href="{{ url_for('letter_print', letter_id=letter.id) }}" class="btn btn-primary" target="_blank" rel="noopener" data-vis="{{ V }}">Print as PDF</a>
   </div>
 </header>
 

@@ -15,8 +15,8 @@
   {# ── Job type selector ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     <div style="display:flex;gap:1rem;padding:0.5rem 0;" data-vis="{{ V }}">
-      <button type="button" class="btn btn-primary" id="tabHPC" onclick="switchTab('hpc')" data-vis="{{ V }}">🖥️ HPC Job</button>
-      <button type="button" class="btn" id="tabAI" onclick="switchTab('ai')" data-vis="{{ V }}">🧠 AI Prompt</button>
+      <button type="button" class="btn btn-primary js-compute-tab" id="tabHPC" data-tab-target="hpc" data-vis="{{ V }}">🖥️ HPC Job</button>
+      <button type="button" class="btn js-compute-tab" id="tabAI" data-tab-target="ai" data-vis="{{ V }}">🧠 AI Prompt</button>
     </div>
   </article>
 
@@ -78,7 +78,7 @@
         </div>
 
         <div style="display:flex;gap:1rem;" data-vis="{{ V }}">
-          <button type="button" class="btn" onclick="runEstimate()" data-vis="{{ V }}">✨ Analyze & Estimate</button>
+          <button type="button" class="btn js-run-estimate" data-vis="{{ V }}">✨ Analyze & Estimate</button>
           <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Job</button>
         </div>
       </form>
@@ -185,6 +185,17 @@ function runEstimate() {
       + '<div><strong>Est. Output:</strong> ' + (data.estimated_output_mb || '?') + ' MB</div>'
       + '</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);">' + (data.reasoning || '') + '</div>';
   }).catch(() => { content.innerHTML = '<span style="color:var(--danger);">Estimate failed — submit anyway with defaults.</span>'; });
+}
+document.querySelectorAll('.js-compute-tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    switchTab(btn.dataset.tabTarget);
+  });
+});
+var estimateBtn = document.querySelector('.js-run-estimate');
+if (estimateBtn) {
+  estimateBtn.addEventListener('click', function(){
+    runEstimate();
+  });
 }
 </script>
 {% endblock %}

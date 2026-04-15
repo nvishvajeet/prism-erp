@@ -24,7 +24,7 @@
         You can also print this page for an ID card badge.
       </p>
       <div style="margin-top:1rem;" data-vis="{{ V }}">
-        <button onclick="window.print()" class="btn btn-primary" data-vis="{{ V }}">Print QR Card</button>
+        <button type="button" class="btn btn-primary js-print-page" data-vis="{{ V }}">Print QR Card</button>
       </div>
       {% else %}
       <p data-vis="{{ V }}">No member code assigned yet. Contact your administrator.</p>
@@ -39,4 +39,14 @@
   .card { box-shadow: none !important; border: 2px solid var(--ink) !important; }
 }
 </style>
+<script>
+(function () {
+  var printBtn = document.querySelector('.js-print-page');
+  if (printBtn) {
+    printBtn.addEventListener('click', function () {
+      window.print();
+    });
+  }
+})();
+</script>
 {% endblock %}

@@ -69,7 +69,7 @@
           </select>
           <label data-vis="{{ V }}"><input type="checkbox" name="field_required_{{ loop.index }}" value="1" {% if f["is_required"] %}checked{% endif %} data-vis="{{ V }}"> Required</label>
           <input type="text" name="field_options_{{ loop.index }}" value="{{ f['field_options'] }}" placeholder="Options (comma-sep)" aria-label="Custom field options" class="fc-options-input" data-vis="{{ V }}">
-          <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
+          <button type="button" class="form-control-remove-btn js-remove-field-row" data-vis="{{ V }}">&times;</button>
         </div>
         {% endfor %}
       </div>
@@ -144,7 +144,7 @@
     </select>
     <label data-vis="{{ V }}"><input type="checkbox" name="field_required_IDX" value="1" data-vis="{{ V }}"> Required</label>
     <input type="text" name="field_options_IDX" placeholder="Options (comma-sep)" aria-label="Custom field options" class="fc-options-input" data-vis="{{ V }}">
-    <button type="button" class="form-control-remove-btn" onclick="this.parentElement.remove()" data-vis="{{ V }}">&times;</button>
+    <button type="button" class="form-control-remove-btn js-remove-field-row" data-vis="{{ V }}">&times;</button>
   </div>
 </template>
 
@@ -153,6 +153,13 @@
   var list = document.getElementById('customFieldsList');
   var tmpl = document.getElementById('fieldRowTemplate');
   var btn = document.getElementById('addFieldBtn');
+  list.addEventListener('click', function(event) {
+    var removeBtn = event.target.closest('.js-remove-field-row');
+    if (removeBtn) {
+      var row = removeBtn.closest('.form-control-field-row');
+      if (row) row.remove();
+    }
+  });
   btn.addEventListener('click', function() {
     var rows = list.querySelectorAll('.form-control-field-row');
     if (rows.length >= 20) return;

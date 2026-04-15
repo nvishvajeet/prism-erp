@@ -45,8 +45,8 @@
 </head>
 <body>
   <div class="no-print">
-    <button onclick="window.print()">🖨 Print This Record</button>
-    <button onclick="window.close()">Close</button>
+    <button type="button" class="js-print-record">🖨 Print This Record</button>
+    <button type="button" class="js-close-window">Close</button>
   </div>
 
   <div class="filing-strip">
@@ -161,5 +161,21 @@
   <div class="footer">
     Catalyst ERP · Purchase Order Audit Record · Auto-generated · Do not alter
   </div>
+  <script>
+    (function () {
+      var printBtn = document.querySelector('.js-print-record');
+      var closeBtn = document.querySelector('.js-close-window');
+      if (printBtn) {
+        printBtn.addEventListener('click', function () {
+          window.print();
+        });
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+          window.close();
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

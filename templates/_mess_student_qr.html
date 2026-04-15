@@ -18,7 +18,7 @@
 </div>
 
 <div style="text-align:center;margin-top:1rem;" data-vis="{{ V }}">
-  <button onclick="window.print()" class="btn btn-primary" data-vis="{{ V }}">Print Card</button>
+  <button type="button" class="btn btn-primary js-print-page" data-vis="{{ V }}">Print Card</button>
   <a href="{{ url_for('mess_student_detail', student_id=student.id) }}" class="btn" data-vis="{{ V }}">Back to Detail</a>
 </div>
 
@@ -29,4 +29,14 @@
   div[style*="border:3px"] { box-shadow: none !important; page-break-inside: avoid; }
 }
 </style>
+<script>
+(function () {
+  var printBtn = document.querySelector('.js-print-page');
+  if (printBtn) {
+    printBtn.addEventListener('click', function () {
+      window.print();
+    });
+  }
+})();
+</script>
 {% endblock %}

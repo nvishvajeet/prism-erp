@@ -22,7 +22,7 @@
       {% if ext in ('jpg','jpeg','png','gif','webp') %}
       <img src="{{ url_for('receipt_file', receipt_id=receipt.id) }}" alt="Receipt" class="receipt-img" data-vis="{{ V }}">
       {% elif ext == 'pdf' %}
-      <a class="btn" href="{{ url_for('receipt_file', receipt_id=receipt.id) }}" target="_blank" data-vis="{{ V }}">View PDF →</a>
+      <a class="btn" href="{{ url_for('receipt_file', receipt_id=receipt.id) }}" target="_blank" rel="noopener" data-vis="{{ V }}">View PDF →</a>
       {% else %}
       <a class="btn" href="{{ url_for('receipt_file', receipt_id=receipt.id) }}" data-vis="{{ V }}">Download attachment</a>
       {% endif %}

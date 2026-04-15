@@ -18,7 +18,7 @@
     <form method="get" class="form-inline-shell control-flex-wrap" data-vis="{{ V }}">
       <label class="control-flex-fill-wide" data-vis="{{ V }}">
         Detail threshold (₹)
-        <select name="threshold" data-vis="{{ V }}" onchange="this.form.submit()">
+        <select name="threshold" data-vis="{{ V }}" class="js-threshold-filter">
           {% for t in [1000, 2000, 5000, 10000, 25000, 50000] %}
           <option value="{{ t }}"{% if detail_threshold == t %} selected{% endif %} data-vis="{{ V }}">₹{{ "{:,.0f}".format(t) }}</option>
           {% endfor %}
@@ -164,7 +164,7 @@
           </td>
           <td data-vis="{{ V }}">{{ o.approved_at[:10] if o.approved_at else '—' }}</td>
           <td data-vis="{{ V }}">
-            <a href="{{ url_for('vendor_payment_print', po_id=o.id) }}" aria-label="Print" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">🖨</a>
+            <a href="{{ url_for('vendor_payment_print', po_id=o.id) }}" aria-label="Print" class="text-link js-stop-row-nav" data-vis="{{ V }}">🖨</a>
           </td>
         </tr>
         {% endfor %}
@@ -177,6 +177,17 @@
 
 <script>
 (function(){
+  var thresholdSelect = document.querySelector('.js-threshold-filter');
+  if (thresholdSelect) {
+    thresholdSelect.addEventListener('change', function(){
+      if (thresholdSelect.form) thresholdSelect.form.submit();
+    });
+  }
+  document.querySelectorAll('.js-stop-row-nav').forEach(function(link){
+    link.addEventListener('click', function(e){
+      e.stopPropagation();
+    });
+  });
   // Clickable rows
   document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
     r.addEventListener('click',function(e){

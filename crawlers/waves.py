@@ -37,7 +37,7 @@ WAVES: dict[str, Wave] = {
     "sanity": Wave(
         name="sanity",
         description="Pre-push gate — must be green before every push",
-        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "empty_states", "dev_panel_readability", "xhr_contracts", "contrast_audit", "csrf_token_present", "css_variable_defined", "aria_label_present", "label_for_matches_id", "duplicate_id_in_template", "hardcoded_url_in_template", "agents_md_contract", "parallel_claims", "deploy_smoke"),
+        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "empty_states", "dev_panel_readability", "xhr_contracts", "contrast_audit", "csrf_token_present", "css_variable_defined", "aria_label_present", "label_for_matches_id", "duplicate_id_in_template", "hardcoded_url_in_template", "external_link_noopener", "no_inline_onclick", "agents_md_contract", "parallel_claims", "deploy_smoke"),
         stop_on_fail=True,
     ),
     "static": Wave(
@@ -67,7 +67,7 @@ WAVES: dict[str, Wave] = {
     "accessibility": Wave(
         name="accessibility",
         description="WCAG contrast + palette-drift + ARIA-label presence",
-        strategies=("contrast_audit", "color_improvement", "aria_label_present", "label_for_matches_id"),
+        strategies=("contrast_audit", "color_improvement", "aria_label_present", "label_for_matches_id", "external_link_noopener", "no_inline_onclick"),
         stop_on_fail=False,
     ),
     "cleanup": Wave(
@@ -90,7 +90,7 @@ WAVES: dict[str, Wave] = {
         description="Skeleton — layout, template creed, CSS hygiene, a11y",
         strategies=(
             "architecture", "philosophy", "css_orphan", "css_variable_defined", "cleanup",
-            "contrast_audit", "color_improvement", "url_for_endpoint_exists",
+            "contrast_audit", "color_improvement", "url_for_endpoint_exists", "external_link_noopener", "no_inline_onclick",
         ),
         stop_on_fail=False,
     ),
@@ -196,7 +196,7 @@ WAVES: dict[str, Wave] = {
             # coverage
             "performance", "random_walk",
             # accessibility
-            "color_improvement", "aria_label_present", "label_for_matches_id",
+            "color_improvement", "aria_label_present", "label_for_matches_id", "external_link_noopener", "no_inline_onclick",
             # regression (static endpoint audit + HTML-id uniqueness + URL discipline)
             "url_for_endpoint_exists", "duplicate_id_in_template", "hardcoded_url_in_template",
             # cleanup

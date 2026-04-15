@@ -11,6 +11,7 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <a class="btn" href="{{ url_for('vendor_list') }}" data-vis="{{ V }}">Vendors</a>
+    <a class="btn" href="{{ url_for('company_books') }}" data-vis="{{ V }}">Books</a>
     <a class="btn" href="{{ url_for('payroll_view') }}" data-vis="{{ V }}">Salary</a>
     <a class="btn" href="{{ url_for('vendor_payment_reports') }}" data-vis="{{ V }}">Reports</a>
     <a class="btn" href="{{ url_for('ca_audit_dashboard') }}" data-vis="{{ V }}">Audit</a>
@@ -38,6 +39,16 @@
       {"value": "₹" ~ "{:,.0f}".format(payroll_month_total or 0), "label": "Salary (monthly)"},
     ]) }}
   </article>
+  {% if by_payment_method %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("PAYMENT RAILS", "How recent paid orders were settled") }}
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.75rem;" data-vis="{{ V }}">
+      {% for row in by_payment_method %}
+      <span class="badge" data-vis="{{ V }}">{{ payment_method_label(row.payment_method) }} · {{ row.count }} · ₹{{ "{:,.0f}".format(row.total) }}</span>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
 </section>
 
 {{ status_pills_row(

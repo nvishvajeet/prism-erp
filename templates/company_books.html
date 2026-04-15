@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, kpi_grid, metadata_grid, empty_state with context %}
+{% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Company Books</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">Separate books, vendors, and payment rails</span>
+  </div>
+</header>
+
+<section class="inst-tiles" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ kpi_grid([
+      {"value": companies|length|string, "label": "Active Companies"},
+      {"value": (companies|selectattr('is_own_firm')|list|length)|string, "label": "Own Firms", "tone": "green"},
+      {"value": (companies|sum(attribute='vendor_count'))|string, "label": "Scoped Vendors"},
+      {"value": "₹" ~ "{:,.0f}".format(companies|sum(attribute='paid_total')), "label": "Paid Through Books"},
+    ]) }}
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("ADD COMPANY", "Each company keeps its own vendors, books, and payment reporting") }}
+    <form method="post" class="form-grid" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Company Name
+        <input type="text" name="name" required placeholder="e.g. Ravikiran Services" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Short Name
+        <input type="text" name="short_name" required placeholder="e.g. Ravikiran" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">GSTIN
+        <input type="text" name="gstin" placeholder="Optional GSTIN" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">PAN
+        <input type="text" name="pan" placeholder="Optional PAN" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">Primary Payment Book
+        <select name="primary_payment_book" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Select primary book…</option>
+          {% for value, label in payment_book_choices %}
+          <option value="{{ value }}" data-vis="{{ V }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Secondary Payment Book
+        <select name="secondary_payment_book" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Optional fallback…</option>
+          {% for value, label in payment_book_choices %}
+          <option value="{{ value }}" data-vis="{{ V }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">UPI Handle
+        <input type="text" name="upi_handle" placeholder="Optional company UPI" data-vis="{{ V }}">
+      </label>
+      <label data-vis="{{ V }}">
+        <span style="display:flex;align-items:center;gap:0.5rem;" data-vis="{{ V }}">
+          <input type="checkbox" name="is_own_firm" value="1" checked data-vis="{{ V }}">
+          Treat this as one of our own firms
+        </span>
+      </label>
+      <label style="grid-column:1/-1;" data-vis="{{ V }}">Address
+        <textarea name="address" rows="2" placeholder="Company address" data-vis="{{ V }}"></textarea>
+      </label>
+      <label style="grid-column:1/-1;" data-vis="{{ V }}">Owner Note
+        <textarea name="owner_note" rows="2" placeholder="Internal note about this company and how it sits inside the group" data-vis="{{ V }}"></textarea>
+      </label>
+      <label style="grid-column:1/-1;" data-vis="{{ V }}">Book Notes
+        <textarea name="book_notes" rows="2" placeholder="How this company uses BOI / HDFC / UPI / cash in practice" data-vis="{{ V }}"></textarea>
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Add Company</button>
+    </form>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("LIVE BOOKS", companies|length|string ~ " active companies") }}
+    {% if companies %}
+    <div class="stack-list" data-vis="{{ V }}">
+      {% for c in companies %}
+      <div class="stack-list-item" data-vis="{{ V }}">
+        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;" data-vis="{{ V }}">
+          <div data-vis="{{ V }}">
+            <strong data-vis="{{ V }}">{{ c.name }}</strong>
+            <div class="hint" data-vis="{{ V }}">{{ c.short_name or '—' }}{% if c.is_own_firm %} · own firm{% endif %}</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
+            <span class="badge" data-vis="{{ V }}">{{ c.vendor_count }} vendors</span>
+            <span class="badge" data-vis="{{ V }}">{{ c.po_count }} payment rows</span>
+            <span class="badge {% if c.open_po_count %}status-queued{% else %}status-active{% endif %}" data-vis="{{ V }}">{{ c.open_po_count }} open</span>
+          </div>
+        </div>
+        {{ metadata_grid([
+          ("GSTIN", c.gstin or '—'),
+          ("PAN", c.pan or '—'),
+          ("Primary Book", c.primary_payment_book|replace('_', ' ')|title if c.primary_payment_book else '—'),
+          ("Secondary Book", c.secondary_payment_book|replace('_', ' ')|title if c.secondary_payment_book else '—'),
+          ("UPI", c.upi_handle or '—'),
+          ("Paid Total", "₹" ~ "{:,.0f}".format(c.paid_total or 0)),
+        ]) }}
+        {% if c.book_notes or c.owner_note %}
+        <p class="hint" style="padding:0 0.75rem 0.75rem;" data-vis="{{ V }}">{{ c.book_notes or c.owner_note }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No companies yet.", "Add your first company to start separating books, vendors, and payment reporting.") }}
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

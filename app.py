@@ -363,7 +363,7 @@ MODULE_REGISTRY = {
             "vendor_payment_approve_queue", "vendor_payment_batch_approve",
             "vendor_payment_print", "vendor_payment_print_batch",
             "vendor_payment_filing", "vendor_list", "vendor_detail",
-            "vendor_new", "vendor_payment_reports",
+            "vendor_new", "vendor_payment_reports", "company_books",
             "ca_audit_dashboard", "ca_audit_batch", "ca_audit_single",
             "ca_audit_upload_statement", "ca_audit_signoff",
             "ca_audit_print_signoff", "ca_audit_statement_review",
@@ -5425,6 +5425,10 @@ def init_db() -> None:
         # that are effectively vendors kept in the same table for history.
         for _sql in (
             "ALTER TABLE companies ADD COLUMN is_own_firm INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE companies ADD COLUMN primary_payment_book TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE companies ADD COLUMN secondary_payment_book TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE companies ADD COLUMN upi_handle TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE companies ADD COLUMN book_notes TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE grants    ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE invoices  ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1",
         ):
@@ -5503,6 +5507,11 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders(created_at);
         """)
         vendor_columns = {col[1] for col in cur.execute("PRAGMA table_info(vendors)").fetchall()}
+        if "company_id" not in vendor_columns:
+            try:
+                cur.execute("ALTER TABLE vendors ADD COLUMN company_id INTEGER")
+            except Exception:
+                pass
         if "approval_status" not in vendor_columns:
             try:
                 cur.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
@@ -5518,7 +5527,20 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE vendors ADD COLUMN approved_at TEXT")
             except Exception:
                 pass
+        po_columns = {col[1] for col in cur.execute("PRAGMA table_info(purchase_orders)").fetchall()}
+        for _sql in (
+            "ALTER TABLE purchase_orders ADD COLUMN payment_book TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE purchase_orders ADD COLUMN payment_batch_code TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE purchase_orders ADD COLUMN payment_flow TEXT NOT NULL DEFAULT 'outgoing'",
+        ):
+            try:
+                cur.execute(_sql)
+            except Exception:
+                pass
         cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id, is_active)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_po_payment_book ON purchase_orders(payment_book, status)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_po_payment_flow ON purchase_orders(payment_flow, status)")
 
         # ── CA Audit module ──────────────────────────────────────
         cur.executescript("""
@@ -19625,6 +19647,41 @@ PO_CATEGORIES = [
     ("general",     "General / Other"),
 ]
 
+PAYMENT_METHOD_CHOICES = [
+    ("netbanking", "Netbanking"),
+    ("neft_rtgs", "NEFT / RTGS"),
+    ("upi", "UPI"),
+    ("cheque", "Cheque"),
+    ("cash", "Cash"),
+    ("other", "Other"),
+]
+
+PAYMENT_FLOW_CHOICES = [
+    ("outgoing", "Outgoing payment"),
+    ("incoming", "Incoming receipt / refund"),
+]
+
+PAYMENT_BOOK_CHOICES = [
+    ("bank_of_india", "Bank of India"),
+    ("hdfc_bank", "HDFC Bank"),
+    ("cash_book", "Cash Book"),
+    ("upi_clearing", "UPI Clearing"),
+    ("cheque_book", "Cheque Book"),
+    ("collection_book", "Collection / Party Receipt"),
+]
+
+
+def payment_method_label(value: str) -> str:
+    return dict(PAYMENT_METHOD_CHOICES).get(value or "", (value or "").replace("_", " ").title() or "—")
+
+
+def payment_book_label(value: str) -> str:
+    return dict(PAYMENT_BOOK_CHOICES).get(value or "", (value or "").replace("_", " ").title() or "—")
+
+
+def payment_flow_label(value: str) -> str:
+    return dict(PAYMENT_FLOW_CHOICES).get(value or "", (value or "").replace("_", " ").title() or "—")
+
 
 def _user_can_manage_payments(user) -> bool:
     if not user:
@@ -19645,13 +19702,23 @@ def _user_can_approve_vendors(user) -> bool:
 def _ensure_vendor_approval_columns() -> None:
     db = get_db()
     cols = {row["name"] for row in db.execute("PRAGMA table_info(vendors)").fetchall()}
+    if "company_id" not in cols:
+        db.execute("ALTER TABLE vendors ADD COLUMN company_id INTEGER")
     if "approval_status" not in cols:
         db.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
     if "approved_by_user_id" not in cols:
         db.execute("ALTER TABLE vendors ADD COLUMN approved_by_user_id INTEGER REFERENCES users(id)")
     if "approved_at" not in cols:
         db.execute("ALTER TABLE vendors ADD COLUMN approved_at TEXT")
+    po_cols = {row["name"] for row in db.execute("PRAGMA table_info(purchase_orders)").fetchall()}
+    if "payment_book" not in po_cols:
+        db.execute("ALTER TABLE purchase_orders ADD COLUMN payment_book TEXT NOT NULL DEFAULT ''")
+    if "payment_batch_code" not in po_cols:
+        db.execute("ALTER TABLE purchase_orders ADD COLUMN payment_batch_code TEXT NOT NULL DEFAULT ''")
+    if "payment_flow" not in po_cols:
+        db.execute("ALTER TABLE purchase_orders ADD COLUMN payment_flow TEXT NOT NULL DEFAULT 'outgoing'")
     db.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id, is_active)")
     db.commit()
 
 
@@ -19699,6 +19766,73 @@ def _parse_bulk_vendor_rows(raw_text: str) -> tuple[list[dict[str, str]], list[s
     return rows, errors
 
 
+@app.route("/payments/books", methods=["GET", "POST"])
+@login_required
+def company_books():
+    """Manage own firms with separate books, banks, and vendor lanes."""
+    if not portal_route_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+    _ensure_vendor_approval_columns()
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        short_name = request.form.get("short_name", "").strip()
+        if not name or not short_name:
+            flash("Company name and short name are required.", "error")
+            return redirect(url_for("company_books"))
+        existing = query_one(
+            "SELECT id FROM companies WHERE lower(name) = ? OR lower(short_name) = ?",
+            (name.lower(), short_name.lower()),
+        )
+        if existing:
+            flash("That company already exists. Edit support can be added next, but duplicates are blocked now.", "error")
+            return redirect(url_for("company_books"))
+        execute(
+            """
+            INSERT INTO companies
+            (name, short_name, gstin, pan, address, is_active, owner_note, created_at,
+             is_own_firm, primary_payment_book, secondary_payment_book, upi_handle, book_notes)
+            VALUES (?,?,?,?,?,1,?,?,?,?,?,?,?)
+            """,
+            (
+                name,
+                short_name,
+                request.form.get("gstin", "").strip(),
+                request.form.get("pan", "").strip(),
+                request.form.get("address", "").strip(),
+                request.form.get("owner_note", "").strip(),
+                now_iso(),
+                1 if request.form.get("is_own_firm") else 0,
+                request.form.get("primary_payment_book", "").strip(),
+                request.form.get("secondary_payment_book", "").strip(),
+                request.form.get("upi_handle", "").strip(),
+                request.form.get("book_notes", "").strip(),
+            ),
+        )
+        flash(f"Added company '{name}'. Its books, vendors, and payment activity can now stay separate.", "success")
+        return redirect(url_for("company_books"))
+
+    companies = query_all(
+        """
+        SELECT c.*,
+               COALESCE((SELECT COUNT(*) FROM vendors v WHERE v.company_id = c.id AND v.is_active = 1), 0) AS vendor_count,
+               COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.company_id = c.id), 0) AS po_count,
+               COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.company_id = c.id AND po.status IN ('pending_approval','approved')), 0) AS open_po_count,
+               COALESCE((SELECT SUM(po.amount) FROM purchase_orders po WHERE po.company_id = c.id AND po.status IN ('paid','receipt_uploaded')), 0) AS paid_total
+          FROM companies c
+         WHERE c.is_active = 1
+         ORDER BY c.is_own_firm DESC, c.short_name, c.name
+        """
+    )
+    return render_template(
+        "company_books.html",
+        companies=companies,
+        payment_book_choices=PAYMENT_BOOK_CHOICES,
+    )
+
+
 @app.route("/vendors")
 @login_required
 def vendor_list():
@@ -19708,23 +19842,30 @@ def vendor_list():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
+    companies = _get_companies()
+    company_filter = request.args.get("company", "").strip()
     vendors = query_all("""
         SELECT v.*, u.name AS created_by_name,
                approver.name AS approved_by_name,
+               c.short_name AS company_short, c.name AS company_name,
                (SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = v.id) AS po_count,
                (SELECT COALESCE(SUM(amount), 0) FROM purchase_orders
                 WHERE vendor_id = v.id AND status IN ('paid','receipt_uploaded')) AS total_paid
           FROM vendors v
           LEFT JOIN users u ON u.id = v.created_by_user_id
           LEFT JOIN users approver ON approver.id = v.approved_by_user_id
+          LEFT JOIN companies c ON c.id = v.company_id
+         WHERE (? = '' OR v.company_id = ?)
          ORDER BY v.is_active DESC, v.name ASC
-    """)
+    """, (company_filter, int(company_filter) if company_filter.isdigit() else 0))
     pending_vendors = [v for v in vendors if row_value(v, "approval_status", "approved") == "pending_approval"]
     return render_template(
         "vendors.html",
         vendors=vendors,
         pending_vendors=pending_vendors,
         can_approve_vendors=_user_can_approve_vendors(user),
+        companies=companies,
+        company_filter=company_filter,
     )
 
 
@@ -19737,6 +19878,8 @@ def vendor_bulk_create():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
+    company_raw = (request.form.get("company_id") or "").strip()
+    company_id = int(company_raw) if company_raw.isdigit() else None
     parsed_rows, errors = _parse_bulk_vendor_rows(request.form.get("bulk_rows", ""))
     if errors:
         flash("Bulk vendor add could not start: " + " | ".join(errors[:5]), "error")
@@ -19756,9 +19899,10 @@ def vendor_bulk_create():
             INSERT INTO vendors (
                 name, contact_person, phone, email, gstin, pan, address, category,
                 bank_account, bank_name, ifsc_code, upi_id, notes, created_by_user_id,
+                company_id,
                 created_at, approval_status, approved_by_user_id, approved_at
             )
-            VALUES (?, ?, ?, ?, '', '', '', ?, '', '', '', '', '', ?, ?, 'pending_approval', NULL, NULL)
+            VALUES (?, ?, ?, ?, '', '', '', ?, '', '', '', '', '', ?, ?, ?, 'pending_approval', NULL, NULL)
             """,
             (
                 row["name"],
@@ -19767,6 +19911,7 @@ def vendor_bulk_create():
                 row["email"],
                 row["category"],
                 user["id"],
+                company_id,
                 now_iso(),
             ),
         )
@@ -19788,6 +19933,7 @@ def vendor_new():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
+    companies = _get_companies()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if not name:
@@ -19797,12 +19943,14 @@ def vendor_new():
         approval_status = "approved" if submit_mode == "approved" and _user_can_approve_vendors(user) else "pending_approval"
         approved_at = now_iso() if approval_status == "approved" else None
         approved_by_user_id = user["id"] if approval_status == "approved" else None
+        company_raw = (request.form.get("company_id") or "").strip()
+        company_id = int(company_raw) if company_raw.isdigit() else None
         vid = execute(
             """INSERT INTO vendors (name, contact_person, phone, email, gstin, pan,
                address, category, bank_account, bank_name, ifsc_code, upi_id,
                notes, created_by_user_id, created_at, approval_status,
-               approved_by_user_id, approved_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               approved_by_user_id, approved_at, company_id)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (name, request.form.get("contact_person", "").strip(),
              request.form.get("phone", "").strip(),
              request.form.get("email", "").strip(),
@@ -19815,13 +19963,13 @@ def vendor_new():
              request.form.get("ifsc_code", "").strip(),
              request.form.get("upi_id", "").strip(),
              request.form.get("notes", "").strip(),
-             user["id"], now_iso(), approval_status, approved_by_user_id, approved_at))
+             user["id"], now_iso(), approval_status, approved_by_user_id, approved_at, company_id))
         log_action(
             user["id"],
             "vendor",
             vid,
             "vendor_created",
-            {"name": name, "approval_status": approval_status},
+            {"name": name, "approval_status": approval_status, "company_id": company_id},
         )
         flash(
             f"Vendor '{name}' {'registered' if approval_status == 'approved' else 'submitted for approval'}.",
@@ -19833,6 +19981,7 @@ def vendor_new():
         vendor=None,
         categories=PO_CATEGORIES,
         can_approve_vendors=_user_can_approve_vendors(user),
+        companies=companies,
     )
 
 
@@ -19847,10 +19996,12 @@ def vendor_detail(vendor_id):
     _ensure_vendor_approval_columns()
     vendor = query_one(
         """
-        SELECT v.*, creator.name AS created_by_name, approver.name AS approved_by_name
+        SELECT v.*, creator.name AS created_by_name, approver.name AS approved_by_name,
+               c.short_name AS company_short, c.name AS company_name
           FROM vendors v
           LEFT JOIN users creator ON creator.id = v.created_by_user_id
           LEFT JOIN users approver ON approver.id = v.approved_by_user_id
+          LEFT JOIN companies c ON c.id = v.company_id
          WHERE v.id = ?
         """,
         (vendor_id,),
@@ -19858,9 +20009,10 @@ def vendor_detail(vendor_id):
     if not vendor:
         abort(404)
     orders = query_all("""
-        SELECT po.*, u.name AS submitted_by_name
+        SELECT po.*, u.name AS submitted_by_name, c.short_name AS company_short
           FROM purchase_orders po
           LEFT JOIN users u ON u.id = po.submitted_by_user_id
+          LEFT JOIN companies c ON c.id = po.company_id
          WHERE po.vendor_id = ?
          ORDER BY po.created_at DESC LIMIT 50
     """, (vendor_id,))
@@ -19979,11 +20131,24 @@ def vendor_payments_list():
     payroll_month_total = (
         payroll_month_total_row["total"] if payroll_month_total_row else 0
     )
+    pm_sql = """
+        SELECT payment_method, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+          FROM purchase_orders
+         WHERE status IN ('paid', 'receipt_uploaded') AND COALESCE(payment_method, '') != ''
+    """
+    pm_params: list[object] = []
+    if company_filter:
+        pm_sql += " AND company_id = ?"
+        pm_params.append(int(company_filter))
+    pm_sql += " GROUP BY payment_method ORDER BY total DESC, payment_method ASC LIMIT 6"
+    by_payment_method = query_all(pm_sql, tuple(pm_params))
     return render_template("vendor_payments.html", orders=rows,
                            pending=pending, approved=approved,
                            paid_total=paid_total, total_orders=total_orders,
                            month_spend=month_spend["total"] if month_spend else 0,
                            payroll_month_total=payroll_month_total,
+                           by_payment_method=by_payment_method,
+                           payment_method_label=payment_method_label,
                            status_filter=status_filter, categories=PO_CATEGORIES,
                            companies=companies, company_filter=company_filter)
 
@@ -19999,7 +20164,7 @@ def vendor_payment_new():
         abort(403)
     _ensure_vendor_approval_columns()
     vendors = query_all(
-        "SELECT id, name, category FROM vendors WHERE is_active = 1 AND COALESCE(approval_status, 'approved') = 'approved' ORDER BY name"
+        "SELECT id, name, category, company_id FROM vendors WHERE is_active = 1 AND COALESCE(approval_status, 'approved') = 'approved' ORDER BY name"
     )
     companies = _get_companies()
     if request.method == "POST":
@@ -20090,6 +20255,9 @@ def vendor_payment_detail(po_id):
                a.name AS approved_by_name,
                p.name AS paid_by_name,
                c.name AS company_name, c.short_name AS company_short,
+               c.primary_payment_book AS company_primary_payment_book,
+               c.secondary_payment_book AS company_secondary_payment_book,
+               c.upi_handle AS company_upi_handle,
                cc.name AS counterparty_name, cc.short_name AS counterparty_short
           FROM purchase_orders po
           LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -20107,7 +20275,13 @@ def vendor_payment_detail(po_id):
     can_upload_receipt = _user_can_manage_payments(user) and po["status"] == "paid"
     return render_template("vendor_payment_detail.html", po=po,
                            can_approve=can_approve, can_pay=can_pay,
-                           can_upload_receipt=can_upload_receipt)
+                           can_upload_receipt=can_upload_receipt,
+                           payment_method_choices=PAYMENT_METHOD_CHOICES,
+                           payment_book_choices=PAYMENT_BOOK_CHOICES,
+                           payment_flow_choices=PAYMENT_FLOW_CHOICES,
+                           payment_method_label=payment_method_label,
+                           payment_book_label=payment_book_label,
+                           payment_flow_label=payment_flow_label)
 
 
 @app.route("/payments/<int:po_id>/approve", methods=["POST"])
@@ -20296,14 +20470,20 @@ def vendor_payment_mark_paid(po_id):
         flash("Only approved orders can be marked as paid.", "error")
         return redirect(url_for("vendor_payments_list"))
     method = request.form.get("payment_method", "").strip()
+    payment_book = request.form.get("payment_book", "").strip()
+    payment_batch_code = request.form.get("payment_batch_code", "").strip()
+    payment_flow = request.form.get("payment_flow", "outgoing").strip() or "outgoing"
     reference = request.form.get("payment_reference", "").strip()
     execute("""UPDATE purchase_orders
                SET status = 'paid', paid_by_user_id = ?, paid_at = ?,
-                   payment_method = ?, payment_reference = ?, updated_at = ?
+                   payment_method = ?, payment_reference = ?, payment_book = ?,
+                   payment_batch_code = ?, payment_flow = ?, updated_at = ?
                WHERE id = ?""",
-            (user["id"], now_iso(), method, reference, now_iso(), po_id))
+            (user["id"], now_iso(), method, reference, payment_book,
+             payment_batch_code, payment_flow, now_iso(), po_id))
     log_action(user["id"], "purchase_order", po_id, "po_paid",
-               {"method": method, "reference": reference})
+               {"method": method, "reference": reference, "payment_book": payment_book,
+                "payment_batch_code": payment_batch_code, "payment_flow": payment_flow})
     flash(f"PO #{po_id} marked as paid.", "success")
     return redirect(url_for("vendor_payment_detail", po_id=po_id))
 
@@ -20379,6 +20559,22 @@ def vendor_payment_reports():
          GROUP BY po.category
          ORDER BY total DESC
     """, cparams)
+    by_method = query_all(f"""
+        SELECT po.payment_method AS payment_method, SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+         WHERE po.status IN ('paid','receipt_uploaded'){cfilt}
+           AND COALESCE(po.payment_method, '') != ''
+         GROUP BY po.payment_method
+         ORDER BY total DESC
+    """, cparams)
+    by_book = query_all(f"""
+        SELECT po.payment_book AS payment_book, SUM(po.amount) AS total, COUNT(*) AS count
+          FROM purchase_orders po
+         WHERE po.status IN ('paid','receipt_uploaded'){cfilt}
+           AND COALESCE(po.payment_book, '') != ''
+         GROUP BY po.payment_book
+         ORDER BY total DESC
+    """, cparams)
     # By company
     by_company = query_all("""
         SELECT c.short_name AS name, SUM(po.amount) AS total, COUNT(*) AS count
@@ -20413,12 +20609,15 @@ def vendor_payment_reports():
     return render_template("vendor_payment_reports.html",
                            monthly=monthly, by_vendor=by_vendor,
                            by_category=by_category, by_company=by_company,
+                           by_method=by_method, by_book=by_book,
                            intercompany=intercompany,
                            grand_total=grand_total,
                            this_month=this_month["total"] if this_month else 0,
                            pending_amount=pending_amount["total"] if pending_amount else 0,
                            categories=dict(PO_CATEGORIES),
-                           companies=companies, company_filter=company_filter)
+                           companies=companies, company_filter=company_filter,
+                           payment_method_label=payment_method_label,
+                           payment_book_label=payment_book_label)
 
 
 # ── Filing cabinet structure ──

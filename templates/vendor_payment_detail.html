@@ -76,6 +76,8 @@
       ("UPI ID", po.vendor_upi or 'Not on file'),
       ("Bank", (po.vendor_bank or '') ~ (' — ' ~ po.vendor_bank_account if po.vendor_bank_account else '')),
       ("IFSC", po.vendor_ifsc or 'Not on file'),
+      ("Company Books", ((po.company_primary_payment_book or '') ~ (' / ' ~ po.company_secondary_payment_book if po.company_secondary_payment_book else ''))|replace('_', ' ')|title if po.company_primary_payment_book or po.company_secondary_payment_book else 'Not set'),
+      ("Company UPI", po.company_upi_handle or 'Not set'),
     ]) }}
     {% if po.vendor_id %}
     <a class="text-link top-gap" href="{{ url_for('vendor_detail', vendor_id=po.vendor_id) }}" data-vis="{{ V }}">Open vendor profile →</a>
@@ -117,7 +119,7 @@
             <span class="activity-entry-time" data-vis="{{ V }}">{{ po.paid_at[:16] if po.paid_at else '' }}</span>
           </div>
           <div class="activity-entry-text" data-vis="{{ V }}">
-            Marked as paid{% if po.payment_method %} via {{ po.payment_method }}{% endif %}{% if po.payment_reference %} (Ref: {{ po.payment_reference }}){% endif %}
+            Marked as {{ payment_flow_label(po.payment_flow) }}{% if po.payment_method %} via {{ payment_method_label(po.payment_method) }}{% endif %}{% if po.payment_book %} from {{ payment_book_label(po.payment_book) }}{% endif %}{% if po.payment_batch_code %} · Batch {{ po.payment_batch_code }}{% endif %}{% if po.payment_reference %} (Ref: {{ po.payment_reference }}){% endif %}
           </div>
         </div>
       </div>
@@ -154,14 +156,30 @@
     {{ card_heading("MARK AS PAID", "Record payment details") }}
     <form method="post" action="{{ url_for('vendor_payment_mark_paid', po_id=po.id) }}" class="form-grid panel-block" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Flow
+        <select name="payment_flow" data-vis="{{ V }}">
+          {% for value, label in payment_flow_choices %}
+          <option value="{{ value }}" data-vis="{{ V }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label data-vis="{{ V }}">Payment Method
         <select name="payment_method" data-vis="{{ V }}">
-          <option value="upi" data-vis="{{ V }}">UPI</option>
-          <option value="bank_transfer" data-vis="{{ V }}">Bank Transfer / NEFT</option>
-          <option value="cash" data-vis="{{ V }}">Cash</option>
-          <option value="cheque" data-vis="{{ V }}">Cheque</option>
-          <option value="other" data-vis="{{ V }}">Other</option>
+          {% for value, label in payment_method_choices %}
+          <option value="{{ value }}" data-vis="{{ V }}">{{ label }}</option>
+          {% endfor %}
         </select>
+      </label>
+      <label data-vis="{{ V }}">Payment Book
+        <select name="payment_book" data-vis="{{ V }}">
+          <option value="" data-vis="{{ V }}">Select book…</option>
+          {% for value, label in payment_book_choices %}
+          <option value="{{ value }}" {% if po.company_primary_payment_book == value %}selected{% endif %} data-vis="{{ V }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label data-vis="{{ V }}">Batch Code
+        <input type="text" name="payment_batch_code" placeholder="Optional batch / bank upload ID" data-vis="{{ V }}">
       </label>
       <label data-vis="{{ V }}">Payment Reference
         <input type="text" name="payment_reference" placeholder="UPI txn ID, cheque no., etc." data-vis="{{ V }}">

@@ -10,6 +10,7 @@
   </div>
   {% if companies and companies|length > 1 %}
   <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn" href="{{ url_for('company_books') }}" data-vis="{{ V }}">Books</a>
     <select id="companyFilter" class="btn" style="appearance:auto;padding-right:1.5rem;" data-vis="{{ V }}">
       <option value="" data-vis="{{ V }}">All Companies</option>
       {% for co in companies %}
@@ -172,6 +173,54 @@
           <td data-vis="{{ V }}">{{ ic.to_company }}</td>
           <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(ic.total) }}</td>
           <td data-vis="{{ V }}">{{ ic.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {% if by_method %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BY PAYMENT RAIL", "Cash, UPI, netbanking, cheque") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Rail</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Paid</th>
+          <th data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for row in by_method %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ payment_method_label(row.payment_method) }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.total) }}</td>
+          <td data-vis="{{ V }}">{{ row.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+  {% if by_book %}
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("BY PAYMENT BOOK", "Which bank or book is carrying the load") }}
+    <table class="data-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Book</th>
+          <th class="col-amount" data-vis="{{ V }}">Total Paid</th>
+          <th data-vis="{{ V }}">Count</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for row in by_book %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ payment_book_label(row.payment_book) }}</strong></td>
+          <td class="col-amount" data-vis="{{ V }}">₹{{ "{:,.0f}".format(row.total) }}</td>
+          <td data-vis="{{ V }}">{{ row.count }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -91,7 +91,19 @@
         ' · last: ' + (last.selector || 'unknown') + ' @ ' + last.page_x + ',' + last.page_y;
     }
 
+    function syncWidgetViewport() {
+      var gutter = 10;
+      var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+      var maxWidth = Math.max(220, viewportWidth - (gutter * 2));
+      if (voiceBadge) voiceBadge.style.maxWidth = maxWidth + 'px';
+      if (!panel) return;
+      panel.style.maxWidth = maxWidth + 'px';
+      panel.style.maxHeight = Math.max(220, viewportHeight - 104) + 'px';
+    }
+
     function openPanel() {
+      syncWidgetViewport();
       panel.hidden = false;
       widget.classList.remove('feedback-widget--compact');
       widget.setAttribute('data-open', 'true');
@@ -131,6 +143,8 @@
     toggle.addEventListener('click', function(){ panel.hidden ? openPanel() : closePanel(); });
     if (close) close.addEventListener('click', closePanel);
     if (mini) mini.addEventListener('click', closePanel);
+    window.addEventListener('resize', syncWidgetViewport, {passive: true});
+    syncWidgetViewport();
 
     // ── Cursor + hover context tracking ───────────────────────────
     var lastPointer = {x: 0, y: 0, pageX: 0, pageY: 0};

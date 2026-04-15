@@ -10114,13 +10114,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    for behaviour (voice, click-pinning, hotkeys). */
 .feedback-widget {
   position: fixed;
-  bottom: 0.85rem;
-  right: 0.85rem;
+  bottom: max(0.85rem, env(safe-area-inset-bottom, 0px));
+  right: max(0.85rem, env(safe-area-inset-right, 0px));
   z-index: 9999;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.45rem;
+  max-width: min(21rem, calc(100vw - 1.2rem));
 }
 .feedback-voice-badge {
   position: relative;
@@ -10142,6 +10143,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   transform: translateY(0);
 }
 .feedback-toggle {
+  width: min(100%, 21rem);
+  max-width: calc(100vw - 1.2rem);
   min-width: 10.75rem;
   min-height: 3.25rem;
   border-radius: 1rem;
@@ -10272,7 +10275,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   position: absolute;
   bottom: calc(100% + 0.35rem);
   right: 0;
-  width: 21rem;
+  width: min(21rem, calc(100vw - 1.2rem));
+  max-width: calc(100vw - 1.2rem);
+  max-height: min(32rem, calc(100vh - 6.5rem));
   background: color-mix(in srgb, var(--panel) 96%, white 4%);
   border: 1px solid color-mix(in srgb, var(--line) 76%, var(--accent) 24%);
   border-radius: 1rem;
@@ -10281,6 +10286,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* CSS `display: flex` on .feedback-panel was overriding the HTML
    `hidden` attribute's default `display: none`, so setting
@@ -10346,6 +10353,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     right: 0.65rem;
     left: 0.65rem;
     align-items: stretch;
+    max-width: none;
   }
   .feedback-toggle {
     width: 100%;

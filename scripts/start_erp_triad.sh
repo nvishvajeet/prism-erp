@@ -138,6 +138,12 @@ for entry in "${VARIANTS[@]}"; do
         export LAB_SCHEDULER_DEMO_MODE="1"
         export LAB_SCHEDULER_HOST="127.0.0.1"
         export LAB_SCHEDULER_PORT="$port"
+        # Demo triad: CSRF + secure-cookie disabled so visitors can log in
+        # on plain HTTP at 127.0.0.1 without running into stale-tab /
+        # SameSite / cross-variant cookie gotchas. Real deployments MUST
+        # re-enable both (defaults in app.py are ON).
+        export LAB_SCHEDULER_CSRF="0"
+        export LAB_SCHEDULER_COOKIE_SECURE="0"
         cd "$SCHED_ROOT"
         nohup "$VENV_PY" app.py >> "$log_file" 2>&1 &
         echo "  started PID $! (log: $log_file)"

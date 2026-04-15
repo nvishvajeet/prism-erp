@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude-opus-orchestration-01 | 0108-0109-testing-plan-page-and-test-accounts | 2026-04-15T19:30 | app.py, templates/testing_plan.html, CLAIMS.md | pending |
 
 ## Stale-claim recovery
 

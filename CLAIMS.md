@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude-opus-orchestration-01 | 0101-tejveer-tester-seed | 2026-04-15T18:22 | app.py (real_team, _persona_emails, role_display_name, allowed_user_role_change_roles), CLAIMS.md | pending |
 
 ## Stale-claim recovery
 

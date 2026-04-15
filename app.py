@@ -7690,6 +7690,8 @@ def seed_data() -> None:
         "nikita", "prashant",
         "rahul.misal@catalyst.local", "sonal@catalyst.local",
         "balaji.phunde@catalyst.local", "mangesh.ghule@catalyst.local",
+        # 2026-04-15 · Tester
+        "tejveer",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -7716,6 +7718,10 @@ def seed_data() -> None:
          "Ravikiran Fleet · Driver",   ["hq"]),
         ("Mangesh Ghule",      "mangesh.ghule@catalyst.local",  "operator",
          "Ravikiran Fleet · Driver",   ["hq"]),
+        # 2026-04-15 · Tester — full-read, scoped-write (debugger/feedback only).
+        # Username "tejveer", password "12345" (demo default, must_change on first login).
+        ("Tejveer",            "tejveer",                       "tester",
+         "Ravikiran · Tester",         ["lab", "hq"]),
     ]
     for name, email, role, office, _portals in real_team:
         db.execute(
@@ -8122,6 +8128,7 @@ ROLE_DISPLAY_NAMES = {
     "professor_approver": "Approver",
     "finance_admin": "Finance Admin",
     "requester": "Lab Member",
+    "tester": "Tester",
 }
 
 ROLE_NEXT_ACTIONS = {
@@ -8133,6 +8140,7 @@ ROLE_NEXT_ACTIONS = {
     "professor_approver": "Approve pending requests. Start at Schedule → Under Review.",
     "finance_admin": "Clear finance approvals. Start at Schedule → Under Review.",
     "requester": "Submit and track your samples. Start at New Request.",
+    "tester": "Walk every page, file bugs via the debugger. Start anywhere.",
 }
 
 ROLE_MANUAL_HEADLINES = {

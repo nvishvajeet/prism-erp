@@ -238,9 +238,9 @@
   </section>
   {% endif %}
 
-  {# ── Tile: Catalyst Command Desk ── #}
+  {# ── Tile: Catalyst AI Assistant ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("CATALYST COMMAND DESK", "Ask for work, route samples, onboard people, or leave feedback from here") }}
+    {{ card_heading("CATALYST AI ASSISTANT", "Ask for work, route samples, onboard people, or leave feedback from here") }}
     <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="portal" value="instrument">

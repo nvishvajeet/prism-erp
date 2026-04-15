@@ -27930,7 +27930,7 @@ def ai_pane_summary():
     hints = []
     suggestions = []
     if "instrument" in page_l:
-        hints.append("Use Catalyst Command Desk here for sample routing, operator onboarding, issue reporting, and quick help on this instrument.")
+        hints.append("Use Catalyst AI Assistant here for sample routing, operator onboarding, issue reporting, and quick help on this instrument.")
         suggestions = [
             "Test this sample and route it to the correct lab flow",
             "Show the next available slot for this instrument",
@@ -27938,7 +27938,7 @@ def ai_pane_summary():
             "I want to report a problem on this instrument page",
         ]
     elif "finance" in page_l:
-        hints.append("Use Catalyst Command Desk here for expenses, grants, payment routing, pending approvals, and finance feedback.")
+        hints.append("Use Catalyst AI Assistant here for expenses, grants, payment routing, pending approvals, and finance feedback.")
         suggestions = [
             "Route this fuel bill to the right finance review queue",
             "Prepare today's pending payment batch",
@@ -27946,7 +27946,7 @@ def ai_pane_summary():
             "I found a finance issue on this page",
         ]
     elif "attendance" in page_l or "personnel" in page_l:
-        hints.append("Use Catalyst Command Desk here for attendance work, onboarding, account requests, manager routing, and staff feedback.")
+        hints.append("Use Catalyst AI Assistant here for attendance work, onboarding, account requests, manager routing, and staff feedback.")
         suggestions = [
             "Create accounts from this staff list and keep them pending approval",
             "Mark today's attendance exceptions for review",
@@ -27954,7 +27954,7 @@ def ai_pane_summary():
             "I want to flag a people-management issue",
         ]
     elif "mess" in page_l or "tuck" in page_l:
-        hints.append("Use Catalyst Command Desk here for meal tracking, token reconciliation, requests, and operational feedback.")
+        hints.append("Use Catalyst AI Assistant here for meal tracking, token reconciliation, requests, and operational feedback.")
         suggestions = [
             "Summarize today's meal counts and pending issues",
             "Route this stock request to the right queue",
@@ -27962,7 +27962,7 @@ def ai_pane_summary():
             "I want to report a service issue here",
         ]
     else:
-        hints.append("Use Catalyst Command Desk for requests, onboarding, approvals, routing, and feedback anywhere in the ERP.")
+        hints.append("Use Catalyst AI Assistant for requests, onboarding, approvals, routing, and feedback anywhere in the ERP.")
         suggestions = [
             "Create accounts from this list",
             "Route this fuel bill",

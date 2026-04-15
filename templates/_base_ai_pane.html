@@ -2,7 +2,7 @@
   {% if current_user_obj %}
   <div id="aiPaneDock" data-vis="{{ V }}"
        style="position:fixed;right:1.5rem;bottom:1.5rem;z-index:9999;width:0;height:0;">
-    <button id="aiPaneToggle" title="Catalyst Command Desk" data-vis="{{ V }}"
+    <button id="aiPaneToggle" title="Catalyst AI Assistant" data-vis="{{ V }}"
             style="position:absolute;right:0;bottom:0;z-index:2;width:3.3rem;height:3.3rem;border-radius:50%;border:none;background:var(--tone-blue, #007AFF);color:var(--bg, #fff);font-size:1.25rem;cursor:grab;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:transform 0.2s;">
       CD
     </button>
@@ -16,7 +16,7 @@
     {# Header #}
     <div id="aiPaneDragHandle" style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;cursor:grab;" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
-        <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst Command Desk</strong>
+        <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst AI Assistant</strong>
         <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Movable AI help with human oversight</span>
       </div>
       <button id="aiPaneClose" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0.2rem;" data-vis="{{ V }}">✕</button>
@@ -367,7 +367,7 @@
       addBubble(displayMsg, 'user');
       input.value = '';
 
-      var thinking = addBubble('<span style="opacity:0.5;">Catalyst Command Desk is routing your request…</span>', 'ai');
+      var thinking = addBubble('<span style="opacity:0.5;">Catalyst AI Assistant is routing your request…</span>', 'ai');
       var currentContext = hoverContext || lastHoverContext;
       var pageContext = document.title + ' | ' + window.location.pathname + (currentContext ? ' | Hovered pane: ' + currentContext : '');
 
@@ -402,7 +402,7 @@
             (data.action !== 'unknown' && data.action !== 'general_query' ? ' <span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;background:var(--tone-amber);color:var(--bg);font-size:0.65rem;font-weight:700;margin-left:0.3rem;">QUEUED</span>' : '');
           addBubble(data.summary + routeHtml + oversightHtml + actionBadge, 'ai');
         } else {
-          addBubble(data.error || 'Catalyst Command Desk could not handle that cleanly just yet.', 'ai', 'error');
+          addBubble(data.error || 'Catalyst AI Assistant could not handle that cleanly just yet.', 'ai', 'error');
         }
       })
       .catch(function(){
@@ -456,7 +456,7 @@
         .then(function(data){
           chat.innerHTML = '';
           // Greeting
-      var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Catalyst Command Desk handles requests, jobs, routing, onboarding, and feedback with human oversight.</div>';
+      var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Catalyst AI Assistant handles requests, jobs, routing, onboarding, and feedback with human oversight.</div>';
           if(data.items.length){
             greeting += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
             data.items.forEach(function(it){

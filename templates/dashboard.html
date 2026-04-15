@@ -50,7 +50,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">✓ All caught up — no active notices</p>
+    {{ empty_state("✓ All caught up — no active notices") }}
     {% endif %}
   </article>
   {% endif %}
@@ -264,7 +264,7 @@
   {% elif portal_module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
   <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
     {{ card_heading("INTAKE", "Quick Intake") }}
-    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">{{ "All caught up — no samples waiting for receipt" if _lab_mode else "All caught up — no samples awaiting action" }}</p>
+    {{ empty_state("All caught up — no samples waiting for receipt" if _lab_mode else "All caught up — no samples awaiting action") }}
   </article>
   {% endif %}
 

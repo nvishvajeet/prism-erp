@@ -41,3 +41,4 @@ from . import hardcoded_url_in_template  # noqa: F401
 from . import label_for_matches_id       # noqa: F401
 from . import external_link_noopener     # noqa: F401
 from . import no_inline_onclick          # noqa: F401
+from . import inline_style_attribute     # noqa: F401

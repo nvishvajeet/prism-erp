@@ -43,7 +43,7 @@ WAVES: dict[str, Wave] = {
     "static": Wave(
         name="static",
         description="No-DB structural analysis — architecture + philosophy",
-        strategies=("architecture", "philosophy", "css_orphan"),
+        strategies=("architecture", "philosophy", "css_orphan", "inline_style_attribute"),
         stop_on_fail=False,
     ),
     "behavioral": Wave(
@@ -91,6 +91,7 @@ WAVES: dict[str, Wave] = {
         strategies=(
             "architecture", "philosophy", "css_orphan", "css_variable_defined", "cleanup",
             "contrast_audit", "color_improvement", "url_for_endpoint_exists", "external_link_noopener", "no_inline_onclick",
+            "inline_style_attribute",
         ),
         stop_on_fail=False,
     ),
@@ -199,6 +200,8 @@ WAVES: dict[str, Wave] = {
             "color_improvement", "aria_label_present", "label_for_matches_id", "external_link_noopener", "no_inline_onclick",
             # regression (static endpoint audit + HTML-id uniqueness + URL discipline)
             "url_for_endpoint_exists", "duplicate_id_in_template", "hardcoded_url_in_template",
+            # css hygiene (inline-style drift guard)
+            "inline_style_attribute",
             # cleanup
             "cleanup",
         ),

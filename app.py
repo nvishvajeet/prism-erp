@@ -9080,29 +9080,64 @@ def _dashboard_cross_module_tiles(user) -> dict[str, object]:
 def index():
     user = current_user()
     if not user:
-        public_portals = [
-            {
-                "slug": "lab",
-                "label": "Lab",
-                "title": "MITWPU Central Instrumentation Facility",
-                "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
-                "href": url_for("login", portal="lab"),
-                "cta": "Enter Lab ERP",
-            },
-            {
-                "slug": "hq",
-                "label": "Private",
-                "title": "Private Workspace",
-                "tagline": "Restricted operations workspace for finance, admin, and internal coordination.",
-                "href": url_for("login", portal="hq"),
-                "cta": "Enter Private Portal",
-            },
-        ]
-        demo_info = {
-            "href": url_for("login", demo="1"),
-            "email": DEMO_PUBLIC_EMAIL,
-            "password": "12345",
-        }
+        # Host-aware tenant picker.
+        #
+        # At the bare apex (catalysterp.org), the two landing panes
+        # are cross-tenant entry points, not in-app portal switches —
+        # each link sends the visitor to the right tenant's own
+        # subdomain (different machine, different DB). Inside a
+        # subdomain (mitwpu-rnd / ravikiran / playground), keep the
+        # classic in-tenant portal behaviour.
+        host = (request.host or "").lower().split(":")[0]
+        APEX_HOSTS = {"catalysterp.org", "www.catalysterp.org"}
+        if host in APEX_HOSTS:
+            public_portals = [
+                {
+                    "slug": "lab",
+                    "label": "Lab",
+                    "title": "MITWPU Central Instrumentation Facility",
+                    "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
+                    "href": "https://mitwpu-rnd.catalysterp.org/login",
+                    "cta": "Enter Lab ERP",
+                },
+                {
+                    "slug": "hq",
+                    "label": "Private",
+                    "title": "Ravikiran Household ERP",
+                    "tagline": "Household, estate, and family-office operations.",
+                    "href": "https://ravikiran.catalysterp.org/login",
+                    "cta": "Enter Ravikiran Portal",
+                },
+            ]
+            demo_info = {
+                "href": "https://playground.catalysterp.org/",
+                "email": DEMO_PUBLIC_EMAIL,
+                "password": "12345",
+            }
+        else:
+            public_portals = [
+                {
+                    "slug": "lab",
+                    "label": "Lab",
+                    "title": "MITWPU Central Instrumentation Facility",
+                    "tagline": "Sample requests, queue, instruments, grants, and lab operations.",
+                    "href": url_for("login", portal="lab"),
+                    "cta": "Enter Lab ERP",
+                },
+                {
+                    "slug": "hq",
+                    "label": "Private",
+                    "title": "Private Workspace",
+                    "tagline": "Restricted operations workspace for finance, admin, and internal coordination.",
+                    "href": url_for("login", portal="hq"),
+                    "cta": "Enter Private Portal",
+                },
+            ]
+            demo_info = {
+                "href": url_for("login", demo="1"),
+                "email": DEMO_PUBLIC_EMAIL,
+                "password": "12345",
+            }
         return render_template(
             "public_landing.html",
             title="CATALYST",

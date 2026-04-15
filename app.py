@@ -25978,17 +25978,51 @@ def debug_feedback():
     Enriched server-side with the logged-in user's name, role, and
     the Flask endpoint that serves the page they were looking at.
     """
-    data = request.get_json(silent=True)
-    if not data or not data.get("text"):
-        return jsonify(ok=False, error="no text"), 400
-
     user = current_user()
-    page = data.get("page", "?")
-    ts = data.get("timestamp", datetime.now().isoformat())
-    grid = "grid visible" if data.get("grid_visible") else "grid off"
-    text = data["text"].strip()
+    data = request.get_json(silent=True)
+    if data and data.get("text"):
+        page = data.get("page", "?")
+        ts = data.get("timestamp", datetime.now().isoformat())
+        grid = "grid visible" if data.get("grid_visible") else "grid off"
+        text = data["text"].strip()
+        clicks = data.get("clicks", [])
+        context_payload = {
+            "timestamp": ts,
+            "grid_visible": bool(data.get("grid_visible")),
+            "clicks": clicks,
+            "client_context": data.get("context", {}),
+        }
+        response_mode = "json"
+    else:
+        title = (request.form.get("title") or "").strip()
+        severity = (request.form.get("severity") or "info").strip() or "info"
+        description = (request.form.get("description") or "").strip()
+        if not any([title, description]):
+            return jsonify(ok=False, error="no text"), 400
+        page = (request.form.get("page") or request.path).strip() or "?"
+        ts = datetime.now().isoformat()
+        grid = "mobile form"
+        text_parts = []
+        if title:
+            text_parts.append(f"Title: {title}")
+        text_parts.append(f"Severity: {severity}")
+        if description:
+            text_parts.append(description)
+        text = "\n\n".join(text_parts).strip()
+        clicks = []
+        screenshot = request.files.get("screenshot")
+        context_payload = {
+            "timestamp": ts,
+            "grid_visible": False,
+            "clicks": [],
+            "client_context": {
+                "user_agent": request.headers.get("User-Agent", ""),
+                "submitted_via": "debug_panel_form",
+                "screenshot_filename": screenshot.filename if screenshot and screenshot.filename else "",
+            },
+        }
+        response_mode = "redirect"
 
-    clicks = data.get("clicks", [])
     click_lines = ""
     if clicks:
         click_lines = "\n**Click markers:**\n"
@@ -26012,15 +26046,22 @@ def debug_feedback():
         page=f"{page} ({grid})",
         source="debug-feedback",
         text=f"{text}\n\n{click_lines}".strip(),
-        context_json=json.dumps({
-            "timestamp": ts,
-            "grid_visible": bool(data.get("grid_visible")),
-            "clicks": clicks,
-            "client_context": data.get("context", {}),
-        }),
+        context_json=json.dumps(context_payload),
     )
+    if response_mode == "redirect":
+        flash("Debug report sent.", "success")
+        return redirect(url_for("debug_panel"))
 
     return jsonify(ok=True, saved_to=str(saved_to), issue_id=issue_id)
+
+
+@app.route("/debug", methods=["GET"])
+@login_required
+def debug_panel():
+    user = current_user()
+    if not (is_owner(user) or user_has_role(user, "tester") or user_has_role(user, "super_admin")):
+        abort(403)
+    return render_template("debug.html")
 
 
 @app.route("/feedback", methods=["POST"])

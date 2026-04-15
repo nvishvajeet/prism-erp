@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <section style="max-width:32rem;margin:1.5rem auto;padding:1rem;">
+    <h1 style="margin-bottom:0.5rem;">Debug Report</h1>
+    <p style="margin-bottom:1rem;color:#666;">Send a quick mobile report with a title, severity, notes, and an optional camera capture.</p>
+    <form action="{{ url_for('debug_feedback') }}" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="page" value="{{ request.args.get('page', '/debug') }}">
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Title</span>
+        <input type="text" name="title" required style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;">
+      </label>
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Severity</span>
+        <select name="severity" style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Description</span>
+        <textarea name="description" rows="8" required style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;"></textarea>
+      </label>
+      <label style="display:block;margin-bottom:1rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Photo</span>
+        <input type="file" name="screenshot" accept="image/*" capture="environment">
+      </label>
+      <button type="submit" style="width:100%;padding:0.9rem;border:0;border-radius:999px;background:#0b57d0;color:#fff;font-weight:600;">Send debug report</button>
+    </form>
+  </section>
+{% endblock %}

@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | redesign-feedback-toggle | 2026-04-15T20:31:00Z | CLAIMS.md, templates/_base_feedback_widgets.html, static/styles.css | pending |
 | codex | unify-debugger-system | 2026-04-15T20:28:00Z | CLAIMS.md, static/debug-grid.js, templates/base.html, docs/TESTING_PLAN_TEJVEER.md | pending |
 
 ## Stale-claim recovery

@@ -10089,36 +10089,119 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    Panel is 260px wide and shorter than before so it doesn't
    block the bottom-right of the page (used by finance + queue
    action buttons). See templates/_base_feedback_widgets.html
-   for behaviour (voice, C-to-capture, hotkeys). */
-.feedback-widget { position: fixed; bottom: 0.75rem; right: 0.75rem; z-index: 9999; }
+   for behaviour (voice, click-pinning, hotkeys). */
+.feedback-widget {
+  position: fixed;
+  bottom: 0.85rem;
+  right: 0.85rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
 .feedback-voice-badge {
-  position: absolute; right: 0; bottom: 3.35rem;
-  padding: 0.35rem 0.65rem; border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+  position: relative;
+  right: 0;
+  bottom: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 72%, var(--accent) 28%);
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line) 76%);
-  color: var(--ink); font-size: 0.7rem; font-weight: 600;
+  color: var(--ink); font-size: 0.72rem; font-weight: 700;
   box-shadow: 0 8px 18px rgba(0,0,0,0.14);
   opacity: 0; transform: translateY(6px);
   transition: opacity 0.16s ease, transform 0.16s ease;
   pointer-events: none;
+  max-width: min(22rem, calc(100vw - 2rem));
 }
 .feedback-voice-badge.is-live {
   opacity: 1;
   transform: translateY(0);
 }
 .feedback-toggle {
-  width: 2.5rem; height: 2.5rem; border-radius: 50%; border: none;
-  background: var(--accent); color: white; font-size: 1.05rem;
-  cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.18);
-  transition: transform 0.15s, width 0.15s, height 0.15s, opacity 0.2s;
+  min-width: 10.75rem;
+  min-height: 3.25rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line) 70%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white 12%), color-mix(in srgb, var(--accent) 56%, #07111f 44%));
+  color: white;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(10,24,44,0.24);
+  transition: transform 0.15s, opacity 0.2s, box-shadow 0.2s, filter 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.8rem 0.6rem 0.75rem;
+  text-align: left;
 }
-.feedback-toggle:hover { transform: scale(1.08); }
+.feedback-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(10,24,44,0.28);
+}
+.feedback-toggle-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+  background: rgba(255,255,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
+  flex: 0 0 auto;
+}
+.feedback-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.feedback-toggle-copy strong {
+  font-size: 0.88rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.feedback-toggle-copy span {
+  font-size: 0.68rem;
+  line-height: 1.1;
+  opacity: 0.88;
+}
+.feedback-toggle-state {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.14);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
 .feedback-widget--compact .feedback-toggle {
-  width: 2rem; height: 2rem; font-size: 0.95rem; opacity: 0.78;
+  min-width: 9.6rem;
+  min-height: 2.8rem;
+  opacity: 0.86;
+  filter: saturate(0.94);
 }
-.feedback-widget--compact .feedback-toggle:hover { opacity: 1; }
+.feedback-widget--compact .feedback-toggle:hover {
+  opacity: 1;
+  filter: saturate(1);
+}
+.feedback-widget[data-open="true"] .feedback-toggle {
+  border-bottom-right-radius: 0.4rem;
+}
+.feedback-widget[data-live="true"] .feedback-toggle {
+  background: linear-gradient(135deg, #da3b2c, #8b1827);
+}
+.feedback-widget[data-live="true"] .feedback-toggle-state {
+  background: rgba(255,255,255,0.24);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 0 0 6px rgba(255,255,255,0.06);
+}
 .feedback-capture-flash {
-  position: absolute; right: 0; bottom: 3.35rem;
+  position: absolute; right: 0; bottom: 3.8rem;
   padding: 0.35rem 0.6rem; border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 84%, white 16%);
   color: #fff; font-size: 0.72rem; font-weight: 700;
@@ -10164,10 +10247,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   }
 }
 .feedback-panel {
-  position: absolute; bottom: 3rem; right: 0; width: 260px;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-  padding: 0.65rem; display: flex; flex-direction: column; gap: 0.45rem;
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  right: 0;
+  width: 21rem;
+  background: color-mix(in srgb, var(--panel) 96%, white 4%);
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--accent) 24%);
+  border-radius: 1rem;
+  box-shadow: 0 18px 44px rgba(10,24,44,0.18);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 /* CSS `display: flex` on .feedback-panel was overriding the HTML
    `hidden` attribute's default `display: none`, so setting
@@ -10175,35 +10266,73 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
    reported this on /sitemap 2026-04-14T18:15:21Z. Force the hidden
    attribute to win. */
 .feedback-panel[hidden] { display: none !important; }
-.feedback-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.feedback-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.feedback-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+.feedback-header-copy strong {
+  font-size: 0.98rem;
+  line-height: 1.1;
+}
+.feedback-header-copy span {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--muted);
+}
 .feedback-header-actions { display: inline-flex; gap: 0.2rem; }
 .feedback-close { background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--muted); padding: 0 0.25rem; line-height: 1; }
 .feedback-close:hover { color: var(--ink); }
 .feedback-mic[disabled] { cursor: not-allowed; }
+.feedback-steps {
+  margin: -0.1rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--surface) 82%, var(--accent) 18%);
+  color: var(--ink);
+  line-height: 1.35;
+}
 .feedback-hint kbd {
   display: inline-block; padding: 0 0.3rem; border: 1px solid var(--line);
   border-radius: 4px; background: var(--surface); font-family: inherit;
   font-size: 0.7rem; color: var(--muted);
 }
 .feedback-form textarea {
-  width: 100%; padding: 0.5rem; border: 1px solid var(--line);
-  border-radius: 8px; font-size: 0.85rem; resize: none;
+  width: 100%; padding: 0.7rem; border: 1px solid var(--line);
+  border-radius: 0.85rem; font-size: 0.85rem; resize: vertical;
+  min-height: 4.5rem;
   background: var(--surface); color: var(--ink);
   box-sizing: border-box;
 }
-.feedback-actions { display: flex; gap: 0.4rem; }
-.feedback-actions .btn { flex: 0; }
-.feedback-actions .btn-primary { flex: 1; }
-.feedback-status { min-height: 1.1rem; margin: 0; color: var(--muted); }
+.feedback-actions { display: flex; gap: 0.45rem; }
+.feedback-actions .btn {
+  flex: 0 0 auto;
+  min-height: 2.45rem;
+  border-radius: 0.8rem;
+}
+.feedback-actions .btn-primary { flex: 1 1 auto; }
+.feedback-status { min-height: 1.1rem; margin: 0; color: var(--muted); line-height: 1.35; }
 .feedback-status[data-tone="live"] { color: var(--accent); }
 .feedback-status[data-tone="warn"] { color: #b26a00; }
-.feedback-hint { font-size: 0.7rem; margin: 0; }
+.feedback-hint { font-size: 0.7rem; margin: 0; line-height: 1.4; }
 
 :root[data-theme="dark"] .feedback-panel { box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 
 @media (max-width: 480px) {
-  .feedback-panel { width: calc(100vw - 2rem); right: -0.5rem; }
-  .feedback-toggle { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
+  .feedback-widget {
+    right: 0.65rem;
+    left: 0.65rem;
+    align-items: stretch;
+  }
+  .feedback-toggle {
+    width: 100%;
+    min-width: 0;
+  }
+  .feedback-panel {
+    width: min(100vw - 1.3rem, 21rem);
+    right: 0;
+  }
 }
 
 /* ── Dispatch · Bottleneck tile age tiers ──────────────────────

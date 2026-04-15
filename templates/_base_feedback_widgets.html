@@ -1,47 +1,56 @@
   {# ── Universal Feedback Button — all users ────────────────
      Compact by default so it never covers page content.
-     - Collapsed: a single 2rem circle in the bottom-right.
-     - Expanded: 280×auto panel, can be minimized or dismissed.
+     - Collapsed: a compact launcher in the bottom-right.
+     - Expanded: focused debug panel, can be minimized or dismissed.
      - Voice: Chrome SpeechRecognition with continuous+interim
        results, so the mic stays live while the user thinks and
        shows what's being transcribed in real time.
      - Context: auto-captures page path + viewport + last mouse
        position + last hovered element selector so the backend
        (AI crawler) can understand where the user was.
-     - Hotkeys: "c" captures the element currently under the
-       mouse pointer into the draft (adds a <snapshot> tag);
-       "m" toggles the mic; Esc closes the panel.
+     - Hotkeys: "f" opens the panel; Esc closes the panel.
   #}
   {% if current_user %}
   <div id="feedbackWidget" class="feedback-widget feedback-widget--compact" data-vis="{{ V }}">
-    <button id="feedbackToggle" class="feedback-toggle" title="Feedback / voice note / bug (press F)" aria-label="Open feedback" data-vis="{{ V }}">💬</button>
-    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Listening and pinning clicks</div>
+    <button id="feedbackToggle" class="feedback-toggle" title="Open debugger and feedback panel (press F)" aria-label="Open debugger and feedback panel" aria-expanded="false" data-vis="{{ V }}">
+      <span class="feedback-toggle-icon" aria-hidden="true" data-vis="{{ V }}">◎</span>
+      <span class="feedback-toggle-copy" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">Debug</strong>
+        <span data-vis="{{ V }}">Mic, pin, send</span>
+      </span>
+      <span id="feedbackToggleState" class="feedback-toggle-state" data-vis="{{ V }}">Ready</span>
+    </button>
+    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Recording live. Click the broken area to pin it.</div>
     <div id="feedbackCaptureFlash" class="feedback-capture-flash" hidden data-vis="{{ V }}">Captured</div>
     <div id="feedbackCaptureMarker" class="feedback-capture-marker" hidden data-vis="{{ V }}" aria-hidden="true"></div>
     <div id="feedbackPanel" class="feedback-panel" hidden data-vis="{{ V }}">
       <div class="feedback-header" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Quick Feedback</strong>
+        <div class="feedback-header-copy" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Debugger</strong>
+          <span data-vis="{{ V }}">Report bugs with voice, pinned clicks, and page context.</span>
+        </div>
         <span class="feedback-header-actions" data-vis="{{ V }}">
           <button id="feedbackMinimize" class="feedback-close" title="Minimize" aria-label="Minimize" data-vis="{{ V }}">–</button>
           <button id="feedbackClose" class="feedback-close" title="Close" aria-label="Close" data-vis="{{ V }}">✕</button>
         </span>
       </div>
+      <p class="feedback-steps hint" data-vis="{{ V }}">1. Describe the issue. 2. Keep the mic live or use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click to pin the exact spot. 3. Send the report.</p>
       <form method="post" action="{{ url_for('site_feedback_submit') }}" class="feedback-form" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="source" value="feedback">
         <input type="hidden" name="page" value="{{ request.path }}">
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
-        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, then click the broken thing while the mic is live, or use Cmd/Ctrl + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
+        <textarea name="text" id="feedbackText" rows="3" placeholder="What broke? What did you expect? You can talk, then click the broken area while recording, or use Ctrl/Cmd + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
         <div class="feedback-actions" data-vis="{{ V }}">
-          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
-          <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯</button>
-          <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
+          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤 Record</button>
+          <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯 Pin</button>
+          <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send Report</button>
         </div>
       </form>
       <p id="feedbackCaptureSummary" class="feedback-status hint" data-vis="{{ V }}">No pinned clicks yet.</p>
       <p id="feedbackStatus" class="feedback-status hint" data-vis="{{ V }}" aria-live="polite"></p>
-      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · mic live = click-to-pin · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click pins without leaving the page · <kbd>Esc</kbd> close.</p>
+      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open debugger · mic live = click-to-pin · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click pins without leaving the page · <kbd>Esc</kbd> close.</p>
     </div>
   </div>
   <script>
@@ -61,6 +70,7 @@
     var captureFlash = document.getElementById('feedbackCaptureFlash');
     var captureMarker = document.getElementById('feedbackCaptureMarker');
     var captureSummary = document.getElementById('feedbackCaptureSummary');
+    var toggleState = document.getElementById('feedbackToggleState');
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
@@ -84,13 +94,19 @@
     function openPanel() {
       panel.hidden = false;
       widget.classList.remove('feedback-widget--compact');
+      widget.setAttribute('data-open', 'true');
+      toggle.setAttribute('aria-expanded', 'true');
       setStatus('', '');
+      if (toggleState) toggleState.textContent = listening ? 'Live' : 'Open';
       // Pull focus into the textarea so voice + typing are immediate.
       if (text) { try { text.focus(); } catch(e) {} }
     }
     function closePanel() {
       panel.hidden = true;
       widget.classList.add('feedback-widget--compact');
+      widget.setAttribute('data-open', 'false');
+      toggle.setAttribute('aria-expanded', 'false');
+      if (toggleState) toggleState.textContent = listening ? 'Live' : 'Ready';
       // Dr. Bharat 2026-04-14 — voice kept listening in the background
       // after Esc/× because closePanel didn't signal recognition.
       // Hard-stop so the browser's mic indicator goes away.
@@ -104,7 +120,9 @@
       listening = false;
       try { recognition.stop(); } catch(e) {}
       showVoiceBadge(false);
-      if (mic) { mic.textContent = '🎤'; mic.title = 'Start voice input'; }
+      widget.setAttribute('data-live', 'false');
+      if (toggleState) toggleState.textContent = panel.hidden ? 'Ready' : 'Open';
+      if (mic) { mic.textContent = '🎤 Record'; mic.title = 'Start voice input'; }
       if (reason && typeof setStatus === 'function') setStatus('', '');
     }
     // Referenced before declaration at module scope — keep forward-declared
@@ -214,6 +232,8 @@
       if (!voiceBadge) return;
       voiceBadge.hidden = !active;
       voiceBadge.classList.toggle('is-live', !!active);
+      widget.setAttribute('data-live', active ? 'true' : 'false');
+      if (toggleState) toggleState.textContent = active ? 'Live' : (panel.hidden ? 'Ready' : 'Open');
     }
 
     function pulseCaptureMarker(point) {
@@ -329,7 +349,7 @@
           listening = false;
           showVoiceBadge(false);
           if (mic) {
-            mic.textContent = '🎤';
+            mic.textContent = '🎤 Record';
             mic.title = 'Mic permission blocked. Check site settings.';
           }
           setStatus('Voice input blocked — allow mic in the site settings and retry.', 'warn');
@@ -341,10 +361,10 @@
       r.onend = function(){
         // Auto-restart while the panel is open + user still wants voice.
         if (listening) {
-          try { r.start(); } catch(e) { listening = false; showVoiceBadge(false); if (mic) mic.textContent = '🎤'; }
+          try { r.start(); } catch(e) { listening = false; showVoiceBadge(false); if (mic) mic.textContent = '🎤 Record'; }
         } else if (mic) {
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
         }
       };
@@ -358,7 +378,7 @@
           listening = false;
           try { recognition.stop(); } catch(e) {}
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
           setStatus('Voice input stopped.', '');
           return;
@@ -371,7 +391,7 @@
           captureCounter = 0;
           updateCaptureSummary();
           showVoiceBadge(true);
-          mic.textContent = '🔴';
+          mic.textContent = '🔴 Recording';
           mic.title = 'Listening… click to stop.';
           setStatus('Listening… speak naturally, then click the broken thing to pin it without leaving the page.', 'live');
         } catch(e) {
@@ -379,7 +399,7 @@
           try { recognition.stop(); } catch(_) {}
           listening = false;
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
           setStatus('Voice input could not start cleanly. Try once more.', 'warn');
         }

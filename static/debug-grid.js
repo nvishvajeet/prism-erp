@@ -1,4 +1,4 @@
-/* CATALYST Unified Debugger
+/* CATALYST Debug Grid + Voice Feedback Recorder
    Loaded when ?debug=1 is in the URL.
 
    Features:
@@ -11,10 +11,6 @@
    3. On Stop the full transcript (speech + click markers) is saved
       to logs/debug_feedback.md via POST /debug/feedback. Claude
       reads that file when you say "start debugging".
-
-   4. Programmatic surface — window.catalystDebug / window.catalyst
-      expose the same live debugger so crawlers and humans use one
-      shared system instead of two overlapping overlays.
 
    The grid uses the same 6-column layout as .dashboard-tiles /
    .inst-tiles so grid numbers map directly to tile positions. */
@@ -147,31 +143,6 @@
   function clearClickMarkers() {
     if (clickMarkerContainer) clickMarkerContainer.innerHTML = '';
     clickEvents = [];
-  }
-
-  function addSyntheticMarker(clientX, clientY, note, target) {
-    var g = gridCoords(clientX, clientY);
-    var label = 'R' + g.row + ',C' + g.col;
-    var context = targetDescriptor(target);
-    var pageX = clientX + window.scrollX;
-    var pageY = clientY + window.scrollY;
-    var entry = '[Click: ' + label + ' on ' + context + ' @ ' + pageX + ',' + pageY + ']';
-    if (note) entry += ' [' + note + ']';
-    transcript += entry + ' ';
-    clickEvents.push({
-      grid: label,
-      element: context,
-      x: clientX,
-      y: clientY,
-      pageX: pageX,
-      pageY: pageY,
-      page: window.location.pathname,
-      action: 'api-capture',
-      note: note || ''
-    });
-    placeClickMarker(clientX, clientY, label);
-    updateTranscriptDisplay();
-    return { grid: label, element: context, pageX: pageX, pageY: pageY };
   }
 
   // ── Session persistence across page navigation ─────────────────
@@ -568,68 +539,4 @@
   if (restoreSessionState()) {
     startRecording(true);
   }
-
-  // ── Unified debugger API ──────────────────────────────────────
-  function findTarget(target) {
-    if (!target) return null;
-    if (typeof target === 'string') {
-      try { return document.querySelector(target); } catch (_) { return null; }
-    }
-    return target && target.nodeType === 1 ? target : null;
-  }
-
-  function tapTarget(target, note) {
-    var el = findTarget(target);
-    if (!el) return null;
-    var rect = el.getBoundingClientRect();
-    return addSyntheticMarker(
-      Math.round(rect.left + (rect.width / 2)),
-      Math.round(rect.top + (rect.height / 2)),
-      note || '',
-      el
-    );
-  }
-
-  function dumpState() {
-    return {
-      page: window.location.pathname,
-      href: window.location.href,
-      gridVisible: gridVisible,
-      isRecording: isRecording,
-      trackingOn: trackingOn,
-      transcript: transcript,
-      clickEvents: clickEvents.slice(),
-      startedAt: sessionStorage.getItem('debugRecordingStart') || null
-    };
-  }
-
-  var api = {
-    on: function () { createGrid(); if (!gridVisible) toggleGrid(); return dumpState(); },
-    off: function () { createGrid(); if (gridVisible) toggleGrid(); return dumpState(); },
-    toggle: function () { toggleGrid(); return dumpState(); },
-    start: function () { if (!isRecording) startRecording(false); return dumpState(); },
-    stop: function () { if (isRecording) stopRecording(); return dumpState(); },
-    clear: function () {
-      transcript = '';
-      clickEvents = [];
-      clearClickMarkers();
-      clearSessionState();
-      updateTranscriptDisplay();
-      return dumpState();
-    },
-    tap: tapTarget,
-    find: function (target) {
-      var el = findTarget(target);
-      if (!el) return null;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.style.outline = '3px solid rgba(220,40,40,0.85)';
-      setTimeout(function () { el.style.outline = ''; }, 1500);
-      return el;
-    },
-    dump: dumpState,
-    state: dumpState
-  };
-
-  window.catalystDebug = api;
-  window.catalyst = api;
 })();

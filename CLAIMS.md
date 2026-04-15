@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| Codex | hotfix-dean-kondhalkar-login | 2026-04-15T09:07:42Z | app.py | pending |
 
 ## Stale-claim recovery
 

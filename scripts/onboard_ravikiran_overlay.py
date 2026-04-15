@@ -148,6 +148,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cur = con.cursor()
+
+    # Schema-aware: Ravikiran's users table is older than Lab ERP's and
+    # lacks some columns (short_code, phone, office_location, etc.).
+    # Detect at runtime and build INSERT dynamically from the intersection
+    # of our desired columns and what the table actually has.
+    actual_cols = {row[1] for row in cur.execute("PRAGMA table_info(users)")}
+    has_short_code         = "short_code" in actual_cols
+    has_office_location    = "office_location" in actual_cols
+    has_phone              = "phone" in actual_cols
+    has_avatar             = "avatar_url" in actual_cols
+    has_role_manual        = "role_manual_notice" in actual_cols
+    has_must_change_pw     = "must_change_password" in actual_cols
+
     cur.execute("BEGIN IMMEDIATE;")
     try:
         for u in users:
@@ -155,28 +168,36 @@ def main(argv: list[str] | None = None) -> int:
             if cur.execute("SELECT 1 FROM users WHERE email = ?", (u["email"],)).fetchone():
                 skipped_email += 1
                 continue
-            # Skip if short_code collides (uniqueness isn't enforced at DB level
-            # but we keep the generated codes distinct at insert time).
-            if u["short_code"] and cur.execute(
+            # Skip if short_code collides (when the column exists in this schema)
+            if has_short_code and u.get("short_code") and cur.execute(
                 "SELECT 1 FROM users WHERE short_code = ?", (u["short_code"],)
             ).fetchone():
                 skipped_shortcode += 1
                 continue
+
+            cols = ["name", "email", "password_hash", "role", "invited_by",
+                    "invite_status", "active"]
+            vals: list = [u["name"], u["email"], pw_hash,
+                          u.get("role") or "operator", inviter,
+                          "pending_approval", 0]
+            if has_must_change_pw:
+                cols.append("must_change_password"); vals.append(1)
+            if has_role_manual:
+                cols.append("role_manual_notice"); vals.append("")
+            if has_avatar:
+                cols.append("avatar_url"); vals.append("")
+            if has_short_code:
+                cols.append("short_code"); vals.append(u.get("short_code") or "")
+            if has_phone:
+                cols.append("phone"); vals.append("")
+            if has_office_location:
+                cols.append("office_location"); vals.append("Ravikiran Services")
+
+            placeholders = ", ".join("?" * len(cols))
+            column_list  = ", ".join(cols)
             cur.execute(
-                """INSERT INTO users
-                    (name, email, password_hash, role, invited_by, invite_status, active,
-                     must_change_password, role_manual_notice, avatar_url, short_code,
-                     phone, office_location)
-                   VALUES (?, ?, ?, ?, ?, 'pending_approval', 0, 1, '', '', ?, '', ?)""",
-                (
-                    u["name"],
-                    u["email"],
-                    pw_hash,
-                    u.get("role") or "operator",
-                    inviter,
-                    u.get("short_code", ""),
-                    "Ravikiran Services",
-                ),
+                f"INSERT INTO users ({column_list}) VALUES ({placeholders})",
+                vals,
             )
             created += 1
         cur.execute("COMMIT;")

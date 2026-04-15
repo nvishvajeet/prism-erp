@@ -37,6 +37,14 @@ TIME=$(date +%H:%M:%S)
 LOG="logs/nightly_dev_${DATE}.log"
 VENV="./venv/bin/python"
 CVENV="./.venv/bin/python"
+RUNTIME_INFO=$($VENV - <<'PY'
+import app
+print(app.FEEDBACK_LOG)
+print(app.DB_PATH)
+PY
+)
+FEEDBACK_LOG=$(printf '%s\n' "$RUNTIME_INFO" | sed -n '1p')
+DB=$(printf '%s\n' "$RUNTIME_INFO" | sed -n '2p')
 
 echo "═══ NIGHTLY DEV SESSION ═══" > "$LOG"
 echo "Date: $DATE $TIME" >> "$LOG"
@@ -47,11 +55,11 @@ echo "── Phase 1: AUDIT ──" >> "$LOG"
 
 # 1a. Debug feedback log
 echo "--- User Feedback ---" >> "$LOG"
-FEEDBACK_LINES=$(wc -l < logs/debug_feedback.md 2>/dev/null || echo 0)
+FEEDBACK_LINES=$(wc -l < "$FEEDBACK_LOG" 2>/dev/null || echo 0)
 echo "  Feedback entries: $FEEDBACK_LINES lines" >> "$LOG"
 if [ "$FEEDBACK_LINES" -gt 10 ]; then
     echo "  ⚠ New feedback needs review" >> "$LOG"
-    tail -20 logs/debug_feedback.md >> "$LOG"
+    tail -20 "$FEEDBACK_LOG" >> "$LOG"
 fi
 echo "" >> "$LOG"
 echo "--- Structured Debug Issues ---" >> "$LOG"
@@ -132,7 +140,6 @@ echo "── Phase 2: HEALTH ──" >> "$LOG"
 
 # 2a. DB size + table counts
 echo "--- Database ---" >> "$LOG"
-DB="data/demo/lab_scheduler.db"
 if [ -f "$DB" ]; then
     SIZE=$(ls -lh "$DB" | awk '{print $5}')
     echo "  DB size: $SIZE" >> "$LOG"

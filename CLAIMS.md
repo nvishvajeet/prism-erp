@@ -101,5 +101,4 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Codex | runtime data isolation hardening | CLAIMS.md, app.py, scripts/nightly_dev.sh, docs/AI_INGESTION_FROM_UPLOADS.md | 2026-04-15 14:44 CEST |
 | Codex | bulk user intake + user/vendor approval queues | app.py, templates/users.html, templates/vendors.html, templates/vendor_form.html, templates/vendor_detail.html | 2026-04-14 21:48 CEST |

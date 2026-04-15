@@ -8,6 +8,7 @@ import mimetypes
 import os
 import random
 import re
+import shutil
 import smtplib
 import sqlite3
 import subprocess
@@ -48,12 +49,13 @@ BASE_DIR = Path(__file__).resolve().parent
 # directory to live on an external SSD or a separate volume. When set,
 # the demo/operational subfolder structure is preserved under that path.
 # Example: CATALYST_DATA_DIR=/Volumes/DataSSD/catalyst → DB lives at
-#   /Volumes/DataSSD/catalyst/demo/lab_scheduler.db  (demo mode)
+#   /Volumes/DataSSD/catalyst/demo/stable/lab_scheduler.db  (stable demo)
+#   /Volumes/DataSSD/catalyst/demo/beta/lab_scheduler.db    (beta demo)
 #   /Volumes/DataSSD/catalyst/operational/lab_scheduler.db  (production)
 _DATA_DIR_OVERRIDE = os.environ.get("CATALYST_DATA_DIR", "").strip()
 DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else (BASE_DIR / "data")
 DATA_OPERATIONAL_DIR = DATA_DIR / "operational"
-DATA_DEMO_DIR = DATA_DIR / "demo"
+DATA_DEMO_ROOT_DIR = DATA_DIR / "demo"
 
 _DEMO_MODE_ENV = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").strip().lower()
 DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
@@ -93,12 +95,58 @@ DEMO_VARIANT_LABELS = {
 
 ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
-_ACTIVE_DATA_DIR = DATA_DEMO_DIR if DEMO_MODE else DATA_OPERATIONAL_DIR
-_ACTIVE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
+RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
+
+
+def _runtime_slug(*parts: str) -> str:
+    cleaned: list[str] = []
+    for part in parts:
+        slug = re.sub(r"[^a-z0-9_-]+", "-", (part or "").strip().lower())
+        slug = re.sub(r"-{2,}", "-", slug).strip("-")
+        if slug:
+            cleaned.append(slug)
+    return "-".join(cleaned) or "default"
+
+
+def _bootstrap_runtime_data_dir() -> Path:
+    if not DEMO_MODE:
+        DATA_OPERATIONAL_DIR.mkdir(parents=True, exist_ok=True)
+        return DATA_OPERATIONAL_DIR
+
+    DATA_DEMO_ROOT_DIR.mkdir(parents=True, exist_ok=True)
+    variant_dir = DATA_DEMO_ROOT_DIR / _runtime_slug(DEMO_VARIANT)
+    variant_dir.mkdir(parents=True, exist_ok=True)
+
+    legacy_demo_files = [
+        "lab_scheduler.db",
+        "lab_scheduler.db-shm",
+        "lab_scheduler.db-wal",
+        "uploads",
+        "exports",
+        "logs",
+        "ai_uploads",
+    ]
+    if not any(variant_dir.iterdir()):
+        for name in legacy_demo_files:
+            legacy_path = DATA_DEMO_ROOT_DIR / name
+            if not legacy_path.exists():
+                continue
+            target = variant_dir / name
+            if legacy_path.is_dir():
+                shutil.copytree(legacy_path, target, dirs_exist_ok=True)
+            else:
+                shutil.copy2(legacy_path, target)
+    return variant_dir
+
+
+_ACTIVE_DATA_DIR = _bootstrap_runtime_data_dir()
 
 DB_PATH = _ACTIVE_DATA_DIR / "lab_scheduler.db"
 EXPORT_DIR = _ACTIVE_DATA_DIR / "exports"
 UPLOAD_DIR = _ACTIVE_DATA_DIR / "uploads"
+AI_UPLOAD_DIR = _ACTIVE_DATA_DIR / "ai_uploads"
+RUNTIME_LOG_DIR = _ACTIVE_DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 INSTRUMENT_IMAGE_DIR = STATIC_DIR / "instrument_images"
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "xlsx", "csv", "txt"}
@@ -180,6 +228,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+app.config["SESSION_COOKIE_NAME"] = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
 
 # CSRF protection — token machinery is wired up but enforcement is gated
 # behind LAB_SCHEDULER_CSRF=1 so we can roll templates and tests over to
@@ -191,11 +240,6 @@ _csrf_env = os.environ.get("LAB_SCHEDULER_CSRF", "1").lower()
 app.config["WTF_CSRF_ENABLED"] = _csrf_env not in {"0", "false", "no"}
 app.config["WTF_CSRF_TIME_LIMIT"] = None  # Tokens valid for the session lifetime, not 1 hour
 app.config["WTF_CSRF_SSL_STRICT"] = False  # LAN deployment may run plain HTTP
-
-# Demo mode — gates the /demo/switch role-impersonation route and the
-# seed_data() demo account inserts. Defaults to ON for development; set
-# LAB_SCHEDULER_DEMO_MODE=0 in production to lock both down.
-DEMO_MODE = os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1").lower() in {"1", "true", "yes"}
 
 # ── ERP Module System ────────────────────────────────────────────
 # Plug-and-play module registry.  To add a new module an AI agent
@@ -22989,7 +23033,7 @@ def ai_advisor_submit():
     uploaded = request.files.get("ai_file")
     if uploaded and uploaded.filename:
         safe_name = secure_filename(uploaded.filename)
-        upload_dir = DATA_DIR / "ai_uploads" / str(user["id"])
+        upload_dir = AI_UPLOAD_DIR / str(user["id"])
         upload_dir.mkdir(parents=True, exist_ok=True)
         dest = upload_dir / f"{now_iso()[:10]}_{safe_name}"
         uploaded.save(str(dest))
@@ -24186,15 +24230,15 @@ def expense_receipt_review(receipt_id):
 # append feedback beside its active operational state instead of
 # relying on the code checkout being writable.
 
-FEEDBACK_LOG = _ACTIVE_DATA_DIR / "logs" / "debug_feedback.md"
-FEEDBACK_HISTORY_LOG = _ACTIVE_DATA_DIR / "logs" / "debug_feedback_history.md"
-FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / "catalyst_feedback" / "debug_feedback.md"
-FALLBACK_FEEDBACK_HISTORY_LOG = Path(gettempdir()) / "catalyst_feedback" / "debug_feedback_history.md"
+FEEDBACK_LOG = RUNTIME_LOG_DIR / "debug_feedback.md"
+FEEDBACK_HISTORY_LOG = RUNTIME_LOG_DIR / "debug_feedback_history.md"
+FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / "catalyst_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback.md"
+FALLBACK_FEEDBACK_HISTORY_LOG = Path(gettempdir()) / "catalyst_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback_history.md"
 
 
 def _feedback_log_targets() -> list[Path]:
     targets: list[Path] = []
-    for candidate in [FEEDBACK_LOG, BASE_DIR / "logs" / "debug_feedback.md", FALLBACK_FEEDBACK_LOG]:
+    for candidate in [FEEDBACK_LOG, FALLBACK_FEEDBACK_LOG]:
         if candidate not in targets:
             targets.append(candidate)
     return targets
@@ -24202,7 +24246,7 @@ def _feedback_log_targets() -> list[Path]:
 
 def _feedback_history_targets() -> list[Path]:
     targets: list[Path] = []
-    for candidate in [FEEDBACK_HISTORY_LOG, BASE_DIR / "logs" / "debug_feedback_history.md", FALLBACK_FEEDBACK_HISTORY_LOG]:
+    for candidate in [FEEDBACK_HISTORY_LOG, FALLBACK_FEEDBACK_HISTORY_LOG]:
         if candidate not in targets:
             targets.append(candidate)
     return targets
@@ -25005,9 +25049,9 @@ def check_command_queue():
         return count
 
 
-QUEUE_REVIEW_LOG = _ACTIVE_DATA_DIR / "logs" / "queue_review_latest.md"
-QUEUE_REVIEW_HISTORY_LOG = _ACTIVE_DATA_DIR / "logs" / "queue_review_history.md"
-SERVER_LIVE_LOG = _ACTIVE_DATA_DIR / "logs" / "server-live.log"
+QUEUE_REVIEW_LOG = RUNTIME_LOG_DIR / "queue_review_latest.md"
+QUEUE_REVIEW_HISTORY_LOG = RUNTIME_LOG_DIR / "queue_review_history.md"
+SERVER_LIVE_LOG = RUNTIME_LOG_DIR / "server-live.log"
 
 
 def _feedback_sections(limit: int = 8) -> list[dict[str, str]]:

@@ -110,6 +110,52 @@
     </div>
   </section>
 
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("ACTION QUEUE", "Live routing pressure") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(queue_summary.active_queue|length, "Active buckets", "#", tone="active") }}
+      {{ stat_blob(queue_summary.human_review|length, "Review buckets", "#", tone="wait") }}
+      {{ stat_blob(queue_summary.archive|length, "Archive buckets", "#", tone="completed") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if queue_summary.active_queue %}
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for row in queue_summary.active_queue[:4] %}
+        <li class="dp-commit-row" data-vis="{{ V }}">
+          <code class="inline-code" data-vis="{{ V }}">{{ row.parsed_action or 'unknown' }}</code>
+          <span data-vis="{{ V }}">{{ row.status }} · {{ row.c }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No live action queue buckets.", hint="AI and intake actions will appear here once routed.") }}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("DEBUG LOG", "Open issues and repeat hotspots") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(debug_summary.open_count, "Open issues", "#", tone=(debug_summary.open_count and "open" or "completed")) }}
+      {{ stat_blob(debug_summary.recent_open|length, "Recent open", "#", tone="wait") }}
+      {{ stat_blob(debug_summary.repeat_hotspots|length, "Hotspots", "#", tone="active") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if debug_summary.recent_open %}
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for issue in debug_summary.recent_open[:4] %}
+        <li class="dp-commit-row" data-vis="{{ V }}">
+          <code class="inline-code" data-vis="{{ V }}">#{{ issue.id }}</code>
+          <span data-vis="{{ V }}">{{ issue.page or '?' }} · {{ issue.status }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No open debug issues.", hint="Voice/debug submissions will show up here after they are logged.") }}
+      {% endif %}
+    </div>
+  </section>
+
   {# ─── 3b. AUDIT EXPORT ─── #}
   <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("AUDIT", "Export audit trail") }}

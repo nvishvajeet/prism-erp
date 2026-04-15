@@ -247,7 +247,15 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
-app.config["SESSION_COOKIE_NAME"] = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
+session_cookie_name = os.environ.get("LAB_SCHEDULER_SESSION_COOKIE_NAME", "").strip()
+if not session_cookie_name:
+    # Keep local/dev lanes isolated, but use one stable cookie name for the
+    # public secure deployment so old tabs do not bounce across runtime lanes.
+    if app.config["SESSION_COOKIE_SECURE"]:
+        session_cookie_name = "catalyst_session"
+    else:
+        session_cookie_name = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
+app.config["SESSION_COOKIE_NAME"] = session_cookie_name
 
 # CSRF protection — token machinery is wired up but enforcement is gated
 # behind LAB_SCHEDULER_CSRF=1 so we can roll templates and tests over to
@@ -563,7 +571,17 @@ def _active_portal_modules() -> set:
 
 def module_visible_in_active_portal(name: str) -> bool:
     """Check if a module is globally enabled and belongs to the active portal."""
-    return module_enabled(name) and name in _active_portal_modules()
+    aliases = {
+        # Queue/calendar/stats are instrument sub-surfaces in the current
+        # ERP model, but older templates and helpers sometimes refer to
+        # the route-family names instead of the portal module key.
+        "schedule": ("schedule", "queue", "instruments"),
+        "queue": ("queue", "schedule", "instruments"),
+        "calendar": ("calendar", "instruments"),
+        "stats": ("stats", "instruments"),
+    }
+    candidates = aliases.get(name, (name,))
+    return any(module_enabled(candidate) and candidate in _active_portal_modules() for candidate in candidates)
 
 
 def _active_portal_config() -> dict | None:
@@ -939,8 +957,12 @@ def handle_csrf_error(_exc):
     )
     portal_slug = session.get("requested_portal")
     if request.endpoint in {"login", "change_password"} or request.path.startswith("/login"):
-        target = url_for("login", portal=portal_slug) if portal_slug in ERP_PORTALS else url_for("login")
-        return redirect(target)
+        return _render_login_response(portal_slug, status_code=400)
+    if request.endpoint == "change_password" or request.path.startswith("/profile/change-password"):
+        user = current_user()
+        if user is not None:
+            return _render_change_password_response(status_code=400)
+        return _render_login_response(portal_slug, status_code=400)
     return redirect(request.referrer or request.path or url_for("index"))
 
 
@@ -3954,6 +3976,12 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
     preset = ROLE_ACCESS_PRESETS.get(user["role"], ROLE_ACCESS_PRESETS["requester"])
     instrument_ids = assigned_instrument_ids(user)
     is_owner_user = is_owner(user)
+    portal_has_instruments = module_visible_in_active_portal("instruments")
+    portal_has_schedule = module_visible_in_active_portal("queue")
+    portal_has_calendar = module_visible_in_active_portal("calendar")
+    portal_has_stats = module_visible_in_active_portal("stats")
+    portal_has_finance = module_visible_in_active_portal("finance")
+    portal_has_receipts = module_visible_in_active_portal("receipts")
     card_fields = set(preset["card_visible_fields"])
     card_actions = set(preset["card_action_fields"])
     profile = {
@@ -3961,22 +3989,22 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         "role": user["role"],
         "is_owner": is_owner_user,
         "assigned_instrument_ids": instrument_ids,
-        "has_instrument_scope": bool(instrument_ids),
-        "can_access_instruments": bool(preset["can_access_instruments"] or instrument_ids),
-        "can_access_schedule": bool(preset["can_access_schedule"] or instrument_ids),
-        "can_access_calendar": bool(preset["can_access_calendar"] or instrument_ids),
-        "can_access_stats": bool(preset["can_access_stats"] or instrument_ids),
+        "has_instrument_scope": bool(instrument_ids) and portal_has_instruments,
+        "can_access_instruments": bool(portal_has_instruments and (preset["can_access_instruments"] or instrument_ids)),
+        "can_access_schedule": bool(portal_has_schedule and (preset["can_access_schedule"] or instrument_ids)),
+        "can_access_calendar": bool(portal_has_calendar and (preset["can_access_calendar"] or instrument_ids)),
+        "can_access_stats": bool(portal_has_stats and (preset["can_access_stats"] or instrument_ids)),
         "can_manage_members": bool(preset["can_manage_members"] or is_owner_user),
         "can_use_role_switcher": bool(preset["can_use_role_switcher"] or is_owner_user),
         "can_view_all_requests": bool(preset["can_view_all_requests"] or is_owner_user),
         "can_view_all_instruments": bool(preset["can_view_all_instruments"] or is_owner_user),
         "can_view_user_profiles": bool(preset["can_view_user_profiles"] or is_owner_user),
-        "can_view_finance_stage": bool(preset["can_view_finance_stage"] or is_owner_user),
+        "can_view_finance_stage": bool(portal_has_finance and (preset["can_view_finance_stage"] or is_owner_user)),
         "can_view_professor_stage": bool(preset["can_view_professor_stage"] or is_owner_user),
-        "can_access_receipts": bool(preset.get("can_access_receipts", False) or is_owner_user),
+        "can_access_receipts": bool(portal_has_receipts and (preset.get("can_access_receipts", False) or is_owner_user)),
         "can_review_receipts": bool(preset.get("can_review_receipts", False) or is_owner_user),
         "_is_operational_nav": bool(preset.get("_is_operational_nav", False) or is_owner_user),
-        "_is_lab_staff": bool(preset.get("_is_lab_staff", False)),
+        "_is_lab_staff": bool(portal_has_instruments and preset.get("_is_lab_staff", False)),
         "card_visible_fields": card_fields,
         "card_action_fields": card_actions,
     }
@@ -8180,6 +8208,75 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
                 ],
                 "next_action": "Start at Queue, then check the instruments that own today’s work.",
             },
+            "instrument_admin": {
+                "headline": "You keep specific instruments ready, documented, and operationally trustworthy.",
+                "responsibilities": [
+                    "Maintain the instrument profile so assignments, instructions, and status always match reality.",
+                    "Review queue items that depend on your machine and unblock issues before they become drift.",
+                    "Treat the instrument page as the source of truth instead of leaving important notes elsewhere.",
+                ],
+                "first_steps": [
+                    "Open Instruments and select the machine you own.",
+                    "Check whether the machine status, operators, and instructions are still accurate.",
+                    "Open Queue to review requests waiting on that instrument.",
+                ],
+                "modules": [
+                    ("Instruments", "Your machine profile is the operating handbook for that instrument."),
+                    ("Queue", "Use it to spot jobs waiting on your instrument and keep turnaround visible."),
+                    ("Requests", "Each request card is where sample-specific notes, files, and state changes belong."),
+                ],
+                "pane_guides": [
+                    ("Instrument page", "Update the instrument profile when the machine changes, not after confusion spreads."),
+                    ("Queue and request cards", "Use them as the operational ledger for what is blocked, scheduled, or done."),
+                ],
+                "next_action": "Start at your instrument page, then review the queue items tied to it.",
+            },
+            "operator": {
+                "headline": "You move real work through the lab: receive samples, run jobs, and keep the queue honest.",
+                "responsibilities": [
+                    "Keep sample state accurate from submission to completion.",
+                    "Record what happened on the request card instead of relying on memory or side channels.",
+                    "Escalate blocked or ambiguous work quickly so samples do not disappear into silence.",
+                ],
+                "first_steps": [
+                    "Open Queue and look for anything awaiting receipt, scheduling, or completion.",
+                    "Open the request card before acting so notes, files, and status stay together.",
+                    "Use instrument pages when you need operating detail, maintenance state, or assignment context.",
+                ],
+                "modules": [
+                    ("Queue", "This is your main operating surface for today’s sample flow."),
+                    ("Requests", "Use request cards to record each movement, note, and result."),
+                    ("Instruments", "Check machine readiness and local instructions before you run work."),
+                ],
+                "pane_guides": [
+                    ("Queue", "Treat it as the live list of commitments, not a rough reminder."),
+                    ("Request cards", "If work happened, the request card should show it."),
+                ],
+                "next_action": "Start at Queue and move the oldest blocked item first.",
+            },
+            "requester": {
+                "headline": "You submit samples clearly, track progress, and give the lab what it needs to execute well.",
+                "responsibilities": [
+                    "Provide enough sample detail that the lab can act without chasing missing context.",
+                    "Track your requests in the system instead of relying only on side conversations.",
+                    "Use the AI assistant to draft requests or report problems, but review the draft before submitting.",
+                ],
+                "first_steps": [
+                    "Open New Request when you need work started.",
+                    "Open your request cards to see status, notes, attachments, and next actions.",
+                    "Use Notifications to follow approvals, routing, and completion updates.",
+                ],
+                "modules": [
+                    ("New Request", "Create a clear, reviewable submission for the lab."),
+                    ("Requests", "Track what is open, completed, or waiting on you."),
+                    ("Notifications", "Watch for routing, review, and completion updates."),
+                ],
+                "pane_guides": [
+                    ("Request form", "Be specific about sample, instrument, and priority so the queue starts cleanly."),
+                    ("Request cards", "Use them as your source of truth for what the lab has done and what still needs input."),
+                ],
+                "next_action": "Start at New Request for new work, or open your latest request card to track progress.",
+            },
         }
         manual = manual_map.get(role, {
             "headline": "You have a specific operating slice of the lab ERP.",
@@ -11731,7 +11828,7 @@ def sitemap():
             admin_items.append({"label": "Leave Queue", "hint": "Approve/reject leave requests", "type": "link", "href": url_for("admin_leave_queue")})
             admin_items.append({"label": "Attendance Overview", "hint": "Daily attendance for all staff", "type": "link", "href": url_for("admin_attendance_calendar")})
         system_items = [
-            {"label": "Server Port", "type": "text", "value": "5055"},
+            {"label": "Server Port", "type": "text", "value": os.environ.get("LAB_SCHEDULER_PORT", "5055")},
             {"label": "Database", "type": "text", "value": "SQLite (local)"},
         ]
         sections.append({
@@ -12033,15 +12130,7 @@ def login():
         )
         flash("Invalid login.", "error")
     portal_slug = session.get("requested_portal")
-    response = make_response(render_template(
-        "login.html",
-        login_portal_slug=portal_slug,
-        login_portal=ERP_PORTALS.get(portal_slug),
-    ))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+    return _render_login_response(portal_slug)
 
 
 @app.route("/portals")
@@ -12087,6 +12176,33 @@ def logout():
         log_action(uid, "auth", uid, "logout", {})
     session.clear()
     return redirect(url_for("login"))
+
+
+def _apply_no_store_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+def _render_login_response(portal_slug: str | None = None, *, status_code: int = 200):
+    response = make_response(
+        render_template(
+            "login.html",
+            login_portal_slug=portal_slug,
+            login_portal=ERP_PORTALS.get(portal_slug),
+        ),
+        status_code,
+    )
+    return _apply_no_store_headers(response)
+
+
+def _render_change_password_response(*, status_code: int = 200):
+    response = make_response(
+        render_template("change_password.html", title="Change Password"),
+        status_code,
+    )
+    return _apply_no_store_headers(response)
 
 
 # ── Google OAuth routes ─────────────────────────────────────────
@@ -12192,6 +12308,47 @@ def _notify_ai_request_routed(
         user_id,
         "task",
         f"AI request routed: {label}",
+        body,
+        href,
+        source_type="ai_prospective_action",
+        source_id=action_id,
+    )
+
+
+def _notify_ai_request_decided(
+    *,
+    user_id: int | None,
+    action_type: str,
+    decision: str,
+    action_label: str = "",
+    action_id: int | None = None,
+    summary: str = "",
+    note: str = "",
+    href: str = "",
+) -> None:
+    """Tell a submitter that their AI-routed request was approved or rejected."""
+    if not user_id:
+        return
+    label = (action_label or action_type or "request").replace("_", " ").strip().title()
+    decision_key = (decision or "").strip().lower()
+    if decision_key == "approved":
+        title = f"AI request approved: {label}"
+        body = f"Your {label.lower()} passed human review."
+        if summary:
+            body += f" Result: {summary}"
+        elif note:
+            body += f" Note: {note}"
+        category = "task"
+    else:
+        title = f"AI request needs changes: {label}"
+        body = f"Your {label.lower()} was not approved yet."
+        if note:
+            body += f" Reviewer note: {note}"
+        category = "warning"
+    notify(
+        user_id,
+        category,
+        title,
         body,
         href,
         source_type="ai_prospective_action",
@@ -15262,6 +15419,8 @@ def dev_panel():
     hot_wave = next((w for w in waves if w.get("status") == "hot"), None)
     pipeline_shipped = sum(1 for w in waves if w.get("status") == "shipped")
     pipeline_total = len(waves)
+    debug_summary = debug_issue_summary(limit=6)
+    queue_summary = action_queue_summary(limit=6)
 
     # ── Infrastructure tile data ──────────────────────────
     peak_cpu = 0.0
@@ -15328,6 +15487,8 @@ def dev_panel():
         pipeline_shipped=pipeline_shipped,
         pipeline_total=pipeline_total,
         crawler_health=crawler_health,
+        debug_summary=debug_summary,
+        queue_summary=queue_summary,
         doc_files=DEV_PANEL_DOC_FILES,
         infra_stats=infra_stats,
         entity_counts=entity_counts,
@@ -16681,11 +16842,7 @@ def change_password():
         if len(portals) > 1 and not selected_portal:
             return redirect(url_for("portal_picker"))
         return redirect(url_for("role_manual"))
-    response = make_response(render_template("change_password.html", title="Change Password"))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+    return _render_change_password_response()
 
 
 @app.route("/history/processed")
@@ -19155,16 +19312,30 @@ def _can_edit_org_chart(user) -> bool:
 def personnel_chart():
     """Deco-mesh style org chart — blobs + arrows, drag to rewire."""
     user = current_user()
-    users = query_all(
-        """SELECT id, name, email, role, member_code, office_location,
-                  org_node_x, org_node_y
-             FROM users
-            WHERE active = 1 AND invite_status = 'active'
-            ORDER BY name"""
-    )
-    edges = query_all(
-        "SELECT user_id, manager_id FROM reporting_structure"
-    )
+    portal_slug = active_portal_slug()
+    user_sql = """
+        SELECT users.id, users.name, users.email, users.role, users.member_code, users.office_location,
+               users.org_node_x, users.org_node_y
+          FROM users
+    """
+    user_params: list[object] = []
+    if portal_slug:
+        user_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = users.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+         WHERE users.active = 1 AND users.invite_status = 'active'
+           AND ep.slug = ? AND ep.is_active = 1
+        """
+        user_params.append(portal_slug)
+    else:
+        user_sql += " WHERE users.active = 1 AND users.invite_status = 'active'"
+    user_sql += " ORDER BY users.name"
+    users = query_all(user_sql, tuple(user_params))
+    visible_user_ids = {u["id"] for u in users}
+    edges = [
+        row for row in query_all("SELECT user_id, manager_id FROM reporting_structure")
+        if row["user_id"] in visible_user_ids and row["manager_id"] in visible_user_ids
+    ]
     laid_out = _org_chart_layout(users, edges)
     edge_pairs = []
     for e in edges:
@@ -19831,16 +20002,29 @@ def personnel_list():
     if not _personnel_access(user):
         abort(403)
     can_edit = _personnel_can_edit(user)
-    staff = query_all("""
+    portal_slug = active_portal_slug()
+    staff_sql = """
         SELECT u.id, u.name, u.email, u.role, u.short_code, u.active,
                mgr.name AS manager_name,
                sc.monthly_salary, sc.designation, sc.department, sc.join_date
           FROM users u
+    """
+    staff_params: list[object] = []
+    if portal_slug:
+        staff_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = u.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+        """
+    staff_sql += """
           LEFT JOIN reporting_structure rs ON rs.user_id = u.id
           LEFT JOIN users mgr ON mgr.id = rs.manager_id
           LEFT JOIN salary_config sc ON sc.user_id = u.id
-         ORDER BY u.name
-    """)
+    """
+    if portal_slug:
+        staff_sql += " WHERE ep.slug = ? AND ep.is_active = 1"
+        staff_params.append(portal_slug)
+    staff_sql += " ORDER BY u.name"
+    staff = query_all(staff_sql, tuple(staff_params))
     # Get today's attendance for quick-mark widget
     from datetime import date as _date
     today = _date.today().isoformat()
@@ -19869,7 +20053,20 @@ def personnel_detail(user_id: int):
         abort(404)
     if not _personnel_access(user):
         abort(403)
-    employee = query_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    portal_slug = active_portal_slug()
+    employee_sql = "SELECT users.* FROM users"
+    employee_params: list[object] = []
+    if portal_slug:
+        employee_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = users.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+        """
+    employee_sql += " WHERE users.id = ?"
+    employee_params.append(user_id)
+    if portal_slug:
+        employee_sql += " AND ep.slug = ? AND ep.is_active = 1"
+        employee_params.append(portal_slug)
+    employee = query_one(employee_sql, tuple(employee_params))
     if not employee:
         abort(404)
     salary_cfg = query_one("SELECT * FROM salary_config WHERE user_id = ?", (user_id,))
@@ -23614,6 +23811,7 @@ def ai_action_decide(action_id: int):
         return redirect(url_for("inbox"))
     decision = request.form.get("decision", "").strip()
     note = request.form.get("note", "").strip()
+    action_type = row_value(action, "action_type", "")
     if decision == "reject":
         if not note:
             flash("Rejection requires a note.", "warning")
@@ -23623,6 +23821,14 @@ def ai_action_decide(action_id: int):
             "decided_at=?, decided_by_user_id=? WHERE id=?",
             (note, now_iso(), user["id"], action_id),
         )
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="rejected",
+            action_id=action_id,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(f"Rejected action #{action_id}.", "success")
         return redirect(url_for("inbox"))
     if decision != "approve":
@@ -23630,7 +23836,6 @@ def ai_action_decide(action_id: int):
         return redirect(url_for("inbox"))
     # Approve: advance to next stage if one exists, else materialise.
     stage = row_value(action, "approver_stage", "area_admin")
-    action_type = row_value(action, "action_type", "")
     route = query_one(
         "SELECT * FROM ai_action_routes WHERE action_type = ?", (action_type,)
     )
@@ -23662,11 +23867,33 @@ def ai_action_decide(action_id: int):
         (note, now_iso(), user["id"], table, new_id, action_id),
     )
     if table and new_id:
+        summary_text = f"Created {table} #{new_id}."
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="approved",
+            action_id=action_id,
+            summary=summary_text,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(
             f"Approved action #{action_id} and created {table} #{new_id}.",
             "success",
         )
     else:
+        summary_text = (
+            f"Approved for manual follow-through in {table or action_type}."
+        )
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="approved",
+            action_id=action_id,
+            summary=summary_text,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(
             f"Approved action #{action_id}. Materialisation for {table or action_type} "
             f"isn't wired yet — complete the entry manually in the module UI.",
@@ -23681,8 +23908,26 @@ def ai_advisor_log():
     """View processed AI advisor entries for the current user."""
     user = current_user()
     entries = query_all(
-        "SELECT * FROM ai_advisor_queue WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
-        (user["id"],))
+        """SELECT aq.*,
+                  pa.id AS routed_action_id,
+                  pa.action_type AS routed_action_type,
+                  pa.status AS routed_action_status,
+                  pa.approver_stage AS routed_approver_stage,
+                  pa.decision_note AS routed_decision_note,
+                  pa.decided_at AS routed_decided_at,
+                  pa.materialised_table AS routed_materialised_table,
+                  pa.materialised_row_id AS routed_materialised_row_id,
+                  approver.name AS routed_approver_name
+           FROM ai_advisor_queue aq
+           LEFT JOIN ai_prospective_actions pa
+             ON pa.source_queue_id = aq.id
+           LEFT JOIN users approver
+             ON approver.id = pa.assigned_approver_id
+           WHERE aq.user_id = ?
+           ORDER BY aq.created_at DESC
+           LIMIT 50""",
+        (user["id"],),
+    )
     return render_template("ai_advisor_log.html", entries=entries)
 
 
@@ -24989,6 +25234,7 @@ def site_feedback_submit():
 def global_search():
     user = current_user()
     q = request.args.get("q", "").strip()
+    portal_slug = active_portal_slug()
     shortcuts = [
         {"label": "Dashboard", "hint": "See current workload and action items.", "url": url_for("index")},
     ]
@@ -25005,17 +25251,40 @@ def global_search():
     results = []
     sections = []
     like = f"%{q}%"
-    instruments_found = [
-        {"type": "Instrument", "title": r["name"], "code": r["code"], "meta": "Machine", "url": url_for("instrument_detail", instrument_id=r["id"])}
-        for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
-    ]
-    requests_found = [
-        {"type": "Request", "title": r["title"], "code": r["request_no"], "meta": "Sample request", "url": url_for("request_detail", request_id=r["id"])}
-        for r in query_all("SELECT id, request_no, title FROM sample_requests WHERE request_no LIKE ? OR title LIKE ? OR sample_name LIKE ? LIMIT 6", (like, like, like))
-    ]
+    instruments_found = []
+    if module_visible_in_active_portal("instruments") and has_instrument_area_access(user):
+        instruments_found = [
+            {"type": "Instrument", "title": r["name"], "code": r["code"], "meta": "Machine", "url": url_for("instrument_detail", instrument_id=r["id"])}
+            for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
+        ]
+    requests_found = []
+    if module_visible_in_active_portal("queue") and can_access_schedule(user):
+        request_clauses, request_params = request_scope_sql(user, "sr")
+        request_clauses.append("(sr.request_no LIKE ? OR sr.title LIKE ? OR sr.sample_name LIKE ?)")
+        request_params.extend([like, like, like])
+        requests_found = [
+            {"type": "Request", "title": r["title"], "code": r["request_no"], "meta": "Sample request", "url": url_for("request_detail", request_id=r["id"])}
+            for r in query_all(
+                f"SELECT sr.id, sr.request_no, sr.title FROM sample_requests sr WHERE {' AND '.join(request_clauses)} LIMIT 6",
+                tuple(request_params),
+            )
+        ]
+    user_from = "FROM users u"
+    user_where = "WHERE (u.name LIKE ? OR u.email LIKE ?)"
+    user_params: list[object] = [like, like]
+    if portal_slug:
+        user_from += (
+            " JOIN erp_user_portals eup ON eup.user_id = u.id "
+            " JOIN erp_portals ep ON ep.id = eup.portal_id "
+        )
+        user_where += " AND ep.slug = ? AND ep.is_active = 1"
+        user_params.append(portal_slug)
     users_found = [
         {"type": "User", "title": r["name"], "code": r["email"], "meta": "User profile", "url": url_for("user_profile", user_id=r["id"])}
-        for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 6", (like, like))
+        for r in query_all(
+            f"SELECT DISTINCT u.id, u.name, u.email {user_from} {user_where} LIMIT 6",
+            tuple(user_params),
+        )
     ]
     grants_found = []
     if module_visible_in_active_portal("finance") and _user_can_view_finance(user):
@@ -28411,6 +28680,27 @@ def ai_pane_summary():
     for t in todos:
         items.append({"type": "todo", "text": f"Task: {t['title']}" + (" (urgent)" if t["priority"] == "urgent" else "")})
 
+    my_ai_routes = query_all(
+        """SELECT action_type, status, created_at
+           FROM ai_prospective_actions
+           WHERE submitted_by_user_id = ?
+           ORDER BY created_at DESC
+           LIMIT 3""",
+        (user["id"],),
+    )
+    for route in my_ai_routes:
+        label = (route["action_type"] or "request").replace("_", " ")
+        status = route["status"] or "awaiting_review"
+        if status == "awaiting_review":
+            text = f"AI-routed {label} awaiting human review"
+        elif status == "approved":
+            text = f"AI-routed {label} approved"
+        elif status == "rejected":
+            text = f"AI-routed {label} rejected"
+        else:
+            text = f"AI-routed {label} — {status.replace('_', ' ')}"
+        items.append({"type": "ai_route", "text": text})
+
     # Admin-specific: pending approvals
     if role in ("super_admin", "site_admin", "instrument_admin", "finance_admin", "approver"):
         pending_approvals = query_one(
@@ -28419,6 +28709,16 @@ def ai_pane_summary():
         )
         if pending_approvals and pending_approvals["c"]:
             items.append({"type": "approval", "text": f"{pending_approvals['c']} pending approval{'s' if pending_approvals['c'] > 1 else ''} for your role"})
+
+    pending_ai_reviews = query_one(
+        "SELECT COUNT(*) AS c FROM ai_prospective_actions WHERE assigned_approver_id = ? AND status = 'awaiting_review'",
+        (user["id"],),
+    )
+    if pending_ai_reviews and pending_ai_reviews["c"]:
+        items.append({
+            "type": "ai_review",
+            "text": f"{pending_ai_reviews['c']} AI-routed request{'s' if pending_ai_reviews['c'] > 1 else ''} awaiting your review",
+        })
 
     # Pending AI commands needing review
     pending_cmds = query_one(

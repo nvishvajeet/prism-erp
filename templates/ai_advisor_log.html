@@ -46,8 +46,54 @@
       {% if e.file_name %}
       <p class="hint" data-vis="{{ V }}">Attached: {{ e.file_name }}</p>
       {% endif %}
+      {% if e.routed_action_id %}
+      <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;" data-vis="{{ V }}">
+        <span class="badge badge-role" data-vis="{{ V }}">AI-routed</span>
+        <span class="badge {% if e.routed_action_status == 'approved' %}status-active{% elif e.routed_action_status == 'rejected' %}status-archived{% else %}status-wait{% endif %}" data-vis="{{ V }}">
+          {% if e.routed_action_status == 'awaiting_review' %}
+          Awaiting human review
+          {% elif e.routed_action_status == 'approved' %}
+          Approved
+          {% elif e.routed_action_status == 'rejected' %}
+          Rejected
+          {% else %}
+          {{ e.routed_action_status|replace('_', ' ')|title }}
+          {% endif %}
+        </span>
+        {% if e.routed_action_type %}
+        <span class="hint" data-vis="{{ V }}">Type: {{ e.routed_action_type|replace('_', ' ')|title }}</span>
+        {% endif %}
+        {% if e.routed_approver_name and e.routed_action_status == 'awaiting_review' %}
+        <span class="hint" data-vis="{{ V }}">With: {{ e.routed_approver_name }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
       {% if e.response %}
       <div style="margin-top:0.5rem;padding:0.75rem;background:var(--surface-alt);border-radius:8px;white-space:pre-wrap;font-size:0.9rem;line-height:1.6;" data-vis="{{ V }}">{{ e.response }}</div>
+      {% endif %}
+      {% if e.routed_action_id %}
+      <div style="margin-top:0.5rem;padding:0.75rem;background:var(--surface-alt);border-radius:8px;" data-vis="{{ V }}">
+        <div class="hint" style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem;" data-vis="{{ V }}">Routing status</div>
+        {% if e.routed_action_status == 'awaiting_review' %}
+        <div style="font-size:0.9rem;line-height:1.5;" data-vis="{{ V }}">
+          This request has been routed for human approval{% if e.routed_approver_name %} with {{ e.routed_approver_name }}{% endif %}.
+        </div>
+        {% elif e.routed_action_status == 'approved' %}
+        <div style="font-size:0.9rem;line-height:1.5;" data-vis="{{ V }}">
+          This request was approved{% if e.routed_materialised_table and e.routed_materialised_row_id %} and created {{ e.routed_materialised_table }} #{{ e.routed_materialised_row_id }}{% endif %}.
+        </div>
+        {% elif e.routed_action_status == 'rejected' %}
+        <div style="font-size:0.9rem;line-height:1.5;" data-vis="{{ V }}">
+          This request was rejected and kept in the log for follow-up.
+        </div>
+        {% endif %}
+        {% if e.routed_decision_note %}
+        <div class="hint" style="margin-top:0.45rem;" data-vis="{{ V }}">Note: {{ e.routed_decision_note }}</div>
+        {% endif %}
+        {% if e.routed_decided_at %}
+        <div class="hint" style="margin-top:0.25rem;" data-vis="{{ V }}">Decision time: {{ e.routed_decided_at[:16] }}</div>
+        {% endif %}
+      </div>
       {% endif %}
       {% if e.batch_id %}
       <p class="hint" style="margin-top:0.25rem;" data-vis="{{ V }}">Batch: {{ e.batch_id }} &middot; Processed: {{ e.processed_at[:16] if e.processed_at else 'pending' }}</p>

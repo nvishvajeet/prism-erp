@@ -32,7 +32,7 @@
         <input type="hidden" name="page" value="{{ request.path }}">
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
-        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, press C to capture the thing under your cursor." data-vis="{{ V }}"></textarea>
+        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, then use Cmd/Ctrl or capture to tag the thing under your cursor." data-vis="{{ V }}"></textarea>
         <div class="feedback-actions" data-vis="{{ V }}">
           <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
           <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯</button>

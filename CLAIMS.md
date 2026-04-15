@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | 0103-hold-meta-pin-rebind | 2026-04-15T16:59:00Z | static/debug-grid.js, CLAIMS.md | pending |
 
 ## Stale-claim recovery
 

@@ -164,17 +164,12 @@
     sessionStorage.removeItem('debugRecordingStart');
   }
 
-  // ── Mouse tracking during recording (hold C or Shift to log position) ──
+  // ── Mouse tracking during recording (hold Command/Meta to log position) ──
   var lastTrackTime = 0;
-  var cKeyDown = false;
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'c' && !e.target.closest('input,textarea,select,[contenteditable]')) cKeyDown = true;
-  });
-  document.addEventListener('keyup', function (e) { if (e.key === 'c') cKeyDown = false; });
   document.addEventListener('mousemove', function (e) {
     if (!isRecording) return;
-    // Hold 'c' key while moving mouse to log positions
-    if (!e.shiftKey && !cKeyDown) return;
+    // Uses the Meta key (Command on Mac, Windows key on Windows/Linux).
+    if (!e.metaKey) return;
     var now = Date.now();
     if (now - lastTrackTime < 200) return; // ~5 times per second
     lastTrackTime = now;
@@ -359,7 +354,7 @@
     transcriptPanel.style.display = 'block';
     if (transcriptEl) transcriptEl.textContent = resumed
       ? 'Resumed recording (navigated from previous page)...'
-      : 'Listening... (click anywhere to mark a point)';
+      : 'Listening... (click to mark points; hold ⌘ / Ctrl while moving to pin hover locations)';
     updateTranscriptDisplay();
   }
 

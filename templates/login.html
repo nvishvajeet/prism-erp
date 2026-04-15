@@ -24,8 +24,8 @@
   {% endif %}
   <form method="post" class="form-grid" data-vis="all">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
-    <label data-vis="all">Username or email
-      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" placeholder="owner@catalyst.local" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
+    <label data-vis="all">Username
+      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" placeholder="dean" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
     </label>
     <label data-vis="all">Password
       <input type="password" name="password" required autocomplete="current-password" placeholder="Enter your password" value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">

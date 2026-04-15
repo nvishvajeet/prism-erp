@@ -11545,18 +11545,11 @@ def login():
             SELECT *
             FROM users
             WHERE active = 1
-              AND (
-                lower(email) = ?
-                OR (
-                  ? NOT LIKE '%@%'
-                  AND instr(email, '@') > 0
-                  AND lower(substr(email, 1, instr(email, '@') - 1)) = ?
-                )
-              )
-            ORDER BY CASE WHEN lower(email) = ? THEN 0 ELSE 1 END, id
+              AND lower(email) = ?
+            ORDER BY id
             LIMIT 1
             """,
-            (login_id, login_id, login_id, login_id),
+            (login_id,),
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             session.clear()

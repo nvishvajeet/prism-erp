@@ -3,6 +3,10 @@
 > The shortest mental model for building the next ERP module without
 > re-reading the whole codebase.
 
+For the condensed "fastest safe execution order" version, read
+[`BUILD_ACCELERATION_PLAYBOOK.md`](BUILD_ACCELERATION_PLAYBOOK.md)
+after this file.
+
 ## What CATALYST really is
 
 CATALYST is one operational spine with interchangeable domain modules.

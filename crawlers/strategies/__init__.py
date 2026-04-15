@@ -38,3 +38,4 @@ from . import aria_label_present       # noqa: F401
 from . import url_for_endpoint_exists  # noqa: F401
 from . import duplicate_id_in_template  # noqa: F401
 from . import hardcoded_url_in_template  # noqa: F401
+from . import label_for_matches_id       # noqa: F401

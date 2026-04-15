@@ -15,7 +15,7 @@
   {% if current_user %}
   <div id="feedbackWidget" class="feedback-widget feedback-widget--compact" data-vis="{{ V }}">
     <button id="feedbackToggle" class="feedback-toggle" title="Feedback / voice note / bug (press F)" aria-label="Open feedback" data-vis="{{ V }}">💬</button>
-    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Listening and tracking cursor</div>
+    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Listening and pinning clicks</div>
     <div id="feedbackCaptureFlash" class="feedback-capture-flash" hidden data-vis="{{ V }}">Captured</div>
     <div id="feedbackCaptureMarker" class="feedback-capture-marker" hidden data-vis="{{ V }}" aria-hidden="true"></div>
     <div id="feedbackPanel" class="feedback-panel" hidden data-vis="{{ V }}">
@@ -32,15 +32,16 @@
         <input type="hidden" name="page" value="{{ request.path }}">
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
-        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, then use Cmd/Ctrl or capture to tag the thing under your cursor." data-vis="{{ V }}"></textarea>
+        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, then click the broken thing while the mic is live, or use Cmd/Ctrl + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
         <div class="feedback-actions" data-vis="{{ V }}">
           <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
           <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯</button>
           <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
         </div>
       </form>
+      <p id="feedbackCaptureSummary" class="feedback-status hint" data-vis="{{ V }}">No pinned clicks yet.</p>
       <p id="feedbackStatus" class="feedback-status hint" data-vis="{{ V }}" aria-live="polite"></p>
-      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · buttons for mic/capture · <kbd>Esc</kbd> close.</p>
+      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · mic live = click-to-pin · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click pins without leaving the page · <kbd>Esc</kbd> close.</p>
     </div>
   </div>
   <script>
@@ -59,12 +60,25 @@
     var voiceBadge = document.getElementById('feedbackVoiceBadge');
     var captureFlash = document.getElementById('feedbackCaptureFlash');
     var captureMarker = document.getElementById('feedbackCaptureMarker');
+    var captureSummary = document.getElementById('feedbackCaptureSummary');
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
       if (!status) return;
       status.textContent = message || '';
       status.setAttribute('data-tone', tone || '');
+    }
+
+    function updateCaptureSummary() {
+      if (!captureSummary) return;
+      if (!capturedClicks.length) {
+        captureSummary.textContent = 'No pinned clicks yet.';
+        return;
+      }
+      var last = capturedClicks[capturedClicks.length - 1];
+      captureSummary.textContent =
+        capturedClicks.length + ' pinned click' + (capturedClicks.length === 1 ? '' : 's') +
+        ' · last: ' + (last.selector || 'unknown') + ' @ ' + last.page_x + ',' + last.page_y;
     }
 
     function openPanel() {
@@ -101,16 +115,23 @@
     if (mini) mini.addEventListener('click', closePanel);
 
     // ── Cursor + hover context tracking ───────────────────────────
-    var lastPointer = {x: 0, y: 0};
+    var lastPointer = {x: 0, y: 0, pageX: 0, pageY: 0};
     var lastHoverSelector = '';
     var pointerTrail = [];
     var pointerTrailLimit = 40;
+    var capturedClicks = [];
+    var captureCounter = 0;
     document.addEventListener('mousemove', function(e){
-      lastPointer.x = e.clientX; lastPointer.y = e.clientY;
+      lastPointer.x = e.clientX;
+      lastPointer.y = e.clientY;
+      lastPointer.pageX = e.clientX + window.scrollX;
+      lastPointer.pageY = e.clientY + window.scrollY;
       if (listening) {
         pointerTrail.push({
           x: e.clientX,
           y: e.clientY,
+          page_x: e.clientX + window.scrollX,
+          page_y: e.clientY + window.scrollY,
           ts: new Date().toISOString()
         });
         if (pointerTrail.length > pointerTrailLimit) {
@@ -130,6 +151,34 @@
       lastHoverSelector = parts.join('');
     }, {passive: true});
 
+    function describeElement(el) {
+      if (!el || el.nodeType !== 1) return '';
+      var parts = [el.tagName.toLowerCase()];
+      if (el.id) parts.push('#' + el.id);
+      if (el.className && typeof el.className === 'string') {
+        var classes = el.className.split(/\s+/).filter(Boolean).slice(0, 3);
+        if (classes.length) parts.push('.' + classes.join('.'));
+      }
+      return parts.join('');
+    }
+
+    function clickCaptureMode(ev) {
+      if (panel.hidden) return '';
+      if (listening) return 'voice';
+      if (ev && (ev.metaKey || ev.ctrlKey)) return 'modifier';
+      return '';
+    }
+
+    function appendCaptureDraft(marker) {
+      if (!text || !marker) return;
+      var snippet = '<snapshot selector="' + (marker.selector || '') +
+        '" x="' + marker.x + '" y="' + marker.y +
+        '" page_x="' + marker.page_x + '" page_y="' + marker.page_y +
+        '" kind="click"/>';
+      if (text.value && !/\s$/.test(text.value)) text.value += ' ';
+      text.value += snippet;
+    }
+
     function collectContext(snapshot){
       var ctx = {
         path: location.pathname + location.search,
@@ -139,6 +188,10 @@
         ts: new Date().toISOString(),
       };
       if (pointerTrail.length) ctx.pointer_trail = pointerTrail.slice(-pointerTrailLimit);
+      if (capturedClicks.length) {
+        ctx.captured_clicks = capturedClicks.slice(-12);
+        ctx.last_click = capturedClicks[capturedClicks.length - 1];
+      }
       if (snapshot) ctx.snapshot = snapshot;
       if (ctxInput) ctxInput.value = JSON.stringify(ctx);
       return ctx;
@@ -178,6 +231,44 @@
       }, 520);
     }
 
+    document.addEventListener('click', function(ev){
+      var mode = clickCaptureMode(ev);
+      if (!mode) return;
+      if (widget.contains(ev.target)) return;
+      var el = ev.target;
+      var selector = describeElement(el) || lastHoverSelector;
+      var marker = {
+        idx: ++captureCounter,
+        mode: mode,
+        path: location.pathname + location.search,
+        selector: selector,
+        x: ev.clientX,
+        y: ev.clientY,
+        page_x: ev.clientX + window.scrollX,
+        page_y: ev.clientY + window.scrollY,
+        ts: new Date().toISOString()
+      };
+      capturedClicks.push(marker);
+      if (capturedClicks.length > 20) capturedClicks.shift();
+      updateCaptureSummary();
+      appendCaptureDraft(marker);
+      collectContext(null);
+      pulseCaptureMarker({x: ev.clientX, y: ev.clientY});
+      flashCapture('Pinned click #' + marker.idx, 'ok');
+      setStatus(
+        mode === 'voice'
+          ? 'Pinned this click. Keep talking or press Send when ready.'
+          : 'Pinned this click without leaving the page.',
+        'live'
+      );
+
+      var blocksNavigation = !!el.closest('a[href], button, input[type="submit"], input[type="button"], summary');
+      if (blocksNavigation) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    }, true);
+
     // ── 🎯 capture element under cursor ───────────────────────────
     function captureElementUnderCursor() {
       var el = document.elementFromPoint(lastPointer.x, lastPointer.y);
@@ -196,6 +287,7 @@
       collectContext(descr);
       pulseCaptureMarker({x: lastPointer.x, y: lastPointer.y});
       flashCapture('Captured under cursor', 'ok');
+      setStatus('Pinned the element under your cursor.', 'live');
     }
     if (captureBtn) captureBtn.addEventListener('click', function(ev){ ev.preventDefault(); captureElementUnderCursor(); });
 
@@ -275,10 +367,13 @@
           recognition.start();
           listening = true;
           pointerTrail = [];
+          capturedClicks = [];
+          captureCounter = 0;
+          updateCaptureSummary();
           showVoiceBadge(true);
           mic.textContent = '🔴';
           mic.title = 'Listening… click to stop.';
-          setStatus('Listening… speak naturally, then tap the mic to stop.', 'live');
+          setStatus('Listening… speak naturally, then click the broken thing to pin it without leaving the page.', 'live');
         } catch(e) {
           // start() throws if already started; treat as toggle-off.
           try { recognition.stop(); } catch(_) {}
@@ -347,6 +442,10 @@
         }
         if (text) text.value = '';
         if (ctxInput) ctxInput.value = '';
+        capturedClicks = [];
+        captureCounter = 0;
+        pointerTrail = [];
+        updateCaptureSummary();
         setStatus(result.data.message || 'Feedback sent.', '');
         if (panel && !panel.hidden) {
           window.setTimeout(function(){

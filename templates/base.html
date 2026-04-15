@@ -333,14 +333,14 @@
 
   {# ── AI Hover Pane — extracted to partial ── #}
   {% include "_base_ai_pane.html" %}
-  {# Debug tools — loaded only for owner accounts. The ?debug=1 query
-     param is an owner-only shortcut; other users cannot enable the
-     overlay by URL, otherwise any authenticated user could inject the
-     debug JS by appending ?debug=1 to any page.
+  {# Debug tools — loaded only when ?debug=1 is present AND the current
+     account is an explicit debug role. That keeps the heavy overlay off
+     normal page loads while still letting owner/tester/admin accounts
+     opt into it on demand.
      - Grid overlay: press 'g' to toggle numbered grid lines
      - Voice recorder: click Record, speak + click, click Stop
      - Feedback saved to logs/debug_feedback.md for Claude to fix #}
-  {% if is_owner_user|default(false) %}
+  {% if can_use_debug_overlay_user|default(false) and request.args.get('debug') == '1' %}
   <script defer src="{{ url_for('static', filename='grid-overlay.js') }}?v=12"></script>
   <script defer src="{{ url_for('static', filename='debug-grid.js') }}?v=12"></script>
   {% endif %}

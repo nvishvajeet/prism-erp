@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | debugger-feedback-hardening | 2026-04-15T20:05:00Z | CLAIMS.md, static/debug-grid.js, app.py, templates/_base_ai_pane.html | pending |
 
 ## Stale-claim recovery
 

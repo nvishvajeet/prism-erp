@@ -8599,6 +8599,7 @@ def _recent_combined_notifications(user) -> list[dict]:
 def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
+    role_set = user_role_set(user)
     ai_settings = _ai_settings_snapshot()
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
     # Every db role must appear here — base.html's [data-vis] filter hides
@@ -8685,7 +8686,7 @@ def inject_globals():
         "current_role_display": role_display_name(user["role"]) if user else "",
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_hint": role_next_action(user["role"]) if user else "",
-        "current_role_set": user_role_set(user),
+        "current_role_set": role_set,
         "user_has_role": lambda role: user_has_role(user, role),
         "instrument_groups_all": instrument_groups_all,
         "support_admin_email": support_admin_email,
@@ -8700,6 +8701,7 @@ def inject_globals():
         "google_oauth_enabled": bool(_oauth),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
+        "can_use_debug_overlay_user": bool(user and (is_owner(user) or bool(role_set & {"tester", "super_admin", "site_admin"}))),
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
         "can_use_role_switcher_user": bool(access_profile["can_use_role_switcher"]),
         "can_access_schedule_user": bool(access_profile["can_access_schedule"]),
@@ -25513,6 +25515,55 @@ def _normalize_feedback_text(raw_text: str) -> str:
     return text
 
 
+def _feedback_context_summary(context_json: str) -> str:
+    """Render the highest-signal parts of a feedback context blob as markdown."""
+    raw = (context_json or "").strip()
+    if not raw:
+        return ""
+    try:
+        ctx = json.loads(raw)
+    except Exception:
+        return ""
+
+    lines: list[str] = []
+    hover = ctx.get("hover")
+    if hover:
+        lines.append(f"- hover target: `{hover}`")
+
+    pointer = ctx.get("pointer") or {}
+    if isinstance(pointer, dict) and pointer:
+        px = pointer.get("pageX", pointer.get("page_x"))
+        py = pointer.get("pageY", pointer.get("page_y"))
+        vx = pointer.get("x")
+        vy = pointer.get("y")
+        parts = []
+        if vx is not None and vy is not None:
+            parts.append(f"viewport `{vx},{vy}`")
+        if px is not None and py is not None:
+            parts.append(f"page `{px},{py}`")
+        if parts:
+            lines.append("- pointer: " + " · ".join(parts))
+
+    clicks = ctx.get("captured_clicks") or []
+    if isinstance(clicks, list) and clicks:
+        lines.append("- captured clicks:")
+        for click in clicks[-5:]:
+            if not isinstance(click, dict):
+                continue
+            selector = click.get("selector") or "unknown"
+            path = click.get("path") or ctx.get("path") or "?"
+            cx = click.get("page_x", click.get("pageX", "?"))
+            cy = click.get("page_y", click.get("pageY", "?"))
+            mode = click.get("mode") or "capture"
+            lines.append(f"  - `{selector}` on `{path}` at `{cx},{cy}` via `{mode}`")
+
+    pointer_trail = ctx.get("pointer_trail") or []
+    if isinstance(pointer_trail, list) and pointer_trail:
+        lines.append(f"- pointer trail samples: `{len(pointer_trail)}`")
+
+    return "**Captured context:**\n" + "\n".join(lines) if lines else ""
+
+
 def _append_feedback_entry(
     *,
     user: sqlite3.Row | None,
@@ -25540,6 +25591,7 @@ def _append_feedback_entry(
         user_label = "anonymous"
     portal_slug = active_portal_slug() or "?"
     cleaned_text = _normalize_feedback_text(text)
+    context_summary = _feedback_context_summary(context_json)
     entry = (
         f"\n## {now_iso()}\n\n"
         f"**User:** {user_label}  \n"
@@ -25548,6 +25600,8 @@ def _append_feedback_entry(
         f"**Source:** `{source}`  \n\n"
         f"{cleaned_text}\n"
     )
+    if context_summary:
+        entry += f"\n{context_summary}\n"
     ctx = (context_json or "").strip()
     if ctx:
         # Cap payload size so a runaway client can't blow up the log.
@@ -25746,7 +25800,13 @@ def debug_feedback():
     if clicks:
         click_lines = "\n**Click markers:**\n"
         for c in clicks:
-            click_lines += f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` ({c.get('page', '?')})\n"
+            action = c.get("action") or "click"
+            page_x = c.get("pageX", c.get("page_x", "?"))
+            page_y = c.get("pageY", c.get("page_y", "?"))
+            click_lines += (
+                f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` "
+                f"({c.get('page', '?')}) at `{page_x},{page_y}` via `{action}`\n"
+            )
 
     saved_to = _append_feedback_entry(
         user=user,

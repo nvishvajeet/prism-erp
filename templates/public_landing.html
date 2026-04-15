@@ -69,6 +69,14 @@
         <p class="hint landing-eyebrow landing-eyebrow-hq" data-vis="{{ V }}">
           Private · By Invitation
         </p>
+        <div class="landing-hq-brandmark-wrap" data-vis="{{ V }}">
+          <img
+            src="{{ url_for('static', filename='ravikiran-erp-logo.jpeg') }}"
+            alt="Catalyst ERP Ravikiran logo"
+            class="landing-hq-brandmark"
+            data-vis="{{ V }}"
+          >
+        </div>
         <h3 class="landing-title landing-title-hq" data-vis="{{ V }}">
           {{ hq_portal.title or 'Ravikiran Group HQ' }}
         </h3>
@@ -177,6 +185,14 @@
     margin: 0 0 0.6rem;
     font-size: clamp(1.15rem, 1.7vw, 1.45rem);
     line-height: 1.2; font-weight: 700; color: #222;
+  }
+  .landing-hq-brandmark-wrap { margin: 0 0 1rem; }
+  .landing-hq-brandmark {
+    width: clamp(4.6rem, 9vw, 6.8rem);
+    height: auto;
+    display: block;
+    border-radius: 1rem;
+    box-shadow: 0 8px 18px rgba(15, 35, 80, 0.12);
   }
   .landing-tagline-hq {
     margin: 0; font-size: 0.92rem; line-height: 1.55; color: #555;

@@ -9,6 +9,24 @@
       <h1 style="margin: 0;">Your testing plan</h1>
       <span class="badge badge-info">role: tester</span>
     </div>
+    <div class="login-support-card" style="margin: 0 0 1rem 0;" data-vis="{{ V }}">
+      <strong data-vis="{{ V }}">Fast loop for every page</strong>
+      <p class="hint" style="margin: 0.45rem 0;" data-vis="{{ V }}">
+        1. Load the page. 2. Do one real action on it. 3. If anything is wrong, leave feedback immediately using typed or mic input. 4. Move to the next page.
+      </p>
+      <p class="hint" style="margin: 0;" data-vis="{{ V }}">
+        Use typed feedback for short/simple bugs. Use mic feedback when you need to narrate a sequence of clicks or explain a moving UI problem.
+      </p>
+    </div>
+    <div class="login-support-card" style="margin: 0 0 1rem 0;" data-vis="{{ V }}">
+      <strong data-vis="{{ V }}">How Claude uses your reports</strong>
+      <p class="hint" style="margin: 0.45rem 0;" data-vis="{{ V }}">
+        Your feedback becomes the fix queue. The AI reads your report, reproduces the flow, patches the bug, and then crawlers verify the page after the fix.
+      </p>
+      <p class="hint" style="margin: 0;" data-vis="{{ V }}">
+        Best report shape: page, action, problem, expected result.
+      </p>
+    </div>
     <p style="color: var(--muted, #888); font-size: 0.9rem; margin: 0 0 1.5rem 0;">
       Read top to bottom. §1–§6 = walk the site as yourself. §7 = walk as each of the
       eight <code>test.*</code> roles. §8 = how your bugs reach dev.

@@ -7,6 +7,31 @@ commit that added the `tester` role + your account._
 Welcome. Read this front-to-back once, then keep it open while
 you work. Total time to read + Day-One walk: ~2.5 hours.
 
+**Core rule for every page:**
+
+1. **Load it**
+2. **Do one real action on it** (click, search, filter, open detail,
+   switch tab, expand tile, submit a harmless form draft, switch
+   portal, etc.)
+3. **Leave feedback immediately** using either:
+   - **typed feedback** in the on-page AI/feedback widget, or
+   - **mic feedback** using the same tool
+4. If the page is broken, confusing, or permission-leaky, say so
+   right there while the context is still visible.
+
+The goal is simple: your testing should produce structured bug reports
+that the crawler loop can later replay and fix.
+
+**Why this matters:**
+
+- **You** walk the real website like a human tester.
+- **The AI feedback tool** captures your exact page, clicks, and narration.
+- **Claude + the crawler suite** then use that evidence to reproduce,
+  fix, and verify the bug.
+
+Think of your job as building a clean queue of real problems for the
+AI/debugging loop. The better your reports, the faster the fixes.
+
 ---
 
 ## 1. First login (5 minutes)
@@ -58,15 +83,80 @@ interruption for both of you.
 ## 2. Day-one walk (2 hours)
 
 Hit every surface below in order. You won't edit anything today —
-your role is READ + REPORT. For each page, note three things:
+your role is READ + REPORT. For each page, note four things:
 
 1. Does it load without visible errors?
-2. Does it show data consistent with what you'd expect to see?
-3. Are there visual bugs (misalignment, overlapping text, cut-off
+2. Can you do at least one meaningful action on it without the page
+   getting stuck?
+3. Does it show data consistent with what you'd expect to see?
+4. Are there visual bugs (misalignment, overlapping text, cut-off
    buttons, broken images, missing labels)?
 
 Tick each line as you go. Don't skip — the order matters for
 building a mental model.
+
+### 2.0 Required page routine
+
+For **every** page you test, do this mini-loop:
+
+1. Open the page.
+2. Wait 2-3 seconds for layout/data to settle.
+3. Do **one action** from this list:
+   - click a card
+   - search
+   - filter
+   - sort
+   - paginate
+   - open a detail page
+   - switch tabs
+   - expand/collapse a section
+   - open a modal
+   - switch portal
+4. Ask yourself:
+   - did the action work?
+   - was the result obvious?
+   - did anything unexpected appear or disappear?
+5. Leave feedback:
+   - **typed** if the bug is simple and short
+   - **mic** if the bug needs explanation or a live walk-through
+
+If a page has no obvious action, your action is: scroll the full page,
+check empty states, and test any visible links.
+
+### 2.0.1 What counts as a "real action"
+
+Pick the most natural action for the page type:
+
+- **list/table pages**: search, sort, paginate, open a row
+- **detail pages**: switch tabs, expand sections, follow linked records
+- **dashboard pages**: click a KPI tile, compare count vs destination page
+- **form pages**: type into one harmless field, open dropdowns, check validation copy
+- **calendar/board pages**: switch view, open a card/block, move between dates
+- **message/inbox pages**: open a thread, test unread/read transitions if visible
+- **settings/admin pages**: open sections and inspect controls; do not save destructive changes
+
+Do not just "look" at the page. Every page should get at least one interaction.
+
+### 2.0.2 What to say in feedback
+
+When you file feedback, say these things in this order:
+
+1. **What page you are on**
+2. **What action you just did**
+3. **What broke / looked wrong**
+4. **What you expected instead**
+
+Good short example:
+
+> On `/schedule`, I searched for a request number, opened the row,
+> and the detail panel showed the wrong status color. I expected
+> rejected to look red, not green.
+
+Good mic example:
+
+> I am on the HQ portal users page. I searched for Nikita, opened
+> her row, and I can still see an edit control even though I am
+> logged in as tester. I expected read-only access.
 
 ### 2.1 Schedule / Calendar
 
@@ -74,6 +164,8 @@ building a mental model.
 - **Expected:** a table or calendar of upcoming instrument
   bookings. Rows should show instrument name, requester, time
   window, status.
+- **Do at least one action:** search, filter by status, open one
+  request, or switch between list/calendar surfaces.
 - **Visual bugs to look for:**
   - Rows that wrap awkwardly on narrow windows
   - Status badges with wrong color (e.g. "completed" rendered
@@ -81,22 +173,30 @@ building a mental model.
   - Filter controls that don't close when you click away
 - **If you see this, file a bug:** `[schedule] <symptom>` in the
   tag.
+- **Best feedback mode:** typed for simple filter/search issues;
+  mic if the bug appears only after multiple clicks.
 
 ### 2.2 Calendar view
 
 - **Path:** `/calendar`
 - **Expected:** month/week view showing bookings as blocks.
+- **Do at least one action:** switch week/month, click one block,
+  or move the date window.
 - **Visual bugs:** blocks overlapping when they shouldn't;
   weekend shading inconsistent; today's date not highlighted.
+- **Best feedback mode:** mic if block interactions are confusing.
 
 ### 2.3 Instruments list
 
 - **Path:** `/instruments`
 - **Expected:** grid or table of instruments. Icons, names,
   status pills, operator assignments.
+- **Do at least one action:** open one instrument, search the list,
+  or use any visible filter/sort affordance.
 - **Visual bugs:** empty-state card missing when the list is
   empty; icons misaligned; status pills inconsistent with what
   the detail page says.
+- **Best feedback mode:** typed unless the bug needs a click-through into detail pages.
 
 ### 2.4 Single instrument detail page
 
@@ -104,29 +204,38 @@ building a mental model.
 - **Expected:** tabs/panes for metadata, queue, team, maintenance,
   history. Your role = tester = read-only — edit buttons should
   be absent or visibly disabled.
+- **Do at least one action:** switch tabs, open history, follow one
+  linked request, or expand a section.
 - **Visual bugs:** tabs that don't switch; metadata truncated;
   "edit" affordances that SHOULDN'T exist for your role appearing
   anyway (that's a §4 security finding, not a §2 cosmetic bug).
+- **Best feedback mode:** mic for tab/section flows; typed for clear permission leaks.
 
 ### 2.5 Users list (READ-only for you)
 
 - **Path:** `/admin/users`
 - **Expected:** a list of users with their roles. You can see
   everyone; you CANNOT edit anyone.
+- **Do at least one action:** search, paginate, open one profile, or
+  sort if sorting is available.
 - **Visual bugs:** role badges that don't match the role column;
   search that clears unexpectedly; pagination that skips rows.
 - **SECURITY CHECK (also §4):** if you see an "Edit" or "Delete"
   button that actually works when you click it — that's a SEV2
   bug. File via the break-glass channel (§4).
+- **Best feedback mode:** typed for visibility leaks; mic if the row/detail flow is confusing.
 
 ### 2.6 Stats / dashboards
 
 - **Path:** `/stats` or `/`
 - **Expected:** tiles showing counts, charts, or summary numbers
   per module. Top-bar badges for "things needing your attention."
+- **Do at least one action:** click one tile, open one linked list,
+  or compare one count against the destination page.
 - **Visual bugs:** charts that don't render; tile counts that
   disagree with what the underlying list shows (e.g. dashboard
   says "7 pending" but the queue shows 9).
+- **Best feedback mode:** mic if you compare multiple pages/counts.
 
 ### 2.7 Messages / reports
 
@@ -135,8 +244,11 @@ building a mental model.
   your account. Since you're new, this may be nearly empty — that
   is fine. Look for the **empty-state card** — it should have a
   helpful message, not a blank page.
+- **Do at least one action:** open one item, switch tabs if present,
+  or confirm the empty state behaves consistently.
 - **Visual bugs:** empty state missing; links to `/messages/:id`
   returning 404; unread count disagreeing with list.
+- **Best feedback mode:** typed unless navigation between items is part of the bug.
 
 ### 2.8 Portal switcher (Lab ↔ HQ)
 
@@ -147,10 +259,27 @@ building a mental model.
 - **Expected:** the module nav visibly changes when you switch.
   Lab has Instruments, Queue, Calendar; HQ has Personnel,
   Vehicles, Receipts, Mess, etc.
+- **Do at least one action:** switch to the other portal, open one
+  page there, then switch back and confirm the nav updates cleanly.
 - **Visual bug:** nav items from the wrong portal appearing.
   That overlaps with the known 112-route module-gating leak —
   a first-hand confirmation of it from you is valuable. Tag
   your bug `[bleed]` if you spot this.
+- **Best feedback mode:** mic, because portal-bleed bugs usually depend on sequence.
+
+### 2.9 Extensive sweep order
+
+When doing a full-site sweep, use this order:
+
+1. Home dashboard
+2. Sitemap
+3. Core queue/list pages
+4. Detail pages opened from those lists
+5. Admin/settings surfaces visible to your role
+6. Portal switch
+7. Repeat the same order in the other portal
+
+This order keeps your reports reproducible and easier for crawlers to replay later.
 
 ---
 
@@ -237,6 +366,45 @@ element pins it without opening the debugger panel. Until that
 commit lands, use the panel's Record → click-to-pin flow
 above. This section will be updated with the SHA once 0103
 ships.
+
+### 3.4 When to type vs when to use mic
+
+Use **typed feedback** when:
+
+- the bug is a one-liner
+- the page is stable
+- the wrong thing is obvious from a screenshot
+- you're logging a quick cosmetic or permission issue
+
+Use **mic feedback** when:
+
+- the bug takes more than one sentence to explain
+- the problem appears only after a sequence of clicks
+- the page changes while you interact with it
+- you want to narrate "I clicked this, then this broke"
+
+Best practice:
+
+- If the page is fine, you do **not** need to submit feedback.
+- If the page is broken, confusing, inconsistent, or permission-leaky,
+  submit feedback before leaving the page.
+
+### 3.5 How your reports are used by Claude
+
+After you submit feedback:
+
+1. The page URL, role, and interaction context are saved.
+2. The operator/AI reads your report.
+3. Claude agents fix the code.
+4. Crawlers replay the affected surface to verify the fix.
+
+This means your report should always be:
+
+- specific
+- tied to one page and one flow
+- explicit about expected vs actual behavior
+
+If you discover three unrelated bugs on one page, file three reports.
 
 ---
 
@@ -333,6 +501,33 @@ Every weekday morning, before any deep testing:
    - Yesterday: bugs filed, verifications done
    - Today: what you plan to test
    - Blockers: anything preventing you from testing
+
+### 6.1 Extensive testing mode
+
+When the operator asks for an **extensive sweep**, use this exact loop:
+
+1. Open sitemap.
+2. Visit every linked page in order.
+3. On each page:
+   - load it
+   - perform one action
+   - leave typed or mic feedback if anything is wrong
+4. After finishing the portal, repeat the same sweep in the other portal.
+5. After finishing tester-role sweeps, repeat as each `test.*` role.
+
+This is the mode that produces the best crawler-fix backlog.
+
+### 6.2 Daily testing target
+
+A strong daily session looks like this:
+
+- **10-20 pages** meaningfully tested
+- **one action per page**
+- **clear feedback** on every broken/confusing page
+- **at least one mic report** when a bug depends on interaction flow
+
+Quality matters more than speed. A smaller number of precise reports is
+better than a large number of vague ones.
 
 ### Reporting cadence
 

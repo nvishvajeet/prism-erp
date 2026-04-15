@@ -80,11 +80,22 @@
 <body{% if current_user %} data-user-role="{{ current_user.role }}"{% endif %}>
   <a class="skip-nav" href="#main-content">Skip to main content</a>
   <header class="topbar" data-vis="{{ V }}">
-    <div data-vis="{{ V }}">
-      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">{{ org_name }}</a></h1>
-      {% if active_portal %}
-      <a href="{{ url_for('portal_picker') }}" class="text-link" style="font-size:0.75rem;margin-left:0.5rem;opacity:0.8;" data-vis="{{ V }}">{{ active_portal.icon }} {{ active_portal.name }}</a>
+    {% set is_ravikiran_portal = active_portal and active_portal.slug in ['hq', 'ravikiran_ops'] %}
+    <div class="topbar-brand" data-vis="{{ V }}">
+      {% if is_ravikiran_portal %}
+      <img
+        src="{{ url_for('static', filename='ravikiran-erp-logo.jpeg') }}"
+        alt="Ravikiran portal logo"
+        class="portal-brandmark"
+        data-vis="{{ V }}"
+      >
       {% endif %}
+      <div data-vis="{{ V }}">
+        <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">{{ org_name }}</a></h1>
+        {% if active_portal %}
+        <a href="{{ url_for('portal_picker') }}" class="text-link topbar-portal-link" data-vis="{{ V }}">{{ active_portal.icon }} {{ active_portal.name }}</a>
+        {% endif %}
+      </div>
     </div>
     {# ── Demo channel flip switch ──
        Lives between brand and user-box in the topbar. Visible only

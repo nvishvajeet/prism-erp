@@ -236,6 +236,22 @@ body {
   letter-spacing: -0.02em;
 }
 
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.portal-brandmark {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(13, 41, 87, 0.15);
+  flex: 0 0 auto;
+}
+
 .brand-link {
   color: var(--ink);
   text-decoration: none;
@@ -250,6 +266,13 @@ body {
   margin: 0.2rem 0 0;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.topbar-portal-link {
+  display: inline-block;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  opacity: 0.8;
 }
 
 .section-kicker {
@@ -8265,6 +8288,12 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   /* Topbar: compact */
   .topbar { padding: 0.6rem 0.75rem; }
   .topbar h1 { font-size: 1rem; }
+  .topbar-brand { gap: 0.55rem; }
+  .portal-brandmark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
   .userbox { gap: 0.3rem; }
   .user-meta strong { font-size: 0.82rem; }
   .badge-role { font-size: 0.6rem; }

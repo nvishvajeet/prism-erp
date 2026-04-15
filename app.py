@@ -23247,6 +23247,28 @@ def dispatch_console():
     # Oldest open requests, with the current gating person resolved.
     # Only shown to ops roles — a requester calling the instrument
     # admin from their own dispatch would be noise, not signal.
+    def _normalize_phone(raw: str) -> str:
+        """Strip whitespace, hyphens, parens, and spaces so tel:/sms: URIs
+        never render with characters the iPhone dialer rejects. Leaves
+        leading + intact (E.164). Returns '' if the number has fewer
+        than 7 digits after stripping (too short to be a real phone)."""
+        if not raw:
+            return ""
+        cleaned = raw.strip()
+        keep_plus = cleaned.startswith("+")
+        digits = "".join(ch for ch in cleaned if ch.isdigit())
+        if len(digits) < 7:
+            return ""
+        return ("+" + digits) if keep_plus else digits
+
+    def _age_tier(days: int) -> str:
+        """CSS tier for colour-coding: red at 7d+, amber 3-6d, default 2-3d."""
+        if days >= 7:
+            return "red"
+        if days >= 3:
+            return "amber"
+        return "default"
+
     bottlenecks = []
     if is_op:
         stale_reqs = query_all(
@@ -23296,16 +23318,20 @@ def dispatch_console():
                     "name": (adm_row["name"] if adm_row else "unassigned"),
                     "phone": (adm_row["phone"] if adm_row else ""),
                 }
+            normalized_phone = _normalize_phone(gate["phone"])
+            age_days = r["age_days"] or 0
             bottlenecks.append({
                 "id": r["id"],
                 "request_no": r["request_no"],
                 "title": r["title"],
                 "status": r["status"],
-                "age_days": r["age_days"],
+                "age_days": age_days,
+                "age_tier": _age_tier(age_days),
                 "instrument_name": r["instrument_name"] or "—",
                 "gate_role": gate["role"],
                 "blocker_name": gate["name"] or "unassigned",
-                "blocker_phone": gate["phone"],
+                "blocker_phone": normalized_phone,
+                "blocker_phone_display": gate["phone"] or "",
             })
 
     return render_template(

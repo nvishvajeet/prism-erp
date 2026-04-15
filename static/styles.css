@@ -10194,3 +10194,40 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .feedback-panel { width: calc(100vw - 2rem); right: -0.5rem; }
   .feedback-toggle { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
 }
+
+/* ── Dispatch · Bottleneck tile age tiers ──────────────────────
+   Phone-first triage: colour scales with how long a request has
+   been stuck. Red = 7d+ (pick up the phone); amber = 3-6d
+   (reach out today); default = 2-3d (still worth surfacing).   */
+.dispatch-age-pill {
+  display: inline-block;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.01em;
+}
+.dispatch-age-default {
+  background: color-mix(in srgb, var(--muted, #6e6e73) 18%, transparent);
+  color: inherit;
+}
+.dispatch-age-amber {
+  background: color-mix(in srgb, var(--tone-amber, #ff9f0a) 22%, transparent);
+  color: var(--tone-amber, #ff9f0a);
+}
+.dispatch-age-red {
+  background: color-mix(in srgb, var(--tone-red, #ff3b30) 22%, transparent);
+  color: var(--tone-red, #ff3b30);
+}
+.dispatch-bottleneck--red {
+  border-left: 3px solid var(--tone-red, #ff3b30);
+  padding-left: 0.5rem;
+}
+.dispatch-bottleneck--amber {
+  border-left: 3px solid var(--tone-amber, #ff9f0a);
+  padding-left: 0.5rem;
+}
+.dispatch-bottleneck--default {
+  border-left: 3px solid transparent;
+  padding-left: 0.5rem;
+}

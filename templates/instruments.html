@@ -78,7 +78,7 @@
     {% call card_heading("", "Instruments") %}
       {% if can_add_instrument %}
       {# Add instrument button — only for site_admin/super_admin, hidden by default #}
-      {% if is_owner_user %}<button type="button" class="mini-icon-button" id="toggleInstrumentCreate" aria-expanded="false" aria-controls="instrumentCreatePanel" title="Add New Instrument" data-vis="{{ V }}">+</button>{% endif %}
+      {% if is_owner_user %}<button type="button" class="mini-icon-button" id="toggleInstrumentCreate" aria-expanded="false" aria-controls="instrumentCreatePanel" aria-label="Add new instrument" title="Add New Instrument" data-vis="{{ V }}">+</button>{% endif %}
       {% endif %}
     {% endcall %}
     {% if can_add_instrument %}

@@ -18,14 +18,14 @@
   {# ── Scanner with Photo Preview ── #}
   <article class="card tile tile-full-width tile-accent-green" data-vis="{{ V }}">
     {{ card_heading("SCAN STUDENT ENTRY", current_meal|title ~ " service") }}
-    <div style="display:flex;gap:1rem;padding:0.75rem;flex-wrap:wrap;" data-vis="{{ V }}">
+    <div class="mess-scan-row" data-vis="{{ V }}">
       {# Left: scan form #}
-      <form method="post" class="form-grid" style="flex:1;min-width:280px;" data-vis="{{ V }}" id="scanForm">
+      <form method="post" class="form-grid mess-scan-form" data-vis="{{ V }}" id="scanForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="control-flex-wrap" data-vis="{{ V }}">
           <label class="control-flex-fill-wide" data-vis="{{ V }}">
             Student ID / QR / Roll Number
-            <input type="text" name="qr_token" id="qrInput" placeholder="Type 3-digit ID or scan QR" autofocus autocomplete="off" required data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.1em;">
+            <input type="text" name="qr_token" id="qrInput" class="mess-scan-qr-input" placeholder="Type 3-digit ID or scan QR" autofocus autocomplete="off" required data-vis="{{ V }}">
           </label>
           <label data-vis="{{ V }}">
             Meal
@@ -35,7 +35,7 @@
               {% endfor %}
             </select>
           </label>
-          <button type="submit" class="btn btn-primary control-min-width-md" data-vis="{{ V }}" style="align-self:flex-end;">
+          <button type="submit" class="btn btn-primary control-min-width-md mess-scan-submit" data-vis="{{ V }}">
             Record Entry
           </button>
         </div>
@@ -56,8 +56,8 @@
 
   {# ── Live Count ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <div style="padding:1.5rem;text-align:center;" data-vis="{{ V }}">
-      <p style="font-size:3rem;font-weight:800;" data-vis="{{ V }}">{{ meal_count }}</p>
+    <div class="mess-count-block" data-vis="{{ V }}">
+      <p class="mess-count-number" data-vis="{{ V }}">{{ meal_count }}</p>
       <p class="hint" data-vis="{{ V }}">{{ current_meal|title }} entries today</p>
     </div>
   </article>
@@ -66,9 +66,9 @@
   {# ── Name Search Fallback ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("SEARCH BY NAME", "When QR/barcode isn't available") }}
-    <div style="padding:0.75rem;" data-vis="{{ V }}">
-      <input type="text" id="nameSearch" placeholder="Type student name or roll number…" aria-label="Student name or roll number search" autocomplete="off" data-vis="{{ V }}" style="width:100%;max-width:25rem;">
-      <div id="searchResults" style="margin-top:0.5rem;" data-vis="{{ V }}"></div>
+    <div class="mess-search-block" data-vis="{{ V }}">
+      <input type="text" id="nameSearch" class="mess-search-input" placeholder="Type student name or roll number…" aria-label="Student name or roll number search" autocomplete="off" data-vis="{{ V }}">
+      <div id="searchResults" class="mess-search-results" data-vis="{{ V }}"></div>
     </div>
   </article>
 

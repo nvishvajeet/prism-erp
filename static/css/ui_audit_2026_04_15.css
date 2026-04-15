@@ -313,3 +313,49 @@ td.cell-currency {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * F-12 · mess_scan scanner-row layout inline → classes
+ *
+ * templates/mess_scan.html had 5 more inline-styled blocks that
+ * shape the scan-form + photo-preview two-column layout, the
+ * big meal-count display, and the name-search section.
+ * Extracted to purpose-named utility classes.
+ * ───────────────────────────────────────────────────────────── */
+.mess-scan-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem;
+  flex-wrap: wrap;
+}
+.mess-scan-form {
+  flex: 1 1 280px;
+  min-width: 280px;
+}
+.mess-scan-qr-input {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.mess-scan-submit {
+  align-self: flex-end;
+}
+.mess-count-block {
+  padding: 1.5rem;
+  text-align: center;
+}
+.mess-count-number {
+  font-size: 3rem;
+  font-weight: 800;
+  margin: 0;
+}
+.mess-search-block {
+  padding: 0.75rem;
+}
+.mess-search-input {
+  width: 100%;
+  max-width: 25rem;
+}
+.mess-search-results {
+  margin-top: 0.5rem;
+}

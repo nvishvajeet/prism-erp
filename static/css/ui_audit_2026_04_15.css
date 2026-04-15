@@ -210,3 +210,47 @@ label:has(> textarea[required])::after {
  * text already ends with "*" — not expressible in pure CSS, so
  * we accept the possibility of "Vendor Name * *" on <0.1% of
  * forms. The visual cost is negligible vs. the UX win. */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-09 · mess_scan photo-preview block (inline → class)
+ *
+ * templates/mess_scan.html lines 48–52 rendered the scanned-
+ * student photo preview with 5 inline-styled children (fixed
+ * width, object-fit, border-radius, font-size overrides).
+ * Extracting to classes: (a) keeps the HTML readable, (b) makes
+ * the preview adapt to the existing .card / tile surface colours
+ * via CSS vars instead of frozen hex, (c) lets dark-mode theming
+ * land via `@media (prefers-color-scheme: dark)` or the
+ * [data-theme] toggle. Template swap is a paired commit.
+ * ───────────────────────────────────────────────────────────── */
+.mess-photo-preview {
+  min-width: 180px;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: var(--surface-alt, var(--panel, #f7f7f8));
+  display: none;  /* JS toggles to block/flex when student found */
+}
+.mess-photo-preview.is-visible {
+  display: block;
+}
+.mess-photo-preview-img {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--line, rgba(0,0,0,0.12));
+}
+.mess-photo-preview-name {
+  font-weight: 700;
+  margin-top: 0.5rem;
+  font-size: 1.1rem;
+}
+.mess-photo-preview-roll {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--muted, #8a8a8e);
+  font-size: 0.85rem;
+}
+.mess-photo-preview-info {
+  font-size: 0.75rem;
+}

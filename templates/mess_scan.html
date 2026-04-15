@@ -45,11 +45,11 @@
         </p>
       </form>
       {# Right: photo preview panel #}
-      <div id="photoPreview" style="min-width:180px;text-align:center;padding:0.5rem;border-radius:8px;background:var(--surface-alt);display:none;" data-vis="{{ V }}">
-        <img id="previewImg" src="" alt="Student Photo" style="width:150px;height:150px;object-fit:cover;border-radius:8px;border:2px solid var(--line);" data-vis="{{ V }}">
-        <p id="previewName" style="font-weight:700;margin-top:0.5rem;font-size:1.1rem;" data-vis="{{ V }}"></p>
-        <p id="previewRoll" style="font-family:monospace;color:var(--muted);font-size:0.85rem;" data-vis="{{ V }}"></p>
-        <p id="previewInfo" class="hint" style="font-size:0.75rem;" data-vis="{{ V }}"></p>
+      <div id="photoPreview" class="mess-photo-preview" data-vis="{{ V }}">
+        <img id="previewImg" class="mess-photo-preview-img" src="" alt="Student Photo" data-vis="{{ V }}">
+        <p id="previewName" class="mess-photo-preview-name" data-vis="{{ V }}"></p>
+        <p id="previewRoll" class="mess-photo-preview-roll" data-vis="{{ V }}"></p>
+        <p id="previewInfo" class="hint mess-photo-preview-info" data-vis="{{ V }}"></p>
       </div>
     </div>
   </article>

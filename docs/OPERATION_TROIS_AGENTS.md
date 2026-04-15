@@ -84,14 +84,17 @@ a clean, evidence-based fix list.
 ### Revised phase timeline
 
 ```
-T+0 ─── T+15 ────────────── T+50 ──── T+55 ───── T+75 ───── T+90
-│WARMUP│  PHASE 1 · APPLY   │ MERGE + │  PHASE 3  │  PHASE 4 │
-│      │   FIXES (35 min)   │ SMOKE   │  CRAWL    │ WEAVE    │
-│15min │   evidence-driven  │  5 min  │  20 min   │ + TAG    │
-│      │                    │         │           │  15 min  │
-└──────┴────────────────────┴─────────┴───────────┴──────────┘
- CL0/1/CO    CL0/1/CO          CL0     CL0/1/CO      CL0 alone
+T+0 ─── T+15 ────────────────── T+60 ──── T+65 ───── T+80 ──── T+90
+│WARMUP│    PHASE 1 · APPLY     │ MERGE + │  PHASE 3  │ PHASE 4 │
+│      │     FIXES (45 min)     │ SMOKE   │  CRAWL    │ WEAVE   │
+│15min │     evidence-driven    │  5 min  │  15 min   │ + TAG   │
+│      │                        │         │           │ 10 min  │
+└──────┴────────────────────────┴─────────┴───────────┴─────────┘
+ CL0/1/CO     CL0/1/CO             CL0     CL0/1/CO     CL0 alone
 ```
+
+**Total = 90 minutes.** Build-to-verify ratio is 45 : 35 — more
+time coding than inventorying.
 
 ### Warmup deliverables (T+0 → T+15) — no code changes
 
@@ -101,7 +104,7 @@ T+0 ─── T+15 ────────────── T+50 ──── 
 | Claude 1 | `docs/UI_AUDIT_2026_04_15.md` inventory table: every `<form method=post>` with path, line, has-save-button, label-complete; every view pane with `overflow:hidden`/fixed-height; three priority buckets — P0 blocks-Tejveer, P1 visible-breakage, P2 nice-to-have |
 | Codex 0 | `docs/GATEKEEPING_AUDIT_2026_04_15.md` — route table: path, methods, decorators, endpoint fn; "Template gates to apply" handoff table; "Ravikiran parallel findings" section. **Inventory only, no code changes yet.** |
 
-### Phase 1 — Apply Fixes (T+15 → T+50), 35 minutes
+### Phase 1 — Apply Fixes (T+15 → T+60), 45 minutes
 
 Now change code. Work from each agent's own warmup inventory.
 
@@ -140,17 +143,17 @@ Now change code. Work from each agent's own warmup inventory.
   HTML body. Claude 1 owns the proper template if time permits
   in their own stretch slot.
 
-### Phase 2 — Merge + smoke (T+50 → T+55), 5 minutes, Claude 0
+### Phase 2 — Merge + smoke (T+60 → T+65), 5 minutes, Claude 0
 
 Git pull, apply Codex's nav gates to `base.html`+`nav.html` as a
 single commit, run smoke gate, local `/health` probe, push.
 
-### Phase 3 — Crawl (T+55 → T+75), 20 minutes
+### Phase 3 — Crawl (T+65 → T+80), 15 minutes
 
 Three lanes and isolated test accounts as scripted above. Output
-as planned. Rsync crawl outputs to `jack.local` at T+73.
+as planned. Rsync crawl outputs to `jack.local` at T+78.
 
-### Phase 4 — Weave + tag (T+75 → T+90), 15 minutes, Claude 0
+### Phase 4 — Weave + tag (T+80 → T+90), 10 minutes, Claude 0
 
 Same 6-check weaving. `docs/OPERATION_TROIS_AGENTS_RESULT.md` as
 executive summary. `v2.0.0-rc1` tag if all 6 checks pass.
@@ -158,14 +161,14 @@ executive summary. `v2.0.0-rc1` tag if all 6 checks pass.
 ### Stretch items
 
 Only start one if you finish Phase 1 **≥ 5 min early** (i.e.
-before T+45):
+before T+55):
 
 1. Mobile-debug body — Claude 1, if UI P0+P1 done.
 2. `user_work_sessions` schema + heartbeat — Codex 0, if
    gatekeeping done.
 3. `CHANGELOG.md` v2.0.0-rc1 entry — Claude 0.
 
-No stretch work may bleed past T+48.
+No stretch work may bleed past T+58 (2 min before Phase 2 merge).
 
 ## North-star
 

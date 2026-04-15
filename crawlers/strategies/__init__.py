@@ -35,3 +35,4 @@ from . import ai_action_promotion      # noqa: F401
 from . import css_variable_defined     # noqa: F401
 from . import csrf_token_present       # noqa: F401
 from . import aria_label_present       # noqa: F401
+from . import url_for_endpoint_exists  # noqa: F401

@@ -142,7 +142,7 @@
     <ul class="dispatch-list" data-vis="{{ V }}">
       {% for t in my_todos %}
       <li class="dispatch-item" data-vis="{{ V }}">
-        <a class="dispatch-item-body" href="{{ url_for('todos_list') }}" data-vis="{{ V }}">
+        <a class="dispatch-item-body" href="{{ url_for('todos_page') }}" data-vis="{{ V }}">
           <strong data-vis="{{ V }}">{{ t['title'] }}</strong>
           <span class="dispatch-meta hint" data-vis="{{ V }}">{{ t['priority']|title }}</span>
         </a>

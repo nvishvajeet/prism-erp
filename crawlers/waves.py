@@ -90,7 +90,7 @@ WAVES: dict[str, Wave] = {
         description="Skeleton — layout, template creed, CSS hygiene, a11y",
         strategies=(
             "architecture", "philosophy", "css_orphan", "css_variable_defined", "cleanup",
-            "contrast_audit", "color_improvement",
+            "contrast_audit", "color_improvement", "url_for_endpoint_exists",
         ),
         stop_on_fail=False,
     ),
@@ -197,6 +197,8 @@ WAVES: dict[str, Wave] = {
             "performance", "random_walk",
             # accessibility
             "color_improvement", "aria_label_present",
+            # regression (static endpoint audit)
+            "url_for_endpoint_exists",
             # cleanup
             "cleanup",
         ),

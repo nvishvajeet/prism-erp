@@ -545,6 +545,49 @@ def active_portal_slug() -> str | None:
     return slug if slug in ERP_PORTALS else None
 
 
+def user_portal_slugs(user_id: int | None) -> set[str]:
+    if not user_id:
+        return set()
+    try:
+        return {row_value(row, "slug", "") for row in _user_portals(int(user_id)) if row_value(row, "slug", "")}
+    except Exception:
+        return set()
+
+
+def user_in_portal(user_id: int | None, portal_slug: str | None = None) -> bool:
+    slug = portal_slug or active_portal_slug()
+    if not slug or not user_id:
+        return True
+    return slug in user_portal_slugs(int(user_id))
+
+
+def users_share_active_portal(viewer_id: int | None, target_id: int | None, portal_slug: str | None = None) -> bool:
+    slug = portal_slug or active_portal_slug()
+    if not slug or not viewer_id or not target_id:
+        return True
+    viewer_portals = user_portal_slugs(int(viewer_id))
+    target_portals = user_portal_slugs(int(target_id))
+    return slug in viewer_portals and slug in target_portals
+
+
+def assign_user_to_portals(user_id: int, portal_slugs: list[str] | tuple[str, ...] | None = None, *, portal_role: str = "member") -> None:
+    chosen = [slug for slug in (portal_slugs or []) if slug in ERP_PORTALS]
+    if not chosen:
+        default_slug = active_portal_slug() or "lab"
+        if default_slug in ERP_PORTALS:
+            chosen = [default_slug]
+    for idx, slug in enumerate(dict.fromkeys(chosen)):
+        portal = query_one("SELECT id FROM erp_portals WHERE slug = ?", (slug,))
+        if not portal:
+            continue
+        execute(
+            """INSERT OR IGNORE INTO erp_user_portals
+               (user_id, portal_id, portal_role, is_default, created_at)
+               VALUES (?,?,?,?,?)""",
+            (user_id, portal["id"], portal_role, 1 if idx == 0 else 0, now_iso()),
+        )
+
+
 def lab_portal_active(portal_slug: str | None = None) -> bool:
     slug = active_portal_slug() if portal_slug is None else portal_slug
     return slug == "lab"
@@ -2644,11 +2687,15 @@ def can_respond_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bo
 def can_view_user_profile(viewer: sqlite3.Row, target_user: sqlite3.Row) -> bool:
     if viewer["id"] == target_user["id"]:
         return True
+    if is_owner(viewer):
+        return True
     # Owner accounts are invisible to non-owners. The owner role sits
     # outside the normal visibility model — they can see everyone, but
     # other admins (super_admin / site_admin) should not see the owner
     # as a listed profile, a clickable name, or a reachable /users/<id>.
     if is_owner(target_user) and not is_owner(viewer):
+        return False
+    if not users_share_active_portal(viewer["id"], target_user["id"]):
         return False
     if user_access_profile(viewer)["can_view_user_profiles"] and user_access_profile(viewer)["can_view_all_requests"]:
         return True
@@ -11039,6 +11086,78 @@ def finance_grants_list():
     )
 
 
+def _finance_grant_detail_post(user, grant_id: int):
+    """POST branch for finance_grant_detail — extracted 2026-04-15.
+
+    Handles three in-form actions (`update_grant_metadata`,
+    `add_grant_member`, `remove_grant_member`) and always returns a
+    302 back to the grant detail page. The edit gate
+    (`_user_can_edit_finance`) is enforced before any branch runs so
+    viewers never trip a destructive path.
+    """
+    if not _user_can_edit_finance(user):
+        abort(403)
+    action = request.form.get("action", "")
+    if action == "update_grant_metadata":
+        db = get_db()
+        portfolio_manager_id = request.form.get("portfolio_manager_id", "").strip()
+        administered_by_user_id = request.form.get("administered_by_user_id", "").strip()
+        db.execute(
+            """UPDATE grants SET
+                code = ?, name = ?, sponsor = ?, grant_type = ?, department = ?,
+                total_budget = ?, start_date = ?, end_date = ?,
+                notes = ?, status = ?,
+                portfolio_manager_id = ?,
+                administered_by_user_id = ?
+             WHERE id = ?""",
+            (
+                request.form.get("code", "").strip(),
+                request.form.get("name", "").strip(),
+                request.form.get("sponsor", "").strip(),
+                request.form.get("grant_type", "internal").strip(),
+                request.form.get("department", "").strip(),
+                float(request.form.get("total_budget", "0") or 0),
+                request.form.get("start_date", "").strip(),
+                request.form.get("end_date", "").strip(),
+                request.form.get("notes", "").strip(),
+                request.form.get("status", "active").strip(),
+                int(portfolio_manager_id) if portfolio_manager_id else None,
+                int(administered_by_user_id) if administered_by_user_id else None,
+                grant_id,
+            ),
+        )
+        db.commit()
+        log_action(user["id"], "grant", grant_id, "grant_metadata_updated", {})
+        flash("Grant metadata updated.", "success")
+    elif action == "add_grant_member":
+        member_user_id = request.form.get("member_user_id", "").strip()
+        member_role = request.form.get("member_role", "member").strip()
+        if member_role not in ("member", "viewer", "admin"):
+            member_role = "member"
+        if member_user_id:
+            db = get_db()
+            try:
+                db.execute(
+                    """INSERT INTO grant_members (grant_id, user_id, role, added_by_user_id, added_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (grant_id, int(member_user_id), member_role, user["id"], now_iso()),
+                )
+                db.commit()
+                log_action(user["id"], "grant", grant_id, "grant_member_added", {"member_user_id": int(member_user_id), "role": member_role})
+                flash("Member added.", "success")
+            except Exception:
+                flash("User is already a member of this grant.", "warning")
+    elif action == "remove_grant_member":
+        member_id = request.form.get("member_id", "").strip()
+        if member_id:
+            db = get_db()
+            db.execute("DELETE FROM grant_members WHERE id = ? AND grant_id = ?", (int(member_id), grant_id))
+            db.commit()
+            log_action(user["id"], "grant", grant_id, "grant_member_removed", {"member_id": int(member_id)})
+            flash("Member removed.", "success")
+    return redirect(url_for("finance_grant_detail", grant_id=grant_id))
+
+
 @app.route("/finance/grants/<int:grant_id>", methods=["GET", "POST"])
 @login_required
 def finance_grant_detail(grant_id: int):
@@ -11050,75 +11169,15 @@ def finance_grant_detail(grant_id: int):
     variable name (`inv`) is unchanged.
 
     POST: edit grant metadata (name, sponsor, PI, budget, dates,
-    grant_type, department, notes). Gated to finance editors only."""
+    grant_type, department, notes). Gated to finance editors only.
+    Delegated to `_finance_grant_detail_post` to keep the handler
+    under the 180-line architecture budget."""
     user = current_user()
     if not _user_can_view_finance(user):
         abort(403)
 
     if request.method == "POST":
-        if not _user_can_edit_finance(user):
-            abort(403)
-        action = request.form.get("action", "")
-        if action == "update_grant_metadata":
-            db = get_db()
-            portfolio_manager_id = request.form.get("portfolio_manager_id", "").strip()
-            administered_by_user_id = request.form.get("administered_by_user_id", "").strip()
-            db.execute(
-                """UPDATE grants SET
-                    code = ?, name = ?, sponsor = ?, grant_type = ?, department = ?,
-                    total_budget = ?, start_date = ?, end_date = ?,
-                    notes = ?, status = ?,
-                    portfolio_manager_id = ?,
-                    administered_by_user_id = ?
-                 WHERE id = ?""",
-                (
-                    request.form.get("code", "").strip(),
-                    request.form.get("name", "").strip(),
-                    request.form.get("sponsor", "").strip(),
-                    request.form.get("grant_type", "internal").strip(),
-                    request.form.get("department", "").strip(),
-                    float(request.form.get("total_budget", "0") or 0),
-                    request.form.get("start_date", "").strip(),
-                    request.form.get("end_date", "").strip(),
-                    request.form.get("notes", "").strip(),
-                    request.form.get("status", "active").strip(),
-                    int(portfolio_manager_id) if portfolio_manager_id else None,
-                    int(administered_by_user_id) if administered_by_user_id else None,
-                    grant_id,
-                ),
-            )
-            db.commit()
-            log_action(user["id"], "grant", grant_id, "grant_metadata_updated", {})
-            flash("Grant metadata updated.", "success")
-            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
-        elif action == "add_grant_member":
-            member_user_id = request.form.get("member_user_id", "").strip()
-            member_role = request.form.get("member_role", "member").strip()
-            if member_role not in ("member", "viewer", "admin"):
-                member_role = "member"
-            if member_user_id:
-                db = get_db()
-                try:
-                    db.execute(
-                        """INSERT INTO grant_members (grant_id, user_id, role, added_by_user_id, added_at)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (grant_id, int(member_user_id), member_role, user["id"], now_iso()),
-                    )
-                    db.commit()
-                    log_action(user["id"], "grant", grant_id, "grant_member_added", {"member_user_id": int(member_user_id), "role": member_role})
-                    flash("Member added.", "success")
-                except Exception:
-                    flash("User is already a member of this grant.", "warning")
-            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
-        elif action == "remove_grant_member":
-            member_id = request.form.get("member_id", "").strip()
-            if member_id:
-                db = get_db()
-                db.execute("DELETE FROM grant_members WHERE id = ? AND grant_id = ?", (int(member_id), grant_id))
-                db.commit()
-                log_action(user["id"], "grant", grant_id, "grant_member_removed", {"member_id": int(member_id)})
-                flash("Member removed.", "success")
-            return redirect(url_for("finance_grant_detail", grant_id=grant_id))
+        return _finance_grant_detail_post(user, grant_id)
     grant = query_one(
         """
         SELECT g.*, pi.name AS pi_name, pi.email AS pi_email,
@@ -16689,7 +16748,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
         log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
         flash(f"Access removed for {target_user['email']}.", "success")
-        return redirect(url_for("user_profile", user_id=user_id))
+        return redirect(url_for("admin_users"))
 
     if action == "archive_delete_user":
         if not can_manage_members(viewer):
@@ -18549,6 +18608,13 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
                 """,
                 (name, email, generate_password_hash(temp_password, method="pbkdf2:sha256"), role, user["id"], member_code),
             )
+            created_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
+            if created_user:
+                assign_user_to_portals(
+                    created_user["id"],
+                    [active_portal_slug() or "lab"],
+                    portal_role="admin" if role in {"site_admin", "super_admin"} else "member",
+                )
             log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
             flash(
                 f"User {email} created. Temporary password: {temp_password} — "
@@ -18590,6 +18656,12 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
                 ),
             )
             new_user = query_one("SELECT id FROM users WHERE email = ?", (row["email"],))
+            if new_user:
+                assign_user_to_portals(
+                    new_user["id"],
+                    [active_portal_slug() or "lab"],
+                    portal_role="admin" if row["role"] in {"site_admin", "super_admin"} else "member",
+                )
             log_action(
                 user["id"],
                 "user",
@@ -18680,21 +18752,42 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
     # admin knows how many aren't being shown.
     MEMBERS_CAP = 200
     member_q = (request.args.get("q") or "").strip()
+    portal_slug = active_portal_slug()
+    portal_join = ""
+    portal_where = ""
+    portal_params: list[object] = []
+    if portal_slug:
+        portal_join = (
+            " JOIN erp_user_portals eup ON eup.user_id = users.id "
+            " JOIN erp_portals ep ON ep.id = eup.portal_id "
+        )
+        portal_where = " AND ep.slug = ? AND ep.is_active = 1 "
+        portal_params.append(portal_slug)
+    owner_placeholders = ",".join("?" for _ in OWNER_EMAILS)
     if lab_profile_mode_active():
-        owner_placeholders = ",".join("?" for _ in OWNER_EMAILS)
+        # Lab operators expect this directory to show the active people
+        # who actually run the facility, not only the top-level admins.
         admin_rows = query_all(
-            f"SELECT id, name, email, role, invite_status, active, member_code "
-            f"FROM users "
-            f"WHERE active = 1 AND (role IN ('site_admin', 'super_admin') OR LOWER(email) IN ({owner_placeholders})) "
-            f"ORDER BY CASE WHEN LOWER(email) IN ({owner_placeholders}) THEN 0 ELSE 1 END, role, name",
-            tuple(OWNER_EMAILS) + tuple(OWNER_EMAILS),
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            f"FROM users {portal_join}"
+            f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
+            f"ORDER BY CASE WHEN LOWER(users.email) IN ({owner_placeholders}) THEN 0 ELSE 1 END, "
+            "CASE users.role "
+            "  WHEN 'site_admin' THEN 0 "
+            "  WHEN 'super_admin' THEN 1 "
+            "  WHEN 'instrument_admin' THEN 2 "
+            "  WHEN 'operator' THEN 3 "
+            "  ELSE 4 "
+            "END, users.name",
+            tuple(portal_params) + tuple(OWNER_EMAILS),
         )
     else:
         admin_rows = query_all(
-            "SELECT id, name, email, role, invite_status, active, member_code "
-            "FROM users "
-            "WHERE active = 1 AND role != 'requester' "
-            "ORDER BY role, name"
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            f"FROM users {portal_join}"
+            f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
+            "ORDER BY users.role, users.name",
+            tuple(portal_params),
         )
     owners = [row for row in admin_rows if row["email"].strip().lower() in OWNER_EMAILS]
     admins = [row for row in admin_rows if row["email"].strip().lower() not in OWNER_EMAILS]
@@ -18703,36 +18796,69 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
     # admin users directory.
     if not is_owner(viewer):
         owners = []
-    member_where = "WHERE role = 'requester'"
-    member_params: list = []
+    member_where = "WHERE users.role = 'requester'"
+    member_from = "FROM users"
+    member_params: list[object] = []
+    if portal_slug:
+        member_from = (
+            "FROM users "
+            "JOIN erp_user_portals eup ON eup.user_id = users.id "
+            "JOIN erp_portals ep ON ep.id = eup.portal_id "
+        )
+        member_where += " AND ep.slug = ? AND ep.is_active = 1"
+        member_params.append(portal_slug)
     if member_q:
-        member_where += " AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(COALESCE(member_code, '')) LIKE ?)"
+        member_where += " AND (LOWER(users.name) LIKE ? OR LOWER(users.email) LIKE ? OR LOWER(COALESCE(users.member_code, '')) LIKE ?)"
         like = f"%{member_q.lower()}%"
         member_params.extend([like, like, like])
     members_total = query_one(
-        f"SELECT COUNT(*) AS c FROM users {member_where}",
+        f"SELECT COUNT(*) AS c {member_from} {member_where}",
         tuple(member_params),
     )["c"]
     members = query_all(
-        f"SELECT id, name, email, role, invite_status, active, member_code "
-        f"FROM users {member_where} ORDER BY name LIMIT ?",
+        f"SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+        f"{member_from} {member_where} ORDER BY users.name LIMIT ?",
         tuple(member_params) + (MEMBERS_CAP,),
     )
-    pending_users = query_all(
-        """
-        SELECT id, name, email, role, invite_status, active, member_code, phone
+    pending_sql = """
+        SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, users.phone
           FROM users
-         WHERE invite_status = 'pending_approval'
-         ORDER BY id DESC
-         LIMIT 100
+    """
+    pending_params: list[object] = []
+    if portal_slug:
+        pending_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = users.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
         """
-    )
+        pending_sql += " WHERE users.invite_status = 'pending_approval' AND ep.slug = ? AND ep.is_active = 1"
+        pending_params.append(portal_slug)
+    else:
+        pending_sql += " WHERE users.invite_status = 'pending_approval'"
+    pending_sql += " ORDER BY users.id DESC LIMIT 100"
+    pending_users = query_all(pending_sql, tuple(pending_params))
+    admin_groups = {
+        "leadership": [],
+        "instrument_admins": [],
+        "operators": [],
+        "other_profiles": [],
+    }
+    for row in admins:
+        role = row["role"]
+        if role in {"site_admin", "super_admin"}:
+            admin_groups["leadership"].append(row)
+        elif role == "instrument_admin":
+            admin_groups["instrument_admins"].append(row)
+        elif role == "operator":
+            admin_groups["operators"].append(row)
+        else:
+            admin_groups["other_profiles"].append(row)
     return {
         "members": members,
         "members_total": members_total,
         "members_cap": MEMBERS_CAP,
         "members_query": member_q,
         "admins": admins,
+        "admin_groups": admin_groups,
         "owners": owners,
         "pending_users": pending_users,
         "lab_profile_mode": lab_profile_mode_active(),
@@ -18754,6 +18880,7 @@ def admin_users():
         members_cap=list_payload["members_cap"],
         members_query=list_payload["members_query"],
         admins=list_payload["admins"],
+        admin_groups=list_payload["admin_groups"],
         owners=list_payload["owners"],
         pending_users=list_payload["pending_users"],
         can_create_users=permissions["can_create_users"],
@@ -19030,17 +19157,11 @@ def admin_onboard():
         new_id = new_user["id"] if new_user else 0
 
         # Assign portal memberships (first in list becomes default)
-        for idx, slug in enumerate(portal_slugs):
-            portal = query_one("SELECT id FROM erp_portals WHERE slug = ?", (slug,))
-            if portal:
-                execute(
-                    """INSERT OR IGNORE INTO erp_user_portals
-                       (user_id, portal_id, portal_role, is_default, created_at)
-                       VALUES (?,?,?,?,?)""",
-                    (new_id, portal["id"],
-                     "admin" if role in {"site_admin", "super_admin"} else "member",
-                     1 if idx == 0 else 0, now_iso()),
-                )
+        assign_user_to_portals(
+            new_id,
+            portal_slugs,
+            portal_role="admin" if role in {"site_admin", "super_admin"} else "member",
+        )
 
         # Assign instruments (operators / instrument_admin / faculty_in_charge)
         for inst_id in instrument_ids:

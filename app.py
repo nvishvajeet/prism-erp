@@ -22,7 +22,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import gettempdir
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
+from flask import Flask, abort, flash, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from openpyxl import Workbook
 from werkzeug.utils import secure_filename
@@ -199,7 +199,7 @@ ERP_PORTALS = {
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "schedule", "requests", "finance",
+            "instruments", "queue", "finance",
             "attendance", "inbox", "notifications", "todos", "admin",
         ],
     },
@@ -210,8 +210,27 @@ ERP_PORTALS = {
         "color": "green",
         "modules": [
             "mess", "tuck_shop", "attendance", "vehicles",
-            "payroll", "personnel", "finance", "vendor_payments", "filing",
+            "personnel", "finance", "vendor_payments",
             "inbox", "notifications", "todos", "admin",
+        ],
+    },
+    "ravikiran_ops": {
+        "name": "Ravikiran Operations",
+        "tagline": "Finance · Personnel · Vehicles · Receipts · Attendance",
+        "icon": "🧭",
+        "color": "amber",
+        "modules": [
+            "finance", "personnel", "vehicles", "attendance",
+            "receipts", "todos", "inbox", "notifications", "admin",
+        ],
+    },
+    "compute": {
+        "name": "Compute ERP",
+        "tagline": "Compute · Queue · Notifications",
+        "icon": "⚡",
+        "color": "violet",
+        "modules": [
+            "compute", "notifications", "inbox", "admin",
         ],
     },
 }
@@ -515,19 +534,22 @@ def _user_portals(user_id: int) -> list:
 
 def _active_portal_modules() -> set:
     """Get modules for the currently active portal from session.
-    Returns ALL_MODULES if no portal is selected (backwards compat).
     Safe to call outside a request context (e.g. during __main__
-    startup probes like _should_start_compute_queue_manager) — the
-    has_request_context guard falls back to ALL_MODULES so callers
-    that haven't got a session yet still get a sensible answer."""
+    startup probes like _should_start_compute_queue_manager) — those
+    callers still get ALL_MODULES. Inside a request, however, missing
+    portal context must fail closed for ordinary users so Lab and HQ
+    never bleed together. The hidden owner keeps the global backstage
+    view even without an active portal selection.
+    """
     if not has_request_context():
         return ALL_MODULES
-    portal_slug = session.get("active_portal")
-    if not portal_slug:
-        return ALL_MODULES
-    cfg = ERP_PORTALS.get(portal_slug)
+    user = current_user()
+    portal_slug = active_portal_slug()
+    if not portal_slug and user is not None:
+        portal_slug = _ensure_active_portal_session(user)
+    cfg = ERP_PORTALS.get(portal_slug or "")
     if not cfg:
-        return ALL_MODULES
+        return ALL_MODULES if is_owner(user) else set()
     return set(cfg["modules"])
 
 
@@ -583,7 +605,7 @@ def users_share_active_portal(viewer_id: int | None, target_id: int | None, port
 def assign_user_to_portals(user_id: int, portal_slugs: list[str] | tuple[str, ...] | None = None, *, portal_role: str = "member") -> None:
     chosen = [slug for slug in (portal_slugs or []) if slug in ERP_PORTALS]
     if not chosen:
-        default_slug = active_portal_slug() or "lab"
+        default_slug = active_portal_slug() or session.get("requested_portal")
         if default_slug in ERP_PORTALS:
             chosen = [default_slug]
     for idx, slug in enumerate(dict.fromkeys(chosen)):
@@ -907,7 +929,11 @@ def handle_csrf_error(_exc):
         "Please retry the action from the refreshed page.",
         "error",
     )
-    return redirect(request.referrer or request.url or url_for("index"))
+    portal_slug = session.get("requested_portal")
+    if request.endpoint in {"login", "change_password"} or request.path.startswith("/login"):
+        target = url_for("login", portal=portal_slug) if portal_slug in ERP_PORTALS else url_for("login")
+        return redirect(target)
+    return redirect(request.referrer or request.path or url_for("index"))
 
 
 @app.errorhandler(403)
@@ -3668,6 +3694,22 @@ def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str |
     return None
 
 
+def _ensure_active_portal_session(user: sqlite3.Row | None) -> str | None:
+    """Repair missing or invalid active-portal session state."""
+    if user is None or not has_request_context():
+        return None
+    current_slug = active_portal_slug()
+    if current_slug:
+        return current_slug
+    portals = _user_portals(user["id"])
+    selected_slug = _select_portal_slug(portals, session.get("requested_portal"))
+    if selected_slug:
+        session["active_portal"] = selected_slug
+        return selected_slug
+    session.pop("active_portal", None)
+    return None
+
+
 def is_owner(user: sqlite3.Row | None) -> bool:
     return bool(user and user["email"].strip().lower() in OWNER_EMAILS)
 
@@ -3976,6 +4018,7 @@ def login_required(view):
         user = current_user()
         if user is None:
             return redirect(url_for("login"))
+        _ensure_active_portal_session(user)
         # W1.3.8 password hygiene: a user signed in with a temporary
         # admin-issued password can only reach the change-password
         # page and /logout until they set their own. Allow static-ish
@@ -5463,7 +5506,31 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_veh_logs_vehicle ON vehicle_logs(vehicle_id);
             CREATE INDEX IF NOT EXISTS idx_veh_logs_type ON vehicle_logs(log_type);
+
+            CREATE TABLE IF NOT EXISTS vehicle_driver_assignments (
+                vehicle_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (vehicle_id, user_id),
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vehicle_driver_assignments_vehicle
+                ON vehicle_driver_assignments(vehicle_id);
+            CREATE INDEX IF NOT EXISTS idx_vehicle_driver_assignments_user
+                ON vehicle_driver_assignments(user_id);
         """)
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO vehicle_driver_assignments
+            (vehicle_id, user_id, is_primary, created_at)
+            SELECT id, assigned_driver_user_id, 1, COALESCE(created_at, ?)
+              FROM vehicles
+             WHERE assigned_driver_user_id IS NOT NULL
+            """,
+            (now_iso(),),
+        )
 
         # ── Personnel / Salary module ─────────────────────────────
         cur.executescript("""
@@ -8145,11 +8212,11 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
     }.get(role, [])
 
     pane_guides = []
-    if access.get("can_access_instruments"):
+    if module_visible_in_active_portal("instruments") and access.get("can_access_instruments"):
         pane_guides.append(("Instrument pages", "Use the main tiles for metadata, downtime, approvals, inventory, pricing, and history. Change only the pane that owns the truth."))
-    if access.get("can_access_schedule"):
+    if module_visible_in_active_portal("schedule") and access.get("can_access_schedule"):
         pane_guides.append(("Queue and request panes", "Use queue for movement decisions and request detail for per-job context, conversation, attachments, and audit-safe updates."))
-    if access.get("can_view_finance_stage"):
+    if module_visible_in_active_portal("finance") and access.get("can_view_finance_stage"):
         pane_guides.append(("Finance panes", "Read grant health, invoice state, and payment progress together before changing financial state."))
     if module_visible_in_active_portal("compute"):
         pane_guides.append(("Compute panes", "Use the job list to see status, submit new AI prompts, and review results on the detail page."))
@@ -8325,7 +8392,7 @@ def inject_globals():
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
     nav_instruments_truncated = False
-    if user and access_profile["can_access_instruments"]:
+    if user and module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"]:
         _all_nav = query_all(
             "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' ORDER BY name"
         )
@@ -8963,6 +9030,7 @@ def index():
             public_portals=public_portals,
             demo_info=demo_info,
         )
+    _ensure_active_portal_session(user)
     db = get_db()
     recent_page = page_value(int(request.args.get("recent_page", "1") or 1))
     clauses, params = request_scope_sql(user, "sr")
@@ -11529,9 +11597,12 @@ def sitemap():
     })
 
     # Operations section — if user has instrument/schedule access
-    if access_profile["can_access_instruments"] or access_profile["can_access_schedule"]:
+    if (
+        (module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"])
+        or (module_visible_in_active_portal("schedule") and access_profile["can_access_schedule"])
+    ):
         ops_items = []
-        if access_profile["can_access_instruments"]:
+        if module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"]:
             instrument_count = db.execute("SELECT COUNT(*) FROM instruments WHERE status = 'active'").fetchone()[0]
             instrument_label = "Instrument Management" if (
                 is_owner(user)
@@ -11539,34 +11610,39 @@ def sitemap():
             ) else "Instruments"
             instrument_hint = "Your machine workspace, maintenance, and queue controls" if instrument_label == "Instrument Management" else f"{instrument_count} active instruments"
             ops_items.append({"label": instrument_label, "hint": instrument_hint, "type": "link", "href": url_for("instruments")})
-        if access_profile["can_access_schedule"]:
+        if module_visible_in_active_portal("schedule") and access_profile["can_access_schedule"]:
             open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
             ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
             ops_items.append({"label": "Completed Jobs", "hint": "View processed history", "type": "link", "href": url_for("schedule", bucket="completed")})
         if module_visible_in_active_portal("finance") and (access_profile.get("can_view_finance_stage") or is_owner(user)):
             ops_items.append({"label": "Finance Portal", "hint": "Billing, invoices, grants", "type": "link", "href": url_for("finance_portal")})
-        sections.append({
-            "key": "operations",
-            "title": "Operations",
-            "icon": "⚡",
-            "groups": [{"title": "Workspace", "entries": ops_items}],
-        })
+        if ops_items:
+            sections.append({
+                "key": "operations",
+                "title": "Operations",
+                "icon": "⚡",
+                "groups": [{"title": "Workspace", "entries": ops_items}],
+            })
 
     # Reporting section
-    if access_profile["can_access_calendar"] or access_profile["can_access_stats"]:
+    if (
+        (module_visible_in_active_portal("calendar") and access_profile["can_access_calendar"])
+        or (module_visible_in_active_portal("stats") and access_profile["can_access_stats"])
+    ):
         report_items = []
-        if access_profile["can_access_calendar"]:
+        if module_visible_in_active_portal("calendar") and access_profile["can_access_calendar"]:
             report_items.append({"label": "Calendar", "hint": "Weekly schedule and downtime", "type": "link", "href": url_for("calendar")})
             report_items.append({"label": "Subscribe Calendar (.ics)", "hint": "Add to Google Calendar / Apple Calendar / Outlook", "type": "link", "href": url_for("calendar_ics")})
-        if access_profile["can_access_stats"]:
+        if module_visible_in_active_portal("stats") and access_profile["can_access_stats"]:
             report_items.append({"label": "Statistics", "hint": "Operations control dashboard", "type": "link", "href": url_for("stats")})
             report_items.append({"label": "Data Export", "hint": "Generate Excel reports", "type": "link", "href": url_for("visualizations")})
-        sections.append({
-            "key": "reporting",
-            "title": "Reporting",
-            "icon": "📊",
-            "groups": [{"title": "Views", "entries": report_items}],
-        })
+        if report_items:
+            sections.append({
+                "key": "reporting",
+                "title": "Reporting",
+                "icon": "📊",
+                "groups": [{"title": "Views", "entries": report_items}],
+            })
 
     # Administration section — admins only
     if access_profile["can_manage_members"]:
@@ -11795,7 +11871,7 @@ def login():
     if request.method == "POST":
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
-        requested_portal = session.get("requested_portal")
+        requested_portal = (request.form.get("portal") or session.get("requested_portal") or "").strip().lower() or None
         # Accept either the full email OR just the short username (local-part
         # of the email) so users who type "kondhalkar" land the same row as
         # "kondhalkar@mitwpu.edu.in". When the input has no '@', we prefer
@@ -11871,11 +11947,15 @@ def login():
         )
         flash("Invalid login.", "error")
     portal_slug = session.get("requested_portal")
-    return render_template(
+    response = make_response(render_template(
         "login.html",
         login_portal_slug=portal_slug,
         login_portal=ERP_PORTALS.get(portal_slug),
-    )
+    ))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.route("/portals")
@@ -16364,6 +16444,21 @@ def role_manual():
     )
 
 
+@app.route("/dev")
+@app.route("/dev/")
+def dev_site():
+    """Public single-page dev-site — current demo + features + stable
+    release + org structure + future plans. No auth required because
+    it's the project's status page, not an ERP surface. Served as a
+    static HTML from static/devsite/ so it can be refreshed by
+    scripts/regen_dev_site.sh without touching app code.
+    See sahajpur-university/dev-site/generate.py for the generator."""
+    return send_from_directory(
+        str(Path(__file__).resolve().parent / "static" / "devsite"),
+        "index.html",
+    )
+
+
 @app.route("/help")
 @app.route("/getting-started")
 @login_required
@@ -18620,9 +18715,12 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
             )
             created_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
             if created_user:
+                target_portal = active_portal_slug() or session.get("requested_portal")
+                if target_portal not in ERP_PORTALS and role == "requester":
+                    target_portal = "lab"
                 assign_user_to_portals(
                     created_user["id"],
-                    [active_portal_slug() or "lab"],
+                    [target_portal] if target_portal in ERP_PORTALS else [],
                     portal_role="admin" if role in {"site_admin", "super_admin"} else "member",
                 )
             log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
@@ -18667,9 +18765,12 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
             )
             new_user = query_one("SELECT id FROM users WHERE email = ?", (row["email"],))
             if new_user:
+                target_portal = active_portal_slug() or session.get("requested_portal")
+                if target_portal not in ERP_PORTALS and row["role"] == "requester":
+                    target_portal = "lab"
                 assign_user_to_portals(
                     new_user["id"],
-                    [active_portal_slug() or "lab"],
+                    [target_portal] if target_portal in ERP_PORTALS else [],
                     portal_role="admin" if row["role"] in {"site_admin", "super_admin"} else "member",
                 )
             log_action(
@@ -19316,8 +19417,84 @@ def vehicles_list():
     }
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
+    driver_map = _vehicle_driver_map([v["id"] for v in vehicles])
     return render_template("vehicles.html", vehicles=vehicles, totals=totals,
+                           driver_map=driver_map,
                            can_manage=can_manage, all_users=all_users)
+
+
+def _clean_vehicle_driver_ids(raw_values: list[str] | tuple[str, ...] | None) -> list[int]:
+    cleaned: list[int] = []
+    for raw in raw_values or []:
+        value = (raw or "").strip()
+        if not value:
+            continue
+        try:
+            user_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if user_id > 0 and user_id not in cleaned:
+            cleaned.append(user_id)
+    return cleaned
+
+
+def _vehicle_driver_rows(vehicle_id: int) -> list[sqlite3.Row]:
+    return query_all(
+        """
+        SELECT u.id, u.name, u.email, COALESCE(vda.is_primary, 0) AS is_primary
+          FROM vehicle_driver_assignments vda
+          JOIN users u ON u.id = vda.user_id
+         WHERE vda.vehicle_id = ?
+         ORDER BY vda.is_primary DESC, u.name ASC
+        """,
+        (vehicle_id,),
+    )
+
+
+def _vehicle_driver_map(vehicle_ids: list[int] | tuple[int, ...]) -> dict[int, list[dict[str, object]]]:
+    cleaned_ids = [int(vehicle_id) for vehicle_id in vehicle_ids if int(vehicle_id) > 0]
+    if not cleaned_ids:
+        return {}
+    placeholders = ",".join("?" for _ in cleaned_ids)
+    rows = query_all(
+        f"""
+        SELECT vda.vehicle_id, u.id, u.name, COALESCE(vda.is_primary, 0) AS is_primary
+          FROM vehicle_driver_assignments vda
+          JOIN users u ON u.id = vda.user_id
+         WHERE vda.vehicle_id IN ({placeholders})
+         ORDER BY vda.vehicle_id ASC, vda.is_primary DESC, u.name ASC
+        """,
+        tuple(cleaned_ids),
+    )
+    mapping: dict[int, list[dict[str, object]]] = {vehicle_id: [] for vehicle_id in cleaned_ids}
+    for row in rows:
+        mapping.setdefault(row["vehicle_id"], []).append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "is_primary": bool(row["is_primary"]),
+            }
+        )
+    return mapping
+
+
+def _sync_vehicle_driver_assignments(vehicle_id: int, driver_ids: list[int]) -> None:
+    execute("DELETE FROM vehicle_driver_assignments WHERE vehicle_id = ?", (vehicle_id,))
+    primary_driver_id = driver_ids[0] if driver_ids else None
+    execute(
+        "UPDATE vehicles SET assigned_driver_user_id = ? WHERE id = ?",
+        (primary_driver_id, vehicle_id),
+    )
+    timestamp = now_iso()
+    for idx, user_id in enumerate(driver_ids):
+        execute(
+            """
+            INSERT OR REPLACE INTO vehicle_driver_assignments
+            (vehicle_id, user_id, is_primary, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (vehicle_id, user_id, 1 if idx == 0 else 0, timestamp),
+        )
 
 
 @app.route("/vehicles/new", methods=["POST"])
@@ -19332,7 +19509,10 @@ def vehicle_create():
     name = request.form.get("name", "").strip()
     registration_no = request.form.get("registration_no", "").strip()
     vehicle_type = request.form.get("vehicle_type", "car").strip()
-    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    driver_ids = _clean_vehicle_driver_ids(
+        request.form.getlist("driver_user_ids") or [request.form.get("assigned_driver_user_id", "")]
+    )
+    assigned_driver = driver_ids[0] if driver_ids else None
     purchase_date = request.form.get("purchase_date", "").strip() or None
     purchase_cost = float(request.form.get("purchase_cost", "0") or "0")
     insurance_expiry = request.form.get("insurance_expiry", "").strip() or None
@@ -19349,9 +19529,10 @@ def vehicle_create():
            status, purchase_date, purchase_cost, insurance_expiry, notes, created_at)
            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)""",
         (name, registration_no, vehicle_type,
-         int(assigned_driver) if assigned_driver else None,
+         assigned_driver,
          purchase_date, purchase_cost, insurance_expiry, notes, now_iso()),
     )
+    _sync_vehicle_driver_assignments(new_id, driver_ids)
     log_action(user["id"], "vehicle", new_id, "vehicle_created",
                {"name": name, "registration_no": registration_no})
     flash(f"{name} added to fleet.", "success")
@@ -19368,10 +19549,8 @@ def vehicle_detail(vehicle_id: int):
     vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
         abort(404)
-    driver = None
-    if vehicle["assigned_driver_user_id"]:
-        driver = query_one("SELECT id, name, email FROM users WHERE id = ?",
-                           (vehicle["assigned_driver_user_id"],))
+    drivers = _vehicle_driver_rows(vehicle_id)
+    driver = drivers[0] if drivers else None
     logs = query_all("""
         SELECT vl.*, u.name AS logged_by_name
           FROM vehicle_logs vl
@@ -19385,12 +19564,22 @@ def vehicle_detail(vehicle_id: int):
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     # Assigned vehicles for cross-link from personnel
     assigned_vehicles = []
-    if vehicle["assigned_driver_user_id"]:
+    if drivers:
         assigned_vehicles = query_all(
-            "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ? AND id != ?",
-            (vehicle["assigned_driver_user_id"], vehicle_id))
+            """
+            SELECT DISTINCT v.id, v.name, v.registration_no
+              FROM vehicle_driver_assignments vda
+              JOIN vehicle_driver_assignments peer ON peer.user_id = vda.user_id
+              JOIN vehicles v ON v.id = peer.vehicle_id
+             WHERE vda.vehicle_id = ? AND v.id != ?
+             ORDER BY v.name ASC
+            """,
+            (vehicle_id, vehicle_id),
+        )
     all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
     return render_template("vehicle_detail.html", vehicle=vehicle, driver=driver,
+                           drivers=drivers,
+                           selected_driver_ids=[row["id"] for row in drivers],
                            logs=logs, fuel_total=fuel_total, maint_total=maint_total,
                            other_total=other_total, can_manage=can_manage,
                            assigned_vehicles=assigned_vehicles,
@@ -19455,7 +19644,10 @@ def vehicle_edit(vehicle_id: int):
     name = request.form.get("name", "").strip() or vehicle["name"]
     registration_no = request.form.get("registration_no", "").strip() or vehicle["registration_no"]
     vehicle_type = request.form.get("vehicle_type", "").strip() or vehicle["vehicle_type"]
-    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    driver_ids = _clean_vehicle_driver_ids(
+        request.form.getlist("driver_user_ids") or [request.form.get("assigned_driver_user_id", "")]
+    )
+    assigned_driver = driver_ids[0] if driver_ids else None
     purchase_date = request.form.get("purchase_date", "").strip() or vehicle["purchase_date"]
     purchase_cost = float(request.form.get("purchase_cost", "") or vehicle["purchase_cost"])
     insurance_expiry = request.form.get("insurance_expiry", "").strip() or vehicle["insurance_expiry"]
@@ -19465,9 +19657,10 @@ def vehicle_edit(vehicle_id: int):
            assigned_driver_user_id=?, purchase_date=?, purchase_cost=?,
            insurance_expiry=?, notes=? WHERE id=?""",
         (name, registration_no, vehicle_type,
-         int(assigned_driver) if assigned_driver else None,
+         assigned_driver,
          purchase_date, purchase_cost, insurance_expiry, notes, vehicle_id),
     )
+    _sync_vehicle_driver_assignments(vehicle_id, driver_ids)
     log_action(user["id"], "vehicle", vehicle_id, "vehicle_updated", {"name": name})
     flash(f"{name} updated.", "success")
     return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
@@ -19598,8 +19791,15 @@ def personnel_detail(user_id: int):
     days_worked = _attendance_days_worked(user_id, today.year, today.month)
     # Assigned vehicles
     assigned_vehicles = query_all(
-        "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ?",
-        (user_id,))
+        """
+        SELECT DISTINCT v.id, v.name, v.registration_no
+          FROM vehicle_driver_assignments vda
+          JOIN vehicles v ON v.id = vda.vehicle_id
+         WHERE vda.user_id = ?
+         ORDER BY v.name ASC
+        """,
+        (user_id,),
+    )
     can_edit = _personnel_can_edit(user)
     manager_id = _line_manager_id_for_user(user_id)
     manager_row = query_one("SELECT id, name, role FROM users WHERE id = ?", (manager_id,)) if manager_id else None

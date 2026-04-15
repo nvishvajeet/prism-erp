@@ -32,3 +32,4 @@ from . import parallel_claims          # noqa: F401
 from . import ui_uniformity            # noqa: F401
 from . import future_fixes_placeholder  # noqa: F401
 from . import ai_action_promotion      # noqa: F401
+from . import css_variable_defined     # noqa: F401

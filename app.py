@@ -475,6 +475,21 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail", "compute_software_list", "compute_software_detail", "compute_inventory", "compute_admin_storage"},
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
+    "queue": {
+        "label": "Queue",
+        "icon": "\u2705",
+        "nav_order": 12,  # near the top — admin eyes land here first
+        "description": "Action queue — admin decisions waiting (account approvals, AI drafts, password resets)",
+        "nav_endpoint": "action_queue",
+        "nav_active_endpoints": {"action_queue"},
+        "nav_badge_key": "action_queue",
+        # Admin-only: anyone in the allowed_open_roles set for user admin
+        # (super_admin, site_admin, + instrument_admin in lab_mode) or the owner.
+        # Nav_access doesn't see the user row directly — it only gets
+        # the cached access_profile. We mirror the role_set check used
+        # by the /admin/users gate (app.py _admin_users_handle_post).
+        "nav_access": lambda ap, is_owner: is_owner or ap.get("role") in {"super_admin", "site_admin", "instrument_admin"},
+    },
     "admin": {
         "label": "Admin",
         "icon": "\u2699\ufe0f",
@@ -683,7 +698,7 @@ def build_nav_items(user, access_profile, is_owner):
         if not module_enabled(key):
             continue
         # Portal filter: only show modules belonging to the active portal
-        if key not in portal_modules and key != "admin":
+        if key not in portal_modules and key not in ("admin", "queue"):
             continue
         access_fn = meta.get("nav_access")
         if access_fn and not access_fn(access_profile, is_owner):
@@ -9715,6 +9730,126 @@ def _inbox_prospective_actions(target_user_id: int) -> list[dict]:
             "created_at": r["created_at"],
         })
     return out
+
+
+def _action_queue_items(user: sqlite3.Row) -> list[dict]:
+    """Gather the admin-governance items the viewer can act on.
+
+    Per docs/ROLE_SURFACES.md §4 + §0 (universal-queue principle),
+    the Action Queue is the ADMIN SLICE only — account approvals
+    (manual + AI-extracted), password resets (when built), role
+    changes. Per-module queues (sample requests, finance, vendor)
+    stay on their own pages.
+
+    Each item is dual-homed: `action_url` jumps to the canonical
+    surface where the same item also lives.
+
+    Silent-skips tables that don't exist yet (fresh installs, older
+    Ravikiran-style schema without AI pipeline).
+    """
+    try:
+        profile = user_access_profile(user)
+    except Exception:
+        profile = {}
+    # Same gate as the "queue" nav module (app.py:489) — admin roles only.
+    # Operators have can_view_user_profiles for request context but shouldn't
+    # see the governance queue.
+    is_admin_role = is_owner(user) or user["role"] in {"super_admin", "site_admin", "instrument_admin"}
+    if not is_admin_role:
+        return []
+
+    items: list[dict] = []
+
+    # 1. Manual-created accounts in pending_approval
+    try:
+        for r in query_all(
+            """SELECT id, name, email, role, created_at, invited_by
+                 FROM users WHERE invite_status = 'pending_approval'
+                ORDER BY id DESC LIMIT 100""",
+        ):
+            inviter_name = ""
+            if row_value(r, "invited_by"):
+                inv = query_one("SELECT name FROM users WHERE id = ?", (r["invited_by"],))
+                inviter_name = row_value(inv, "name", "") if inv else ""
+            items.append({
+                "kind": "account_pending",
+                "kind_label": "Account approval",
+                "subject": f"New {r['role']}: {r['name']} ({r['email']})",
+                "submitted_by": inviter_name or "—",
+                "created_at": row_value(r, "created_at", "") or "",
+                "action_url": url_for("admin_users") + f"#user-{r['id']}",
+                "action_label": "Open in Admin → Users",
+            })
+    except sqlite3.OperationalError:
+        pass
+
+    # 2. AI-extracted prospective actions assigned to me
+    try:
+        for r in query_all(
+            """SELECT id, action_type, file_name, created_at, submitted_by_user_id
+                 FROM ai_prospective_actions
+                WHERE assigned_approver_id = ? AND status = 'awaiting_review'
+                ORDER BY id DESC LIMIT 100""",
+            (user["id"],),
+        ):
+            submitter = query_one("SELECT name FROM users WHERE id = ?", (r["submitted_by_user_id"],))
+            items.append({
+                "kind": "ai_draft",
+                "kind_label": "AI draft",
+                "subject": f"{r['action_type'].replace('_',' ').title()} — {row_value(r, 'file_name', '(no file)')}",
+                "submitted_by": row_value(submitter, "name", "—") if submitter else "—",
+                "created_at": row_value(r, "created_at", "") or "",
+                "action_url": url_for("inbox"),  # existing surface; dedicated /ai-imports lands later
+                "action_label": "Review in Inbox",
+            })
+    except sqlite3.OperationalError:
+        pass
+
+    # 3. Password resets (table doesn't exist yet — skip silently)
+    try:
+        for r in query_all(
+            """SELECT id, username_entered, requested_at
+                 FROM password_reset_requests WHERE status = 'pending'
+                ORDER BY id DESC LIMIT 50""",
+        ):
+            items.append({
+                "kind": "pwd_reset",
+                "kind_label": "Password reset",
+                "subject": f"Reset request for {r['username_entered']}",
+                "submitted_by": "(anonymous requester)",
+                "created_at": row_value(r, "requested_at", "") or "",
+                "action_url": "#",
+                "action_label": "Open (pending implementation)",
+            })
+    except sqlite3.OperationalError:
+        pass
+
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+    return items
+
+
+@app.route("/queue", methods=["GET"])
+@login_required
+def action_queue():
+    """Admin governance inbox — account approvals (manual + AI-extracted),
+    password resets. Items are DUAL-HOMED: each also appears on its
+    canonical surface (Admin → Users, etc.). The queue is a
+    consolidator, not a substitute.
+
+    Per docs/ROLE_SURFACES.md §4 and the universal-queue principle.
+    Non-admin roles see an empty list (403 would be surprising; a
+    visibly-empty queue is friendlier)."""
+    user = current_user()
+    items = _action_queue_items(user)
+    return render_template(
+        "action_queue.html",
+        items=items,
+        count_by_kind={
+            "account_pending": sum(1 for it in items if it["kind"] == "account_pending"),
+            "ai_draft":        sum(1 for it in items if it["kind"] == "ai_draft"),
+            "pwd_reset":       sum(1 for it in items if it["kind"] == "pwd_reset"),
+        },
+    )
 
 
 @app.route("/inbox", methods=["GET"])

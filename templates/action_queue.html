@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container" data-vis="all">
+  <header class="page-header" data-vis="all">
+    <h1 data-vis="all">Action queue</h1>
+    <p class="hint" data-vis="all">
+      Admin-governance items waiting on your decision. Each row also lives on its
+      canonical surface (Admin → Users, etc.) — this queue is a consolidator,
+      not a substitute. Per-module workflows (sample requests, finance, vendor
+      intake) stay on their own pages.
+    </p>
+  </header>
+
+  {% if items %}
+  <div class="queue-summary" data-vis="all" style="display:flex;gap:1.2rem;margin:0 0 1rem 0;flex-wrap:wrap;">
+    {% if count_by_kind.account_pending %}
+    <span class="pill pill-blue" data-vis="all">{{ count_by_kind.account_pending }} account approval{{ 's' if count_by_kind.account_pending != 1 else '' }}</span>
+    {% endif %}
+    {% if count_by_kind.ai_draft %}
+    <span class="pill pill-purple" data-vis="all">{{ count_by_kind.ai_draft }} AI draft{{ 's' if count_by_kind.ai_draft != 1 else '' }}</span>
+    {% endif %}
+    {% if count_by_kind.pwd_reset %}
+    <span class="pill pill-orange" data-vis="all">{{ count_by_kind.pwd_reset }} password reset{{ 's' if count_by_kind.pwd_reset != 1 else '' }}</span>
+    {% endif %}
+  </div>
+
+  <table class="data-table" data-vis="all">
+    <thead data-vis="all">
+      <tr data-vis="all">
+        <th data-vis="all">Kind</th>
+        <th data-vis="all">Subject</th>
+        <th data-vis="all">Submitted by</th>
+        <th data-vis="all">Created</th>
+        <th data-vis="all">Action</th>
+      </tr>
+    </thead>
+    <tbody data-vis="all">
+      {% for it in items %}
+      <tr data-vis="all">
+        <td data-vis="all">
+          <span class="pill pill-{{ 'blue' if it.kind=='account_pending' else 'purple' if it.kind=='ai_draft' else 'orange' }}" data-vis="all">
+            {{ it.kind_label }}
+          </span>
+        </td>
+        <td data-vis="all">{{ it.subject }}</td>
+        <td data-vis="all">{{ it.submitted_by }}</td>
+        <td data-vis="all" class="hint" style="font-size:0.9em;">{{ it.created_at or '—' }}</td>
+        <td data-vis="all">
+          <a class="text-link" href="{{ it.action_url }}" data-vis="all">{{ it.action_label }} →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" data-vis="all">
+    <h3 data-vis="all">All clear</h3>
+    <p class="hint" data-vis="all">
+      Nothing is waiting on your decision right now. When new accounts
+      are proposed (manually or via AI upload), or a password reset is
+      requested, they'll appear here. You can also act on items from
+      their canonical pages (<a href="{{ url_for('admin_users') }}">Admin → Users</a>, etc.).
+    </p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

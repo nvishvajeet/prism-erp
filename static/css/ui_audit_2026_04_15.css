@@ -292,3 +292,24 @@ td.cell-currency {
   padding: 2px 4px;
   border-radius: 4px;
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * F-11 · request_detail AI-draft approval block inline → classes
+ *
+ * templates/request_detail.html lines 83–94 rendered the AI-draft
+ * approval callout with 3 inline style attrs (font-weight bold on
+ * the heading paragraph, margin resets on the hint, flex row on
+ * the submit form). Extracting to .ai-draft-* classes.
+ * ───────────────────────────────────────────────────────────── */
+.ai-draft-heading {
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.ai-draft-hint {
+  margin: 0 0 0.75rem;
+}
+.ai-draft-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

@@ -80,13 +80,13 @@
       {% endif %}
       {% if sample_request["status"] in ("draft_ai", "results_pending_approval") and can_manage %}
       <div class="ai-draft-callout" data-vis="{{ V }}">
-        <p style="font-weight:700;margin:0 0 0.5rem;" data-vis="{{ V }}">
+        <p class="ai-draft-heading" data-vis="{{ V }}">
           {% if sample_request["status"] == "draft_ai" %}AI Draft — Needs Your Approval{% else %}AI Results — Confirm Completion{% endif %}
         </p>
-        <p class="hint" style="margin:0 0 0.75rem;" data-vis="{{ V }}">
+        <p class="hint ai-draft-hint" data-vis="{{ V }}">
           {% if sample_request["status"] == "draft_ai" %}This request was created by the AI assistant. Review the details and approve to make it live, or reject to discard.{% else %}The AI attached results to this request. Confirm to mark it completed, or reject to revert.{% endif %}
         </p>
-        <form method="post" action="{{ url_for('ai_draft_approve', request_id=sample_request['id']) }}" style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
+        <form method="post" action="{{ url_for('ai_draft_approve', request_id=sample_request['id']) }}" class="ai-draft-actions" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" name="verdict" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
           <button type="submit" name="verdict" value="reject" class="btn btn-reject-inline" data-vis="{{ V }}">Reject</button>

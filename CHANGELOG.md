@@ -15,6 +15,69 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [2.0.0-rc1] — 2026-04-15
+
+Operation TroisAgents sprint output. Three agents (Claude 0,
+Claude 1, Codex 0) across a long coordinated ship window.
+
+### Security
+
+- Login rate limiter: sliding 5-minute window, 5 failures → 5-minute
+  per-IP block (`516a1b3`).
+- Security response headers: HSTS, CSP, X-Frame-Options,
+  X-Content-Type-Options, Referrer-Policy (`516a1b3`).
+- AI crawler `--erp` / `--db` path enforcement (`516a1b3`).
+- SQLite `synchronous=FULL` in operational mode (`516a1b3`).
+- Werkzeug `ProxyFix` for Cloudflare tunnel correctness and
+  forwarded-HTTPS login support (`44acc86`).
+- Same security stack ported to Ravikiran wrapper (`e3cfa92` in
+  `ravikiran-erp`).
+
+### Features
+
+- `attendance_number` column + numeric quick-mark flow for
+  attendance-by-number (`43f99e9`, `9afabe0`, `bcc1b70`).
+- Mobile-first `/attendance/quick` keypad page (`bcc1b70`).
+- `playground.catalysterp.org` backend path corrected via host-aware
+  apex tenant routing (`545bc21`) and tunnel proxy fixes (`44acc86`).
+- Chooser app at `catalysterp.org` root with MITWPU R&D and Personal
+  ERP tiles (`85e720a`, `79bb3d7`).
+
+### Operations
+
+- Ravikiran `launchd` plist staged at
+  `chooser/launchd/local.catalyst.ravikiran.plist` (`2ad115b`).
+- Operational hardening doc:
+  `docs/OPERATIONAL_HARDENING_V2.md` (`516a1b3`).
+- HSTS preload readiness note (`37d521f`).
+- Ship-readiness check script:
+  `scripts/ship_readiness_check.py` (`44acc86`, `c234035`).
+- Observability follow-on doc (`5cc0434`).
+- Tenant onboarding playbook:
+  `docs/ERP_TENANT_ONBOARDING.md` (`49c7868` lineage).
+
+### UI / UX
+
+- Attendance number visible on profile pages (`19ad685`).
+- Mobile responsive polish across templates
+  (`5b11a9b`, plus `8331c1a` stitch).
+- UI audit plus form save-button / clipping pass
+  (`e7c4373`, `ad271c6`, `8331c1a`).
+- Ravikiran template branding scrub and de-lab pass
+  (`7282282` in `ravikiran-erp`).
+
+### Deferred
+
+- Mobile debug tool full production rollout (voice dictation,
+  screenshot upload, richer `/debug` UX).
+- Time-logging feature (`user_work_sessions` + heartbeat +
+  `/admin/users/<id>/hours`) remains shipped in sprint code but not
+  yet fully deployed/validated on the public hosts.
+- Ravikiran DB filename rename (`lab_scheduler.db` → `ravikiran.db`).
+- Ravikiran `tester` role full wiring beyond debug visibility.
+- Post-sprint feedback items tracked in
+  `docs/POST_SPRINT_FEEDBACK_PLAN_2026_04_15.md`.
+
 ## [1.0.0] — 2026-04-15
 
 **CATALYST ERP — the final stable 1.0.**

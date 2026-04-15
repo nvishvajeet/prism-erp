@@ -1,21 +1,23 @@
   {# ── AI Hover Pane — available on every page ── #}
   {% if current_user_obj %}
-  <button id="aiPaneToggle" title="Catalyst Command Desk" data-vis="{{ V }}"
-          style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;width:3.5rem;height:3.5rem;border-radius:50%;border:none;background:var(--tone-blue, #007AFF);color:var(--bg, #fff);font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:transform 0.2s;"
-          onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">
-    CD
-  </button>
-  <div id="aiPaneHoverPrompt" data-vis="{{ V }}"
-       style="display:none;position:fixed;bottom:5.45rem;right:1.5rem;z-index:9999;max-width:18rem;padding:0.5rem 0.7rem;border-radius:999px;background:color-mix(in srgb, var(--card-bg, #1c1c1e) 92%, var(--tone-blue, #007AFF) 8%);border:1px solid var(--color-separator, rgba(255,255,255,0.12));box-shadow:0 10px 28px rgba(0,0,0,0.24);font-size:0.72rem;line-height:1.25;color:inherit;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity 0.16s ease, transform 0.16s ease;">
-    Ask for work, actions, onboarding, approvals, or feedback
-  </div>
-  <aside id="aiPane" data-vis="{{ V }}"
-         style="display:none;position:fixed;bottom:5.5rem;right:1.5rem;z-index:9998;width:24rem;max-height:70vh;border-radius:12px;background:var(--card-bg, #1c1c1e);border:1px solid var(--color-separator, rgba(255,255,255,0.1));box-shadow:0 8px 40px rgba(0,0,0,0.5);overflow:hidden;flex-direction:column;">
+  <div id="aiPaneDock" data-vis="{{ V }}"
+       style="position:fixed;right:1.5rem;bottom:1.5rem;z-index:9999;width:0;height:0;">
+    <button id="aiPaneToggle" title="Catalyst Command Desk" data-vis="{{ V }}"
+            style="position:absolute;right:0;bottom:0;z-index:2;width:3.3rem;height:3.3rem;border-radius:50%;border:none;background:var(--tone-blue, #007AFF);color:var(--bg, #fff);font-size:1.25rem;cursor:grab;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:transform 0.2s;">
+      CD
+    </button>
+    <div id="aiPaneHoverPrompt" data-vis="{{ V }}"
+         style="position:absolute;right:0;bottom:4rem;z-index:1;display:flex;align-items:center;gap:0.35rem;max-width:17rem;min-width:12.5rem;padding:0.5rem 0.75rem;border-radius:16px;background:color-mix(in srgb, var(--card-bg, #1c1c1e) 92%, var(--tone-blue, #007AFF) 8%);border:1px solid var(--color-separator, rgba(255,255,255,0.12));box-shadow:0 10px 28px rgba(0,0,0,0.24);font-size:0.72rem;line-height:1.28;color:inherit;transition:opacity 0.2s ease, transform 0.2s ease;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 1.35rem;width:1.35rem;height:1.35rem;border-radius:999px;background:rgba(0,122,255,0.16);color:var(--tone-blue, #007AFF);font-size:0.72rem;">AI</span>
+      <span id="aiPaneHoverPromptText">Ask for work, actions, onboarding, approvals, or feedback</span>
+    </div>
+    <aside id="aiPane" data-vis="{{ V }}"
+           style="display:none;position:absolute;right:0;bottom:4.55rem;z-index:3;width:min(22rem, calc(100vw - 2rem));max-height:min(34rem, 70vh);border-radius:16px;background:var(--card-bg, #1c1c1e);border:1px solid var(--color-separator, rgba(255,255,255,0.1));box-shadow:0 8px 40px rgba(0,0,0,0.5);overflow:hidden;flex-direction:column;">
     {# Header #}
-    <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
+    <div id="aiPaneDragHandle" style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;cursor:grab;" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
         <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst Command Desk</strong>
-        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">AI request intake with human oversight</span>
+        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Movable AI help with human oversight</span>
       </div>
       <button id="aiPaneClose" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0.2rem;" data-vis="{{ V }}">✕</button>
     </div>
@@ -34,8 +36,8 @@
       </div>
       <div class="hint" style="text-align:center;padding:1rem;font-size:0.8rem;" data-vis="{{ V }}">
         Put any job here: requests, expenses, onboarding, account creation, approvals, routing, explanations, or feedback.<br>I can draft, route, summarize, and push work into the right human review lane.
-        <div style="margin-top:0.45rem;font-size:0.72rem;" data-vis="{{ V }}">
-          Built on Claude with human supervision. Fast requests can move quickly, and sensitive actions stay reviewable before they go live.
+        <div id="aiPaneLanguageNote" style="margin-top:0.45rem;font-size:0.72rem;" data-vis="{{ V }}">
+          Type in English, Marathi, Hindi, or any language you prefer.
         </div>
       </div>
     </div>
@@ -52,18 +54,20 @@
         </label>
         <button type="button" id="aiPaneMic" title="Start voice input" aria-label="Toggle microphone"
                 style="background:none;border:none;cursor:pointer;padding:0.4rem;font-size:1.05rem;color:var(--muted);" data-vis="{{ V }}">🎤</button>
-        <textarea id="aiPaneInput" rows="2" placeholder="Ask for any job, request, approval, onboarding action, or feedback..."
+        <textarea id="aiPaneInput" rows="2" placeholder="Ask in English, Marathi, Hindi, or any language: jobs, requests, approvals, onboarding, or feedback..."
                   style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
                   data-vis="{{ V }}"></textarea>
         <button type="button" id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Send</button>
       </div>
       <p class="hint" style="margin-top:0.25rem;font-size:0.65rem;" data-vis="{{ V }}">
-        This desk accepts normal work requests and feedback. Attach a file with 📎, tap 🎤 to dictate, or press Enter to send. Manual forms still work, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
+        This desk accepts normal work requests and feedback. Attach a file with 📎, tap 🎤 to dictate, or press Enter to send. Marathi and other languages are welcome. Manual forms still work, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
       </p>
     </div>
-  </aside>
+    </aside>
+  </div>
   <script>
   (function(){
+    var dock = document.getElementById('aiPaneDock');
     var toggle = document.getElementById('aiPaneToggle');
     var pane = document.getElementById('aiPane');
     var closeBtn = document.getElementById('aiPaneClose');
@@ -72,6 +76,9 @@
     var sendBtn = document.getElementById('aiPaneSend');
     var micBtn = document.getElementById('aiPaneMic');
     var hoverPrompt = document.getElementById('aiPaneHoverPrompt');
+    var hoverPromptText = document.getElementById('aiPaneHoverPromptText');
+    var languageNote = document.getElementById('aiPaneLanguageNote');
+    var dragHandle = document.getElementById('aiPaneDragHandle');
     var fileInput = document.getElementById('aiPaneFile');
     var dropZone = document.getElementById('aiPaneDropZone');
     var fileNameEl = document.getElementById('aiPaneFileName');
@@ -79,10 +86,15 @@
     var pendingFile = null;
     var hoverContext = '';
     var lastHoverContext = '';
+    var rotatingPrompts = [];
+    var promptRotationIndex = 0;
+    var promptRotationTimer = null;
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     var aiListening = false;
     var aiRecognition = null;
-    if(!toggle || !pane) return;
+    var dragState = null;
+    var dragMoved = false;
+    if(!toggle || !pane || !dock) return;
 
     function cleanText(value){
       return (value || '').replace(/\s+/g, ' ').trim();
@@ -107,25 +119,70 @@
       return label ? ('Ask about ' + label + ', submit work, or leave feedback') : 'Ask for work, actions, onboarding, approvals, or feedback';
     }
 
-    function showHoverPrompt(label){
-      if(!hoverPrompt || pane.style.display === 'flex') return;
-      hoverPrompt.textContent = promptCopy(label);
-      hoverPrompt.style.display = 'block';
-      requestAnimationFrame(function(){
-        hoverPrompt.style.opacity = '1';
-        hoverPrompt.style.transform = 'translateY(0)';
-      });
+    function applyDockPosition(pos){
+      dock.style.left = pos.left + 'px';
+      dock.style.top = pos.top + 'px';
+      dock.style.right = 'auto';
+      dock.style.bottom = 'auto';
     }
 
-    function hideHoverPrompt(){
+    function clampDockPosition(left, top){
+      var bubbleWidth = hoverPrompt ? Math.max(200, hoverPrompt.offsetWidth || 200) : 200;
+      var maxLeft = Math.max(16, window.innerWidth - bubbleWidth - 16);
+      var maxTop = Math.max(16, window.innerHeight - 72);
+      return {
+        left: Math.min(Math.max(16, left), maxLeft),
+        top: Math.min(Math.max(16, top), maxTop)
+      };
+    }
+
+    function saveDockPosition(pos){
+      try { localStorage.setItem('aiPaneDockPos', JSON.stringify(pos)); } catch(e) {}
+    }
+
+    function restoreDockPosition(){
+      try {
+        var raw = localStorage.getItem('aiPaneDockPos');
+        if(!raw) return;
+        var parsed = JSON.parse(raw);
+        if(typeof parsed.left !== 'number' || typeof parsed.top !== 'number') return;
+        applyDockPosition(clampDockPosition(parsed.left, parsed.top));
+      } catch(e) {}
+    }
+
+    function setHoverPromptText(text){
+      if(!hoverPromptText) return;
+      hoverPromptText.textContent = text;
+    }
+
+    function setPromptVisibility(isOpen){
       if(!hoverPrompt) return;
-      hoverPrompt.style.opacity = '0';
-      hoverPrompt.style.transform = 'translateY(4px)';
-      window.setTimeout(function(){
-        if(hoverPrompt.style.opacity === '0'){
-          hoverPrompt.style.display = 'none';
-        }
-      }, 170);
+      hoverPrompt.style.opacity = isOpen ? '0' : '1';
+      hoverPrompt.style.transform = isOpen ? 'translateY(6px)' : 'translateY(0)';
+      hoverPrompt.style.pointerEvents = isOpen ? 'none' : 'auto';
+    }
+
+    function startPromptRotation(){
+      if(promptRotationTimer) window.clearInterval(promptRotationTimer);
+      if(!rotatingPrompts.length) return;
+      setHoverPromptText(rotatingPrompts[0]);
+      promptRotationTimer = window.setInterval(function(){
+        if(pane.style.display === 'flex' || !rotatingPrompts.length) return;
+        promptRotationIndex = (promptRotationIndex + 1) % rotatingPrompts.length;
+        setHoverPromptText(rotatingPrompts[promptRotationIndex]);
+      }, 3600);
+    }
+
+    function updateRotatingPrompts(contextLabel){
+      var prompts = [];
+      if(contextLabel){
+        prompts.push('Ask about ' + contextLabel);
+      }
+      prompts = prompts.concat(rotatingPrompts.filter(Boolean));
+      if(!prompts.length){
+        prompts = ['Ask for work, actions, onboarding, approvals, or feedback'];
+      }
+      setHoverPromptText(prompts[promptRotationIndex % prompts.length]);
     }
 
     function bindHoverContext(){
@@ -146,26 +203,79 @@
           var label = contextLabelFor(node) || contextLabelFor(node.closest('section.card, article.card, .paginated-pane')) || document.title;
           hoverContext = label;
           lastHoverContext = label;
-          showHoverPrompt(label);
+          updateRotatingPrompts(label);
         });
         node.addEventListener('mouseleave', function(){
           hoverContext = '';
-          hideHoverPrompt();
+          updateRotatingPrompts(lastHoverContext);
         });
       });
     }
 
     toggle.addEventListener('click', function(){
+      if(dragMoved){
+        dragMoved = false;
+        return;
+      }
       pane.style.display = pane.style.display === 'none' ? 'flex' : 'none';
       if(pane.style.display === 'flex'){
-        hideHoverPrompt();
+        setPromptVisibility(true);
         if(!input.value.trim() && (hoverContext || lastHoverContext)){
           input.value = 'About ' + (hoverContext || lastHoverContext) + ': ';
         }
         input.focus();
+      } else {
+        setPromptVisibility(false);
       }
     });
-    closeBtn.addEventListener('click', function(){ pane.style.display = 'none'; });
+    closeBtn.addEventListener('click', function(){ pane.style.display = 'none'; setPromptVisibility(false); });
+
+    function beginDrag(clientX, clientY){
+      var rect = dock.getBoundingClientRect();
+      dragState = { offsetX: clientX - rect.left, offsetY: clientY - rect.top };
+      dragMoved = false;
+      toggle.style.cursor = 'grabbing';
+      if(dragHandle) dragHandle.style.cursor = 'grabbing';
+    }
+
+    function dragTo(clientX, clientY){
+      if(!dragState) return;
+      dragMoved = true;
+      var pos = clampDockPosition(clientX - dragState.offsetX, clientY - dragState.offsetY);
+      applyDockPosition(pos);
+      saveDockPosition(pos);
+    }
+
+    function endDrag(){
+      dragState = null;
+      toggle.style.cursor = 'grab';
+      if(dragHandle) dragHandle.style.cursor = 'grab';
+    }
+
+    [toggle, dragHandle].forEach(function(node){
+      if(!node) return;
+      node.addEventListener('mousedown', function(e){
+        if(e.target && e.target.id === 'aiPaneClose') return;
+        beginDrag(e.clientX, e.clientY);
+      });
+      node.addEventListener('touchstart', function(e){
+        if(!e.touches || !e.touches.length) return;
+        beginDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }, {passive: true});
+    });
+    document.addEventListener('mousemove', function(e){ dragTo(e.clientX, e.clientY); });
+    document.addEventListener('touchmove', function(e){
+      if(!dragState || !e.touches || !e.touches.length) return;
+      dragTo(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive: true});
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
+    window.addEventListener('resize', function(){
+      var rect = dock.getBoundingClientRect();
+      var pos = clampDockPosition(rect.left, rect.top);
+      applyDockPosition(pos);
+      saveDockPosition(pos);
+    });
 
     // File handling
     fileInput.addEventListener('change', function(){
@@ -346,7 +456,7 @@
         .then(function(data){
           chat.innerHTML = '';
           // Greeting
-          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Catalyst Command Desk handles requests, jobs, routing, onboarding, and feedback with human oversight.</div>';
+      var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Catalyst Command Desk handles requests, jobs, routing, onboarding, and feedback with human oversight.</div>';
           if(data.items.length){
             greeting += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
             data.items.forEach(function(it){
@@ -357,6 +467,20 @@
           }
           if(data.hints.length){
             greeting += '<div style="margin-top:0.4rem;font-size:0.7rem;opacity:0.6;">' + data.hints[0] + '</div>';
+          }
+          if(data.language_note && languageNote){
+            languageNote.textContent = data.language_note;
+          }
+          if(Array.isArray(data.suggestions) && data.suggestions.length){
+            rotatingPrompts = data.suggestions.slice();
+            promptRotationIndex = 0;
+            startPromptRotation();
+            updateRotatingPrompts(lastHoverContext);
+            document.querySelectorAll('.ai-example-chip').forEach(function(chip, idx){
+              if(!data.suggestions[idx]) return;
+              chip.dataset.prompt = data.suggestions[idx];
+              chip.textContent = data.suggestions[idx].length > 26 ? data.suggestions[idx].slice(0, 23) + '...' : data.suggestions[idx];
+            });
           }
           addBubble(greeting, 'ai');
         }).catch(function(){});
@@ -372,6 +496,9 @@
         });
     });
 
+    restoreDockPosition();
+    setPromptVisibility(false);
+    startPromptRotation();
     bindHoverContext();
 
     // Example-prompt chips — click to populate input

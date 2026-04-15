@@ -27925,20 +27925,61 @@ def ai_pane_summary():
     if pending_cmds and pending_cmds["c"] and role in ("super_admin", "site_admin", "finance_admin"):
         items.append({"type": "ai_review", "text": f"{pending_cmds['c']} AI-generated action{'s' if pending_cmds['c'] > 1 else ''} awaiting review"})
 
-    # Context hints based on current page
+    # Context hints and rotating example prompts based on current page
+    page_l = page.lower()
     hints = []
-    if "instrument" in page.lower():
-        hints.append("You can ask Catalyst Command Desk to submit a sample request, route a sample, onboard operators, explain the page, or take feedback")
-    elif "finance" in page.lower():
-        hints.append("You can ask Catalyst Command Desk to route expenses, fuel bills, grants, payment work, or finance feedback")
-    elif "attendance" in page.lower() or "personnel" in page.lower():
-        hints.append("You can ask Catalyst Command Desk to mark attendance, prepare account requests, create salary notes, or capture onboarding tasks")
-    elif "mess" in page.lower() or "tuck" in page.lower():
-        hints.append("You can ask Catalyst Command Desk about today's meal stats, token reconciliation, requests, or site feedback")
+    suggestions = []
+    if "instrument" in page_l:
+        hints.append("Use Catalyst Command Desk here for sample routing, operator onboarding, issue reporting, and quick help on this instrument.")
+        suggestions = [
+            "Test this sample and route it to the correct lab flow",
+            "Show the next available slot for this instrument",
+            "या instrument साठी operator accounts तयार करा",
+            "I want to report a problem on this instrument page",
+        ]
+    elif "finance" in page_l:
+        hints.append("Use Catalyst Command Desk here for expenses, grants, payment routing, pending approvals, and finance feedback.")
+        suggestions = [
+            "Route this fuel bill to the right finance review queue",
+            "Prepare today's pending payment batch",
+            "हा expense योग्य company book मध्ये टाका",
+            "I found a finance issue on this page",
+        ]
+    elif "attendance" in page_l or "personnel" in page_l:
+        hints.append("Use Catalyst Command Desk here for attendance work, onboarding, account requests, manager routing, and staff feedback.")
+        suggestions = [
+            "Create accounts from this staff list and keep them pending approval",
+            "Mark today's attendance exceptions for review",
+            "या कर्मचाऱ्यांसाठी onboarding tasks तयार करा",
+            "I want to flag a people-management issue",
+        ]
+    elif "mess" in page_l or "tuck" in page_l:
+        hints.append("Use Catalyst Command Desk here for meal tracking, token reconciliation, requests, and operational feedback.")
+        suggestions = [
+            "Summarize today's meal counts and pending issues",
+            "Route this stock request to the right queue",
+            "आजच्या kitchen requests चा सारांश दाखवा",
+            "I want to report a service issue here",
+        ]
     else:
-        hints.append("Try: 'Create accounts from this list', 'Route this fuel bill', 'Test this sample', or 'I want to give feedback about this page'")
+        hints.append("Use Catalyst Command Desk for requests, onboarding, approvals, routing, and feedback anywhere in the ERP.")
+        suggestions = [
+            "Create accounts from this list",
+            "Route this fuel bill",
+            "या page बद्दल feedback द्यायचा आहे",
+            "What should I do next here?",
+        ]
 
-    return jsonify({"items": items, "hints": hints, "role": role, "name": user["name"]})
+    language_note = "You can type in English, Marathi, Hindi, or any language you prefer."
+
+    return jsonify({
+        "items": items,
+        "hints": hints,
+        "suggestions": suggestions,
+        "language_note": language_note,
+        "role": role,
+        "name": user["name"],
+    })
 
 
 @app.route("/admin/ai-log")

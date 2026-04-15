@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude-opus-4.6-inline-style | inline-style-attribute-crawler | 2026-04-15T17:00 | crawlers/strategies/inline_style_attribute.py, crawlers/strategies/__init__.py, crawlers/waves.py | pending |
 
 ## Stale-claim recovery
 

@@ -13,12 +13,17 @@
 
 | Slot | Agent | Machine | Fires at |
 |---|---|---|---|
-| A | **Claude 1** | iMac | :00 – :20 each hour |
-| B | **Codex 0** | MBP | :20 – :40 each hour |
-| C | **Claude 0** | MBP (2nd session) | :40 – :00 each hour |
+| A | **Claude 1** | iMac | :00 – :30 each hour-and-a-half cycle |
+| B | **Codex 0** | MBP | :30 – :00 (next hour) |
+| C | **Claude 0** | MBP (2nd session) | :00 – :30 (next slot) |
+
+Each agent runs **30 minutes**, then hands off. A full rotation
+takes 90 minutes (3 × 30 min). Two full rotations per batch =
+3 hours per batch. Local machine jobs (crawlers, smoke, greps)
+run in the background between LLM slots.
 
 **Fallback (2 agents):** If any agent drops, the surviving two
-go 30/30. The dropped agent's current-round tasks get absorbed
+go 45/45. The dropped agent's current-round tasks get absorbed
 by the next agent in rotation. Handoff log stays the single
 source of truth — the surviving agents read it and pick up.
 
@@ -37,26 +42,29 @@ Each batch has 9 rounds (3 agents × 3 hours). Each round is
 
 ---
 
-## Rotation pattern (per hour)
+## Rotation pattern (90-min cycle)
 
 ```
-:00 ──────── :20 ──────── :40 ──────── :00
-│  Claude 1  │  Codex 0   │  Claude 0  │
-│  (work)    │  (work)    │  (work)    │
-│            │            │            │
-│  verifies  │  verifies  │  verifies  │
-│  Claude 0  │  Claude 1  │  Codex 0   │
-└────────────┴────────────┴────────────┘
+:00 ──────────── :30 ──────────── :00 ──────────── :30
+│   Claude 1    │   Codex 0     │   Claude 0    │
+│   30 min      │   30 min      │   30 min      │
+│               │               │               │
+│  5 min verify │  5 min verify │  5 min verify │
+│ 25 min build  │ 25 min build  │ 25 min build  │
+└───────────────┴───────────────┴───────────────┘
+         one full rotation = 90 min
+         two rotations per batch = 3 hours
 ```
 
-Each agent:
-1. **Pulls** both repos at the start of their 20-min slot
-2. **Reads** the last section of `docs/RELAY_HANDOFF_LOG.md`
-3. **Verifies** the previous agent's work (try to break it)
-4. **Generalises** (same bug elsewhere? same pattern in other repo?)
-5. **Ships** their own assigned tasks
-6. **Appends** their section to the handoff log
-7. **Pushes** and goes idle
+Each agent's 30-min slot:
+1. **Pull** both repos (1 min)
+2. **Read** the last section of `docs/RELAY_HANDOFF_LOG.md` (1 min)
+3. **Verify** the previous agent's work — try to break it (3 min)
+4. **Generalise** — same bug elsewhere? same pattern in other repo? (included in build)
+5. **Build** — ship assigned tasks (23 min)
+6. **Append** handoff section to the log (1 min)
+7. **Push** + set timer for next slot (1 min)
+8. **Fire local background jobs** (crawlers, smoke, greps) that grind while idle
 
 ---
 
@@ -239,11 +247,10 @@ cat docs/THREE_AGENT_MASTER_PLAN_2026_04_16.md
 
 ## Rate-limit budget
 
-Each agent gets ~20 min per hour. With 3 agents:
-- 60 min of compute per clock hour
-- 3 hours per batch = 9 clock hours of compute per batch
-- 3 batches = 27 hours of compute total
-- But only 9 clock hours elapsed (3 agents run in parallel slots)
+Each agent gets 30 min per 90-min cycle. With 3 agents:
+- 90 min of compute per 90-min cycle
+- 2 cycles per batch = 3 hours per batch
+- 3 batches = 9 hours elapsed, 9 hours of compute
 
 If rate limits hit: the affected agent commits partial work with
 `STATUS: RATE-LIMITED` and the next agent picks up. The handoff

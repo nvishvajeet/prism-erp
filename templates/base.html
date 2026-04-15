@@ -342,6 +342,7 @@
   <script defer src="{{ url_for('static', filename='role-toggle.js') }}"></script>
   <script defer src="{{ url_for('static', filename='sortable-table.js') }}"></script>
   {% if current_user %}
+  <script defer src="{{ url_for('static', filename='telemetry.js') }}?v=1"></script>
   <div id="keybindHelp" class="keybind-help" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden data-vis="{{ V }}">
     <div class="keybind-help-card" data-vis="{{ V }}">
       <h2 data-vis="{{ V }}">Keyboard shortcuts</h2>

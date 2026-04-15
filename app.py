@@ -4973,6 +4973,35 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_grant_members_grant ON grant_members(grant_id);
             CREATE INDEX IF NOT EXISTS idx_grant_members_user  ON grant_members(user_id);
 
+            -- Insights module — user-behavior telemetry.
+            -- Privacy floor: no raw mouse coords, no keystrokes, no
+            -- cross-session fingerprinting. session_id is the client-
+            -- generated UUID for one browser tab only.
+            CREATE TABLE IF NOT EXISTS telemetry_page_time (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                active_ms INTEGER NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_tpt_path ON telemetry_page_time(path, created_at);
+            CREATE INDEX IF NOT EXISTS idx_tpt_user ON telemetry_page_time(user_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS telemetry_click (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                action TEXT NOT NULL,
+                clicked_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_tc_action ON telemetry_click(action, created_at);
+            CREATE INDEX IF NOT EXISTS idx_tc_user   ON telemetry_click(user_id, created_at);
+
             -- sample_requests gains a project_id FK for forward-lookup.
             -- Nullable in alpha.1 because the backfill stitches it after
             -- the fact; NOT NULL would block the tables-exist-before-
@@ -11903,11 +11932,23 @@ def login():
               )
             ORDER BY
               CASE WHEN lower(email) = ? THEN 0 ELSE 1 END,
+              CASE
+                WHEN ? != ''
+                 AND EXISTS (
+                   SELECT 1
+                   FROM erp_user_portals eup
+                   JOIN erp_portals ep ON ep.id = eup.portal_id
+                   WHERE eup.user_id = users.id
+                     AND ep.slug = ?
+                 )
+                THEN 0
+                ELSE 1
+              END,
               CASE WHEN lower(email) LIKE '%@mitwpu.edu.in' THEN 0 ELSE 1 END,
               id
             LIMIT 1
             """,
-            (login_id, login_id, login_id, login_id),
+            (login_id, login_id, login_id, login_id, requested_portal or "", requested_portal or ""),
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             session.clear()
@@ -16603,7 +16644,11 @@ def change_password():
         if len(portals) > 1 and not selected_portal:
             return redirect(url_for("portal_picker"))
         return redirect(url_for("role_manual"))
-    return render_template("change_password.html", title="Change Password")
+    response = make_response(render_template("change_password.html", title="Change Password"))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.route("/history/processed")
@@ -16705,6 +16750,7 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
     )
+    can_edit_metadata_value = viewer["id"] == target_user["id"] or can_edit_user_value
     instrument_roster: list[sqlite3.Row] = []
     instrument_categories: list[str] = []
     assigned_admin_ids: set[int] = set()
@@ -16738,6 +16784,7 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
         instrument_categories = sorted({(row["category"] or "Uncategorized") for row in instrument_roster})
     return {
         "can_edit_user": can_edit_user_value,
+        "can_edit_metadata": can_edit_metadata_value,
         "instrument_roster": instrument_roster,
         "instrument_categories": instrument_categories,
         "assigned_admin_ids": assigned_admin_ids,
@@ -16909,11 +16956,12 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         return redirect(url_for("user_profile", user_id=user_id))
 
     if action == "update_user_metadata":
-        if not can_manage_members(viewer):
-            abort(403)
-        if is_owner(target_user) and not is_owner(viewer):
-            abort(403)
-        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+        can_admin_edit_user = (
+            can_manage_members(viewer)
+            and (not is_owner(target_user) or is_owner(viewer))
+            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+        )
+        if not can_admin_edit_user and target_user["id"] != viewer["id"]:
             abort(403)
         new_name = request.form.get("name", target_user["name"]).strip() or target_user["name"]
         new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
@@ -16921,9 +16969,9 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         new_office = (request.form.get("office_location", existing_office) or "").strip()
         existing_website = target_user["website"] if "website" in target_user.keys() else ""
         new_website = normalize_optional_website(request.form.get("website", existing_website))
-        new_active = 1 if request.form.get("active") == "on" else 0
-        if target_user["id"] == viewer["id"]:
-            new_active = 1
+        new_active = 1 if target_user["active"] else 0
+        if can_admin_edit_user and target_user["id"] != viewer["id"]:
+            new_active = 1 if request.form.get("active") == "on" else 0
         execute(
             "UPDATE users SET name = ?, member_code = ?, office_location = ?, website = ?, active = ? WHERE id = ?",
             (new_name, new_member_code, new_office, new_website, new_active, user_id),
@@ -17127,6 +17175,7 @@ def user_profile(user_id: int):
             and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
         ),
         can_edit_user=assignment_payload["can_edit_user"],
+        can_edit_metadata=assignment_payload["can_edit_metadata"],
         instrument_roster=assignment_payload["instrument_roster"],
         instrument_categories=assignment_payload["instrument_categories"],
         assigned_admin_ids=assignment_payload["assigned_admin_ids"],
@@ -28451,17 +28500,60 @@ def _handle_quick_entry_submit(user):
 @app.route('/insights')
 @login_required
 def insights_list():
-    """List all insights."""
+    """Admin dashboard — aggregated user-behavior telemetry.
+
+    Read-only. Only visible to roles with admin-class capabilities;
+    others get a 403. Windows: 7 days by default, ?window=24h|30d
+    overrides.
+    """
     if not module_enabled('insights'):
         abort(404)
     user = current_user()
-    items = query_all('SELECT * FROM insights ORDER BY created_at DESC')
-    stats = {
-        'total': len(items),
-        'active': sum(1 for i in items if i['status'] == 'active'),
-        'completed': sum(1 for i in items if i['status'] == 'completed'),
-    }
-    return render_template('insights_list.html', items=items, stats=stats)
+    role = (user['role'] if user else '') or ''
+    if role not in {'owner', 'super_admin', 'site_admin', 'instrument_admin', 'academic_admin'}:
+        abort(403)
+
+    window = (request.args.get('window') or '7d').strip()
+    if window == '24h':
+        since_sql = "datetime('now', '-1 day')"
+        window_label = 'last 24 hours'
+    elif window == '30d':
+        since_sql = "datetime('now', '-30 day')"
+        window_label = 'last 30 days'
+    else:
+        since_sql = "datetime('now', '-7 day')"
+        window_label = 'last 7 days'
+
+    top_pages = query_all(
+        f'SELECT path, SUM(active_ms) AS total_ms, COUNT(DISTINCT user_id) AS users, COUNT(*) AS samples '
+        f'FROM telemetry_page_time WHERE created_at >= {since_sql} '
+        f'GROUP BY path ORDER BY total_ms DESC LIMIT 10'
+    )
+    top_actions = query_all(
+        f'SELECT action, COUNT(*) AS clicks, COUNT(DISTINCT user_id) AS users '
+        f'FROM telemetry_click WHERE created_at >= {since_sql} '
+        f'GROUP BY action ORDER BY clicks DESC LIMIT 10'
+    )
+    totals = query_one(
+        f'SELECT '
+        f'(SELECT COUNT(*) FROM telemetry_page_time WHERE created_at >= {since_sql}) AS pt_rows, '
+        f'(SELECT COUNT(*) FROM telemetry_click     WHERE created_at >= {since_sql}) AS click_rows, '
+        f'(SELECT COUNT(DISTINCT user_id) FROM telemetry_page_time WHERE created_at >= {since_sql}) AS active_users'
+    )
+
+    max_ms = max((p['total_ms'] for p in top_pages), default=1) or 1
+    max_clicks = max((a['clicks'] for a in top_actions), default=1) or 1
+
+    return render_template(
+        'insights_list.html',
+        window=window,
+        window_label=window_label,
+        top_pages=top_pages,
+        top_actions=top_actions,
+        totals=totals,
+        max_ms=max_ms,
+        max_clicks=max_clicks,
+    )
 
 
 @app.route('/insights/<int:insight_id>', methods=['GET', 'POST'])
@@ -28533,6 +28625,115 @@ def insights_new():
         flash('insight created.', 'success')
         return redirect(url_for('insights_detail', insight_id=new_id))
     return render_template('insights_new.html')
+
+
+# ───────────────────────────────────────────────────────────────
+# Insights — telemetry ingestion endpoint
+# Called by static/telemetry.js via fetch() with CSRF token auto-
+# injected by the base-template fetch shim. Batched beacon on
+# visibilitychange + pagehide. Privacy: see schema comment above.
+# ───────────────────────────────────────────────────────────────
+
+_TELEMETRY_MAX_BATCH = 50          # events per request
+_TELEMETRY_MAX_PATH_LEN = 256
+_TELEMETRY_MAX_ACTION_LEN = 64
+_TELEMETRY_MAX_SESSION_LEN = 64
+
+
+def _safe_telemetry_str(value, maxlen: int) -> str | None:
+    """Truncate + sanity-check a telemetry string field; return None on bad input."""
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    if len(s) > maxlen:
+        s = s[:maxlen]
+    # Block obviously-malformed paths (no newlines, no control chars)
+    if any(ord(c) < 32 for c in s):
+        return None
+    return s
+
+
+@app.route('/api/telemetry/batch', methods=['POST'])
+@login_required
+def api_telemetry_batch():
+    """Ingest a batch of telemetry events from the browser.
+
+    Payload shape (application/json):
+        {
+          "session_id": "<client UUID>",
+          "page_time": [
+            {"path": "...", "active_ms": 12345,
+             "started_at": "2026-04-15T15:00:00Z",
+             "ended_at":   "2026-04-15T15:00:12Z"},
+            ...
+          ],
+          "clicks": [
+            {"path": "...", "action": "submit-request",
+             "clicked_at": "2026-04-15T15:00:04Z"},
+            ...
+          ]
+        }
+
+    Silent no-op if the insights module is disabled — keeps the
+    client JS safe to ship before the feature is turned on.
+    """
+    if not module_enabled('insights'):
+        return ('', 204)
+    user = current_user()
+    if user is None:
+        return ('', 204)
+
+    payload = request.get_json(silent=True) or {}
+    session_id = _safe_telemetry_str(payload.get('session_id'), _TELEMETRY_MAX_SESSION_LEN)
+    if not session_id:
+        return ('{"ok":false,"reason":"bad_session"}', 400, {'Content-Type': 'application/json'})
+
+    accepted_pt = 0
+    for ev in (payload.get('page_time') or [])[:_TELEMETRY_MAX_BATCH]:
+        if not isinstance(ev, dict):
+            continue
+        path = _safe_telemetry_str(ev.get('path'), _TELEMETRY_MAX_PATH_LEN)
+        try:
+            active_ms = int(ev.get('active_ms') or 0)
+        except (TypeError, ValueError):
+            continue
+        if not path or active_ms <= 0 or active_ms > 24 * 3600 * 1000:
+            continue
+        started_at = _safe_telemetry_str(ev.get('started_at'), 32) or now_iso()
+        ended_at = _safe_telemetry_str(ev.get('ended_at'), 32) or now_iso()
+        execute(
+            'INSERT INTO telemetry_page_time '
+            '(user_id, session_id, path, active_ms, started_at, ended_at) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (user['id'], session_id, path, active_ms, started_at, ended_at),
+        )
+        accepted_pt += 1
+
+    accepted_click = 0
+    for ev in (payload.get('clicks') or [])[:_TELEMETRY_MAX_BATCH]:
+        if not isinstance(ev, dict):
+            continue
+        path = _safe_telemetry_str(ev.get('path'), _TELEMETRY_MAX_PATH_LEN)
+        action = _safe_telemetry_str(ev.get('action'), _TELEMETRY_MAX_ACTION_LEN)
+        clicked_at = _safe_telemetry_str(ev.get('clicked_at'), 32) or now_iso()
+        if not path or not action:
+            continue
+        execute(
+            'INSERT INTO telemetry_click '
+            '(user_id, session_id, path, action, clicked_at) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (user['id'], session_id, path, action, clicked_at),
+        )
+        accepted_click += 1
+
+    return (
+        '{"ok":true,"page_time":%d,"clicks":%d}' % (accepted_pt, accepted_click),
+        200,
+        {'Content-Type': 'application/json'},
+    )
+
 
 if __name__ == "__main__":
     init_db()

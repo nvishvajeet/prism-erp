@@ -66,8 +66,8 @@ missing for the product to deserve a major-version identity?**
 | Personnel / payroll | `partial` | personnel list/detail/salary config routes exist | needs tighter payroll + attendance + document-vault integration |
 | Inbox + notifications spine | `shipped` | `/inbox`, `/notifications` live | continue unifying cross-module events so every portal uses the same pattern |
 | Tasks / letters / receipts | `shipped` | routes + templates exist | mostly polish, consistency, and cross-linking |
-| Vendor / procurement | `missing` | no dedicated vendor registry / PO / quote / GRN flow yet | needs a real procurement domain, likely starting inside finance |
-| Inventory / consumables | `missing` | no first-class inventory module in registry | needs stock, reorder, issue/consume, supplier linkage |
+| Vendor / procurement | `partial` | `/vendors` list/new/detail/approval routes + `vendor_payments*` routes, plus 11 vendor/vendor_payment templates are live | still needs PO / quote / GRN flow and deeper payment history beyond approvals |
+| Inventory / consumables | `partial` | `_instrument_detail_inventory.html` tile ships inside instrument detail; `/compute/inventory` route + `compute_inventory.html` exist | still needs first-class module with stock, reorder, issue/consume, supplier linkage, and low-stock alerts |
 | REST / integration layer | `missing` | health endpoints exist, but not a true ERP API surface | needs a scoped, documented API for mobile and external systems |
 | Structural portability | `partial` | module registry exists, but `app.py` is still monolithic | route/domain extraction or at least helperization required before v2.0 scale |
 

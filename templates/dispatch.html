@@ -192,5 +192,44 @@
   rec.onend = function(){ mic.textContent = '🎤 Voice'; listening = false; };
   rec.onerror = function(){ mic.textContent = '🎤 Voice'; listening = false; };
 })();
+
+(function(){
+  // Silent auto-refresh of the dispatch console every 90s so bottlenecks,
+  // AI drafts, and pending receipts stay live without manual reload.
+  //
+  // Guard rails — we SKIP the refresh when:
+  //   • the command textarea has focus (user is typing / dictating)
+  //   • the textarea has any text in it (draft in progress, voice transcript)
+  //   • a file is selected for upload
+  //   • document is hidden (tab backgrounded — no point)
+  //   • user has interacted in the last 10s (scrolling, clicking)
+  //
+  // We use a real reload rather than a fetch-and-swap because every tile on
+  // this page is server-rendered with CSRF tokens and Jinja state; swapping
+  // partial HTML would require a parallel /dispatch?partial=1 route and a
+  // DOM diff. Full reload is two extra DB round-trips and preserves scroll
+  // in modern browsers.
+  var REFRESH_MS = 90 * 1000;
+  var IDLE_MS    = 10 * 1000;
+  var input = document.getElementById('dispatchInput');
+  var fileInputs = document.querySelectorAll('.dispatch-cmd-form input[type=file]');
+  var lastActivity = Date.now();
+  ['mousedown','keydown','touchstart','scroll','wheel'].forEach(function(ev){
+    window.addEventListener(ev, function(){ lastActivity = Date.now(); }, { passive: true });
+  });
+  function canRefresh(){
+    if (document.hidden) return false;
+    if (Date.now() - lastActivity < IDLE_MS) return false;
+    if (input && document.activeElement === input) return false;
+    if (input && input.value && input.value.trim().length > 0) return false;
+    for (var i = 0; i < fileInputs.length; i++) {
+      if (fileInputs[i].files && fileInputs[i].files.length > 0) return false;
+    }
+    return true;
+  }
+  setInterval(function(){
+    if (canRefresh()) window.location.reload();
+  }, REFRESH_MS);
+})();
 </script>
 {% endblock %}

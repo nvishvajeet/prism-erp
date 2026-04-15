@@ -1384,6 +1384,24 @@ input[type="file"] {
   line-height: 1.28;
 }
 
+.people-link-stack {
+  gap: 0.28rem;
+}
+
+.person-link-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.14rem 0.52rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel, #fff) 74%, var(--accent, #3056d3) 8%);
+  border: 1px solid color-mix(in srgb, var(--line, rgba(0,0,0,0.08)) 75%, var(--accent, #3056d3) 25%);
+  text-decoration: none;
+  white-space: normal;
+  line-height: 1.3;
+}
+
 .queue-table-shell {
   max-height: none;
 }
@@ -1878,6 +1896,8 @@ th {
 
 .detail-grid dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .meta-stack {
@@ -6236,6 +6256,18 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 .user-detail-tiles > .tile-user-meta { grid-column: span 3; }
 .user-detail-tiles > .tile-user-work { grid-column: span 3; }
+.meta-stack-user {
+  gap: 1rem;
+}
+.meta-section-card {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line, rgba(0,0,0,0.08));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel, #fff) 88%, var(--surface-2, #f6f7fa) 12%);
+}
+.meta-section-card h3 {
+  margin: 0 0 0.65rem;
+}
 
 @media (max-width: 1200px) {
   .user-detail-tiles { grid-template-columns: repeat(4, 1fr); }
@@ -7247,6 +7279,24 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   font-weight: 600;
 }
 .inbox-row:hover { background: color-mix(in srgb, var(--accent, #4c6ef5) 5%, var(--panel)); }
+.todo-card-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: start;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.65rem;
+  opacity: 1 !important;
+}
+.todo-row-left,
+.todo-row-right {
+  align-self: start;
+}
+.todo-body-copy {
+  margin: 0.35rem 0 0;
+  color: var(--muted, #5f6b7a);
+  line-height: 1.5;
+}
 .inbox-row-link {
   display: block;
   padding: 0.75rem 1rem;
@@ -9735,6 +9785,12 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 .instruments-table tbody td:first-child,
 .instruments-table tbody td.location-stacked { white-space: normal; overflow: visible; text-overflow: clip; }
 .instruments-table .people-list { max-height: 2.2rem; overflow: hidden; }
+.instruments-table .people-link-stack { max-height: none; overflow: visible; }
+.location-line {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
 .instruments-table .category-header-row td { padding: 0.5rem 0.6rem; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
 /* Larger + button on instruments page */

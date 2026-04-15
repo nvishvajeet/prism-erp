@@ -93,7 +93,7 @@
     <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" data-vis="{{ V }}">
     {% if items %}
     {% for item in items %}
-    <div class="inbox-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
+    <div class="inbox-row todo-card-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
       {# Checkbox / complete toggle #}
       <div class="todo-row-left" data-vis="{{ V }}">
         {% if item.status != 'done' %}
@@ -110,6 +110,9 @@
       {# Body #}
       <div class="inbox-row-body inbox-row-body-main" data-vis="{{ V }}">
         <strong class="{% if item.status == 'done' %}todo-title-done{% endif %}" data-vis="{{ V }}">{{ item.title }}</strong>
+        {% if item.body %}
+        <p class="todo-body-copy" data-vis="{{ V }}">{{ item.body }}</p>
+        {% endif %}
         <span class="hint" data-vis="{{ V }}">
           {% if tab == 'assigned' and item.assigner_name %}from {{ item.assigner_name }}{% endif %}
           {% if tab == 'by_me' and item.assignee_name %}&rarr; {{ item.assignee_name }}{% endif %}

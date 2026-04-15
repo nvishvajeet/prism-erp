@@ -27,11 +27,13 @@
     {% endif %}
   </td>
   <td data-vis="{{ V }}">
-    {% if instrument["operators"] %}
-    <div class="people-list compact-people-list" data-vis="{{ V }}">
-      {% for person in instrument["operators"].split(',') %}
-      {% set name = person.strip() %}
-      {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
+    {% if instrument["operator_profiles"] %}
+    <div class="people-list compact-people-list people-link-stack" data-vis="{{ V }}">
+      {% for person in instrument["operator_profiles"].split('||') %}
+      {% set bits = person.split('::', 1) %}
+      {% if bits|length == 2 and bits[1] %}
+      <a class="text-link person-link-chip" href="{{ url_for('user_profile', user_id=bits[0]) }}" data-vis="{{ V }}">{{ bits[1] }}</a>
+      {% endif %}
       {% endfor %}
     </div>
     {% else %}
@@ -39,11 +41,13 @@
     {% endif %}
   </td>
   <td data-vis="{{ V }}">
-    {% if instrument["faculty_in_charge"] %}
-    <div class="people-list compact-people-list" data-vis="{{ V }}">
-      {% for person in instrument["faculty_in_charge"].split(',') %}
-      {% set name = person.strip() %}
-      {% if name %}<div data-vis="{{ V }}">{{ name }}</div>{% endif %}
+    {% if instrument["faculty_profiles"] %}
+    <div class="people-list compact-people-list people-link-stack" data-vis="{{ V }}">
+      {% for person in instrument["faculty_profiles"].split('||') %}
+      {% set bits = person.split('::', 1) %}
+      {% if bits|length == 2 and bits[1] %}
+      <a class="text-link person-link-chip" href="{{ url_for('user_profile', user_id=bits[0]) }}" data-vis="{{ V }}">{{ bits[1] }}</a>
+      {% endif %}
       {% endfor %}
     </div>
     {% else %}

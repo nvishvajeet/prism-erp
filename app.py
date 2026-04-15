@@ -540,6 +540,8 @@ def portal_role_display_name(role: str | None, portal_slug: str | None = None) -
 
 def lab_profile_role_choices() -> list[tuple[str, str]]:
     return [
+        ("operator", role_display_name("operator")),
+        ("instrument_admin", role_display_name("instrument_admin")),
         ("site_admin", portal_role_display_name("site_admin", "lab")),
         ("super_admin", portal_role_display_name("super_admin", "lab")),
     ]
@@ -547,7 +549,7 @@ def lab_profile_role_choices() -> list[tuple[str, str]]:
 
 def allowed_user_creation_roles() -> set[str]:
     if lab_profile_mode_active():
-        return {"site_admin", "super_admin"}
+        return {"operator", "instrument_admin", "site_admin", "super_admin"}
     return {
         "requester", "operator", "instrument_admin", "faculty_in_charge",
         "professor_approver", "finance_admin", "site_admin", "super_admin",
@@ -6187,8 +6189,8 @@ AI_ACTION_ROUTES_SEED: list[tuple[str, str, str, str, str, str]] = [
      "sample_requests", "Bulk intake drafts need a lab/admin check before they count as operational truth."),
     ("attach_results",  "Results review",   "instrument_admin", "",
      "sample_requests", "AI-attached results need a human to confirm the request record."),
-    ("create_account",  "Account request",  "site_admin",      "finance_admin",
-     "users",           "New accounts need operations + finance/admin metadata review."),
+    ("create_account",  "Account request",  "instrument_admin", "",
+     "users",           "New accounts should land with the responsible lab/admin approver before a login exists."),
     ("create_instrument", "Instrument draft", "site_admin",    "",
      "instruments",     "New instruments must be reviewed before activation."),
     ("create_custom_field", "Instrument field change", "instrument_admin", "",
@@ -12314,7 +12316,19 @@ def instruments():
         SELECT i.*,
                GROUP_CONCAT(DISTINCT a.name) AS admins,
                GROUP_CONCAT(DISTINCT o.name) AS operators,
-               GROUP_CONCAT(DISTINCT f.name) AS faculty_in_charge
+               GROUP_CONCAT(DISTINCT f.name) AS faculty_in_charge,
+               (
+                 SELECT GROUP_CONCAT(uo.id || '::' || uo.name, '||')
+                   FROM instrument_operators io2
+                   JOIN users uo ON uo.id = io2.user_id
+                  WHERE io2.instrument_id = i.id
+               ) AS operator_profiles,
+               (
+                 SELECT GROUP_CONCAT(uf.id || '::' || uf.name, '||')
+                   FROM instrument_faculty_admins ifa2
+                   JOIN users uf ON uf.id = ifa2.user_id
+                  WHERE ifa2.instrument_id = i.id
+               ) AS faculty_profiles
         FROM instruments i
         LEFT JOIN instrument_admins ia ON ia.instrument_id = i.id
         LEFT JOIN users a ON a.id = ia.user_id
@@ -18354,10 +18368,14 @@ def request_calendar_card(request_id: int):
 
 def _admin_users_permissions(user) -> dict[str, bool]:
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_open_user_admin = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
+    lab_mode = lab_profile_mode_active()
+    allowed_open_roles = {"super_admin", "site_admin"}
+    if lab_mode:
+        allowed_open_roles.add("instrument_admin")
+    can_open_user_admin = is_owner(user) or user["role"] in allowed_open_roles
     if not can_open_user_admin:
         abort(403)
-    can_create_users = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
+    can_create_users = is_owner(user) or user["role"] in allowed_open_roles
     can_delete_members = is_owner(user)
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_elevate_members = is_owner(user) or user["role"] == "super_admin"
@@ -22797,6 +22815,49 @@ def _materialise_prospective_action(action: sqlite3.Row, approver_id: int) -> tu
         )
         row = query_one("SELECT last_insert_rowid() AS id")
         return ("expense_receipts", row["id"] if row else None)
+    if target == "users" and action_type == "create_account":
+        account_data = payload.get("parsed_data", {}) if isinstance(payload.get("parsed_data"), dict) else {}
+        name = (account_data.get("name") or payload.get("name") or "").strip()
+        email = (account_data.get("email") or payload.get("email") or "").strip().lower()
+        role = (account_data.get("role") or payload.get("role") or "requester").strip()
+        phone = (account_data.get("phone") or payload.get("phone") or "").strip()
+        if not name or not email:
+            return ("users", None)
+        existing = query_one("SELECT id FROM users WHERE email = ?", (email,))
+        if existing:
+            return ("users", existing["id"])
+        if role not in allowed_user_creation_roles():
+            role = "operator" if lab_profile_mode_active() else "requester"
+        temp_password = generate_temp_password()
+        member_code = generate_member_code(name, role)
+        execute(
+            """
+            INSERT INTO users (
+                name, email, password_hash, role, invited_by, invite_status,
+                active, member_code, must_change_password, phone
+            )
+            VALUES (?, ?, ?, ?, ?, 'active', 1, ?, 1, ?)
+            """,
+            (
+                name,
+                email,
+                generate_password_hash(temp_password, method="pbkdf2:sha256"),
+                role,
+                submitter,
+                member_code,
+                phone,
+            ),
+        )
+        row = query_one("SELECT last_insert_rowid() AS id")
+        if row:
+            log_action(
+                submitter,
+                "user",
+                row["id"],
+                "ai_user_created",
+                {"email": email, "role": role, "member_code": member_code},
+            )
+        return ("users", row["id"] if row else None)
     # Other target tables — not wired yet. Audit-only materialisation: leave
     # the prospective row approved but with no target row id. The approver
     # has to complete the entry manually via the module's own UI. Prevents
@@ -24979,38 +25040,38 @@ def process_all_pending_commands():
 
 
 def prune_command_queue(days: int = 30) -> dict[str, int]:
-    """Transform old finished rows from the action queue into review items.
+    """Archive old terminal rows without removing them from the live queue.
 
-    Only terminal rows are pruned from the *active* queue. Before removal,
-    each row is:
-
-    1. copied into ``command_queue_archive`` for audit/recovery, and
-    2. transformed into an ``ai_prospective_actions`` inbox item so a
-       human can still review what the queue item became.
-
-    We deliberately keep ``awaiting_approval`` rows forever — they
-    already represent drafts that need a human decision and must never
-    silently disappear. ``pending`` / ``processing`` are also kept
-    (they mean work is still queued up).
+    The command queue is now durable operational memory. Old terminal rows
+    are copied into ``command_queue_archive`` and transformed into review
+    items once, but they remain in ``command_queue`` so future crawlers can
+    still mine the full history.
 
     Usage (nightly cron, called from scripts/nightly_dev.sh):
         python -c "import app; print(app.prune_command_queue())"
 
-    Returns a dict with the per-status row counts that were transformed.
+    Returns a dict with the per-status row counts that were archived while
+    retained in the live queue.
     """
     with app.app_context():
         cutoff = (datetime.now() - timedelta(days=max(1, int(days)))).isoformat()
         stats: dict[str, int] = {}
         for status in ("completed", "failed"):
             stale_rows = query_all(
-                "SELECT * FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
+                """
+                SELECT *
+                  FROM command_queue cq
+                 WHERE cq.status = ?
+                   AND COALESCE(cq.processed_at, cq.created_at) < ?
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM command_queue_archive cqa
+                        WHERE cqa.original_queue_id = cq.id
+                   )
+                """,
                 (status, cutoff),
             )
-            row = query_one(
-                "SELECT COUNT(*) AS c FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
-                (status, cutoff),
-            )
-            stats[status] = row["c"] if row else 0
+            stats[status] = len(stale_rows)
             if stats[status]:
                 archive_reason = f"prune>{days}d"
                 transformed = 0
@@ -25038,11 +25099,8 @@ def prune_command_queue(days: int = 30) -> dict[str, int]:
                     """,
                     (now_iso(), archive_reason, status, cutoff),
                 )
-                execute(
-                    "DELETE FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
-                    (status, cutoff),
-                )
                 stats[f"{status}_review_items"] = transformed
+                stats[f"{status}_retained"] = stats[status]
         stats["cutoff"] = cutoff
         return stats
 
@@ -27310,7 +27368,7 @@ def _ai_pane_run_advanced_actions(
         return {"entity_created": "draft_instrument", "summary": summary}
 
     if action == "create_account" and action_data.get("name") and action_data.get("email"):
-        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin")):
+        if not (is_owner(user) or user["role"] in ("super_admin", "site_admin", "instrument_admin")):
             return {"entity_created": "", "summary": "Only admins can create accounts. — Request sent for admin review."}
         email = action_data["email"].strip().lower()
         existing = query_one("SELECT id FROM users WHERE email = ?", (email,))
@@ -27336,7 +27394,7 @@ def _ai_pane_run_advanced_actions(
             "UPDATE command_queue SET status='awaiting_approval', parsed_data=?, result_message=?, processed_at=? WHERE id=?",
             (json.dumps(review_payload), summary, now_iso(), cmd_id),
         )
-        for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'finance_admin') LIMIT 5"):
+        for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'instrument_admin', 'finance_admin') LIMIT 5"):
             notify(
                 adm["id"],
                 "admin",

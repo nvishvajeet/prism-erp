@@ -546,7 +546,9 @@ def main() -> None:
     assert b"Instrument page updated" in response.data
     assert b"Zeiss" in response.data
     assert b"Sigma 500" in response.data
-    assert client.get("/admin/users").status_code == 403
+    # Lab instrument admins can now review onboarding/profile drafts so
+    # uploaded operator lists from the AI/action queue have a human home.
+    assert client.get("/admin/users").status_code == 200
     uploaded_instrument_photo: Path | None = None
     with app.app.app_context():
         instrument = app.get_db().execute("SELECT machine_photo_url FROM instruments WHERE id = 1").fetchone()

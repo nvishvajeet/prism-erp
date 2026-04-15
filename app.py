@@ -11883,6 +11883,43 @@ def notify(user_id: int, category: str, title: str, body: str = "",
     )
 
 
+def _notify_ai_request_routed(
+    *,
+    user_id: int | None,
+    action_type: str,
+    action_label: str = "",
+    approver_id: int | None = None,
+    action_id: int | None = None,
+    summary: str = "",
+    href: str = "",
+) -> None:
+    """Tell a submitter that their AI request has been routed for review.
+
+    This is for the AI ingester / command queue path only. Debug logging is
+    intentionally excluded because it is an internal operational channel.
+    """
+    if not user_id:
+        return
+    label = (action_label or action_type or "request").replace("_", " ").strip().title()
+    approver_text = "the responsible reviewer"
+    if approver_id:
+        approver = query_one("SELECT name FROM users WHERE id = ?", (approver_id,))
+        if approver and row_value(approver, "name", ""):
+            approver_text = approver["name"]
+    body = f"Your {label.lower()} was routed to {approver_text} and is now pending human oversight approval."
+    if summary:
+        body += f" Action taken: {summary}"
+    notify(
+        user_id,
+        "task",
+        f"AI request routed: {label}",
+        body,
+        href,
+        source_type="ai_prospective_action",
+        source_id=action_id,
+    )
+
+
 def unread_system_notification_count(user) -> int:
     """Count of unread system notifications for a user."""
     row = query_one(
@@ -22800,7 +22837,17 @@ def create_prospective_action(
         ),
     )
     row = query_one("SELECT last_insert_rowid() AS id")
-    return row["id"] if row else None
+    new_id = row["id"] if row else None
+    _notify_ai_request_routed(
+        user_id=submitted_by_user_id,
+        action_type=action_type,
+        action_label=row_value(route, "label", action_type),
+        approver_id=approver_id,
+        action_id=new_id,
+        summary=f"{row_value(route, 'label', action_type)} extracted and queued for review.",
+        href=url_for("ai_advisor_log"),
+    )
+    return new_id
 
 
 def _create_prospective_action_from_command_queue(
@@ -22883,7 +22930,17 @@ def _create_prospective_action_from_command_queue(
         ),
     )
     row = query_one("SELECT last_insert_rowid() AS id")
-    return row["id"] if row else None
+    new_id = row["id"] if row else None
+    _notify_ai_request_routed(
+        user_id=row_value(queue_row, "user_id"),
+        action_type=action_type,
+        action_label=row_value(route, "label", action_type),
+        approver_id=approver_id,
+        action_id=new_id,
+        summary=row_value(queue_row, "result_message", "") or f"{row_value(route, 'label', action_type)} moved into review.",
+        href=url_for("quick_entry"),
+    )
+    return new_id
 
 
 @app.route("/ai/ask", methods=["POST"])
@@ -27435,6 +27492,13 @@ def _ai_pane_run_advanced_actions(
             "UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
             (req_id, summary, now_iso(), cmd_id),
         )
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Draft request",
+            summary=summary,
+            href=url_for("request_detail", id=req_id),
+        )
         for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
             notify(op["id"], "task", "AI draft request needs approval",
                    f"{user['name']}: {title} for {requester['name']} on {inst['name']}", url_for("request_detail", id=req_id))
@@ -27483,6 +27547,13 @@ def _ai_pane_run_advanced_actions(
         summary = f"{len(created_ids)} draft request(s) created for {requester['name']} on {inst_label} — awaiting approval"
         execute("UPDATE command_queue SET status='awaiting_approval', result_message=?, processed_at=? WHERE id=?",
                 (summary, now_iso(), cmd_id))
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Bulk sample intake",
+            summary=summary,
+            href=url_for("quick_entry"),
+        )
         for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
             notify(op["id"], "task", f"AI bulk intake: {len(created_ids)} samples",
                    f"{user['name']}: {len(created_ids)} samples for {inst_label}", url_for("schedule"))
@@ -27508,6 +27579,13 @@ def _ai_pane_run_advanced_actions(
         summary = f"Results attached to {req_row['request_no']} — awaiting operator confirmation"
         execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='request', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
                 (req_row["id"], summary, now_iso(), cmd_id))
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Results review",
+            summary=summary,
+            href=url_for("request_detail", id=req_row["id"]),
+        )
         for op in query_all("SELECT id FROM users WHERE role IN ('operator', 'super_admin', 'site_admin') LIMIT 5"):
             notify(op["id"], "task", "AI results need confirmation",
                    f"Results for {req_row['request_no']}: {result_notes[:80]}", url_for("request_detail", id=req_row["id"]))
@@ -27535,6 +27613,13 @@ def _ai_pane_run_advanced_actions(
         summary = f"Draft instrument '{name}' ({code}) created — inactive until you activate it"
         execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
                 (inst_id, summary, now_iso(), cmd_id))
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Instrument draft",
+            summary=summary,
+            href=url_for("instrument_detail", instrument_id=inst_id),
+        )
         log_action(user["id"], "instrument", inst_id, "ai_instrument_drafted", {"name": name, "code": code})
         for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin') LIMIT 5"):
             notify(adm["id"], "admin", "AI drafted new instrument",
@@ -27568,6 +27653,13 @@ def _ai_pane_run_advanced_actions(
         execute(
             "UPDATE command_queue SET status='awaiting_approval', parsed_data=?, result_message=?, processed_at=? WHERE id=?",
             (json.dumps(review_payload), summary, now_iso(), cmd_id),
+        )
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Account request",
+            summary=summary,
+            href=url_for("quick_entry"),
         )
         for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'instrument_admin', 'finance_admin') LIMIT 5"):
             notify(
@@ -27625,6 +27717,13 @@ def _ai_pane_run_advanced_actions(
         summary = f"Suggested workflow for {inst['name']}: {readable} — review and apply from the instrument detail page"
         execute("UPDATE command_queue SET status='awaiting_approval', result_entity_type='instrument', result_entity_id=?, result_message=?, processed_at=? WHERE id=?",
                 (inst["id"], summary, now_iso(), cmd_id))
+        _notify_ai_request_routed(
+            user_id=user["id"],
+            action_type=action,
+            action_label="Workflow suggestion",
+            summary=summary,
+            href=url_for("instrument_detail", instrument_id=inst["id"]),
+        )
         for adm in query_all("SELECT id FROM users WHERE role IN ('super_admin', 'site_admin', 'instrument_admin') LIMIT 5"):
             notify(adm["id"], "admin", f"AI workflow suggestion for {inst['name']}",
                    f"{user['name']}: {readable}",
@@ -27660,6 +27759,13 @@ def _ai_pane_enqueue_admin_review(user, *, action: str, summary: str) -> str:
             f"{summary} — needs your review",
             url_for("quick_entry"),
         )
+    _notify_ai_request_routed(
+        user_id=user["id"],
+        action_type=action,
+        action_label=action.replace("_", " ").title(),
+        summary=summary,
+        href=url_for("quick_entry"),
+    )
     return summary + " — Sent to admin for review"
 
 

@@ -18,7 +18,6 @@
   var MAX_BATCH = 50;
   var IDLE_MS = 30000;   // user considered idle after 30s of no input
   var FLUSH_EVERY_MS = 60000;
-  var HEARTBEAT_EVERY_MS = 60000;
 
   // session id = random UUID for this tab
   var sessionId = (function () {

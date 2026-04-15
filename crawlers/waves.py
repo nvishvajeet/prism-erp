@@ -37,7 +37,7 @@ WAVES: dict[str, Wave] = {
     "sanity": Wave(
         name="sanity",
         description="Pre-push gate — must be green before every push",
-        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "empty_states", "dev_panel_readability", "xhr_contracts", "contrast_audit", "csrf_token_present", "css_variable_defined", "aria_label_present", "duplicate_id_in_template", "agents_md_contract", "parallel_claims", "deploy_smoke"),
+        strategies=("smoke", "visibility", "role_landing", "topbar_badges", "empty_states", "dev_panel_readability", "xhr_contracts", "contrast_audit", "csrf_token_present", "css_variable_defined", "aria_label_present", "duplicate_id_in_template", "hardcoded_url_in_template", "agents_md_contract", "parallel_claims", "deploy_smoke"),
         stop_on_fail=True,
     ),
     "static": Wave(
@@ -197,8 +197,8 @@ WAVES: dict[str, Wave] = {
             "performance", "random_walk",
             # accessibility
             "color_improvement", "aria_label_present",
-            # regression (static endpoint audit + HTML-id uniqueness)
-            "url_for_endpoint_exists", "duplicate_id_in_template",
+            # regression (static endpoint audit + HTML-id uniqueness + URL discipline)
+            "url_for_endpoint_exists", "duplicate_id_in_template", "hardcoded_url_in_template",
             # cleanup
             "cleanup",
         ),

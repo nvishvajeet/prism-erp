@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| Codex | lab-user-website-field | 2026-04-15T08:49:09Z | app.py, templates/user_profile.html, templates/users.html | pending |
 
 ## Stale-claim recovery
 

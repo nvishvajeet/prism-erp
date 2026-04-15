@@ -168,6 +168,8 @@ ERP_PORTALS = {
     },
 }
 
+APP_VERSION = "1.2"
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
@@ -931,6 +933,16 @@ def generate_temp_password() -> str:
     import secrets
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
     return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+def normalize_optional_website(raw_value: str) -> str:
+    """Normalize profile website URLs so user pages can link safely."""
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", value):
+        value = "https://" + value
+    return value
 
 
 def log_action(actor_id: int | None, entity_type: str, entity_id: int, action: str, payload: dict) -> None:
@@ -4300,6 +4312,48 @@ def init_db() -> None:
                 UNIQUE(user_id)
             );
 
+            -- Per-instrument inventory (consumables, parts, supplies).
+            -- min_qty/max_qty optional — low-stock surfaces when
+            -- current_qty < min_qty.
+            CREATE TABLE IF NOT EXISTS instrument_inventory_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                sku TEXT NOT NULL DEFAULT '',
+                unit TEXT NOT NULL DEFAULT 'unit',
+                current_qty REAL NOT NULL DEFAULT 0,
+                min_qty REAL,
+                max_qty REAL,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_inv_instrument ON instrument_inventory_items(instrument_id);
+
+            -- Deadstock — high-value, one-off assets (not consumables).
+            -- Serial-numbered items with optional operational min/max
+            -- thresholds (temperature, voltage, running hours).
+            CREATE TABLE IF NOT EXISTS deadstock_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id INTEGER,
+                name TEXT NOT NULL,
+                asset_tag TEXT NOT NULL DEFAULT '',
+                serial_no TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                purchased_at TEXT NOT NULL DEFAULT '',
+                warranty_until TEXT NOT NULL DEFAULT '',
+                min_threshold REAL,
+                max_threshold REAL,
+                threshold_unit TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_deadstock_instrument ON deadstock_items(instrument_id);
+
             CREATE TABLE IF NOT EXISTS complaints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 complainant_user_id INTEGER NOT NULL,
@@ -4916,6 +4970,25 @@ def init_db() -> None:
         if "office_location" not in user_columns:
             try:
                 cur.execute("ALTER TABLE users ADD COLUMN office_location TEXT NOT NULL DEFAULT ''")
+            except:
+                pass
+        if "website" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN website TEXT NOT NULL DEFAULT ''")
+            except:
+                pass
+
+        # Org-chart pinned coordinates (v1.1). NULL = auto-layout the
+        # node; set = HR admin has dragged the blob to a specific spot
+        # on the /personnel/chart canvas.
+        if "org_node_x" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN org_node_x REAL")
+            except:
+                pass
+        if "org_node_y" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN org_node_y REAL")
             except:
                 pass
 
@@ -7270,9 +7343,9 @@ def seed_data() -> None:
         # Owner (god-view via OWNER_EMAILS env var)
         ("Facility Owner", "owner@catalyst.local",      "super_admin"),
         # Dean — super admin
-        ("Dean Rao",             "dean@catalyst.local",          "super_admin"),
+        ("Dr Bharat Chaudhari",  "dean@catalyst.local",          "super_admin"),
         # Kondhalkar — admin across many instruments
-        ("Prof. Kondhalkar",     "kondhalkar@catalyst.local",    "instrument_admin"),
+        ("Mr Vishal Kondhalkar", "kondhalkar@catalyst.local",    "instrument_admin"),
         # Site admin
         ("Site Admin",           "siteadmin@catalyst.local",         "site_admin"),
         # Operators
@@ -7297,6 +7370,36 @@ def seed_data() -> None:
         db.execute(
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
             (name, email, demo_pw_hash, role),
+        )
+
+    lab_profile_updates = [
+        (
+            "dean@catalyst.local",
+            "Dr Bharat Chaudhari",
+            "MIT-WPU Research · Dean R&D",
+            "https://research.mitwpu.edu.in/researcher/bharat-chaudhari",
+        ),
+        (
+            "kondhalkar@catalyst.local",
+            "Mr Vishal Kondhalkar",
+            "MIT-WPU Research & Development",
+            "",
+        ),
+    ]
+    for email, name, office, website in lab_profile_updates:
+        db.execute(
+            """UPDATE users
+               SET name = ?,
+                   office_location = CASE
+                       WHEN COALESCE(office_location, '') = '' THEN ?
+                       ELSE office_location
+                   END,
+                   website = CASE
+                       WHEN ? = '' THEN COALESCE(website, '')
+                       ELSE ?
+                   END
+             WHERE email = ?""",
+            (name, office, website, website, email),
         )
 
     # (Real-team roster lives above the existing-users guard so it lands
@@ -8036,6 +8139,7 @@ def inject_globals():
 
     return {
         "V": V,
+        "app_version": APP_VERSION,
         "current_user": user,
         "current_user_display_name": current_user_display_name,
         "display_name_for_user": display_name_for,
@@ -15970,7 +16074,8 @@ def processed_history():
 def _user_profile_target(viewer, user_id: int):
     target_user = query_one(
         "SELECT id, name, email, role, invite_status, active, member_code, "
-        "COALESCE(office_location, '') AS office_location "
+        "COALESCE(office_location, '') AS office_location, "
+        "COALESCE(website, '') AS website "
         "FROM users WHERE id = ?",
         (user_id,),
     )
@@ -16271,12 +16376,14 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         new_member_code = request.form.get("member_code", target_user["member_code"] or "").strip() or None
         existing_office = target_user["office_location"] if "office_location" in target_user.keys() else ""
         new_office = (request.form.get("office_location", existing_office) or "").strip()
+        existing_website = target_user["website"] if "website" in target_user.keys() else ""
+        new_website = normalize_optional_website(request.form.get("website", existing_website))
         new_active = 1 if request.form.get("active") == "on" else 0
         if target_user["id"] == viewer["id"]:
             new_active = 1
         execute(
-            "UPDATE users SET name = ?, member_code = ?, office_location = ?, active = ? WHERE id = ?",
-            (new_name, new_member_code, new_office, new_active, user_id),
+            "UPDATE users SET name = ?, member_code = ?, office_location = ?, website = ?, active = ? WHERE id = ?",
+            (new_name, new_member_code, new_office, new_website, new_active, user_id),
         )
         log_action(
             viewer["id"],
@@ -16284,7 +16391,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             user_id,
             "user_metadata_updated",
             {"name": new_name, "member_code": new_member_code,
-             "office_location": new_office, "active": new_active},
+             "office_location": new_office, "website": new_website, "active": new_active},
         )
         flash(f"Profile updated for {new_name}.", "success")
         return redirect(url_for("user_profile", user_id=user_id))
@@ -18280,6 +18387,207 @@ def admin_users():
         lab_profile_mode=list_payload["lab_profile_mode"],
         lab_role_choices=lab_profile_role_choices(),
     )
+
+
+# ── Org-chart (Deco-mesh style) ───────────────────────────────
+# Renders every active user as a "blob" and every reporting_structure
+# row as an "arrow". HR admins (super_admin / site_admin) can rewire
+# edges by POSTing {user_id, manager_id} to /personnel/chart/edge.
+# Blob positions auto-layout by depth tier unless org_node_x/y pinned.
+def _org_chart_layout(users, edges):
+    """Compute (x,y) for each user inside a 1000x700 viewBox.
+
+    Pinned positions win. Otherwise: BFS-depth from the roots,
+    spread horizontally within each tier.
+    """
+    by_id = {u["id"]: dict(u) for u in users}
+    manager_of = {e["user_id"]: e["manager_id"] for e in edges}
+    depth = {uid: 0 for uid in by_id if uid not in manager_of}
+    changed = True
+    while changed:
+        changed = False
+        for uid, mid in manager_of.items():
+            if mid in depth and uid not in depth:
+                depth[uid] = depth[mid] + 1
+                changed = True
+    max_depth = max(depth.values()) if depth else 0
+    for uid in by_id:
+        if uid not in depth:
+            depth[uid] = max_depth + 1
+    tiers: dict[int, list[int]] = {}
+    for uid, d in depth.items():
+        tiers.setdefault(d, []).append(uid)
+    width, height, pad = 1000, 700, 80
+    max_tier = max(tiers) if tiers else 0
+    for tier_d, uids in tiers.items():
+        uids.sort(key=lambda i: by_id[i]["name"] or "")
+        y = pad + (tier_d / max(1, max_tier)) * (height - 2 * pad) if max_tier > 0 else height / 2
+        for i, uid in enumerate(uids):
+            px = by_id[uid].get("org_node_x")
+            py = by_id[uid].get("org_node_y")
+            if px is not None and py is not None:
+                by_id[uid]["x"] = float(px)
+                by_id[uid]["y"] = float(py)
+            else:
+                slot = (i + 1) / (len(uids) + 1)
+                by_id[uid]["x"] = pad + slot * (width - 2 * pad)
+                by_id[uid]["y"] = y
+    return by_id
+
+
+def _can_edit_org_chart(user) -> bool:
+    if not user:
+        return False
+    if is_owner(user):
+        return True
+    return user["role"] in {"super_admin", "site_admin"}
+
+
+@app.route("/personnel/chart", methods=["GET"])
+@login_required
+def personnel_chart():
+    """Deco-mesh style org chart — blobs + arrows, drag to rewire."""
+    user = current_user()
+    users = query_all(
+        """SELECT id, name, email, role, member_code, office_location,
+                  org_node_x, org_node_y
+             FROM users
+            WHERE active = 1 AND invite_status = 'active'
+            ORDER BY name"""
+    )
+    edges = query_all(
+        "SELECT user_id, manager_id FROM reporting_structure"
+    )
+    laid_out = _org_chart_layout(users, edges)
+    edge_pairs = []
+    for e in edges:
+        u = laid_out.get(e["user_id"])
+        m = laid_out.get(e["manager_id"])
+        if u and m:
+            edge_pairs.append({
+                "user_id": e["user_id"],
+                "manager_id": e["manager_id"],
+                "x1": m["x"], "y1": m["y"],
+                "x2": u["x"], "y2": u["y"],
+            })
+    return render_template(
+        "org_chart.html",
+        nodes=sorted(laid_out.values(), key=lambda n: n["name"] or ""),
+        edges=edge_pairs,
+        can_edit=_can_edit_org_chart(user),
+    )
+
+
+@app.route("/personnel/chart/edge", methods=["POST"])
+@login_required
+def personnel_chart_edge():
+    """Rewire one reports-to edge. Body: user_id, manager_id (or 'none')."""
+    user = current_user()
+    if not _can_edit_org_chart(user):
+        abort(403)
+    try:
+        uid = int(request.form.get("user_id") or 0)
+    except (TypeError, ValueError):
+        abort(400)
+    raw_mid = request.form.get("manager_id")
+    mid = None
+    if raw_mid not in (None, "", "none"):
+        try:
+            mid = int(raw_mid)
+        except (TypeError, ValueError):
+            abort(400)
+    if uid <= 0 or (mid is not None and mid == uid):
+        abort(400)
+    if mid is None:
+        execute("DELETE FROM reporting_structure WHERE user_id = ?", (uid,))
+    else:
+        execute(
+            """INSERT INTO reporting_structure (user_id, manager_id) VALUES (?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET manager_id = excluded.manager_id""",
+            (uid, mid),
+        )
+    flash("Reporting line updated.", "success")
+    return redirect(url_for("personnel_chart"))
+
+
+@app.route("/personnel/chart/pin", methods=["POST"])
+@login_required
+def personnel_chart_pin():
+    """Pin a blob at (x,y) on the canvas, or clear the pin."""
+    user = current_user()
+    if not _can_edit_org_chart(user):
+        abort(403)
+    try:
+        uid = int(request.form.get("user_id") or 0)
+    except (TypeError, ValueError):
+        abort(400)
+    raw_x = request.form.get("x")
+    raw_y = request.form.get("y")
+    if raw_x in (None, "") or raw_y in (None, ""):
+        execute("UPDATE users SET org_node_x = NULL, org_node_y = NULL WHERE id = ?", (uid,))
+    else:
+        try:
+            x = float(raw_x); y = float(raw_y)
+        except (TypeError, ValueError):
+            abort(400)
+        execute("UPDATE users SET org_node_x = ?, org_node_y = ? WHERE id = ?", (x, y, uid))
+    return ("", 204)
+
+
+@app.route("/admin/org/setup", methods=["GET", "POST"])
+@login_required
+def admin_org_setup():
+    """HR-admin wizard: bulk-create a fresh org in one pass.
+
+    Roster format (one line per person, comma-delimited):
+        Name, email, role [, manager_email]
+    Idempotent on email. Manager wiring happens in a second pass so
+    forward references work.
+    """
+    user = current_user()
+    if not _can_edit_org_chart(user):
+        abort(403)
+    if request.method == "POST":
+        roster = (request.form.get("roster") or "").strip()
+        default_password = (request.form.get("default_password") or "12345").strip() or "12345"
+        pw_hash = generate_password_hash(default_password, method="pbkdf2:sha256")
+        parsed = []
+        for raw in roster.splitlines():
+            parts = [p.strip() for p in raw.split(",")]
+            if len(parts) < 3 or not parts[0] or not parts[1]:
+                continue
+            parsed.append((parts[0], parts[1], parts[2], parts[3] if len(parts) >= 4 else ""))
+        created = 0
+        linked = 0
+        for name, email, role, _ in parsed:
+            existing = query_one("SELECT id FROM users WHERE lower(email) = ?", (email.lower(),))
+            if existing:
+                continue
+            execute(
+                """INSERT INTO users (name, email, password_hash, role, invite_status, active, must_change_password)
+                   VALUES (?, ?, ?, ?, 'active', 1, 1)""",
+                (name, email, pw_hash, role),
+            )
+            created += 1
+        for name, email, role, manager_email in parsed:
+            if not manager_email:
+                continue
+            u = query_one("SELECT id FROM users WHERE lower(email) = ?", (email.lower(),))
+            m = query_one("SELECT id FROM users WHERE lower(email) = ?", (manager_email.lower(),))
+            if u and m and u["id"] != m["id"]:
+                execute(
+                    """INSERT INTO reporting_structure (user_id, manager_id) VALUES (?, ?)
+                       ON CONFLICT(user_id) DO UPDATE SET manager_id = excluded.manager_id""",
+                    (u["id"], m["id"]),
+                )
+                linked += 1
+        flash(
+            f"Org setup: {created} accounts created, {linked} reporting lines wired. "
+            f"Initial password for new accounts: {default_password}",
+            "success",
+        )
+        return redirect(url_for("personnel_chart"))
+    return render_template("admin_org_setup.html")
 
 
 @app.route("/admin/onboard", methods=["GET", "POST"])
@@ -23668,10 +23976,17 @@ Commands to parse:
 
         response_text, _meta = _ai_generate_text(batch_prompt, max_tokens=4096, lane="parser")
         if not response_text:
+            fallback_message = (
+                "AI parser unavailable right now — kept in the human review queue "
+                "so an admin can still triage it."
+            )
             for pid in ids:
                 execute(
-                    "UPDATE command_queue SET status='failed', result_message='No AI provider configured', processed_at=? WHERE id=?",
-                    (now_iso(), pid),
+                    """UPDATE command_queue
+                       SET status='awaiting_approval', parsed_action='unknown',
+                           result_message=?, processed_at=?
+                       WHERE id=?""",
+                    (fallback_message, now_iso(), pid),
                 )
             return 0
 
@@ -25995,6 +26310,7 @@ def _ai_pane_route_label(action: str) -> str:
 
 
 @app.route("/api/ai/pane", methods=["POST"])
+@app.route("/api/ai/pane/submit", methods=["POST"])
 @login_required
 def ai_pane_submit():
     """AJAX: Real-time AI pane submission. Parses via Claude Haiku,

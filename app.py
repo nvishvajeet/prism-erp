@@ -6138,6 +6138,29 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_prospective_approver ON ai_prospective_actions(assigned_approver_id, status);
             CREATE INDEX IF NOT EXISTS idx_prospective_submitter ON ai_prospective_actions(submitted_by_user_id);
 
+            -- Admin-mediated forgot-password queue. Rows are created by
+            -- the public /forgot-password route and resolved by an admin
+            -- (generates a temp password, sets must_change_password=1,
+            -- shares out-of-band). Spec: docs/ROLE_SURFACES.md §3.
+            -- No self-reset email; every reset is mediated so the admin
+            -- has the chance to flag suspicious requests.
+            CREATE TABLE IF NOT EXISTS password_reset_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username_entered TEXT NOT NULL,
+                matched_user_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'pending',
+                requested_at TEXT NOT NULL,
+                resolved_by_user_id INTEGER,
+                resolved_at TEXT,
+                decision_note TEXT NOT NULL DEFAULT '',
+                requester_ip TEXT NOT NULL DEFAULT '',
+                requester_ua TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (matched_user_id) REFERENCES users(id),
+                FOREIGN KEY (resolved_by_user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_pwreset_status ON password_reset_requests(status, requested_at);
+            CREATE INDEX IF NOT EXISTS idx_pwreset_user   ON password_reset_requests(matched_user_id);
+
             -- Debug issue ledger: every feedback/debug report becomes a
             -- structured issue that stays active until multiple crawlers
             -- independently confirm the fix. Markdown logs remain the raw
@@ -12024,6 +12047,64 @@ def demo_switch_role(role_key: str):
     )
     flash(f"Switched to {target['label']} view.", "success")
     return redirect(url_for("role_manual"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@app.route("/forgot_password", methods=["GET", "POST"])  # underscore alias
+def forgot_password():
+    """Admin-mediated password reset. Spec: docs/ROLE_SURFACES.md §3.
+
+    User types a username/email; we write a password_reset_requests
+    row (status='pending'). Admins see it in the Action Queue + on
+    Admin → Password reset (v2 UI, coming). An admin generates a new
+    temp password and shares it out-of-band — no self-reset email.
+    The flash response is deliberately vague ('if that account exists,
+    an admin has been notified') whether or not the entered id matches
+    a real user, preventing enumeration.
+
+    (Rate limiting scoped for v1.3.2; a flood fills the admin queue
+    but doesn't damage data.)
+    """
+    if request.method == "POST":
+        login_id = (request.form.get("email") or "").strip().lower()
+        if not login_id or len(login_id) > 200:
+            flash("Enter your username or email.", "warning")
+            return redirect(url_for("forgot_password"))
+        matched = query_one(
+            "SELECT id FROM users WHERE lower(email) = ? "
+            "OR (? NOT LIKE '%@%' AND instr(email,'@') > 0 "
+            "    AND lower(substr(email, 1, instr(email, '@') - 1)) = ?) "
+            "LIMIT 1",
+            (login_id, login_id, login_id),
+        )
+        matched_user_id = matched["id"] if matched else None
+        try:
+            execute(
+                """INSERT INTO password_reset_requests
+                    (username_entered, matched_user_id, status, requested_at,
+                     requester_ip, requester_ua)
+                   VALUES (?, ?, 'pending', ?, ?, ?)""",
+                (
+                    login_id,
+                    matched_user_id,
+                    now_iso(),
+                    (request.remote_addr or "")[:64],
+                    (request.headers.get("User-Agent") or "")[:200],
+                ),
+            )
+        except sqlite3.OperationalError:
+            log_action(None, "auth", 0, "password_reset_requested_schema_missing",
+                       {"login": login_id, "note": "password_reset_requests table absent"})
+        log_action(None, "auth", matched_user_id or 0, "password_reset_requested",
+                   {"login": login_id, "matched": bool(matched_user_id),
+                    "ip": request.remote_addr or ""})
+        flash(
+            "If that account exists, an admin has been notified and will "
+            "share a new temporary password with you shortly.",
+            "success",
+        )
+        return redirect(url_for("login"))
+    return render_template("forgot_password.html")
 
 
 @app.route("/login", methods=["GET", "POST"])

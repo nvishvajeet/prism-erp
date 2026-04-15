@@ -53,11 +53,16 @@
       </label>
 
       <div class="file-upload-area" id="uploadArea" data-vis="{{ V }}">
-        <input type="file" name="receipt_file" accept=".jpg,.jpeg,.png,.pdf" data-vis="{{ V }}">
-        <span class="file-upload-label" data-vis="{{ V }}"><strong>Photo of receipt / bill</strong> (optional)<br>JPG, PNG, or PDF</span>
+        {# capture="environment" — on phones this opens the rear camera
+           directly so staff can snap the receipt without picking through
+           the photo library. Browsers that don't support it fall back to
+           the normal file picker. 10MB cap is enforced both client-side
+           (below) and server-side. #}
+        <input type="file" name="receipt_file" accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf" capture="environment" data-vis="{{ V }}">
+        <span class="file-upload-label" data-vis="{{ V }}"><strong>Photo of receipt / bill</strong> (optional)<br>JPG, PNG, or PDF · max 10 MB</span>
       </div>
 
-      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Submit Receipt</button>
+      <button type="submit" id="submitReceiptBtn" class="btn btn-primary" data-vis="{{ V }}">Submit Receipt</button>
     </form>
   </article>
 
@@ -106,10 +111,40 @@
   ['dragenter','dragover'].forEach(function(e){area.addEventListener(e,function(ev){ev.preventDefault();area.classList.add('drag-over');});});
   ['dragleave','drop'].forEach(function(e){area.addEventListener(e,function(){area.classList.remove('drag-over');});});
   var inp=area.querySelector('input[type="file"]');
+  var MAX_BYTES = 10 * 1024 * 1024;
   if(inp) inp.addEventListener('change',function(){
     var lbl=area.querySelector('.file-upload-label');
-    if(lbl && inp.files.length) lbl.innerHTML='<strong>'+inp.files[0].name+'</strong>';
+    if(!inp.files.length) return;
+    var f = inp.files[0];
+    if (f.size > MAX_BYTES) {
+      alert('Receipt file too large (' + (f.size/1024/1024).toFixed(1) + ' MB). Limit is 10 MB — try a smaller photo or compress the PDF.');
+      inp.value = '';
+      return;
+    }
+    if(lbl) lbl.innerHTML='<strong>'+f.name+'</strong> <span style="opacity:0.7;font-size:0.85em;">('+(f.size/1024).toFixed(0)+' KB)</span>';
   });
+
+  // Double-submit guard — finance receipts are recorded on POST; accidental
+  // double-tap on a phone was inserting two rows for the same bill. Disable
+  // the submit button and show a clear "uploading…" state; a full reload
+  // (flash + my_receipts row) is the user's confirmation.
+  var form = area.closest('form');
+  var btn = document.getElementById('submitReceiptBtn');
+  if (form && btn) {
+    form.addEventListener('submit', function(){
+      btn.disabled = true;
+      btn.dataset.originalText = btn.textContent;
+      btn.textContent = 'Uploading…';
+      // Safety net — re-enable after 60s in case the network died so the
+      // user can retry without reloading. (POST-redirect-GET normally lands
+      // a fresh page well before this fires.)
+      setTimeout(function(){
+        if (!btn.disabled) return;
+        btn.disabled = false;
+        btn.textContent = btn.dataset.originalText || 'Submit Receipt';
+      }, 60000);
+    });
+  }
 })();
 </script>
 {% endblock %}

@@ -21390,12 +21390,36 @@ def receipt_submit():
         file_path = ""
         uploaded = request.files.get("receipt_file")
         if uploaded and uploaded.filename:
-            safe_name = secure_filename(uploaded.filename)
-            upload_dir = Path("data") / "receipt_submissions"
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            file_path = f"rcpt_{user['id']}_{ts}_{safe_name}"
-            uploaded.save(str(upload_dir / file_path))
+            # Receipt uploads come from phones in the field — we enforce
+            # both a size cap and an extension allowlist so that (a) a
+            # wild .mov from someone's camera roll doesn't balloon our
+            # disk, and (b) we never persist executable attachments even
+            # if the client bypassed the front-end accept= filter.
+            allowed_exts = {".jpg", ".jpeg", ".png", ".pdf", ".heic", ".webp"}
+            max_bytes = 10 * 1024 * 1024  # 10 MB
+            ext = Path(uploaded.filename).suffix.lower()
+            if ext not in allowed_exts:
+                flash(f"Receipt file type '{ext or 'unknown'}' not allowed. Use JPG, PNG, HEIC, WEBP, or PDF.", "error")
+                return redirect(url_for("receipt_submit"))
+            uploaded.stream.seek(0, os.SEEK_END)
+            size_bytes = uploaded.stream.tell()
+            uploaded.stream.seek(0)
+            if size_bytes > max_bytes:
+                flash(f"Receipt file is {size_bytes/1024/1024:.1f} MB — limit is 10 MB. Compress or crop before submitting.", "error")
+                return redirect(url_for("receipt_submit"))
+            if size_bytes <= 0:
+                # Flask sometimes hands us an empty FileStorage if the
+                # multipart part was truncated (flaky mobile network).
+                # Treat this as "no file" so we don't leave a dangling
+                # empty file on disk referenced by the row.
+                uploaded = None
+            else:
+                safe_name = secure_filename(uploaded.filename) or f"receipt{ext}"
+                upload_dir = Path("data") / "receipt_submissions"
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+                file_path = f"rcpt_{user['id']}_{ts}_{safe_name}"
+                uploaded.save(str(upload_dir / file_path))
         execute("""
             INSERT INTO receipt_submissions
             (submitted_by_user_id, vendor_name, amount, category, description,
@@ -21403,7 +21427,10 @@ def receipt_submit():
             VALUES (?,?,?,?,?,?,?,?,?,?)
         """, (user["id"], vendor_name, amount, category, description,
               receipt_date, file_path, company_id, "pending", now_iso()))
-        flash("Receipt submitted for review.", "success")
+        if file_path:
+            flash(f"Receipt submitted: ₹{amount:,.0f} from {vendor_name} (photo attached).", "success")
+        else:
+            flash(f"Receipt submitted: ₹{amount:,.0f} from {vendor_name} (no photo attached — reviewers will ask you to upload one).", "success")
         return redirect(url_for("receipt_submit"))
     # Show user's recent submissions
     my_receipts = query_all("""

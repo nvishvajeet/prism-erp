@@ -101,5 +101,4 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Codex | shared vendors with separate company books | CLAIMS.md, app.py, templates/vendor_form.html, templates/vendors.html, templates/vendor_detail.html, templates/vendor_payment_form.html | 2026-04-15 13:10 CEST |
 | Codex | bulk user intake + user/vendor approval queues | app.py, templates/users.html, templates/vendors.html, templates/vendor_form.html, templates/vendor_detail.html | 2026-04-14 21:48 CEST |

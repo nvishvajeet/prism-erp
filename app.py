@@ -5507,11 +5507,6 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_po_created ON purchase_orders(created_at);
         """)
         vendor_columns = {col[1] for col in cur.execute("PRAGMA table_info(vendors)").fetchall()}
-        if "company_id" not in vendor_columns:
-            try:
-                cur.execute("ALTER TABLE vendors ADD COLUMN company_id INTEGER")
-            except Exception:
-                pass
         if "approval_status" not in vendor_columns:
             try:
                 cur.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
@@ -5538,7 +5533,6 @@ def init_db() -> None:
             except Exception:
                 pass
         cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id, is_active)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_po_payment_book ON purchase_orders(payment_book, status)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_po_payment_flow ON purchase_orders(payment_flow, status)")
 
@@ -19702,8 +19696,6 @@ def _user_can_approve_vendors(user) -> bool:
 def _ensure_vendor_approval_columns() -> None:
     db = get_db()
     cols = {row["name"] for row in db.execute("PRAGMA table_info(vendors)").fetchall()}
-    if "company_id" not in cols:
-        db.execute("ALTER TABLE vendors ADD COLUMN company_id INTEGER")
     if "approval_status" not in cols:
         db.execute("ALTER TABLE vendors ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'approved'")
     if "approved_by_user_id" not in cols:
@@ -19718,7 +19710,6 @@ def _ensure_vendor_approval_columns() -> None:
     if "payment_flow" not in po_cols:
         db.execute("ALTER TABLE purchase_orders ADD COLUMN payment_flow TEXT NOT NULL DEFAULT 'outgoing'")
     db.execute("CREATE INDEX IF NOT EXISTS idx_vendors_approval_status ON vendors(approval_status, is_active)")
-    db.execute("CREATE INDEX IF NOT EXISTS idx_vendors_company ON vendors(company_id, is_active)")
     db.commit()
 
 
@@ -19811,13 +19802,12 @@ def company_books():
                 request.form.get("book_notes", "").strip(),
             ),
         )
-        flash(f"Added company '{name}'. Its books, vendors, and payment activity can now stay separate.", "success")
+        flash(f"Added company '{name}'. Its books, expenses, salaries, and bank/payment activity can now stay separate.", "success")
         return redirect(url_for("company_books"))
 
     companies = query_all(
         """
         SELECT c.*,
-               COALESCE((SELECT COUNT(*) FROM vendors v WHERE v.company_id = c.id AND v.is_active = 1), 0) AS vendor_count,
                COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.company_id = c.id), 0) AS po_count,
                COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po.company_id = c.id AND po.status IN ('pending_approval','approved')), 0) AS open_po_count,
                COALESCE((SELECT SUM(po.amount) FROM purchase_orders po WHERE po.company_id = c.id AND po.status IN ('paid','receipt_uploaded')), 0) AS paid_total
@@ -19842,30 +19832,23 @@ def vendor_list():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
-    companies = _get_companies()
-    company_filter = request.args.get("company", "").strip()
     vendors = query_all("""
         SELECT v.*, u.name AS created_by_name,
                approver.name AS approved_by_name,
-               c.short_name AS company_short, c.name AS company_name,
                (SELECT COUNT(*) FROM purchase_orders WHERE vendor_id = v.id) AS po_count,
                (SELECT COALESCE(SUM(amount), 0) FROM purchase_orders
                 WHERE vendor_id = v.id AND status IN ('paid','receipt_uploaded')) AS total_paid
           FROM vendors v
           LEFT JOIN users u ON u.id = v.created_by_user_id
           LEFT JOIN users approver ON approver.id = v.approved_by_user_id
-          LEFT JOIN companies c ON c.id = v.company_id
-         WHERE (? = '' OR v.company_id = ?)
          ORDER BY v.is_active DESC, v.name ASC
-    """, (company_filter, int(company_filter) if company_filter.isdigit() else 0))
+    """)
     pending_vendors = [v for v in vendors if row_value(v, "approval_status", "approved") == "pending_approval"]
     return render_template(
         "vendors.html",
         vendors=vendors,
         pending_vendors=pending_vendors,
         can_approve_vendors=_user_can_approve_vendors(user),
-        companies=companies,
-        company_filter=company_filter,
     )
 
 
@@ -19878,8 +19861,6 @@ def vendor_bulk_create():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
-    company_raw = (request.form.get("company_id") or "").strip()
-    company_id = int(company_raw) if company_raw.isdigit() else None
     parsed_rows, errors = _parse_bulk_vendor_rows(request.form.get("bulk_rows", ""))
     if errors:
         flash("Bulk vendor add could not start: " + " | ".join(errors[:5]), "error")
@@ -19899,10 +19880,9 @@ def vendor_bulk_create():
             INSERT INTO vendors (
                 name, contact_person, phone, email, gstin, pan, address, category,
                 bank_account, bank_name, ifsc_code, upi_id, notes, created_by_user_id,
-                company_id,
                 created_at, approval_status, approved_by_user_id, approved_at
             )
-            VALUES (?, ?, ?, ?, '', '', '', ?, '', '', '', '', '', ?, ?, ?, 'pending_approval', NULL, NULL)
+            VALUES (?, ?, ?, ?, '', '', '', ?, '', '', '', '', '', ?, ?, 'pending_approval', NULL, NULL)
             """,
             (
                 row["name"],
@@ -19911,7 +19891,6 @@ def vendor_bulk_create():
                 row["email"],
                 row["category"],
                 user["id"],
-                company_id,
                 now_iso(),
             ),
         )
@@ -19933,7 +19912,6 @@ def vendor_new():
     if not _user_can_manage_payments(user):
         abort(403)
     _ensure_vendor_approval_columns()
-    companies = _get_companies()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         if not name:
@@ -19943,14 +19921,12 @@ def vendor_new():
         approval_status = "approved" if submit_mode == "approved" and _user_can_approve_vendors(user) else "pending_approval"
         approved_at = now_iso() if approval_status == "approved" else None
         approved_by_user_id = user["id"] if approval_status == "approved" else None
-        company_raw = (request.form.get("company_id") or "").strip()
-        company_id = int(company_raw) if company_raw.isdigit() else None
         vid = execute(
             """INSERT INTO vendors (name, contact_person, phone, email, gstin, pan,
                address, category, bank_account, bank_name, ifsc_code, upi_id,
                notes, created_by_user_id, created_at, approval_status,
-               approved_by_user_id, approved_at, company_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               approved_by_user_id, approved_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (name, request.form.get("contact_person", "").strip(),
              request.form.get("phone", "").strip(),
              request.form.get("email", "").strip(),
@@ -19963,13 +19939,13 @@ def vendor_new():
              request.form.get("ifsc_code", "").strip(),
              request.form.get("upi_id", "").strip(),
              request.form.get("notes", "").strip(),
-             user["id"], now_iso(), approval_status, approved_by_user_id, approved_at, company_id))
+             user["id"], now_iso(), approval_status, approved_by_user_id, approved_at))
         log_action(
             user["id"],
             "vendor",
             vid,
             "vendor_created",
-            {"name": name, "approval_status": approval_status, "company_id": company_id},
+            {"name": name, "approval_status": approval_status},
         )
         flash(
             f"Vendor '{name}' {'registered' if approval_status == 'approved' else 'submitted for approval'}.",
@@ -19981,7 +19957,6 @@ def vendor_new():
         vendor=None,
         categories=PO_CATEGORIES,
         can_approve_vendors=_user_can_approve_vendors(user),
-        companies=companies,
     )
 
 
@@ -19996,12 +19971,10 @@ def vendor_detail(vendor_id):
     _ensure_vendor_approval_columns()
     vendor = query_one(
         """
-        SELECT v.*, creator.name AS created_by_name, approver.name AS approved_by_name,
-               c.short_name AS company_short, c.name AS company_name
+        SELECT v.*, creator.name AS created_by_name, approver.name AS approved_by_name
           FROM vendors v
           LEFT JOIN users creator ON creator.id = v.created_by_user_id
           LEFT JOIN users approver ON approver.id = v.approved_by_user_id
-          LEFT JOIN companies c ON c.id = v.company_id
          WHERE v.id = ?
         """,
         (vendor_id,),
@@ -20164,7 +20137,7 @@ def vendor_payment_new():
         abort(403)
     _ensure_vendor_approval_columns()
     vendors = query_all(
-        "SELECT id, name, category, company_id FROM vendors WHERE is_active = 1 AND COALESCE(approval_status, 'approved') = 'approved' ORDER BY name"
+        "SELECT id, name, category FROM vendors WHERE is_active = 1 AND COALESCE(approval_status, 'approved') = 'approved' ORDER BY name"
     )
     companies = _get_companies()
     if request.method == "POST":

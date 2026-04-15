@@ -10,14 +10,6 @@
     <span class="inst-header-code" data-vis="{{ V }}">{{ vendors|length }} registered</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    {% if companies and companies|length > 1 %}
-    <select id="companyFilter" class="btn" style="appearance:auto;padding-right:1.5rem;" data-vis="{{ V }}">
-      <option value="" data-vis="{{ V }}">All Companies</option>
-      {% for co in companies %}
-      <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
-      {% endfor %}
-    </select>
-    {% endif %}
     <a class="btn btn-primary" href="{{ url_for('vendor_new') }}" data-vis="{{ V }}">+ New Vendor</a>
   </div>
 </header>
@@ -42,7 +34,6 @@
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Vendor</th>
           <th data-vis="{{ V }}">Category</th>
-          {% if companies and companies|length > 1 %}<th data-vis="{{ V }}">Company</th>{% endif %}
           <th data-vis="{{ V }}">Contact</th>
           <th data-vis="{{ V }}">Created By</th>
           <th data-vis="{{ V }}">Action</th>
@@ -53,7 +44,6 @@
         <tr data-vis="{{ V }}">
           <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('vendor_detail', vendor_id=v.id) }}" data-vis="{{ V }}">{{ v.name }}</a></td>
           <td data-vis="{{ V }}">{{ v.category|title }}</td>
-          {% if companies and companies|length > 1 %}<td data-vis="{{ V }}">{{ v.company_short or '—' }}</td>{% endif %}
           <td data-vis="{{ V }}">{{ v.contact_person or v.phone or v.email or "—" }}</td>
           <td data-vis="{{ V }}">{{ v.created_by_name or "—" }}</td>
           <td data-vis="{{ V }}">
@@ -87,16 +77,6 @@
     {{ card_heading("", "Bulk Add Vendors", "One line per vendor: Vendor, category, contact, phone, email") }}
     <form method="post" action="{{ url_for('vendor_bulk_create') }}" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if companies %}
-      <label data-vis="{{ V }}">Company Book
-        <select name="company_id" data-vis="{{ V }}">
-          <option value="" data-vis="{{ V }}">Shared / not set</option>
-          {% for co in companies %}
-          <option value="{{ co.id }}"{% if company_filter == co.id|string %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      {% endif %}
       <label style="grid-column:1/-1;" data-vis="{{ V }}">Bulk rows
         <textarea name="bulk_rows" rows="7" placeholder="Mahalaxmi Transport, logistics, Suresh Patil, 9999999999, mahalaxmi@example.com&#10;Shree Diesel Services, fuel, Rohan, 8888888888&#10;Fresh Farms, provisions, Meera, 7777777777, freshfarms@example.com" data-vis="{{ V }}"></textarea>
       </label>
@@ -116,7 +96,6 @@
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Name</th>
           <th data-vis="{{ V }}">Category</th>
-          {% if companies and companies|length > 1 %}<th data-vis="{{ V }}">Company</th>{% endif %}
           <th data-vis="{{ V }}">Contact</th>
           <th data-vis="{{ V }}">Orders</th>
           <th class="col-amount" data-vis="{{ V }}">Paid</th>
@@ -131,7 +110,6 @@
             {% if v.contact_person %}<br><span class="hint" data-vis="{{ V }}">{{ v.contact_person }}</span>{% endif %}
           </td>
           <td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ v.category|title }}</span></td>
-          {% if companies and companies|length > 1 %}<td data-vis="{{ V }}"><span class="badge" data-vis="{{ V }}">{{ v.company_short or '—' }}</span></td>{% endif %}
           <td data-vis="{{ V }}">
             {% if v.phone %}{{ v.phone }}{% endif %}
             {% if v.email %}<br><span class="hint" data-vis="{{ V }}">{{ v.email }}</span>{% endif %}
@@ -169,21 +147,12 @@
   });
   var searchInput=document.getElementById('vendorSearch');
   var rows=document.querySelectorAll('#vendorBody tr');
-  var companyFilter=document.getElementById('companyFilter');
   if(searchInput){
     searchInput.addEventListener('input',function(){
       var q=this.value.toLowerCase();
       rows.forEach(function(r){
         r.style.display=(!q||r.textContent.toLowerCase().indexOf(q)!==-1)?'':'none';
       });
-    });
-  }
-  if(companyFilter){
-    companyFilter.addEventListener('change',function(){
-      var url=new URL(window.location);
-      if(companyFilter.value) url.searchParams.set('company', companyFilter.value);
-      else url.searchParams.delete('company');
-      window.location=url.toString();
     });
   }
 })();

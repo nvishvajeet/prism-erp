@@ -49,11 +49,11 @@
         <select name="vendor_id" required data-vis="{{ V }}">
           <option value="" data-vis="{{ V }}">Select vendor…</option>
           {% for v in vendors %}
-          <option value="{{ v.id }}" data-company="{{ v.company_id or '' }}" data-vis="{{ V }}">{{ v.name }}{% if v.category %} ({{ v.category }}){% endif %}</option>
+          <option value="{{ v.id }}" data-vis="{{ V }}">{{ v.name }}{% if v.category %} ({{ v.category }}){% endif %}</option>
           {% endfor %}
         </select>
         <span class="hint" data-vis="{{ V }}">
-          Don't see the vendor? <a href="{{ url_for('vendor_new') }}" data-vis="{{ V }}">Register new vendor</a>. Vendors should be created inside the right company book.
+          Don't see the vendor? <a href="{{ url_for('vendor_new') }}" data-vis="{{ V }}">Register new vendor</a>. Vendors are shared across the group; books and payments stay company-specific.
         </span>
       </label>
 
@@ -115,28 +115,10 @@
   // Inter-company toggle
   var icToggle=document.getElementById('icToggle');
   var cpLabel=document.getElementById('counterpartyLabel');
-  var companySelect=document.getElementById('companySelect');
-  var vendorSelect=document.querySelector('select[name="vendor_id"]');
   if(icToggle && cpLabel){
     icToggle.addEventListener('change',function(){
       cpLabel.style.display=icToggle.checked?'':'none';
     });
-  }
-  function filterVendorsByCompany(){
-    if(!companySelect || !vendorSelect) return;
-    var selected = companySelect.value;
-    Array.prototype.forEach.call(vendorSelect.options, function(opt){
-      if(!opt.value){ opt.hidden=false; return; }
-      var optCompany = opt.getAttribute('data-company') || '';
-      opt.hidden = !!(selected && optCompany && optCompany !== selected);
-    });
-    if(vendorSelect.selectedOptions.length && vendorSelect.selectedOptions[0].hidden){
-      vendorSelect.value='';
-    }
-  }
-  if(companySelect && vendorSelect){
-    companySelect.addEventListener('change', filterVendorsByCompany);
-    filterVendorsByCompany();
   }
 })();
 </script>

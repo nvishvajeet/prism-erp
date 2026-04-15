@@ -7,7 +7,7 @@
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('vendor_payments_list') }}" data-vis="{{ V }}">← Payments</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">Company Books</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">Separate books, vendors, and payment rails</span>
+    <span class="inst-header-code" data-vis="{{ V }}">Separate books, salaries, expenses, bank statements, and payment rails</span>
   </div>
 </header>
 
@@ -16,13 +16,13 @@
     {{ kpi_grid([
       {"value": companies|length|string, "label": "Active Companies"},
       {"value": (companies|selectattr('is_own_firm')|list|length)|string, "label": "Own Firms", "tone": "green"},
-      {"value": (companies|sum(attribute='vendor_count'))|string, "label": "Scoped Vendors"},
+      {"value": (companies|sum(attribute='po_count'))|string, "label": "Company Payment Rows"},
       {"value": "₹" ~ "{:,.0f}".format(companies|sum(attribute='paid_total')), "label": "Paid Through Books"},
     ]) }}
   </article>
 
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("ADD COMPANY", "Each company keeps its own vendors, books, and payment reporting") }}
+    {{ card_heading("ADD COMPANY", "Each company keeps its own books, expenses, salaries, and payment reporting while vendors stay shared") }}
     <form method="post" class="form-grid" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label data-vis="{{ V }}">Company Name
@@ -87,7 +87,6 @@
             <div class="hint" data-vis="{{ V }}">{{ c.short_name or '—' }}{% if c.is_own_firm %} · own firm{% endif %}</div>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" data-vis="{{ V }}">
-            <span class="badge" data-vis="{{ V }}">{{ c.vendor_count }} vendors</span>
             <span class="badge" data-vis="{{ V }}">{{ c.po_count }} payment rows</span>
             <span class="badge {% if c.open_po_count %}status-queued{% else %}status-active{% endif %}" data-vis="{{ V }}">{{ c.open_po_count }} open</span>
           </div>
@@ -107,7 +106,7 @@
       {% endfor %}
     </div>
     {% else %}
-    {{ empty_state("No companies yet.", "Add your first company to start separating books, vendors, and payment reporting.") }}
+    {{ empty_state("No companies yet.", "Add your first company to start separating books, expenses, salaries, and payment reporting.") }}
     {% endif %}
   </article>
 </section>

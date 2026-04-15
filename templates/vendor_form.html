@@ -40,17 +40,6 @@
         </select>
       </label>
 
-      {% if companies %}
-      <label data-vis="{{ V }}">Company Book
-        <select name="company_id" data-vis="{{ V }}">
-          <option value="" data-vis="{{ V }}">Shared / not set</option>
-          {% for co in companies %}
-          <option value="{{ co.id }}"{% if vendor and vendor.company_id == co.id %} selected{% endif %} data-vis="{{ V }}">{{ co.short_name or co.name }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      {% endif %}
-
       <label data-vis="{{ V }}">GSTIN
         <input type="text" name="gstin" placeholder="22AAAAA0000A1Z5" value="{{ vendor.gstin if vendor else '' }}" data-vis="{{ V }}">
       </label>

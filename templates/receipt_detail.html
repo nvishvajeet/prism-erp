@@ -8,16 +8,8 @@
     <span class="badge status-{{ receipt.status }}" data-vis="{{ V }}">{{ receipt.status|capitalize }}</span>
     {# Stage chip — visible regardless of final status so the audit trail is clear. #}
     {% set stage = receipt.approval_stage or 'submitted' %}
-    <span style="margin-left:0.4rem;padding:0.15rem 0.5rem;border-radius:999px;background:
-      {%- if stage == 'submitted' %}var(--color-amber-bg, #fef3c7);color:#92400e
-      {%- elif stage == 'categorised' %}var(--color-blue-bg, #dbeafe);color:#1e40af
-      {%- elif stage == 'approved' %}var(--color-green-bg, #dcfce7);color:#166534
-      {%- elif stage == 'rejected' %}var(--color-red-bg, #fee2e2);color:#991b1b
-      {%- else %}#eee;color:#333{% endif %};
-      font-size:0.7rem;font-weight:700;letter-spacing:0.04em;"
-      data-vis="{{ V }}">
-      Stage · {{ stage }}
-    </span>
+    {% set stage_slug = stage if stage in ('submitted','categorised','approved','rejected') else 'default' %}
+    <span class="receipt-stage-badge receipt-stage-{{ stage_slug }}" data-vis="{{ V }}">Stage · {{ stage }}</span>
   </div>
 </header>
 

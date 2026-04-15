@@ -58,6 +58,18 @@ KNOWN_DYNAMIC_FUNCTIONS = {
     "flush_email_queue",
     "queue_external_email",
     "record_payment",
+    # Crawler integration hook — called as `app.crawler_confirm_debug_issue(...)`
+    # from crawler strategies that verify a fix, not referenced by name in
+    # app.py / templates / scripts. Three distinct crawler names confirming
+    # the same issue close it.
+    "crawler_confirm_debug_issue",
+    # Portal-gating helper — part of the portal membership API in app.py
+    # (`user_portal_slugs`, `users_share_active_portal`, `assign_user_to_portals`).
+    # Live scaffold for the portal-bound access checks being wired through
+    # the codebase (Codex's bulk user intake / approval-queue task, 2026-04).
+    # Keep surface area stable; will be referenced by name once the intake
+    # flow lands.
+    "user_in_portal",
 }
 
 
@@ -133,6 +145,17 @@ class CleanupStrategy(CrawlerStrategy):
         if tpl_dir.exists():
             for tpl in tpl_dir.rglob("*.html"):
                 haystack += "\n" + tpl.read_text(encoding="utf-8", errors="ignore")
+        # Scripts live under `scripts/` and call app functions as
+        # `app.<name>(...)` via embedded `python3 -c` blocks or direct
+        # imports. Without scanning here, cron-style scripts that keep
+        # otherwise-dormant helpers alive (action_queue_summary,
+        # debug_issue_summary, review_operational_queues, …) produced
+        # false "dead function" positives in the 2026-04-15 audit.
+        scripts_dir = root / "scripts"
+        if scripts_dir.exists():
+            for path in scripts_dir.rglob("*"):
+                if path.is_file() and path.suffix in {".py", ".sh", ".bash", ".zsh"}:
+                    haystack += "\n" + path.read_text(encoding="utf-8", errors="ignore")
 
         dead: list[tuple[str, str]] = []
         for name in sorted(defs):

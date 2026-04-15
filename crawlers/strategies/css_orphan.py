@@ -70,6 +70,10 @@ ALLOWLIST_PREFIXES: tuple[str, ...] = (
     # {default, amber, red}. One class per age bucket.
     "dispatch-age-",
     "dispatch-bottleneck--",
+    # Receipt workflow stage chip — composed in receipt_detail.html as
+    # `receipt-stage-{{ stage_slug }}` with stage_slug ∈
+    # {submitted, categorised, approved, rejected, default}.
+    "receipt-stage-",
     # Dynamic families composed through Jinja / runtime state
     "approval-chain-",
     "finance-grant-",
@@ -127,13 +131,24 @@ class CSSOrphanStrategy(CrawlerStrategy):
         stripped = re.sub(r"/\*.*?\*/", "", css_text, flags=re.DOTALL)
         candidates: set[str] = set(CLASS_RE.findall(stripped))
 
-        # Assemble template + python haystacks
+        # Assemble template + python + static-JS haystacks.
+        #
+        # We scan `static/*.js` too because the consolidation phase
+        # pulled inline <script> blocks out of templates (base.html,
+        # _base_ai_pane.html, user_detail.html) into sibling .js
+        # files. Classes like `.nav-dropdown-open`, `.toast-leave`,
+        # `.pane-page-hidden` are applied only from JS and would
+        # otherwise read as orphans.
         haystack_parts: list[str] = []
         if templates_dir.exists():
             for path in templates_dir.rglob("*.html"):
                 haystack_parts.append(path.read_text(encoding="utf-8", errors="ignore"))
         for py in root.glob("*.py"):
             haystack_parts.append(py.read_text(encoding="utf-8", errors="ignore"))
+        static_dir = root / "static"
+        if static_dir.exists():
+            for js in static_dir.rglob("*.js"):
+                haystack_parts.append(js.read_text(encoding="utf-8", errors="ignore"))
         haystack = "\n".join(haystack_parts)
 
         orphans: list[str] = []

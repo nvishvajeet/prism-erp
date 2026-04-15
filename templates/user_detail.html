@@ -26,15 +26,7 @@
           <dd data-vis="{{ V }}">
             {{ target_user["name"] }}
             {% if target_user["office_location"] %}
-            <span class="office-chip" data-vis="{{ V }}"
-                  style="display:inline-block;margin-left:0.5rem;
-                         padding:0.12rem 0.55rem;border-radius:999px;
-                         font-size:0.72rem;font-weight:600;
-                         background:#eef3f8;color:#264b75;
-                         border:1px solid rgba(38,75,117,0.18);
-                         letter-spacing:0.02em;white-space:nowrap;">
-              📍 {{ target_user["office_location"] }}
-            </span>
+            <span class="office-chip" data-vis="{{ V }}">📍 {{ target_user["office_location"] }}</span>
             {% endif %}
           </dd>
           <dt data-vis="{{ V }}">Username</dt><dd data-vis="{{ V }}">{{ target_user["email"] }}</dd>
@@ -347,53 +339,7 @@
 {% endif %}
 
 {% if can_edit_user and instrument_roster %}
-<script>
-  /* Category quick-grant buttons for the instrument assignment matrix */
-  (function () {
-    var buttons = document.querySelectorAll('.category-grant');
-    if (!buttons.length) return;
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        var category = btn.getAttribute('data-assignment-category');
-        var lane = btn.getAttribute('data-assignment-lane');
-        var rows = document.querySelectorAll('tr.assignment-row[data-assignment-category="' + category + '"]');
-        rows.forEach(function (row) {
-          if (lane === 'clear') {
-            row.querySelectorAll('input[type=checkbox]').forEach(function (cb) { cb.checked = false; });
-          } else {
-            var box = row.querySelector('input[name="' + lane + '"]');
-            if (box) box.checked = true;
-          }
-        });
-      });
-    });
-  })();
-
-  /* W1.3.6 — group quick-grant buttons. Each button carries a JSON
-     list of instrument ids; clicking it checks the given lane for
-     every matching row. */
-  (function () {
-    var groupBtns = document.querySelectorAll('.group-grant');
-    if (!groupBtns.length) return;
-    groupBtns.forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        var lane = btn.getAttribute('data-group-lane');
-        var ids = [];
-        try {
-          ids = JSON.parse(btn.getAttribute('data-group-ids') || '[]');
-        } catch (err) { return; }
-        ids.forEach(function (id) {
-          var box = document.querySelector(
-            'input[name="' + lane + '"][value="' + id + '"]'
-          );
-          if (box) box.checked = true;
-        });
-      });
-    });
-  })();
-</script>
+<script defer src="{{ url_for('static', filename='user_detail_grants.js') }}?v=1"></script>
 {% endif %}
 
 <section class="card" id="submitted-jobs" data-vis="{{ V }}">

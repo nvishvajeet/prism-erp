@@ -52,6 +52,25 @@
   --tone-rejected-border: #efd9d9;
   --tone-rejected-ink: #9a5c5c;
 
+  /* Single-hue accent tones — iOS-style semantic colors. Referenced
+     from AI-draft callouts, receipt status badges, vendor-payment dots,
+     etc. Prior to 2026-04-15 these existed only as inline-fallback
+     literals; hoisting them here gives dark-mode a single override
+     point and lets the philosophy crawler confirm no raw hex leaks
+     into templates. */
+  --tone-amber: #ff9f0a;
+  --tone-red: #ff3b30;
+  --tone-green: #34c759;
+  --tone-blue: #0a84ff;
+  --color-amber-bg: rgba(255, 159, 10, 0.10);
+  --color-amber-ink: #92400e;
+  --color-blue-bg:  #dbeafe;
+  --color-blue-ink: #1e40af;
+  --color-green-bg: #dcfce7;
+  --color-green-ink: #166534;
+  --color-red-bg:   #fee2e2;
+  --color-red-ink:  #991b1b;
+
   /* Spacing Scale */
   --spacing-xs: 0.3rem;
   --spacing-sm: 0.5rem;
@@ -5513,15 +5532,6 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
     var(--panel));
 }
 
-.tile-dash-hero {
-  grid-column: 1 / -1;
-  background:
-    radial-gradient(circle at top right, rgba(193, 57, 43, 0.09), transparent 22rem),
-    linear-gradient(135deg, #171b22 0%, #1f2530 44%, #2a313c 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 28px 70px -36px rgba(18, 22, 29, 0.72);
-}
-
 .tile-dash-brief {
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--panel) 96%, #ffffff),
@@ -5536,52 +5546,15 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 }
 .tile-dash-brief .qa-grid { margin-top: 0.4rem; }
 
-.tile-dash-hero > .section-head h2,
-.tile-dash-hero .section-kicker,
-.tile-dash-hero .dash-hero-copy,
-.tile-dash-hero .qa-label,
-.tile-dash-hero .qa-eyebrow,
-.tile-dash-hero .dash-hero-status {
-  color: #f6f4ef;
-}
-
-.dash-hero-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.28rem 0.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
+/* .dash-hero-copy — used in role_manual.html welcome tile to soften the
+   headline intro on a regular light card. (The former .tile-dash-hero
+   dark-wrapper family was retired 2026-04-15 as dead CSS.) */
 .dash-hero-copy {
   max-width: 46rem;
   margin: 0 0 0.95rem;
   font-size: 1.02rem;
   line-height: 1.55;
-  color: rgba(246, 244, 239, 0.78);
-}
-
-.dash-hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-bottom: 1rem;
-}
-
-.dash-hero-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.32rem 0.72rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(246, 244, 239, 0.82);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
+  color: var(--ink-muted, #555);
 }
 
 .dash-section-note {
@@ -7092,9 +7065,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 :root[data-theme="dark"] .tile-dash-operational {
   background: linear-gradient(180deg, rgba(33, 39, 48, 0.98), rgba(24, 29, 37, 0.98));
 }
-:root[data-theme="dark"] .dash-hero-copy,
-:root[data-theme="dark"] .dash-hero-chip,
-:root[data-theme="dark"] .dash-hero-status {
+:root[data-theme="dark"] .dash-hero-copy {
   color: rgba(246, 244, 239, 0.86);
 }
 :root[data-theme="dark"] .quick-intake-card {
@@ -10230,4 +10201,73 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .dispatch-bottleneck--default {
   border-left: 3px solid transparent;
   padding-left: 0.5rem;
+}
+
+/* ---------- AI-draft callout + inline reject button ---------------
+   Extracted from request_detail.html's inline styles on 2026-04-15 so
+   the template no longer carries raw color literals. The callout frames
+   AI drafts / results awaiting human approval; the inline reject button
+   is the secondary destructive action beside the primary approve. */
+.ai-draft-callout {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--color-amber-bg);
+  border: 1px solid var(--tone-amber);
+}
+.btn-reject-inline {
+  background: var(--tone-red);
+  color: var(--bg);
+}
+
+/* ---------- Receipt status badge — stage-driven color swatch -------
+   Stage badge for the receipt review pipeline. Previously assembled as
+   inline style with per-stage hex colors; consolidated on 2026-04-15
+   behind the `--color-*-bg` / `--color-*-ink` tokens so dark mode can
+   tune them in one place and no raw color lands in the template. */
+.receipt-stage-badge {
+  display: inline-block;
+  padding: 0.18rem 0.62rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.receipt-stage-submitted {
+  background: var(--color-amber-bg);
+  color: var(--color-amber-ink);
+}
+.receipt-stage-categorised {
+  background: var(--color-blue-bg);
+  color: var(--color-blue-ink);
+}
+.receipt-stage-approved {
+  background: var(--color-green-bg);
+  color: var(--color-green-ink);
+}
+.receipt-stage-rejected {
+  background: var(--color-red-bg);
+  color: var(--color-red-ink);
+}
+.receipt-stage-default {
+  background: var(--line);
+  color: var(--muted);
+}
+
+/* ---------- Office location chip ---------------------------------
+   Small 📍 pill shown beside a user's name when their office is on
+   record. Pulled out of user_detail.html inline styles on 2026-04-15
+   so templates stay free of raw color hex. */
+.office-chip {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--tone-open-bg);
+  color: var(--tone-open-ink);
+  border: 1px solid var(--tone-open-border);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }

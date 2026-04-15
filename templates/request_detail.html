@@ -77,7 +77,7 @@
       <p class="tile-request-header-note hint" data-vis="{{ V }}">{{ status_summary }}</p>
       {% endif %}
       {% if sample_request["status"] in ("draft_ai", "results_pending_approval") and can_manage %}
-      <div style="margin-top:0.75rem;padding:0.75rem;border-radius:8px;background:var(--color-amber-bg, rgba(255,159,10,0.1));border:1px solid var(--tone-amber, #FF9F0A);" data-vis="{{ V }}">
+      <div class="ai-draft-callout" data-vis="{{ V }}">
         <p style="font-weight:700;margin:0 0 0.5rem;" data-vis="{{ V }}">
           {% if sample_request["status"] == "draft_ai" %}AI Draft — Needs Your Approval{% else %}AI Results — Confirm Completion{% endif %}
         </p>
@@ -87,7 +87,7 @@
         <form method="post" action="{{ url_for('ai_draft_approve', request_id=sample_request['id']) }}" style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" name="verdict" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
-          <button type="submit" name="verdict" value="reject" class="btn" style="background:var(--tone-red);color:var(--bg, #fff);" data-vis="{{ V }}">Reject</button>
+          <button type="submit" name="verdict" value="reject" class="btn btn-reject-inline" data-vis="{{ V }}">Reject</button>
         </form>
       </div>
       {% endif %}
@@ -349,73 +349,8 @@
   </article>
   {% endif %}
 
-  {# ── TILE 6: events — activity feed + reply ── #}
-  <article class="card tile tile-request-events" data-vis="{{ V }}">
-    {{ card_heading("", "Activity") }}
-    {% if card_policy.fields.events %}
-    {% call paginated_pane('reqEvents', page_size=10, max_height='none') %}
-    <div class="activity-feed activity-feed-threaded" id="reqEventsBody" data-vis="{{ V }}">
-      {% for entry in timeline_entries %}
-      {% set _side = 'right' if (entry.kind == 'note' and entry.side == 'right') else ('left' if entry.kind == 'note' else 'center') %}
-      {% set _entry_kind = entry.kind if entry.kind else 'note' %}
-      <div class="activity-entry activity-entry-{{ _entry_kind }} side-{{ _side }}" data-pane-item data-vis="{{ V }}">
-        <div class="activity-entry-body" data-vis="{{ V }}">
-          <div class="activity-entry-meta" data-vis="{{ V }}">
-            <strong data-vis="{{ V }}">{{ entry["title"] }}</strong>
-            <span class="activity-entry-time" data-vis="{{ V }}">{{ format_dt(entry["at"]) }}</span>
-          </div>
-          {% if entry["actor"] %}
-          <p class="hint" data-vis="{{ V }}">{{ entry["actor"] }}</p>
-          {% endif %}
-          {% if entry["detail"] %}
-          <div class="activity-entry-text" data-vis="{{ V }}">{{ entry["detail"] }}</div>
-          {% endif %}
-          {% if entry["files"] %}
-          <div class="activity-entry-files" data-vis="{{ V }}">
-            {% for attachment in entry["files"] %}
-            <a class="text-link" href="{{ url_for('download_attachment', attachment_id=attachment['id']) }}" data-vis="{{ V }}">
-              {% set filename_lower = attachment["original_filename"]|lower %}
-              <span class="event-attachment-tag" data-vis="{{ V }}">{% if filename_lower.endswith('.pdf') %}PDF{% else %}FILE{% endif %}</span>
-              {{ attachment["original_filename"] }}
-            </a>
-            {% set ext = attachment.original_filename.rsplit('.', 1)[-1]|lower %}
-            {% if ext in ('jpg','jpeg','png','gif','webp') %}
-            <img src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-preview" alt="{{ attachment['original_filename'] }}" loading="lazy">
-            {% elif ext == 'pdf' %}
-            <iframe src="{{ url_for('view_attachment', attachment_id=attachment['id']) }}" class="attachment-pdf-preview" title="{{ attachment['original_filename'] }}"></iframe>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% endif %}
-        </div>
-      </div>
-      {% else %}
-      {{ empty_state('No activity yet.') }}
-      {% endfor %}
-    </div>
-    {% endcall %}
-    {% else %}
-    <p class="hint" data-vis="{{ V }}">Restricted.</p>
-    {% endif %}
-    {% if card_policy.fields.conversation and card_policy.actions.reply %}
-    {% set _note_opts = [('', 'Comment')] %}
-    {% if conversation_note_types %}
-      {% for nk, nl, _nh in conversation_note_types %}
-        {% if _note_opts.append((nk, nl)) %}{% endif %}
-      {% endfor %}
-    {% endif %}
-    <div class="top-gap" data-vis="{{ V }}">
-      {{ input_dialog(
-          form_action=url_for('request_detail', request_id=sample_request['id']),
-          action_name='post_message',
-          placeholder='Write a reply or update',
-          submit_label='Add Comment',
-          note_types=_note_opts,
-          allow_file=True
-      ) }}
-    </div>
-    {% endif %}
-  </article>
+  {# Activity tile extracted to keep parent under 400-line budget #}
+  {% include "_request_detail_events.html" %}
 
 
 </section>

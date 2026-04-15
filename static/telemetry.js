@@ -78,24 +78,72 @@
     send();
   }
 
-  // Click capture — only events on elements with data-action
+  // Normalize human text into a stable, short slug suitable for use as
+  // an action name. "Submit Receipt" → "submit-receipt", "+ New PO" →
+  // "new-po", truncated to 64 chars. Used by the fallback inference
+  // below so explicit data-action tags remain authoritative but nothing
+  // is missed.
+  function slugify(text) {
+    if (!text) return '';
+    return String(text)
+      .toLowerCase()
+      .replace(/[\u2190-\u21ff\u2600-\u27bf]/g, '')  // arrows + misc-symbol glyphs
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 64);
+  }
+
+  // Infer a sensible action name from a clicked element when no
+  // explicit data-action attribute is present. Returns '' if the
+  // element is not action-like (random <div> clicks are ignored).
+  function inferAction(el) {
+    if (!el || !el.tagName) return '';
+    var tag = el.tagName.toLowerCase();
+    var role = el.getAttribute ? el.getAttribute('role') : '';
+    var isAction = (
+      tag === 'button' || tag === 'a' ||
+      (tag === 'input' && (el.type === 'submit' || el.type === 'button')) ||
+      role === 'button' || role === 'link' ||
+      (el.classList && (el.classList.contains('btn') || el.classList.contains('tile-action')))
+    );
+    if (!isAction) return '';
+    // Prefer aria-label, then name/value, then visible text.
+    var text = el.getAttribute('aria-label')
+            || el.name || el.value
+            || (el.innerText || el.textContent || '').trim();
+    var slug = slugify(text);
+    if (!slug) return '';
+    return 'auto:' + slug;
+  }
+
+  // Click capture — explicit data-action wins on the nearest ancestor
+  // that has one; otherwise we infer from the nearest action-like
+  // ancestor.
   document.addEventListener('click', function (ev) {
     var el = ev.target;
+    var action = '';
+    var firstInferred = '';
     var steps = 0;
     while (el && steps < 6) {
       if (el.dataset && el.dataset.action) {
-        var action = String(el.dataset.action).slice(0, 64);
-        clickQueue.push({
-          path: path,
-          action: action,
-          clicked_at: new Date().toISOString()
-        });
-        if (clickQueue.length >= MAX_BATCH) send();
-        return;
+        action = String(el.dataset.action).slice(0, 64);
+        break;
+      }
+      if (!firstInferred) {
+        var guessed = inferAction(el);
+        if (guessed) firstInferred = guessed;
       }
       el = el.parentElement;
       steps += 1;
     }
+    if (!action) action = firstInferred;
+    if (!action) return;
+    clickQueue.push({
+      path: path,
+      action: action,
+      clicked_at: new Date().toISOString()
+    });
+    if (clickQueue.length >= MAX_BATCH) send();
   }, { capture: true, passive: true });
 
   // Periodic flush so long-running pages don't lose data

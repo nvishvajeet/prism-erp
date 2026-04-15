@@ -29,6 +29,7 @@ from openpyxl import Workbook
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Google OAuth (optional — only active when GOOGLE_CLIENT_ID is set)
 try:
@@ -302,6 +303,13 @@ ERP_PORTALS = {
 APP_VERSION = "1.0.0"
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_prefix=0,
+)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
 app.config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "25"))

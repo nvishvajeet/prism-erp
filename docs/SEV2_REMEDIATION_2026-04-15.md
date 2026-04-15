@@ -24,3 +24,15 @@ for Operation TroisAgents. The launchd gap is tracked in the conductor lane.
 SEV2 #4 is fixed by refusing to run an ERP-aware crawler against a database
 path outside the selected ERP root. Silent wrong-ERP reads are treated as a
 loud abort now.
+
+## Lane 2 Follow-Ups
+
+- Proxy correctness behind the Cloudflare tunnel is now handled with
+  `ProxyFix` in `app.py`, so forwarded HTTPS requests resolve as HTTPS inside
+  Flask and stop tripping the branded-host login flow. Production and demo
+  hosts behind the tunnel must set `LAB_SCHEDULER_COOKIE_SECURE=1`.
+- `tests/test_proxy_csrf.py` covers login POSTs under
+  `X-Forwarded-Proto: https` and asserts the forwarded scheme is visible inside
+  the app.
+- `scripts/ship_readiness_check.py` provides a pre-deploy gate for schema,
+  login-rate-limit, security-header, proxy, and smoke-test readiness.

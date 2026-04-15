@@ -22,7 +22,7 @@ from pathlib import Path
 from tempfile import gettempdir
 
 from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from openpyxl import Workbook
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -799,6 +799,16 @@ def handle_large_upload(_exc):
     flash("Upload too large. Maximum file size is 100 MB.", "error")
     referrer = request.referrer or url_for("index")
     return redirect(referrer)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(_exc):
+    flash(
+        "Your page token expired or changed while the page was open. "
+        "Please retry the action from the refreshed page.",
+        "error",
+    )
+    return redirect(request.referrer or request.url or url_for("index"))
 
 
 @app.errorhandler(403)
@@ -6039,7 +6049,8 @@ def init_db() -> None:
         _seed_software_catalog()
     except Exception:
         pass
-    # v3.0 — seed ERP portals and assign all users to both portals by default.
+    # v3.0 — seed ERP portals. Existing users default into lab only; HQ
+    # access is granted explicitly by later team/admin assignment.
     _seed_erp_portals()
     # v3.1 — seed AI action-queue routing table.
     _seed_ai_action_routes()
@@ -6053,8 +6064,13 @@ def init_db() -> None:
 
 
 def _seed_erp_portals() -> None:
-    """Seed the two ERP portals and assign all existing users to both.
-    Idempotent — skips if portals already exist."""
+    """Seed the two ERP portals with conservative defaults.
+
+    Existing users default into the lab portal only, except the seeded
+    local owner account which keeps both portals for cross-ERP admin and
+    smoke-test coverage. HQ access for everyone else is granted explicitly
+    by later team seeding / admin actions.
+    """
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
     try:
@@ -6068,14 +6084,25 @@ def _seed_erp_portals() -> None:
                  json.dumps(cfg["modules"]), 0 if slug == "lab" else 1, now_iso()),
             )
         portals = db.execute("SELECT id, slug FROM erp_portals").fetchall()
-        users = db.execute("SELECT id FROM users").fetchall()
-        for u in users:
-            for p in portals:
+        portal_id_by_slug = {row["slug"]: row["id"] for row in portals}
+        lab_portal = db.execute(
+            "SELECT id, slug FROM erp_portals WHERE slug = 'lab' LIMIT 1"
+        ).fetchone()
+        users = db.execute("SELECT id, email FROM users").fetchall()
+        if lab_portal:
+            for u in users:
                 try:
                     db.execute(
                         "INSERT OR IGNORE INTO erp_user_portals (user_id, portal_id, portal_role, is_default, created_at) VALUES (?,?,?,?,?)",
-                        (u[0], p[0], "member", 1 if p[1] == "lab" else 0, now_iso()),
+                        (u[0], lab_portal[0], "member", 1, now_iso()),
                     )
+                    if (u["email"] or "").strip().lower() == "owner@catalyst.local":
+                        hq_portal_id = portal_id_by_slug.get("hq")
+                        if hq_portal_id:
+                            db.execute(
+                                "INSERT OR IGNORE INTO erp_user_portals (user_id, portal_id, portal_role, is_default, created_at) VALUES (?,?,?,?,?)",
+                                (u[0], hq_portal_id, "owner", 0, now_iso()),
+                            )
                 except Exception:
                     pass
         db.commit()

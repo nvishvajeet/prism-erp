@@ -1,0 +1,98 @@
+/* ui_audit_2026_04_15.css — Operation Trois Agents, Lane 2.
+ *
+ * Defensive overrides for form / tile / pane layout issues found
+ * during the T+0 → T+55 UI audit on 2026-04-15.
+ *
+ * Scope: CSS-only overrides. No existing rule in static/styles.css
+ * is modified. Every rule in this file is additive and targeted —
+ * if base-layer CSS is later fixed, these overrides stay harmless.
+ *
+ * Load order: AFTER static/styles.css in base.html. See the handoff
+ * section in docs/UI_AUDIT_2026_04_15.md for the one-line <link>
+ * Claude 0 applies at T+55 merge.
+ *
+ * Each rule block cites the finding id from UI_AUDIT_2026_04_15.md.
+ */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-01  insights-tiles grid is missing its tile override
+ *
+ * `.tile` defaults to `max-height: 600px; overflow: hidden`
+ * (styles.css:3781 + 3824). Every other `-tiles` grid container
+ * (inst-tiles, finance-tiles, request-tiles, new-request-tiles,
+ * admin-notices-tiles, sitemap-tiles, instruments-tiles, etc.)
+ * either uncaps or explicitly delegates child-scroll. The
+ * `insights-tiles` container — used by insights_list /
+ * insights_detail / insights_form_control / insights_new — has
+ * NO such rule, so any insights tile with content taller than
+ * 600px gets silently clipped by overflow:hidden.
+ *
+ * Fix: treat insights-tiles the same as inst-tiles (entity
+ * detail pattern: content first, no forced scroll).
+ * ───────────────────────────────────────────────────────────── */
+.insights-tiles > .tile {
+  max-height: none;
+  overflow: visible;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-02  View-pane data-entry overflow fallback
+ *
+ * Defensive: for any tile that renders a form (.form-grid,
+ * .action-form) inside a container that DOES cap height, let
+ * the form scroll internally instead of getting clipped. No
+ * current template is known to hit this path — safety net for
+ * future tiles that might land inside .stats-tiles / .inbox-tiles
+ * / .dashboard-tiles (which cap to 600px or 320px).
+ *
+ * Form children also need min-height:0 to actually shrink inside
+ * a flex-column parent (styles.css:3782 sets flex-direction:column
+ * on .tile).
+ * ───────────────────────────────────────────────────────────── */
+.tile .form-grid,
+.tile .action-form {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-03  Long-text value wrapping on metadata / data rows
+ *
+ * Long single-word strings (URLs, hashes, long vendor names
+ * without spaces) can push a tile past its grid column, which
+ * on dashboard/stats tiles gets clipped. Force break-word on
+ * the common metadata-grid value cell.
+ * ───────────────────────────────────────────────────────────── */
+.metadata-grid .meta-value,
+.metadata-grid dd {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-04  Form action row — mobile wrap
+ *
+ * Forms end with an action row (Save / Cancel buttons). Several
+ * templates mark it up as a flex row without explicit wrap, so
+ * on <375px viewports the Cancel button ends up off-screen.
+ * This adds wrap without touching templates.
+ * ───────────────────────────────────────────────────────────── */
+.form-grid .form-actions,
+.action-form .form-actions,
+.form-grid [class*="actions-row"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Intentionally-empty sections (documented decisions, no rule):
+ *
+ * F-NF1  portfolio.html #todayBuyForm — JS-submit via row-checkbox
+ *        change; no visible Save button by design.
+ *
+ * F-NF2  All 155 other POST forms have a reachable submit button
+ *        and use the label-wrap pattern for field labels (checked:
+ *        vendor_form.html, new_request.html, finance_grant_detail
+ *        .html). No template-level changes required.
+ * ───────────────────────────────────────────────────────────── */

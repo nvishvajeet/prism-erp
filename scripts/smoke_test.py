@@ -613,6 +613,17 @@ def main() -> None:
 
     # Action Queue smoke — admin roles see the nav link and page, non-admin roles don't.
     # Spec: docs/ROLE_SURFACES.md §4 + universal-queue principle.
+    # We insert a pending_approval user first so the queue has a real row to
+    # render — this guards against silent-skip bugs like the one caught in
+    # 2026-04-15 where `SELECT … created_at` on users (which has no such column)
+    # raised OperationalError and made the queue falsely empty.
+    with app.app.app_context():
+        app.get_db().execute(
+            "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status, active) "
+            "VALUES ('Smoke Pending', 'smoke-pending@test.local', '', 'operator', 'pending_approval', 0)"
+        )
+        app.get_db().commit()
+
     client.get("/logout")
     login(client, "kondhalkar@catalyst.local")
     home = client.get("/")
@@ -620,6 +631,11 @@ def main() -> None:
     queue = client.get("/queue")
     assert queue.status_code == 200, f"/queue expected 200 for instrument_admin, got {queue.status_code}"
     assert b"Action queue" in queue.data, "/queue body missing 'Action queue' heading"
+    assert b"Account approval" in queue.data, (
+        "/queue body missing 'Account approval' pill — pending_approval row didn't render. "
+        "Check _action_queue_items query shape; last regression was SELECT … created_at on users."
+    )
+    assert b"Smoke Pending" in queue.data, "/queue body missing the injected 'Smoke Pending' row"
 
     client.get("/logout")
     login(client, "anika@catalyst.local")
@@ -628,6 +644,11 @@ def main() -> None:
     # /queue still returns 200 with empty-state — intentionally friendlier than 403
     queue = client.get("/queue")
     assert queue.status_code == 200, f"/queue expected 200 (empty state) for operator, got {queue.status_code}"
+
+    # Clean up the injected row so subsequent test runs aren't affected
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM users WHERE email = 'smoke-pending@test.local'")
+        app.get_db().commit()
 
     print("smoke test passed")
 

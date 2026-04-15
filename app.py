@@ -9790,9 +9790,12 @@ def _action_queue_items(user: sqlite3.Row) -> list[dict]:
     items: list[dict] = []
 
     # 1. Manual-created accounts in pending_approval
+    # Note: the users table doesn't carry a created_at column — rows are
+    # ordered by id (which is auto-increment). If you want age, query
+    # audit_logs(entity_type='user', action='user_created_pending_approval').
     try:
         for r in query_all(
-            """SELECT id, name, email, role, created_at, invited_by
+            """SELECT id, name, email, role, invited_by
                  FROM users WHERE invite_status = 'pending_approval'
                 ORDER BY id DESC LIMIT 100""",
         ):
@@ -9805,7 +9808,7 @@ def _action_queue_items(user: sqlite3.Row) -> list[dict]:
                 "kind_label": "Account approval",
                 "subject": f"New {r['role']}: {r['name']} ({r['email']})",
                 "submitted_by": inviter_name or "—",
-                "created_at": row_value(r, "created_at", "") or "",
+                "created_at": "",  # not available on users; keep key for template uniformity
                 "action_url": url_for("admin_users") + f"#user-{r['id']}",
                 "action_label": "Open in Admin → Users",
             })

@@ -1058,6 +1058,42 @@ def generate_member_code(name: str, role: str) -> str:
     return f"{name_prefix}{role_abbr}{seq_num:03d}"
 
 
+def _generate_attendance_numbers_if_needed(cur) -> None:
+    """Populate attendance_number on users who don't have one, in
+    id-ascending order starting from max(attendance_number)+1.
+
+    Added 2026-04-15 per Nikita's ask: "instead of letters it is
+    better people have numbers so they can just tell their number
+    and mark their attendance quickly." Sequential integers (1, 2,
+    3, …) are easier to call out verbally than 3-letter codes.
+    """
+    try:
+        users_without = cur.execute(
+            "SELECT id FROM users WHERE attendance_number IS NULL ORDER BY id"
+        ).fetchall()
+    except Exception:
+        return  # Column might not exist yet
+    if not users_without:
+        return
+    try:
+        row = cur.execute(
+            "SELECT COALESCE(MAX(attendance_number), 0) AS mx FROM users"
+        ).fetchone()
+        next_n = (row[0] if isinstance(row, (tuple, list)) else row["mx"]) + 1
+    except Exception:
+        next_n = 1
+    for u in users_without:
+        uid = u[0] if isinstance(u, (tuple, list)) else u["id"]
+        try:
+            cur.execute(
+                "UPDATE users SET attendance_number = ? WHERE id = ?",
+                (next_n, uid),
+            )
+        except Exception:
+            pass
+        next_n += 1
+
+
 def _generate_short_codes_if_needed(cur) -> None:
     """Auto-assign 3-letter uppercase short codes to users who lack one.
     Uses first 3 letters of name; appends a digit on collision.
@@ -5246,8 +5282,21 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
             except:
                 pass
+
+        # 2026-04-15 · Nikita's attendance-by-number ask. Sequential
+        # integer per user for fast spoken check-in ("I'm #14"). Keep
+        # the 3-letter short_code untouched for existing UIs; this is
+        # a parallel column. First call populates the column in
+        # id-ascending order; new users inherited the next integer in
+        # the create_user flow (see users.py).
+        if "attendance_number" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN attendance_number INTEGER DEFAULT NULL")
+            except:
+                pass
         # Auto-generate short_codes for users who don't have one
         _generate_short_codes_if_needed(cur)
+        _generate_attendance_numbers_if_needed(cur)
 
         # W1.3.8 — Password hygiene. Admin-created / admin-reset
         # users must change their password on first login. Flag
@@ -18770,11 +18819,23 @@ def attendance_api_quick_mark():
         status = "present"
     if not code or len(code) < 2:
         return jsonify({"ok": False, "error": "Code too short"})
-    # Find by short_code, member_code, or name prefix
-    target = query_one(
-        "SELECT id, name, short_code FROM users WHERE UPPER(short_code) = ? AND active = 1",
-        (code,),
-    )
+    # Find by attendance_number (Nikita's numeric quick-mark —
+    # 2026-04-15), then short_code (3-letter), then member_code,
+    # then name prefix.
+    target = None
+    if code.isdigit():
+        try:
+            target = query_one(
+                "SELECT id, name, short_code FROM users WHERE attendance_number = ? AND active = 1",
+                (int(code),),
+            )
+        except Exception:
+            target = None
+    if not target:
+        target = query_one(
+            "SELECT id, name, short_code FROM users WHERE UPPER(short_code) = ? AND active = 1",
+            (code,),
+        )
     if not target:
         # Fallback: try member_code
         target = query_one(

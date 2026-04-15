@@ -91,6 +91,9 @@
 
   {% include "_dashboard_ai_advisor.html" %}
 
+  {# ── TILE: AI RIG SCHEDULE — live agent rig status + weekly burst plan ── #}
+  {% include "_rig_schedule_tile.html" %}
+
   {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
   {% if dash_action_items %}
   <article class="card tile tile-full-width tile-dash-action-items tile-dash-operational" data-vis="{{ V }}">

@@ -1,0 +1,203 @@
+{# ─────────────────────────────────────────────────────────────────────
+   AI Rig Schedule tile — home page.
+   v1: renders the hardcoded `rig_schedule` dict from the home route.
+   Wiring to a live agent-status source is a later task.
+   Style: Apple tile primitive (Tile + Badge), consistent with the
+   rest of dashboard.html. Uses `card_heading` from _page_macros.html
+   (already imported by dashboard.html at the top of the file).
+   ──────────────────────────────────────────────────────────────────── #}
+{% if rig_schedule %}
+<article class="card tile tile-span-3 tile-dash-rig-schedule tile-dash-support" data-vis="{{ V }}">
+  {{ card_heading("RIG", "AI Rig Schedule") }}
+
+  {# ── NOW / PRIMARY / ON DECK rows ── #}
+  <ul class="rig-rows" data-vis="{{ V }}">
+    {% if rig_schedule.now %}
+    <li class="rig-row" data-vis="{{ V }}">
+      <span class="rig-row-label" data-vis="{{ V }}">NOW</span>
+      <span class="rig-row-agent" data-vis="{{ V }}">{{ rig_schedule.now.primary|upper }}</span>
+      <span class="rig-row-badge" data-vis="{{ V }}">{{ rig_schedule.now.badge }}</span>
+      <span class="rig-row-note hint" data-vis="{{ V }}">{{ rig_schedule.now.note }}</span>
+    </li>
+    {% endif %}
+    {% for cap in rig_schedule.capped or [] %}
+    <li class="rig-row" data-vis="{{ V }}">
+      <span class="rig-row-label" data-vis="{{ V }}">PRIMARY</span>
+      <span class="rig-row-agent" data-vis="{{ V }}">{{ cap.agent|upper }}</span>
+      <span class="rig-row-badge" data-vis="{{ V }}">🔴</span>
+      <span class="rig-row-note hint" data-vis="{{ V }}">
+        {{ cap.note or 'capped' }}{% if cap.resets %} · resets {{ cap.resets }}{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+    {% if rig_schedule.on_deck %}
+    <li class="rig-row" data-vis="{{ V }}">
+      <span class="rig-row-label" data-vis="{{ V }}">ON DECK</span>
+      <span class="rig-row-agent" data-vis="{{ V }}">{{ rig_schedule.on_deck.agent|upper }}</span>
+      <span class="rig-row-badge" data-vis="{{ V }}">{{ rig_schedule.on_deck.badge }}</span>
+      <span class="rig-row-note hint" data-vis="{{ V }}">{{ rig_schedule.on_deck.note }}</span>
+    </li>
+    {% endif %}
+  </ul>
+
+  {# ── Next burst ── #}
+  {% if rig_schedule.next_burst %}
+  <p class="rig-next-burst" data-vis="{{ V }}">
+    <span class="rig-next-burst-label" data-vis="{{ V }}">NEXT BURST</span>
+    <span class="rig-next-burst-arrow" data-vis="{{ V }}">&rarr;</span>
+    <strong data-vis="{{ V }}">{{ rig_schedule.next_burst.agent|upper }}</strong>
+    <span class="hint" data-vis="{{ V }}">at {{ rig_schedule.next_burst.at }}</span>
+  </p>
+  {% endif %}
+
+  {# ── Weekly plan ── #}
+  {% if rig_schedule.week_plan %}
+  <div class="rig-week" data-vis="{{ V }}">
+    <p class="rig-week-head" data-vis="{{ V }}">Week plan</p>
+    <ul class="rig-week-list" data-vis="{{ V }}">
+      {% for row in rig_schedule.week_plan %}
+      <li class="rig-week-row" data-vis="{{ V }}">
+        <span class="rig-week-day" data-vis="{{ V }}">{{ row.day }}</span>
+        <span class="rig-week-blocks" data-vis="{{ V }}">{{ row.blocks|join(' · ') }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Burst budgets ── #}
+  {% if rig_schedule.bursts %}
+  {% set b = rig_schedule.bursts %}
+  <div class="rig-bursts" data-vis="{{ V }}">
+    <span class="rig-burst-label" data-vis="{{ V }}">MBP bursts</span>
+    <span class="rig-burst-cells" data-vis="{{ V }}">
+      {% for i in range(b.mbp_budget or 0) -%}
+      <span class="rig-burst-cell{% if i < (b.mbp_used or 0) %} rig-burst-cell-used{% endif %}" data-vis="{{ V }}">{% if i < (b.mbp_used or 0) %}✓{% else %}·{% endif %}</span>
+      {%- endfor %}
+    </span>
+    <span class="rig-burst-label" data-vis="{{ V }}">iMac</span>
+    <span class="rig-burst-cells" data-vis="{{ V }}">
+      {% for i in range(b.imac_budget or 0) -%}
+      <span class="rig-burst-cell{% if i < (b.imac_used or 0) %} rig-burst-cell-used{% endif %}" data-vis="{{ V }}">{% if i < (b.imac_used or 0) %}✓{% else %}·{% endif %}</span>
+      {%- endfor %}
+    </span>
+  </div>
+  {% endif %}
+</article>
+
+<style>
+  /* Rig schedule tile — scoped styles. Apple tile primitives only:
+     mono type for dense info rows, badge dots for agent state, no
+     custom colours beyond what's already in the dashboard theme. */
+  .tile-dash-rig-schedule .rig-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+  }
+  .tile-dash-rig-schedule .rig-row {
+    display: grid;
+    grid-template-columns: 5.5rem 4rem 1.5rem 1fr;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .tile-dash-rig-schedule .rig-row-label {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+  }
+  .tile-dash-rig-schedule .rig-row-agent {
+    font-weight: 600;
+  }
+  .tile-dash-rig-schedule .rig-row-badge {
+    text-align: center;
+  }
+  .tile-dash-rig-schedule .rig-next-burst {
+    margin: 0.8rem 0 0;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    background: rgba(127, 127, 127, 0.08);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .tile-dash-rig-schedule .rig-next-burst-label {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+  }
+  .tile-dash-rig-schedule .rig-week {
+    margin-top: 0.9rem;
+    border-top: 1px solid rgba(127, 127, 127, 0.2);
+    padding-top: 0.6rem;
+  }
+  .tile-dash-rig-schedule .rig-week-head {
+    margin: 0 0 0.35rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .tile-dash-rig-schedule .rig-week-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  .tile-dash-rig-schedule .rig-week-row {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: 0.5rem;
+  }
+  .tile-dash-rig-schedule .rig-week-day {
+    font-weight: 600;
+    opacity: 0.85;
+  }
+  .tile-dash-rig-schedule .rig-bursts {
+    margin-top: 0.9rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(127, 127, 127, 0.2);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+    align-items: center;
+  }
+  .tile-dash-rig-schedule .rig-burst-label {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+  }
+  .tile-dash-rig-schedule .rig-burst-cells {
+    display: inline-flex;
+    gap: 0.15rem;
+  }
+  .tile-dash-rig-schedule .rig-burst-cell {
+    width: 1rem;
+    height: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    border-radius: 3px;
+    opacity: 0.55;
+  }
+  .tile-dash-rig-schedule .rig-burst-cell-used {
+    opacity: 1;
+    background: rgba(64, 168, 96, 0.18);
+    border-color: rgba(64, 168, 96, 0.55);
+  }
+</style>
+{% endif %}

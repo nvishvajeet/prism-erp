@@ -9304,6 +9304,25 @@ def index():
     attendance_streak = _dashboard_attendance_streak(user, db)
     cross_module_tiles = _dashboard_cross_module_tiles(user)
 
+    # Rig schedule (v1): hardcoded snapshot of the agent-rig status +
+    # weekly burst plan. Rendered by templates/_rig_schedule_tile.html.
+    # Wiring to a live source is a later task.
+    rig_schedule = {
+        "now": {"primary": "codex", "badge": "🟢", "note": "5h fresh · wk 79%"},
+        "on_deck": {"agent": "imac", "badge": "🟢", "note": "full tank"},
+        "capped": [{"agent": "mbp", "resets": "20:00", "note": "session 100%"}],
+        "next_burst": {"agent": "mbp", "at": "20:00"},
+        "week_plan": [
+            {"day": "Wed", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Thu", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Fri", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Sat", "blocks": ["iMac★", "Codex", "Codex", "Codex"]},
+            {"day": "Sun", "blocks": ["Codex", "Codex", "Codex", "Codex"]},
+            {"day": "Mon", "blocks": ["Codex", "Codex", "Codex", "Codex"]},
+        ],
+        "bursts": {"mbp_used": 1, "mbp_budget": 4, "imac_used": 0, "imac_budget": 4},
+    }
+
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -9329,6 +9348,7 @@ def index():
         attendance_streak=attendance_streak,
         dash_fleet_status=cross_module_tiles["dash_fleet_status"],
         dash_payroll_due=cross_module_tiles["dash_payroll_due"],
+        rig_schedule=rig_schedule,
         ai_advice=session.get("ai_advisor") if session.get("ai_advisor") and not request.args.get("refresh_advice") else _ai_dashboard_advice_cached(user),
     )
 

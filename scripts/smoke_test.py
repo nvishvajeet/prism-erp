@@ -693,6 +693,52 @@ def main() -> None:
         app.get_db().execute("DELETE FROM password_reset_requests WHERE username_entered LIKE '%@%.local'")
         app.get_db().commit()
 
+    # login-ux-cleanup-v1 invariants + notify_admins_on_pw_reset.
+    client.get("/logout")
+    login_page = client.get("/login?demo=1")
+    assert b"owner@catalyst.local" not in login_page.data, (
+        "login.html leaked owner@catalyst.local in the username field on ?demo=1 — "
+        "the demo_public_email auto-fill was dropped in login-ux-cleanup-v1."
+    )
+    assert b"CATALYST CATALYST" not in login_page.data, (
+        "login brand rendered duplicate 'CATALYST CATALYST'. Collapse when org_name == portal_name."
+    )
+    assert "\u2190 Choose ERP".encode("utf-8") in login_page.data, (
+        "login.html missing prominent '\u2190 Choose ERP' back button at top of the card."
+    )
+    # Verify _notify_admins_on_pw_reset drops system_notifications + user_todos
+    # rows for every active admin when a /forgot-password POST lands.
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM system_notifications WHERE category='pw_reset_requested'")
+        app.get_db().execute("DELETE FROM user_todos WHERE title LIKE 'Password reset requested%'")
+        app.get_db().execute("DELETE FROM password_reset_requests")
+        app.get_db().commit()
+    r = client.post("/forgot-password", data={"email": "kondhalkar@catalyst.local"}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app.app_context():
+        n_notif = app.get_db().execute(
+            "SELECT COUNT(*) FROM system_notifications WHERE category='pw_reset_requested'"
+        ).fetchone()[0]
+        n_todo = app.get_db().execute(
+            "SELECT COUNT(*) FROM user_todos WHERE title LIKE 'Password reset requested%' AND status='open'"
+        ).fetchone()[0]
+        n_admin = app.get_db().execute(
+            "SELECT COUNT(*) FROM users WHERE active=1 AND invite_status='active' "
+            "AND role IN ('super_admin','site_admin','instrument_admin','owner')"
+        ).fetchone()[0]
+    assert n_admin > 0, "seed should have at least one active admin"
+    assert n_notif == n_admin, (
+        f"expected {n_admin} system_notifications rows (one per admin), got {n_notif}. "
+        "Check _notify_admins_on_pw_reset column shape + admin role filter."
+    )
+    assert n_todo == n_admin, f"expected {n_admin} user_todos rows, got {n_todo}"
+    # Clean up
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM system_notifications WHERE category='pw_reset_requested'")
+        app.get_db().execute("DELETE FROM user_todos WHERE title LIKE 'Password reset requested%'")
+        app.get_db().execute("DELETE FROM password_reset_requests")
+        app.get_db().commit()
+
     # Admin resolve UI — /admin/password-reset lists, Resolve generates a temp
     # password + flashes it once + updates the user row. Spec: ROLE_SURFACES.md §3.
     with app.app.app_context():

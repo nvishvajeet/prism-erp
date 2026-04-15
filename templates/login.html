@@ -1,47 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
-{# Demo prefill: visiting /login?demo=1 prefills the public demo account
-   (DEMO_PUBLIC_EMAIL) and shared password "12345" so visitors from the
-   landing page can take a one-click tour. Works in both demo and
-   operational deployments; the seeded credential differs per
-   environment — see DEMO_PUBLIC_EMAIL in app.py. #}
+{# login-ux-cleanup-v1 (2026-04-15):
+   - Prominent ← back-to-entry button at the TOP of the card (was buried
+     at the bottom as a text link)
+   - No more owner@catalyst.local auto-fill — the demo_public_email prefill
+     leaked the owner's live identity into the username field whenever
+     someone landed via /login?demo=1
+   - Single-word brand when org_name == portal_name (was rendering
+     "CATALYST CATALYST" in the CATALYST-default case)
+   - Forgot-password link was already there; kept #}
 {% set _demo_prefill = request.args.get('demo') == '1' %}
 {% set _portal_name = login_portal.name if login_portal else "CATALYST" %}
+{% set _brand_repeated = (org_name == _portal_name) %}
 {% set _portal_hint = {
   'lab': 'MITWPU users: sign in to the Lab Scheduler ERP.',
-  'hq': 'Private workspace entry point. Demo and internal use continue here for now.'
+  'hq': 'Private workspace entry point.'
 }.get(login_portal_slug, 'Sign in to continue.') %}
 <div class="login-page" data-vis="all">
 <section class="card narrow login-card" data-vis="all">
+  <p class="form-hint" data-vis="all" style="margin:0 0 0.5rem 0;">
+    <a class="text-link" href="{{ url_for('index') }}" data-vis="all">← Choose ERP</a>
+  </p>
   <div class="login-brand" data-vis="all">
     <span class="login-brand-name">{{ org_name }}</span>
+    {% if not _brand_repeated %}
     <span class="login-brand-sub">{{ _portal_name }}</span>
+    {% endif %}
   </div>
   <h2 data-vis="all">Sign In</h2>
   <p class="hint" data-vis="all">{{ _portal_hint }}</p>
   {% if _demo_prefill %}
-  <p class="hint" data-vis="all">Demo account pre-filled — just hit <strong>Login</strong>.</p>
+  <p class="hint" data-vis="all">Demo mode — use the shared password <strong>12345</strong>.</p>
   {% endif %}
   <form method="post" class="form-grid" data-vis="all">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
     <label data-vis="all">Username
-      <input type="text" name="email" required autocapitalize="off" autocomplete="username" spellcheck="false" placeholder="dean" value="{% if _demo_prefill %}{{ demo_public_email }}{% endif %}" data-vis="all">
+      <input type="text" name="email" required autocapitalize="off"
+             autocomplete="username" spellcheck="false"
+             placeholder="Username" data-vis="all">
     </label>
     <label data-vis="all">Password
-      <input type="password" name="password" required autocomplete="current-password" placeholder="Enter your password" value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">
+      <input type="password" name="password" required autocomplete="current-password"
+             placeholder="Enter your password"
+             value="{% if _demo_prefill %}12345{% endif %}" data-vis="all">
     </label>
     <button type="submit" data-vis="all">Enter Workspace</button>
   </form>
-  <div class="login-support-stack" data-vis="all">
-    <div class="login-support-card" data-vis="all">
-      <strong data-vis="all">Need the right doorway?</strong>
-      <p class="hint" data-vis="all">Use the entry page if you want to switch between the lab ERP and the alternate private workspace before signing in.</p>
-    </div>
-    <div class="login-support-card" data-vis="all">
-      <strong data-vis="all">First-time or reset password users</strong>
-      <p class="hint" data-vis="all">After signing in with a temporary password, you will be taken directly to the password-change screen before any other page opens.</p>
-    </div>
-  </div>
   {% if google_oauth_enabled %}
   <div class="login-divider" data-vis="all"><span>or</span></div>
   <a href="{{ url_for('auth_google') }}" class="btn btn-google-signin" data-vis="all">
@@ -50,8 +54,6 @@
   </a>
   {% endif %}
   <p class="form-hint" data-vis="all">
-    <a class="text-link" href="{{ url_for('index') }}">Back to entry page</a>
-    &nbsp;·&nbsp;
     <a class="text-link" href="{{ url_for('forgot_password') }}">Forgot password?</a>
   </p>
 </section>

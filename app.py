@@ -12102,6 +12102,7 @@ def forgot_password():
         log_action(None, "auth", matched_user_id or 0, "password_reset_requested",
                    {"login": login_id, "matched": bool(matched_user_id),
                     "ip": request.remote_addr or ""})
+        _notify_admins_on_pw_reset(login_id, matched_user_id)
         flash(
             "If that account exists, an admin has been notified and will "
             "share a new temporary password with you shortly.",
@@ -12109,6 +12110,53 @@ def forgot_password():
         )
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
+
+
+def _notify_admins_on_pw_reset(username_entered: str, matched_user_id: int | None) -> None:
+    """Drop a row in system_notifications AND user_todos for every admin
+    who can act on /admin/password-reset, so they see the reset request
+    as a fresh signal without polling the Action Queue. Same admin gate
+    as the resolve route (super/site/instrument admin + owner).
+
+    Silent-skip any missing table — this runs on the public POST path
+    and must never 500 the user-facing flow."""
+    try:
+        admins = query_all(
+            "SELECT id FROM users WHERE active = 1 AND role IN "
+            "('super_admin','site_admin','instrument_admin','owner') "
+            "AND invite_status = 'active'"
+        )
+    except sqlite3.OperationalError:
+        return
+    if not admins:
+        return
+    title = f"Password reset requested for {username_entered}"
+    body = (
+        f"A password reset has been requested for {username_entered!r}. "
+        f"Review it at /admin/password-reset and click Resolve to generate "
+        f"a fresh temporary password."
+    )
+    now = now_iso()
+    for a in admins:
+        try:
+            execute(
+                "INSERT INTO system_notifications "
+                "(user_id, category, title, body, href, source_type, "
+                " source_id, created_at) "
+                "VALUES (?, 'pw_reset_requested', ?, ?, ?, 'password_reset', ?, ?)",
+                (a["id"], title, body, "/admin/password-reset", matched_user_id or 0, now),
+            )
+        except sqlite3.OperationalError:
+            pass
+        try:
+            execute(
+                "INSERT INTO user_todos "
+                "(user_id, title, body, priority, status, created_at) "
+                "VALUES (?, ?, ?, 'high', 'open', ?)",
+                (a["id"], title, f"{body}\n\nOpen /admin/password-reset", now),
+            )
+        except sqlite3.OperationalError:
+            pass
 
 
 @app.route("/login", methods=["GET", "POST"])

@@ -11402,7 +11402,12 @@ def sitemap():
         ops_items = []
         if access_profile["can_access_instruments"]:
             instrument_count = db.execute("SELECT COUNT(*) FROM instruments WHERE status = 'active'").fetchone()[0]
-            ops_items.append({"label": "Instruments", "hint": f"{instrument_count} active instruments", "type": "link", "href": url_for("instruments")})
+            instrument_label = "Instrument Management" if (
+                is_owner(user)
+                or user["role"] in {"super_admin", "site_admin", "instrument_admin"}
+            ) else "Instruments"
+            instrument_hint = "Your machine workspace, maintenance, and queue controls" if instrument_label == "Instrument Management" else f"{instrument_count} active instruments"
+            ops_items.append({"label": instrument_label, "hint": instrument_hint, "type": "link", "href": url_for("instruments")})
         if access_profile["can_access_schedule"]:
             open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
             ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
@@ -11660,16 +11665,34 @@ def login():
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
         requested_portal = session.get("requested_portal")
+        # Accept either the full email OR just the short username (local-part
+        # of the email) so users who type "kondhalkar" land the same row as
+        # "kondhalkar@mitwpu.edu.in". When the input has no '@', we prefer
+        # @mitwpu.edu.in matches — those are the real accounts on live — and
+        # fall back to the first active row with that local-part. This
+        # restores the pre-v1.3.0 login ergonomics without reintroducing the
+        # earlier ambiguity problem: canonical-email match always wins, and
+        # short-form only matches when the input has no '@' at all.
         user = query_one(
             """
             SELECT *
             FROM users
             WHERE active = 1
-              AND lower(email) = ?
-            ORDER BY id
+              AND (
+                lower(email) = ?
+                OR (
+                  ? NOT LIKE '%@%'
+                  AND instr(email, '@') > 0
+                  AND lower(substr(email, 1, instr(email, '@') - 1)) = ?
+                )
+              )
+            ORDER BY
+              CASE WHEN lower(email) = ? THEN 0 ELSE 1 END,
+              CASE WHEN lower(email) LIKE '%@mitwpu.edu.in' THEN 0 ELSE 1 END,
+              id
             LIMIT 1
             """,
-            (login_id,),
+            (login_id, login_id, login_id, login_id),
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             session.clear()
@@ -12722,6 +12745,20 @@ def _instrument_detail_read_model(user, instrument, instrument_id: int) -> dict[
             (instrument_id,),
         )
     }
+    try:
+        recent_maintenance_entries = query_all(
+            """
+            SELECT m.*, u.name AS performed_by_name
+              FROM instrument_maintenance m
+              LEFT JOIN users u ON u.id = m.performed_by_user_id
+             WHERE m.instrument_id = ?
+             ORDER BY m.performed_at DESC, m.id DESC
+             LIMIT 3
+            """,
+            (instrument_id,),
+        )
+    except sqlite3.OperationalError:
+        recent_maintenance_entries = []
     instrument_logs = query_all(
         "SELECT al.*, u.name AS actor_name FROM audit_logs al LEFT JOIN users u ON u.id = al.actor_id WHERE entity_type = 'instrument' AND entity_id = ? ORDER BY al.id",
         (instrument_id,),
@@ -12777,6 +12814,7 @@ def _instrument_detail_read_model(user, instrument, instrument_id: int) -> dict[
             """,
             (instrument_id,),
         ),
+        "recent_maintenance_entries": recent_maintenance_entries,
         "inventory_items": query_all(
             "SELECT * FROM instrument_inventory WHERE instrument_id = ? ORDER BY item_name",
             (instrument_id,),
@@ -12819,12 +12857,13 @@ def instrument_detail(instrument_id: int):
         intake_mode=instrument_intake_mode(instrument),
         intake_mode_label=intake_mode_label,
         approval_config=payload["approval_config"],
-        can_edit_approval_config=is_owner(user) or user["role"] == "super_admin",
+        can_edit_approval_config=context["can_edit"],
         approval_role_candidates=payload["approval_role_candidates"],
         operators=query_all(
             "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
         ),
         upcoming_downtime=payload["upcoming_downtime"],
+        recent_maintenance_entries=payload["recent_maintenance_entries"],
         inventory_items=payload["inventory_items"],
         grants=payload["grants"],
     )
@@ -12838,7 +12877,12 @@ def instrument_form_control(instrument_id: int):
     if not instrument:
         abort(404)
     instrument = instrument[0]
-    if not (is_owner(user) or user["role"] == "super_admin"):
+    can_configure = (
+        is_owner(user)
+        or user["role"] in {"super_admin", "site_admin"}
+        or can_manage_instrument(user["id"], instrument_id, user["role"])
+    )
+    if not can_configure:
         abort(403)
 
     if request.method == "POST":

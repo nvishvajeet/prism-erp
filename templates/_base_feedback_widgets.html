@@ -34,8 +34,8 @@
         <input type="hidden" name="context_json" id="feedbackContext" value="">
         <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, press C to capture the thing under your cursor." data-vis="{{ V }}"></textarea>
         <div class="feedback-actions" data-vis="{{ V }}">
-          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start/stop voice (M)" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
-          <button type="button" id="feedbackCapture" class="btn" title="Capture element under cursor (C)" data-vis="{{ V }}">🎯</button>
+          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
+          <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯</button>
           <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
         </div>
       </form>
@@ -90,7 +90,7 @@
       listening = false;
       try { recognition.stop(); } catch(e) {}
       showVoiceBadge(false);
-      if (mic) { mic.textContent = '🎤'; mic.title = 'Start voice input (M)'; }
+      if (mic) { mic.textContent = '🎤'; mic.title = 'Start voice input'; }
       if (reason && typeof setStatus === 'function') setStatus('', '');
     }
     // Referenced before declaration at module scope — keep forward-declared
@@ -178,7 +178,7 @@
       }, 520);
     }
 
-    // ── "C" / 🎯 capture element under cursor ─────────────────────
+    // ── 🎯 capture element under cursor ───────────────────────────
     function captureElementUnderCursor() {
       var el = document.elementFromPoint(lastPointer.x, lastPointer.y);
       var descr = '';
@@ -253,7 +253,7 @@
         } else if (mic) {
           showVoiceBadge(false);
           mic.textContent = '🎤';
-          mic.title = 'Start voice input (M)';
+          mic.title = 'Start voice input';
         }
       };
       return r;
@@ -267,7 +267,7 @@
           try { recognition.stop(); } catch(e) {}
           showVoiceBadge(false);
           mic.textContent = '🎤';
-          mic.title = 'Start voice input (M)';
+          mic.title = 'Start voice input';
           setStatus('Voice input stopped.', '');
           return;
         }
@@ -285,7 +285,7 @@
           listening = false;
           showVoiceBadge(false);
           mic.textContent = '🎤';
-          mic.title = 'Start voice input (M)';
+          mic.title = 'Start voice input';
           setStatus('Voice input could not start cleanly. Try once more.', 'warn');
         }
       });

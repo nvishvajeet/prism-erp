@@ -12,6 +12,7 @@ import shutil
 import smtplib
 import sqlite3
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from contextlib import closing
@@ -99,6 +100,67 @@ RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
 WORK_SESSION_IDLE_MINUTES = 30
 WORK_SESSION_HEARTBEAT_MAX_SECONDS = 300
+
+
+class LoginRateLimiter:
+    """Sliding-window limiter for failed login attempts per client IP."""
+
+    def __init__(
+        self,
+        max_failures: int = 5,
+        window_seconds: int = 300,
+        block_seconds: int = 300,
+    ) -> None:
+        self._failures: dict[str, list[float]] = {}
+        self._blocked: dict[str, float] = {}
+        self.max_failures = max_failures
+        self.window_seconds = window_seconds
+        self.block_seconds = block_seconds
+
+    def _now(self) -> float:
+        return time.time()
+
+    def _prune(self, ip: str, now: float | None = None) -> list[float]:
+        current = self._now() if now is None else now
+        kept = [
+            ts for ts in self._failures.get(ip, [])
+            if current - ts <= self.window_seconds
+        ]
+        if kept:
+            self._failures[ip] = kept
+        else:
+            self._failures.pop(ip, None)
+        blocked_until = self._blocked.get(ip)
+        if blocked_until is not None and blocked_until <= current:
+            self._blocked.pop(ip, None)
+        return kept
+
+    def record_failure(self, ip: str) -> None:
+        current = self._now()
+        failures = self._prune(ip, now=current)
+        failures.append(current)
+        self._failures[ip] = failures
+        if len(failures) >= self.max_failures:
+            self._blocked[ip] = current + self.block_seconds
+
+    def is_blocked(self, ip: str) -> tuple[bool, int]:
+        current = self._now()
+        self._prune(ip, now=current)
+        blocked_until = self._blocked.get(ip)
+        if blocked_until is None:
+            return False, 0
+        remaining = max(0, int(blocked_until - current))
+        if remaining <= 0:
+            self._blocked.pop(ip, None)
+            return False, 0
+        return True, remaining
+
+    def clear(self, ip: str) -> None:
+        self._failures.pop(ip, None)
+        self._blocked.pop(ip, None)
+
+
+_login_limiter = LoginRateLimiter()
 
 
 def _runtime_slug(*parts: str) -> str:
@@ -907,7 +969,10 @@ def get_db() -> sqlite3.Connection:
         # already in WAL. See PHILOSOPHY §3 — this is the single perf
         # lever the hard-attribute contract permits.
         conn.execute("PRAGMA journal_mode = WAL")
-        conn.execute("PRAGMA synchronous = NORMAL")
+        if DEMO_MODE or os.environ.get("LAB_SCHEDULER_SQLITE_FAST"):
+            conn.execute("PRAGMA synchronous = NORMAL")
+        else:
+            conn.execute("PRAGMA synchronous = FULL")
         g.db = conn
     return g.db
 
@@ -917,6 +982,31 @@ def close_db(_exc: object) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+@app.after_request
+def _add_security_headers(resp):
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if (
+        request.scheme == "https"
+        or request.headers.get("X-Forwarded-Proto") == "https"
+    ):
+        resp.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';",
+    )
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    return resp
 
 
 @app.route("/health")
@@ -4613,7 +4703,10 @@ def init_db() -> None:
     # bootstraps is born in WAL. Also kick foreign_keys on for the
     # init path itself (get_db() handles runtime connections).
     db.execute("PRAGMA journal_mode = WAL")
-    db.execute("PRAGMA synchronous = NORMAL")
+    if DEMO_MODE or os.environ.get("LAB_SCHEDULER_SQLITE_FAST"):
+        db.execute("PRAGMA synchronous = NORMAL")
+    else:
+        db.execute("PRAGMA synchronous = FULL")
     db.execute("PRAGMA foreign_keys = ON")
     with closing(db.cursor()) as cur:
         cur.executescript(
@@ -12622,6 +12715,14 @@ def login():
     if request.method == "GET" and current_user() is not None:
         return redirect(url_for("index"))
     if request.method == "POST":
+        ip = request.headers.get("CF-Connecting-IP", request.remote_addr or "")
+        blocked, seconds = _login_limiter.is_blocked(ip)
+        if blocked:
+            flash(
+                f"Too many failed attempts. Try again in {seconds // 60}m {seconds % 60}s.",
+                "error",
+            )
+            return _render_login_response(session.get("requested_portal"), status_code=429)
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
         requested_portal = (request.form.get("portal") or session.get("requested_portal") or "").strip().lower() or None
@@ -12667,6 +12768,7 @@ def login():
             (login_id, login_id, login_id, login_id, requested_portal or "", requested_portal or ""),
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
+            _login_limiter.clear(ip)
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
@@ -12708,8 +12810,9 @@ def login():
             "auth",
             failed_uid or 0,
             "login_failed",
-            {"login": login_id, "ip": request.remote_addr or ""},
+            {"login": login_id, "ip": ip},
         )
+        _login_limiter.record_failure(ip)
         flash("Invalid login.", "error")
     portal_slug = session.get("requested_portal")
     return _render_login_response(portal_slug)

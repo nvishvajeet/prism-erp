@@ -56,6 +56,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from crawlers.common import validate_erp_db_match
+
 try:
     import openpyxl  # type: ignore
 except ImportError as exc:  # pragma: no cover
@@ -516,6 +518,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=None,
                     help="Write JSON to this file in addition to stdout.")
     args = ap.parse_args(argv)
+    if args.db is not None:
+        args.db = validate_erp_db_match(args.erp, args.db)
 
     if not args.file.exists():
         print(json.dumps({"error": f"file not found: {args.file}"}), file=sys.stderr)

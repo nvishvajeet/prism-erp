@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ravikiran ERP — household/personal ERP wrapper.
+  Runs on port 5057. Addresses audit SEV2 #3 (Ravikiran has no
+  launchd plist on mini — dies on reboot).
+  Staged here for deploy-time install. Install after
+  ravikiran.catalysterp.org ingress is live in cloudflared.
+
+  Install:
+    cp local.catalyst.ravikiran.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) \
+      ~/Library/LaunchAgents/local.catalyst.ravikiran.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst.ravikiran
+
+  ThrottleInterval is 60 (not 10) per audit SEV3 A recommendation.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.catalyst.ravikiran</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>cd ~/ravikiran-services &amp;&amp; exec .venv/bin/gunicorn app:app -w 2 -b 127.0.0.1:5057 --access-logfile - --error-logfile -</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/vishwajeet/ravikiran-services</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LAB_SCHEDULER_DEMO_MODE</key>
+    <string>1</string>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/vishwajeet/ravikiran-services/logs/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/vishwajeet/ravikiran-services/logs/server.log</string>
+
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>

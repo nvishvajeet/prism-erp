@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CATALYST chooser app — bare catalysterp.org root landing.
+  Runs on port 5060. Staged here for deploy-time install; mini
+  is READ-ONLY during Operation TroisAgents. Install after
+  cert.pem + ingress rule for catalysterp.org → 127.0.0.1:5060
+  are live.
+
+  Install:
+    cp local.catalyst.chooser.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) \
+      ~/Library/LaunchAgents/local.catalyst.chooser.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst.chooser
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.catalyst.chooser</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>cd ~/Scheduler/Main/chooser &amp;&amp; exec ../.venv/bin/python app.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/vishwajeet/Scheduler/Main/chooser</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/vishwajeet/Scheduler/Main/chooser/chooser.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/vishwajeet/Scheduler/Main/chooser/chooser.log</string>
+
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>ProcessType</key><string>Interactive</string>
+</dict>
+</plist>

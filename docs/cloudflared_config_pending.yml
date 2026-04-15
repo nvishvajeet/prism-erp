@@ -1,0 +1,60 @@
+# CATALYST — staged Cloudflare tunnel ingress for v2.0.
+#
+# Target file on mini: ~/.cloudflared/config.yml
+# Current tunnel UUID:  b1d5e505-9c85-4950-9a57-e2af733e923a
+# Creds file on mini:   ~/.cloudflared/b1d5e505-9c85-4950-9a57-e2af733e923a.json
+#
+# Deploy preconditions (NONE apply during Operation TroisAgents;
+# deploy happens in a separate window after this sprint):
+#   1. cert.pem must be at ~/.cloudflared/cert.pem on mini.
+#   2. All three DNS records created:
+#        cloudflared tunnel route dns b1d5e505-9c85-4950-9a57-e2af733e923a \
+#          mitwpu-rnd.catalysterp.org
+#        cloudflared tunnel route dns b1d5e505-9c85-4950-9a57-e2af733e923a \
+#          ravikiran.catalysterp.org
+#        cloudflared tunnel route dns b1d5e505-9c85-4950-9a57-e2af733e923a \
+#          playground.catalysterp.org
+#      (catalysterp.org root already routed.)
+#   3. Chooser app running on :5060 (plist:
+#      chooser/launchd/local.catalyst.chooser.plist).
+#   4. Ravikiran app running on :5057 (plist:
+#      chooser/launchd/local.catalyst.ravikiran.plist).
+#   5. Lab-ERP demo running on :5056 (existing
+#      local.catalyst.demo plist).
+#   6. Lab-ERP op running on :5055 HTTPS (existing
+#      local.catalyst plist).
+#
+# Staging order for safety:
+#   (a) Install this config WITHOUT restarting the tunnel — verify
+#       it parses: cloudflared tunnel --config config.yml ingress validate
+#   (b) Restart: launchctl kickstart -k gui/$(id -u)/com.cloudflare.cloudflared
+#       (or equivalent, depending on how the tunnel runs today).
+#   (c) curl -sSI https://<each hostname>/ returns 200 or a login redirect.
+#   (d) Rollback plan: keep ~/.cloudflared/config.yml.pre-trois-agents-YYYYMMDD.bak
+
+tunnel: b1d5e505-9c85-4950-9a57-e2af733e923a
+credentials-file: /Users/vishwajeet/.cloudflared/b1d5e505-9c85-4950-9a57-e2af733e923a.json
+
+ingress:
+  # ── Branded subdomains (new in v2.0) ────────────────────────
+  - hostname: mitwpu-rnd.catalysterp.org
+    service: https://127.0.0.1:5055
+    originRequest:
+      noTLSVerify: true
+
+  - hostname: ravikiran.catalysterp.org
+    service: http://127.0.0.1:5057
+
+  - hostname: playground.catalysterp.org
+    service: http://127.0.0.1:5056
+
+  # ── Root → chooser (replaces direct-to-Lab-ERP) ─────────────
+  # Owner directive 2026-04-15: root hosts a chooser page with
+  # "MITWPU R&D" + "Personal ERP" tiles. Zero mention of
+  # Ravikiran on the chooser (Ravikiran name only appears under
+  # its own subdomain).
+  - hostname: catalysterp.org
+    service: http://127.0.0.1:5060
+
+  # ── 404 fallback ────────────────────────────────────────────
+  - service: http_status:404

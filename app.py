@@ -16694,12 +16694,15 @@ def role_manual():
 @app.route("/dev")
 @app.route("/dev/")
 def dev_site():
-    """Public single-page dev-site — current demo + features + stable
-    release + org structure + future plans. No auth required because
-    it's the project's status page, not an ERP surface. Served as a
-    static HTML from static/devsite/ so it can be refreshed by
-    scripts/regen_dev_site.sh without touching app code.
-    See sahajpur-university/dev-site/generate.py for the generator."""
+    """Project status page — intended for the LOCAL demo triad ONLY.
+    Gated to DEMO_MODE so production CATALYST (DEMO_MODE=0) returns
+    404 here, keeping the live site free of dev-facing surfaces.
+    The static HTML at static/devsite/index.html still ships in the
+    repo (deploy artifact), but the route serves it only when the
+    instance is booted in demo mode. Source-of-truth lives in
+    sahajpur-university/dev-site/; regen via its generate.py."""
+    if not DEMO_MODE:
+        abort(404)
     return send_from_directory(
         str(Path(__file__).resolve().parent / "static" / "devsite"),
         "index.html",

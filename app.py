@@ -7528,12 +7528,23 @@ def seed_data() -> None:
          "Ravikiran Fleet · Driver",   ["hq"]),
     ]
     for name, email, role, office, _portals in real_team:
+        # must_change_password=0 on demo — per "keep demo simple, single
+        # admin password 12345". Production invites still set =1 via
+        # bulk_create_users (see app.py:18536). Demo is for demo;
+        # forcing a password rotation on a seeded persona pointlessly
+        # blocks every page with a redirect to /profile/change-password.
         db.execute(
             """INSERT OR IGNORE INTO users
                  (name, email, password_hash, role, invite_status,
                   must_change_password, office_location)
-               VALUES (?, ?, ?, ?, 'active', 1, ?)""",
+               VALUES (?, ?, ?, ?, 'active', 0, ?)""",
             (name, email, demo_pw_hash, role, office),
+        )
+        # If the row already existed from a previous seed with must_change=1,
+        # clear it so the demo stays usable with the shared password.
+        db.execute(
+            "UPDATE users SET must_change_password = 0 WHERE email = ? AND invite_status = 'active'",
+            (email,),
         )
         db.execute(
             "UPDATE users SET office_location = ? WHERE email = ? AND (office_location IS NULL OR office_location = '')",

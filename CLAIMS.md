@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | revive-launchd-crawlers | 2026-04-15T16:36:59Z | CLAIMS.md, ops/launchd/*, scripts/* | claim then fix |
 
 ## Stale-claim recovery
 

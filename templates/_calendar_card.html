@@ -8,7 +8,7 @@
 <dl class="detail-grid compact-detail-grid cal-card-meta" data-vis="{{ V }}">
   <dt data-vis="{{ V }}">Sample</dt><dd data-vis="{{ V }}">{{ sample_request["sample_name"] }} ({{ sample_request["sample_count"] }})</dd>
   <dt data-vis="{{ V }}">Instrument</dt><dd data-vis="{{ V }}">{{ sample_request["instrument_name"] }}</dd>
-  <dt data-vis="{{ V }}">Operator</dt><dd data-vis="{{ V }}">{{ sample_request["operator_name"] or "—" }}</dd>
+  <dt data-vis="{{ V }}">Operator</dt><dd data-vis="{{ V }}">{% if sample_request["assigned_operator_id"] and sample_request["operator_name"] and can_view_user_profile_id_user(sample_request["assigned_operator_id"]) %}<a class="text-link" href="{{ url_for('user_profile', user_id=sample_request['assigned_operator_id']) }}" data-vis="{{ V }}">{{ sample_request["operator_name"] }}</a>{% else %}{{ sample_request["operator_name"] or "—" }}{% endif %}</dd>
   {% if sample_request["scheduled_for"] %}<dt data-vis="{{ V }}">Scheduled</dt><dd data-vis="{{ V }}">{{ format_dt(sample_request["scheduled_for"]) }}</dd>{% endif %}
 </dl>
 

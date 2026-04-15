@@ -136,7 +136,7 @@
       <tbody data-vis="{{ V }}">
         {% for pending in pending_users %}
         <tr data-vis="{{ V }}">
-          <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ pending.name }}</strong></td>
+          <td data-vis="{{ V }}"><strong data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=pending.id) }}" data-vis="{{ V }}">{{ pending.name }}</a></strong></td>
           <td data-vis="{{ V }}">{{ login_label(pending.email) }}</td>
           <td data-vis="{{ V }}">{{ role_display_name(pending.role) }}</td>
           <td data-vis="{{ V }}">{{ pending.phone or "—" }}</td>

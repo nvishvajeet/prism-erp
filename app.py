@@ -692,9 +692,22 @@ def lab_profile_role_choices() -> list[tuple[str, str]]:
     ]
 
 
+def operations_portal_active() -> bool:
+    return active_portal_slug() in {"hq", "ravikiran_ops"}
+
+
+def operations_profile_role_choices(viewer) -> list[str]:
+    base_roles = ["operator", "finance_admin"]
+    if viewer["role"] == "super_admin":
+        base_roles += ["site_admin", "super_admin"]
+    return base_roles
+
+
 def allowed_user_creation_roles() -> set[str]:
     if lab_profile_mode_active():
         return {"operator", "instrument_admin", "site_admin", "super_admin"}
+    if operations_portal_active():
+        return {"operator", "finance_admin", "site_admin", "super_admin"}
     return {
         "requester", "operator", "instrument_admin", "faculty_in_charge",
         "professor_approver", "finance_admin", "site_admin", "super_admin",
@@ -707,6 +720,8 @@ def allowed_user_role_change_roles(viewer) -> list[str]:
         if is_owner(viewer) or viewer["role"] == "super_admin":
             base_roles.append("super_admin")
         return base_roles
+    if operations_portal_active():
+        return operations_profile_role_choices(viewer)
     base_roles = [
         "requester",
         "operator",
@@ -7691,7 +7706,7 @@ def seed_data() -> None:
     real_team = [
         ("Nikita Nagargoje",   "nikita",                        "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
-        ("Prashant Nagargoje", "prashant",                      "super_admin",
+        ("Prashant Chavre",    "prashant",                      "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
         ("Rahul Misal",        "rahul.misal@catalyst.local",    "operator",
          "Kothrud HQ · Ravikiran",     ["hq"]),
@@ -17057,6 +17072,20 @@ def _user_profile_target(viewer, user_id: int):
 
 
 def _user_profile_activity_payload(viewer, user_id: int) -> dict[str, object]:
+    if not module_visible_in_active_portal("instruments"):
+        empty_summary = {
+            "total_jobs": 0,
+            "total_samples": 0,
+            "completed_jobs": 0,
+            "open_jobs": 0,
+        }
+        return {
+            "rows": [],
+            "handled_rows": [],
+            "originated_count": 0,
+            "submitted_summary": empty_summary,
+            "handled_summary": empty_summary,
+        }
     scope_clauses, scope_params = request_scope_sql(viewer, "sr")
     rows = query_all(
         f"""
@@ -17139,7 +17168,9 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
     assigned_operator_ids: set[int] = set()
     assigned_faculty_ids: set[int] = set()
     assigned_requester_ids: set[int] = set()
-    if can_edit_user_value:
+    vehicle_roster: list[sqlite3.Row] = []
+    assigned_vehicle_ids: set[int] = set()
+    if can_edit_user_value and module_visible_in_active_portal("instruments"):
         instrument_roster = query_all(
             "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
         )
@@ -17164,6 +17195,16 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
             )
         }
         instrument_categories = sorted({(row["category"] or "Uncategorized") for row in instrument_roster})
+    if can_edit_user_value and module_visible_in_active_portal("vehicles"):
+        vehicle_roster = query_all(
+            "SELECT id, name, registration_no, vehicle_type FROM vehicles WHERE status = 'active' ORDER BY name"
+        )
+        assigned_vehicle_ids = {
+            row["vehicle_id"] for row in query_all(
+                "SELECT vehicle_id FROM vehicle_driver_assignments WHERE user_id = ?",
+                (user_id,),
+            )
+        }
     return {
         "can_edit_user": can_edit_user_value,
         "can_edit_metadata": can_edit_metadata_value,
@@ -17173,6 +17214,8 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
         "assigned_operator_ids": assigned_operator_ids,
         "assigned_faculty_ids": assigned_faculty_ids,
         "assigned_requester_ids": assigned_requester_ids,
+        "vehicle_roster": vehicle_roster,
+        "assigned_vehicle_ids": assigned_vehicle_ids,
     }
 
 
@@ -17181,16 +17224,27 @@ def _user_profile_role_payload(viewer, target_user, can_edit_user_value: bool) -
     if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
         base_roles = allowed_user_role_change_roles(viewer)
         role_choices = [(role, role_display_name(role)) for role in base_roles]
-    layered_role_choices = [] if lab_profile_mode_active() else [
-        ("operator", "Operator"),
-        ("instrument_admin", "Instrument Admin"),
-        ("faculty_in_charge", "Faculty in Charge"),
-        ("professor_approver", "Professor Approver"),
-        ("finance_admin", "Finance Admin"),
-    ] + (
-        [("site_admin", "Site Admin")]
-        if viewer["role"] == "super_admin" else []
-    )
+    if lab_profile_mode_active():
+        layered_role_choices = []
+    elif operations_portal_active():
+        layered_role_choices = [
+            ("operator", "Operator"),
+            ("finance_admin", "Finance Admin"),
+        ] + (
+            [("site_admin", "Site Admin")]
+            if viewer["role"] == "super_admin" else []
+        )
+    else:
+        layered_role_choices = [
+            ("operator", "Operator"),
+            ("instrument_admin", "Instrument Admin"),
+            ("faculty_in_charge", "Faculty in Charge"),
+            ("professor_approver", "Professor Approver"),
+            ("finance_admin", "Finance Admin"),
+        ] + (
+            [("site_admin", "Site Admin")]
+            if viewer["role"] == "super_admin" else []
+        )
     return {
         "role_choices": role_choices,
         "target_role_set": user_role_set(target_user),
@@ -17511,6 +17565,55 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         flash("Instrument assignments saved.", "success")
         return redirect(url_for("user_profile", user_id=user_id))
 
+    if action == "update_user_vehicle_assignments":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+
+        desired_vehicle_ids = {
+            int(v) for v in request.form.getlist("vehicle_ids")
+            if str(v).strip().isdigit()
+        }
+        active_vehicle_ids = {
+            row["id"] for row in query_all(
+                "SELECT id FROM vehicles WHERE status = 'active'"
+            )
+        }
+        desired_vehicle_ids &= active_vehicle_ids
+        current_vehicle_ids = {
+            row["vehicle_id"] for row in query_all(
+                "SELECT vehicle_id FROM vehicle_driver_assignments WHERE user_id = ?",
+                (user_id,),
+            )
+        }
+
+        for vehicle_id in desired_vehicle_ids | current_vehicle_ids:
+            driver_ids = [
+                row["user_id"] for row in query_all(
+                    """
+                    SELECT user_id
+                      FROM vehicle_driver_assignments
+                     WHERE vehicle_id = ?
+                     ORDER BY is_primary DESC, created_at ASC, user_id ASC
+                    """,
+                    (vehicle_id,),
+                )
+            ]
+            if vehicle_id in desired_vehicle_ids:
+                if user_id not in driver_ids:
+                    driver_ids.append(user_id)
+            else:
+                driver_ids = [driver_id for driver_id in driver_ids if driver_id != user_id]
+            _sync_vehicle_driver_assignments(vehicle_id, driver_ids)
+
+        log_action(
+            viewer["id"], "user", user_id, "user_vehicle_assignments_updated",
+            {"email": target_user["email"], "vehicle_count": len(desired_vehicle_ids)},
+        )
+        flash("Vehicle assignments saved.", "success")
+        return redirect(url_for("user_profile", user_id=user_id))
+
     return None
 
 
@@ -17530,6 +17633,16 @@ def user_profile(user_id: int):
     role_payload = _user_profile_role_payload(viewer, target_user, assignment_payload["can_edit_user"])
     reset_pw_info = _user_profile_reset_password_info(user_id)
     instrument_groups = instrument_groups_all()
+    assigned_vehicles = query_all(
+        """
+        SELECT DISTINCT v.id, v.name, v.registration_no, v.vehicle_type
+          FROM vehicle_driver_assignments vda
+          JOIN vehicles v ON v.id = vda.vehicle_id
+         WHERE vda.user_id = ?
+         ORDER BY v.name ASC
+        """,
+        (user_id,),
+    ) if module_visible_in_active_portal("vehicles") else []
     return render_template(
         "user_detail.html",
         target_user=target_user,
@@ -17558,12 +17671,16 @@ def user_profile(user_id: int):
         ),
         can_edit_user=assignment_payload["can_edit_user"],
         can_edit_metadata=assignment_payload["can_edit_metadata"],
+        show_lab_work_summary=module_visible_in_active_portal("instruments"),
         instrument_roster=assignment_payload["instrument_roster"],
         instrument_categories=assignment_payload["instrument_categories"],
         assigned_admin_ids=assignment_payload["assigned_admin_ids"],
         assigned_operator_ids=assignment_payload["assigned_operator_ids"],
         assigned_faculty_ids=assignment_payload["assigned_faculty_ids"],
         assigned_requester_ids=assignment_payload["assigned_requester_ids"],
+        vehicle_roster=assignment_payload["vehicle_roster"],
+        assigned_vehicle_ids=assignment_payload["assigned_vehicle_ids"],
+        assigned_vehicles=assigned_vehicles,
         lab_profile_mode=lab_profile_mode_active(),
         role_choices=role_payload["role_choices"],
         target_role_set=role_payload["target_role_set"],

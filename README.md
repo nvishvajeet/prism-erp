@@ -137,6 +137,30 @@ CATALYST can be demoed as multiple ERP sites from the same codebase:
 Preset bundles and demo guidance:
 [docs/ERP_DEMO_VARIANTS.md](docs/ERP_DEMO_VARIANTS.md)
 
+## Ravikiran Sync Rules
+
+Ravikiran must behave as an operations ERP, not as a relabeled lab ERP.
+
+- The `hq` and `ravikiran_ops` portals are for operations work such as
+  personnel, vehicles, attendance, receipts, vendor payments, and
+  finance.
+- User profiles in those portals must not show lab-only surfaces such
+  as instrument responsibility, professor approver roles, or lab request
+  history.
+- Ravikiran staff should be modeled through personnel, manager lines,
+  payroll, and vehicle responsibility.
+- Driver assignment belongs to the vehicle/personnel model, not to the
+  lab instrument access model.
+- The lab portal can keep instrument-specific assignment and approval
+  flows, but those concepts must stay scoped to the lab portal.
+
+Current implementation direction:
+
+- keep one shared ERP spine
+- keep portal-scoped UI and role choices
+- keep Ravikiran onboarding flowing into approval queues for human review
+- keep metadata editable by admins from the user management surface
+
 ## Cross-Module Integration
 
 Modules talk to each other automatically:

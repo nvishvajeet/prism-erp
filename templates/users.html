@@ -105,10 +105,20 @@
   <article class="card tile tile-users-create" data-vis="{{ V }}">
     {{ card_heading("", "Create Profile") }}
     {% if can_create_users %}
-    <div style="padding:0.5rem 0.75rem;display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;" data-vis="{{ V }}">
-      <span class="hint" data-vis="{{ V }}">Need more than just name + role?</span>
+    <details class="onboarding-hint" data-vis="{{ V }}">
+      <summary data-vis="{{ V }}"><strong>How to onboard a new person</strong> — 5 quick steps</summary>
+      <ol class="onboarding-hint-list" data-vis="{{ V }}">
+        <li data-vis="{{ V }}">Fill <b>Name</b> + <b>Username</b> (the email they'll log in with) + <b>Role</b> in the form below, then hit <b>Create User</b>.</li>
+        <li data-vis="{{ V }}">The system shows a <b>temporary 5-digit password</b> in a toast — copy it.</li>
+        <li data-vis="{{ V }}">Send the username + temp password to the new person on a private channel (WhatsApp, email, in person). <b>Do not post publicly.</b></li>
+        <li data-vis="{{ V }}">They log in at <font class="mono">catalysterp.org/login</font> and are forced to change the password on first use.</li>
+        <li data-vis="{{ V }}">Assign them to portals / instruments from the <b>user detail page</b> (click their name in the Members table below).</li>
+      </ol>
+      <p class="hint" data-vis="{{ V }}">Need to onboard 5+ at once? Use the <b>Bulk Add</b> box lower on this page — one person per line.</p>
+    </details>
+    <div class="onboarding-cta" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">Want AI-assisted intake (designation, department, instrument access in one pass)?</span>
       <a href="{{ url_for('admin_onboard') }}" class="btn btn-primary" data-vis="{{ V }}">✨ Guided onboarding</a>
-      <span class="hint" data-vis="{{ V }}">— auto-fills from plain English, captures designation, department, portal + instrument access in one pass.</span>
     </div>
     {% endif %}
     {% if can_create_users %}

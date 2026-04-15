@@ -1,0 +1,223 @@
+{#
+ROUTE (Claude 0 wires at merge):
+  @app.route("/attendance/quick", methods=["GET"])
+  @login_required
+  def attendance_quick_mark_page():
+      # Role gate: super_admin, site_admin, operator, instrument_admin
+      user = current_user()
+      if not (user_role_set(user) & {"super_admin","site_admin","operator","instrument_admin","finance_admin"} or is_owner(user)):
+          abort(403)
+      return render_template("attendance_quick.html")
+
+NAV STITCH (Claude 0): add a link to this page from base.html/nav.html
+  visible to the same role set above. Suggested label: "Quick mark"
+  or "Quick attend". Mobile-first — icon optional.
+
+APIs called (existing, verified in app.py at T+96):
+  GET  /attendance/api/search-staff?q=<code>   → [{id,name,code,role}, ...]
+  POST /attendance/api/quick-mark              → {ok,name,status,...}
+
+CSRF: pulled from base.html's `<meta name="csrf-token">`; body is
+JSON so the X-CSRF-Token header path is the canonical one for this
+app (see static/base_shell.js fetch shim).
+#}
+{% extends "base.html" %}
+{% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to attendance">←</a>{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/attendance_quick.css') }}">
+
+<section class="aq-shell" data-vis="{{ V }}">
+
+  <div class="aq-banner" id="aqBanner" role="status" aria-live="polite" data-vis="{{ V }}"></div>
+
+  <div class="aq-display" data-vis="{{ V }}">
+    <div class="aq-code is-empty" id="aqCode" aria-label="Attendance number being typed" data-vis="{{ V }}"></div>
+    <div class="aq-preview" id="aqPreview" aria-live="polite" data-vis="{{ V }}">Enter your attendance number</div>
+  </div>
+
+  <form id="aqForm" class="aq-pad" autocomplete="off"
+        aria-label="Attendance number keypad"
+        onsubmit="return false;"
+        data-vis="{{ V }}">
+    <button type="button" class="aq-key" data-digit="1" aria-label="1" data-vis="{{ V }}">1</button>
+    <button type="button" class="aq-key" data-digit="2" aria-label="2" data-vis="{{ V }}">2</button>
+    <button type="button" class="aq-key" data-digit="3" aria-label="3" data-vis="{{ V }}">3</button>
+    <button type="button" class="aq-key" data-digit="4" aria-label="4" data-vis="{{ V }}">4</button>
+    <button type="button" class="aq-key" data-digit="5" aria-label="5" data-vis="{{ V }}">5</button>
+    <button type="button" class="aq-key" data-digit="6" aria-label="6" data-vis="{{ V }}">6</button>
+    <button type="button" class="aq-key" data-digit="7" aria-label="7" data-vis="{{ V }}">7</button>
+    <button type="button" class="aq-key" data-digit="8" aria-label="8" data-vis="{{ V }}">8</button>
+    <button type="button" class="aq-key" data-digit="9" aria-label="9" data-vis="{{ V }}">9</button>
+    <button type="button" class="aq-key aq-key-clear" data-action="clear" aria-label="Clear" data-vis="{{ V }}">Clear</button>
+    <button type="button" class="aq-key" data-digit="0" aria-label="0" data-vis="{{ V }}">0</button>
+    <button type="button" class="aq-key aq-key-back" data-action="back" aria-label="Backspace" data-vis="{{ V }}">⌫</button>
+    <button type="button" class="aq-key aq-key-submit" id="aqSubmit" disabled aria-label="Mark present" data-vis="{{ V }}">Mark Present</button>
+  </form>
+
+</section>
+
+<script>
+(function () {
+  var MAX_LEN = 5;  // attendance_number max 5 digits
+  var code = "";
+  var codeEl = document.getElementById("aqCode");
+  var previewEl = document.getElementById("aqPreview");
+  var submitBtn = document.getElementById("aqSubmit");
+  var banner = document.getElementById("aqBanner");
+  var padForm = document.getElementById("aqForm");
+  var previewController = null;
+  var previewTimer = null;
+
+  function csrfToken() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute("content") : "";
+  }
+
+  function renderCode() {
+    codeEl.textContent = code;
+    codeEl.classList.toggle("is-empty", code.length === 0);
+    submitBtn.disabled = code.length === 0;
+  }
+
+  function resetPreview() {
+    previewEl.className = "aq-preview";
+    previewEl.textContent = code.length === 0
+      ? "Enter your attendance number"
+      : "Looking up…";
+  }
+
+  function setPreviewError(msg) {
+    previewEl.className = "aq-preview is-error";
+    previewEl.textContent = msg;
+  }
+
+  function setPreviewSuccess(html) {
+    previewEl.className = "aq-preview";
+    previewEl.innerHTML = html;
+  }
+
+  function schedulePreview() {
+    if (previewController) { previewController.abort(); }
+    if (previewTimer) { clearTimeout(previewTimer); }
+    resetPreview();
+    if (code.length === 0) return;
+    previewTimer = setTimeout(function () {
+      previewController = new AbortController();
+      fetch("/attendance/api/search-staff?q=" + encodeURIComponent(code),
+            { signal: previewController.signal, credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (rows) {
+          // API searches name/short_code/member_code. For a pure
+          // numeric code we also accept a match on attendance_number
+          // — server-side quick-mark will find it by number even if
+          // the search endpoint does not. Show a neutral "Ready to
+          // mark #N" hint when no name preview comes back.
+          if (!rows || rows.length === 0) {
+            setPreviewSuccess(
+              '<div class="aq-preview-sub">Ready to mark #' +
+              escapeHtml(code) + '</div>'
+            );
+            return;
+          }
+          var r = rows[0];
+          setPreviewSuccess(
+            '<div class="aq-preview-name">' + escapeHtml(r.name) + '</div>' +
+            '<div class="aq-preview-sub">' + escapeHtml(r.role || "") +
+            (r.code ? ' · ' + escapeHtml(r.code) : '') + '</div>'
+          );
+        })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          setPreviewError("lookup failed");
+        });
+    }, 220);
+  }
+
+  function showBanner(kind, msg) {
+    banner.textContent = msg;
+    banner.className = "aq-banner is-visible is-" + kind;
+    setTimeout(function () { banner.className = "aq-banner"; }, 2000);
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;",
+               "\"": "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function pressDigit(d) {
+    if (code.length >= MAX_LEN) return;
+    code += d;
+    renderCode();
+    schedulePreview();
+  }
+  function pressBack() {
+    if (code.length === 0) return;
+    code = code.slice(0, -1);
+    renderCode();
+    schedulePreview();
+  }
+  function pressClear() {
+    if (code.length === 0) return;
+    code = "";
+    renderCode();
+    schedulePreview();
+  }
+  function pressSubmit() {
+    if (!code) return;
+    submitBtn.disabled = true;
+    var pendingCode = code;
+    fetch("/attendance/api/quick-mark", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken(),
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({ code: pendingCode, status: "present" })
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      .then(function (data) {
+        if (data && data.ok) {
+          var name = data.name || ("#" + pendingCode);
+          showBanner("success", "✓ Marked " + name + " present");
+        } else {
+          var err = (data && data.error) || ("Unknown number " + pendingCode);
+          showBanner("error", "✕ " + err);
+        }
+      })
+      .catch(function () { showBanner("error", "✕ Network error"); })
+      .finally(function () {
+        code = "";
+        renderCode();
+        resetPreview();
+      });
+  }
+
+  padForm.addEventListener("click", function (ev) {
+    var btn = ev.target.closest(".aq-key");
+    if (!btn) return;
+    if (btn.disabled) return;
+    if (btn.dataset.digit) { pressDigit(btn.dataset.digit); return; }
+    if (btn.dataset.action === "back")  { pressBack();  return; }
+    if (btn.dataset.action === "clear") { pressClear(); return; }
+    if (btn.id === "aqSubmit") { pressSubmit(); }
+  });
+
+  // Hardware keyboard fallback (kiosk attached keyboards, desktop
+  // QA). Ignored when code is at MAX_LEN.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key >= "0" && ev.key <= "9") { pressDigit(ev.key); ev.preventDefault(); return; }
+    if (ev.key === "Backspace") { pressBack();  ev.preventDefault(); return; }
+    if (ev.key === "Enter")     { pressSubmit(); ev.preventDefault(); return; }
+    if (ev.key === "Escape")    { pressClear(); ev.preventDefault(); return; }
+  });
+
+  renderCode();
+})();
+</script>
+
+{% endblock %}

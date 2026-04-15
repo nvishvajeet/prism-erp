@@ -1,0 +1,186 @@
+/* attendance_quick.css — Nikita's mobile number-pad page.
+ * Full-viewport, high-contrast, kiosk-ready. 64px tap targets.
+ * Dark-first; prefers-color-scheme light fallback below.
+ */
+
+:root {
+  --aq-bg: #0b0b10;
+  --aq-surface: #17171f;
+  --aq-ink: #f3f3f5;
+  --aq-muted: #8c8d96;
+  --aq-accent: #4c9aff;
+  --aq-success: #32c05a;
+  --aq-error: #ff4c4c;
+  --aq-line: rgba(255, 255, 255, 0.09);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --aq-bg: #f7f7fa;
+    --aq-surface: #ffffff;
+    --aq-ink: #0b0b0e;
+    --aq-muted: #5a5d67;
+    --aq-line: rgba(0, 0, 0, 0.09);
+  }
+}
+
+.aq-shell {
+  min-height: calc(100vh - 6rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: 1rem 0.75rem max(1rem, env(safe-area-inset-bottom, 0.5rem));
+  background: var(--aq-bg);
+  color: var(--aq-ink);
+}
+
+.aq-display {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--aq-surface);
+  border: 1px solid var(--aq-line);
+  border-radius: 18px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+
+.aq-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(2.25rem, 8vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  min-height: 3.5rem;
+  color: var(--aq-ink);
+  overflow-wrap: anywhere;
+}
+
+.aq-code.is-empty::before {
+  content: "— — —";
+  color: var(--aq-muted);
+  letter-spacing: 0.22em;
+}
+
+.aq-preview {
+  margin-top: 0.5rem;
+  min-height: 1.8rem;
+  color: var(--aq-muted);
+  font-size: 0.95rem;
+}
+
+.aq-preview-name {
+  color: var(--aq-ink);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.aq-preview-sub {
+  color: var(--aq-muted);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.aq-preview.is-error {
+  color: var(--aq-error);
+  font-weight: 600;
+}
+
+.aq-preview.is-success {
+  color: var(--aq-success);
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+/* 3x4 keypad */
+.aq-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+  width: 100%;
+  max-width: 24rem;
+}
+
+.aq-key {
+  min-height: 64px;
+  min-width: 64px;
+  aspect-ratio: 1.25 / 1;
+  border: 1px solid var(--aq-line);
+  border-radius: 14px;
+  background: var(--aq-surface);
+  color: var(--aq-ink);
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.aq-key:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.aq-key:focus-visible {
+  outline: 2px solid var(--aq-accent);
+  outline-offset: 3px;
+}
+
+.aq-key-submit {
+  grid-column: span 3;
+  background: var(--aq-accent);
+  color: #fff;
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+  border-color: transparent;
+  margin-top: 0.25rem;
+}
+
+.aq-key-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.aq-key-back,
+.aq-key-clear {
+  background: transparent;
+  color: var(--aq-muted);
+  font-size: 1.1rem;
+}
+
+.aq-banner {
+  width: 100%;
+  max-width: 24rem;
+  padding: 1rem;
+  border-radius: 14px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: none;
+}
+
+.aq-banner.is-visible { display: block; }
+.aq-banner.is-success {
+  background: rgba(50, 192, 90, 0.14);
+  color: var(--aq-success);
+  border: 1px solid rgba(50, 192, 90, 0.45);
+}
+.aq-banner.is-error {
+  background: rgba(255, 76, 76, 0.14);
+  color: var(--aq-error);
+  border: 1px solid rgba(255, 76, 76, 0.45);
+}
+
+/* iPhone SE (375×667) target — everything fits without scrolling. */
+@media (max-height: 700px) {
+  .aq-display { padding: 1rem 0.75rem; }
+  .aq-code { font-size: 2rem; min-height: 2.75rem; }
+  .aq-key { min-height: 52px; aspect-ratio: auto; font-size: 1.4rem; padding: 0.6rem 0; }
+  .aq-key-submit { font-size: 1.05rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aq-key, .aq-key:active { transition: none; transform: none; }
+}

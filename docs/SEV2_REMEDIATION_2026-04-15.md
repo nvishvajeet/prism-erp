@@ -29,10 +29,14 @@ loud abort now.
 
 - Proxy correctness behind the Cloudflare tunnel is now handled with
   `ProxyFix` in `app.py`, so forwarded HTTPS requests resolve as HTTPS inside
-  Flask and stop tripping the branded-host login flow. Production and demo
-  hosts behind the tunnel must set `LAB_SCHEDULER_COOKIE_SECURE=1`.
+  Flask and stop tripping the branded-host login flow. Shipped in `44acc86`.
+  Production and demo hosts behind the tunnel must set
+  `LAB_SCHEDULER_COOKIE_SECURE=1`.
 - `tests/test_proxy_csrf.py` covers login POSTs under
   `X-Forwarded-Proto: https` and asserts the forwarded scheme is visible inside
-  the app.
+  the app. Landed in `44acc86`.
 - `scripts/ship_readiness_check.py` provides a pre-deploy gate for schema,
-  login-rate-limit, security-header, proxy, and smoke-test readiness.
+  login-rate-limit, security-header, proxy, and smoke-test readiness. Landed
+  in `44acc86`.
+- `docs/OPERATIONAL_HARDENING_V2.md` now also records HSTS preload readiness
+  constraints for the branded host fleet in `37d521f`.

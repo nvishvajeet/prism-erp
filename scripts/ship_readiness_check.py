@@ -12,6 +12,22 @@ if str(ROOT) not in sys.path:
 import app  # noqa: E402
 
 
+def ensure_app_db() -> None:
+    app.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    needs_init = not app.DB_PATH.exists()
+    if not needs_init:
+        try:
+            with sqlite3.connect(app.DB_PATH) as db:
+                row = db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+                ).fetchone()
+            needs_init = row is None
+        except sqlite3.Error:
+            needs_init = True
+    if needs_init:
+        app.init_db()
+
+
 def ensure_proxy_route() -> None:
     if "_ship_proxy_scheme" not in app.app.view_functions:
         app.app.add_url_rule(
@@ -77,6 +93,7 @@ def check_smoke() -> bool:
 
 
 def main() -> int:
+    ensure_app_db()
     ensure_proxy_route()
     results = [
         check_schema(),

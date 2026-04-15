@@ -47,6 +47,27 @@
         <input type="hidden" name="page" value="{{ request.path }}">
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
+        <div class="form-grid" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Severity
+            <select id="feedbackSeverity" data-vis="{{ V }}">
+              <option value="">Select severity</option>
+              <option value="blocker">Blocker</option>
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+              <option value="polish">Polish</option>
+            </select>
+          </label>
+          <label data-vis="{{ V }}">Type
+            <select id="feedbackIssueType" data-vis="{{ V }}">
+              <option value="">Select type</option>
+              <option value="bug">Bug</option>
+              <option value="ui">UI / Layout</option>
+              <option value="content">Content / Copy</option>
+              <option value="flow">Flow / Guidance</option>
+              <option value="performance">Performance</option>
+            </select>
+          </label>
+        </div>
         <textarea name="text" id="feedbackText" rows="3" placeholder="What broke? What did you expect? You can talk, then click the broken area while recording, or use Ctrl/Cmd + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
         <div class="feedback-context-card" data-vis="{{ V }}">
           <p class="feedback-context-title" data-vis="{{ V }}">Live Context</p>
@@ -85,6 +106,8 @@
     var clearBtn = document.getElementById('feedbackClear');
     var contextPreview = document.getElementById('feedbackContextPreview');
     var presetButtons = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-preset]'));
+    var severitySelect = document.getElementById('feedbackSeverity');
+    var issueTypeSelect = document.getElementById('feedbackIssueType');
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
@@ -108,16 +131,20 @@
     function updateContextPreview() {
       if (!contextPreview) return;
       var base = 'Page: ' + (location.pathname + location.search || '/');
+      var tags = [];
+      if (severitySelect && severitySelect.value) tags.push('Severity: ' + severitySelect.value);
+      if (issueTypeSelect && issueTypeSelect.value) tags.push('Type: ' + issueTypeSelect.value);
       if (!capturedClicks.length) {
-        contextPreview.textContent = base + ' · No pinned target yet.';
+        contextPreview.textContent = [base].concat(tags).concat(['No pinned target yet.']).join(' · ');
         return;
       }
       var last = capturedClicks[capturedClicks.length - 1];
-      var parts = [
-        base,
+      var parts = [base]
+        .concat(tags)
+        .concat([
         'Target: ' + (last.selector || 'unknown'),
         'Coords: ' + last.page_x + ',' + last.page_y
-      ];
+      ]);
       if (last.text) parts.push('Text: ' + last.text);
       contextPreview.textContent = parts.join(' · ');
     }
@@ -126,6 +153,8 @@
       opts = opts || {};
       if (text && !opts.keepText) text.value = '';
       if (ctxInput) ctxInput.value = '';
+      if (severitySelect) severitySelect.value = '';
+      if (issueTypeSelect) issueTypeSelect.value = '';
       capturedClicks = [];
       captureCounter = 0;
       pointerTrail = [];
@@ -419,6 +448,8 @@
     }
     if (captureBtn) captureBtn.addEventListener('click', function(ev){ ev.preventDefault(); captureElementUnderCursor(); });
     if (clearBtn) clearBtn.addEventListener('click', function(ev){ ev.preventDefault(); resetFeedbackDraft({quiet: false}); });
+    if (severitySelect) severitySelect.addEventListener('change', updateContextPreview);
+    if (issueTypeSelect) issueTypeSelect.addEventListener('change', updateContextPreview);
     presetButtons.forEach(function(btn){
       btn.addEventListener('click', function(){
         if (!text) return;
@@ -555,6 +586,17 @@
     if (form) form.addEventListener('submit', function(ev){
       ev.preventDefault();
       collectContext(null);
+      if (text) {
+        var tags = [];
+        if (severitySelect && severitySelect.value) tags.push('severity=' + severitySelect.value);
+        if (issueTypeSelect && issueTypeSelect.value) tags.push('type=' + issueTypeSelect.value);
+        if (tags.length) {
+          var prefix = '[' + tags.join(' | ') + '] ';
+          if (text.value.indexOf(prefix) !== 0) {
+            text.value = prefix + text.value;
+          }
+        }
+      }
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Saving...';

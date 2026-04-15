@@ -9947,8 +9947,8 @@ def _action_queue_items(user: sqlite3.Row) -> list[dict]:
                 "subject": f"Reset request for {r['username_entered']}",
                 "submitted_by": "(anonymous requester)",
                 "created_at": row_value(r, "requested_at", "") or "",
-                "action_url": "#",
-                "action_label": "Open (pending implementation)",
+                "action_url": url_for("admin_password_reset") + f"#request-{r['id']}",
+                "action_label": "Open in Admin → Password reset",
             })
     except sqlite3.OperationalError:
         pass
@@ -19221,6 +19221,133 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         "pending_users": pending_users,
         "lab_profile_mode": lab_profile_mode_active(),
     }
+
+
+def _pw_reset_admin_gate(user):
+    """Returns (can_act: bool, reason: str) for password-reset admin actions.
+    Gate matches /admin/users (can_create_users)."""
+    if not user:
+        return False, "not logged in"
+    if is_owner(user):
+        return True, ""
+    # Mirror /admin/users gate — anyone who can create users can resolve resets.
+    role = user["role"] if user else ""
+    allowed = {"super_admin", "site_admin"}
+    if lab_profile_mode_active():
+        allowed.add("instrument_admin")
+    return (role in allowed), f"role {role!r} not in {sorted(allowed)}"
+
+
+@app.route("/admin/password-reset", methods=["GET"])
+@app.route("/admin/password_reset", methods=["GET"])
+@login_required
+def admin_password_reset():
+    """Admin view of pending password_reset_requests. Spec: docs/ROLE_SURFACES.md §3.
+    Each row has Resolve / Reject buttons. Resolving generates a fresh temp
+    password, updates the user row (must_change_password=1), marks the
+    request resolved, and flashes the temp password ONCE for out-of-band
+    sharing — it never lands in email or logs."""
+    user = current_user()
+    can_act, _ = _pw_reset_admin_gate(user)
+    if not can_act:
+        abort(403)
+    try:
+        pending = query_all(
+            """SELECT p.id, p.username_entered, p.matched_user_id, p.requested_at,
+                      p.requester_ip,
+                      u.name AS matched_name, u.email AS matched_email, u.role AS matched_role
+                 FROM password_reset_requests p
+                 LEFT JOIN users u ON u.id = p.matched_user_id
+                WHERE p.status = 'pending'
+                ORDER BY p.requested_at ASC"""
+        )
+        resolved_recent = query_all(
+            """SELECT p.id, p.username_entered, p.status, p.resolved_at,
+                      r.name AS resolver_name, p.decision_note
+                 FROM password_reset_requests p
+                 LEFT JOIN users r ON r.id = p.resolved_by_user_id
+                WHERE p.status != 'pending'
+                ORDER BY p.resolved_at DESC LIMIT 20"""
+        )
+    except sqlite3.OperationalError:
+        pending, resolved_recent = [], []
+    return render_template(
+        "admin_password_reset.html",
+        pending=pending,
+        resolved_recent=resolved_recent,
+    )
+
+
+@app.route("/admin/password-reset/<int:request_id>/resolve", methods=["POST"])
+@login_required
+def admin_password_reset_resolve(request_id: int):
+    user = current_user()
+    can_act, _ = _pw_reset_admin_gate(user)
+    if not can_act:
+        abort(403)
+    req = query_one(
+        "SELECT * FROM password_reset_requests WHERE id = ?", (request_id,)
+    )
+    if not req or req["status"] != "pending":
+        flash("That reset request is no longer pending.", "error")
+        return redirect(url_for("admin_password_reset"))
+    if not req["matched_user_id"]:
+        # Request referenced an unknown user — can't generate a password.
+        execute(
+            "UPDATE password_reset_requests SET status='rejected', "
+            "resolved_by_user_id=?, resolved_at=?, decision_note=? WHERE id=?",
+            (user["id"], now_iso(), "no matching user", request_id),
+        )
+        flash("No matching user for that request — marked rejected.", "warning")
+        return redirect(url_for("admin_password_reset"))
+    temp_password = generate_temp_password()
+    execute(
+        "UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?",
+        (generate_password_hash(temp_password, method="pbkdf2:sha256"), req["matched_user_id"]),
+    )
+    execute(
+        "UPDATE password_reset_requests SET status='resolved', "
+        "resolved_by_user_id=?, resolved_at=? WHERE id=?",
+        (user["id"], now_iso(), request_id),
+    )
+    log_action(
+        user["id"], "auth", req["matched_user_id"], "password_reset_resolved",
+        {"request_id": request_id, "matched_user_id": req["matched_user_id"]},
+    )
+    flash(
+        f"Temporary password for {req['username_entered']}: "
+        f"<strong>{temp_password}</strong> — share this out-of-band (SMS / in person). "
+        "It will not be shown again. The user must change it on first login.",
+        "success",
+    )
+    return redirect(url_for("admin_password_reset"))
+
+
+@app.route("/admin/password-reset/<int:request_id>/reject", methods=["POST"])
+@login_required
+def admin_password_reset_reject(request_id: int):
+    user = current_user()
+    can_act, _ = _pw_reset_admin_gate(user)
+    if not can_act:
+        abort(403)
+    req = query_one(
+        "SELECT * FROM password_reset_requests WHERE id = ?", (request_id,)
+    )
+    if not req or req["status"] != "pending":
+        flash("That reset request is no longer pending.", "error")
+        return redirect(url_for("admin_password_reset"))
+    note = (request.form.get("note") or "").strip()[:500]
+    execute(
+        "UPDATE password_reset_requests SET status='rejected', "
+        "resolved_by_user_id=?, resolved_at=?, decision_note=? WHERE id=?",
+        (user["id"], now_iso(), note or "no reason given", request_id),
+    )
+    log_action(
+        user["id"], "auth", req["matched_user_id"] or 0, "password_reset_rejected",
+        {"request_id": request_id, "note": note},
+    )
+    flash("Reset request rejected.", "success")
+    return redirect(url_for("admin_password_reset"))
 
 
 @app.route("/admin/users", methods=["GET", "POST"])

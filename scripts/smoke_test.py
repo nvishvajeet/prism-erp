@@ -693,6 +693,54 @@ def main() -> None:
         app.get_db().execute("DELETE FROM password_reset_requests WHERE username_entered LIKE '%@%.local'")
         app.get_db().commit()
 
+    # Admin resolve UI — /admin/password-reset lists, Resolve generates a temp
+    # password + flashes it once + updates the user row. Spec: ROLE_SURFACES.md §3.
+    with app.app.app_context():
+        app.get_db().execute(
+            "INSERT INTO password_reset_requests "
+            "(username_entered, matched_user_id, status, requested_at) "
+            "VALUES ('kondhalkar@catalyst.local', 9, 'pending', ?)",
+            (app.now_iso(),),
+        )
+        app.get_db().commit()
+
+    login(client, "kondhalkar@catalyst.local")
+    listing = client.get("/admin/password-reset")
+    assert listing.status_code == 200, f"GET /admin/password-reset expected 200, got {listing.status_code}"
+    assert b"Pending" in listing.data, "admin pw-reset page missing 'Pending' section"
+    assert b"kondhalkar@catalyst.local" in listing.data, "seeded request not listed"
+    assert client.get("/admin/password_reset").status_code == 200, "/admin/password_reset alias should 200"
+    with app.app.app_context():
+        row = app.get_db().execute(
+            "SELECT id FROM password_reset_requests WHERE status='pending' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        assert row is not None
+        pw_req_id = row["id"]
+    resolve = client.post(f"/admin/password-reset/{pw_req_id}/resolve", follow_redirects=True)
+    assert resolve.status_code == 200
+    assert b"Temporary password" in resolve.data, (
+        "Resolve should flash 'Temporary password for …' so admin can share it. "
+        "Check admin_password_reset_resolve flash copy."
+    )
+    with app.app.app_context():
+        req = app.get_db().execute(
+            "SELECT status, resolved_by_user_id FROM password_reset_requests WHERE id = ?",
+            (pw_req_id,),
+        ).fetchone()
+        assert req["status"] == "resolved"
+        assert req["resolved_by_user_id"] == 9
+        kon = app.get_db().execute("SELECT must_change_password FROM users WHERE id = 9").fetchone()
+        assert kon["must_change_password"] == 1, "resolve must set must_change_password=1"
+    # Non-admin forbidden
+    client.get("/logout")
+    login(client, "anika@catalyst.local")
+    assert client.get("/admin/password-reset").status_code == 403, "operator should 403 on admin pw-reset"
+    # Clean up
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM password_reset_requests")
+        app.get_db().execute("UPDATE users SET must_change_password = 0 WHERE id = 9")
+        app.get_db().commit()
+
     print("smoke test passed")
 
 

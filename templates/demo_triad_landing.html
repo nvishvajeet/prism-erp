@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+
+{#
+  demo_triad_landing.html — public demo landing page for the three
+  ERP variants (lab, ravikiran_ops, compute). Served at the root URL
+  of the public demo; each tile links out to its own gunicorn
+  instance running the same CATALYST code under a different
+  CATALYST_MODULES bundle.
+
+  Expected render context:
+    variants = {
+      "lab":            { "label": ..., "url": ..., "tagline": ...,
+                          "bundle": ..., "best_first_click": ... },
+      "ravikiran_ops":  { ... },
+      "compute":        { ... },
+    }
+
+  No JS. No new CSS files. A small inline <style> block adds only
+  landing-page-specific rules — everything else reuses .inst-tiles,
+  .tile, .card, and the section-head / hint classes from styles.css.
+#}
+
+{% block content %}
+
+{# Inline-only style block. Per docs/ERP_VISION.md §3 — no new CSS
+   files. These rules tighten the three-column tile grid for the
+   landing shell and give the CTA a consistent footer slot. #}
+<style>
+  .demo-triad-landing { margin-top: 0.75rem; }
+  .demo-triad-landing .inst-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 900px) {
+    .demo-triad-landing .inst-tiles { grid-template-columns: 1fr; }
+  }
+  .demo-triad-landing .tile {
+    grid-column: span 1;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: none;
+  }
+  .demo-triad-landing .tile h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+  }
+  .demo-triad-landing .tile .variant-audience {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.75;
+    margin: 0;
+  }
+  .demo-triad-landing .tile .variant-prove {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+  .demo-triad-landing .tile .variant-bundle {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    opacity: 0.7;
+    word-break: break-word;
+  }
+  .demo-triad-landing .tile-cta {
+    margin-top: auto;
+    padding-top: 0.4rem;
+  }
+  .demo-triad-landing .tile-cta a {
+    display: inline-block;
+    font-weight: 600;
+  }
+  .demo-triad-explainer { margin-top: 1.1rem; }
+  .demo-triad-explainer p { margin: 0.4rem 0; }
+</style>
+
+<section class="demo-triad-landing" data-vis="{{ V }}">
+
+  <article class="card" data-vis="{{ V }}">
+    {{ card_heading(
+         "CATALYST demo",
+         "Three ERPs, one codebase",
+         "Pick a demo. Each runs the same CATALYST, with a different module bundle and its own data."
+    ) }}
+  </article>
+
+  <section class="inst-tiles" data-vis="{{ V }}" style="margin-top:0.75rem;">
+
+    {# ── Lab ERP ───────────────────────────────────────────── #}
+    {% set lab = variants.lab if variants and variants.lab else {} %}
+    <article class="card tile" data-vis="{{ V }}">
+      <h3 data-vis="{{ V }}">{{ (lab.label if lab.label else 'Lab ERP')|e }}</h3>
+      <p class="variant-audience" data-vis="{{ V }}">
+        Shared instrumentation labs · research facilities
+      </p>
+      <p class="variant-prove" data-vis="{{ V }}">
+        {% if lab.tagline %}{{ lab.tagline|e }}{% else %}What you'll see: request submission, approval, queue, completion. Grant-linked finance. Role-scoped visibility.{% endif %}
+      </p>
+      {% if lab.best_first_click %}
+      <p class="hint" data-vis="{{ V }}">First click: {{ lab.best_first_click|e }}</p>
+      {% endif %}
+      {% if lab.bundle %}
+      <p class="variant-bundle" data-vis="{{ V }}">{{ lab.bundle|e }}</p>
+      {% endif %}
+      <p class="tile-cta" data-vis="{{ V }}">
+        <a class="btn btn-primary"
+           href="{{ (lab.url if lab.url else 'http://127.0.0.1:5101')|e }}"
+           data-vis="{{ V }}">Try Lab ERP →</a>
+      </p>
+    </article>
+
+    {# ── Ravikiran Operations ERP ──────────────────────────── #}
+    {% set ops = variants.ravikiran_ops if variants and variants.ravikiran_ops else {} %}
+    <article class="card tile" data-vis="{{ V }}">
+      <h3 data-vis="{{ V }}">{{ (ops.label if ops.label else 'Ravikiran Operations ERP')|e }}</h3>
+      <p class="variant-audience" data-vis="{{ V }}">
+        Service businesses · hospitality · operations teams
+      </p>
+      <p class="variant-prove" data-vis="{{ V }}">
+        {% if ops.tagline %}{{ ops.tagline|e }}{% else %}What you'll see: staff, vehicles, receipts, payroll, and tasks/inbox working together as one.{% endif %}
+      </p>
+      {% if ops.best_first_click %}
+      <p class="hint" data-vis="{{ V }}">First click: {{ ops.best_first_click|e }}</p>
+      {% endif %}
+      {% if ops.bundle %}
+      <p class="variant-bundle" data-vis="{{ V }}">{{ ops.bundle|e }}</p>
+      {% endif %}
+      <p class="tile-cta" data-vis="{{ V }}">
+        <a class="btn btn-primary"
+           href="{{ (ops.url if ops.url else '#')|e }}"
+           data-vis="{{ V }}">Try Ravikiran Ops →</a>
+      </p>
+    </article>
+
+    {# ── Compute ERP ───────────────────────────────────────── #}
+    {% set cmp = variants.compute if variants and variants.compute else {} %}
+    <article class="card tile" data-vis="{{ V }}">
+      <h3 data-vis="{{ V }}">{{ (cmp.label if cmp.label else 'Compute ERP')|e }}</h3>
+      <p class="variant-audience" data-vis="{{ V }}">
+        HPC labs · technical facilities · compute clusters
+      </p>
+      <p class="variant-prove" data-vis="{{ V }}">
+        {% if cmp.tagline %}{{ cmp.tagline|e }}{% else %}What you'll see: queue, notifications, and admin surfaces for a running cluster.{% endif %}
+      </p>
+      {% if cmp.best_first_click %}
+      <p class="hint" data-vis="{{ V }}">First click: {{ cmp.best_first_click|e }}</p>
+      {% endif %}
+      {% if cmp.bundle %}
+      <p class="variant-bundle" data-vis="{{ V }}">{{ cmp.bundle|e }}</p>
+      {% endif %}
+      <p class="tile-cta" data-vis="{{ V }}">
+        <a class="btn btn-primary"
+           href="{{ (cmp.url if cmp.url else '#')|e }}"
+           data-vis="{{ V }}">Try Compute →</a>
+      </p>
+    </article>
+
+  </section>
+
+  <article class="card demo-triad-explainer" data-vis="{{ V }}">
+    {{ card_heading("How it works", "One codebase, three ERPs") }}
+    <p data-vis="{{ V }}">
+      Each variant is a different <code data-vis="{{ V }}">CATALYST_MODULES</code>
+      bundle on the same code. Improvements ship once, land everywhere.
+      Add a new ERP by adding a new bundle.
+    </p>
+    <p class="hint" data-vis="{{ V }}">See MODULE_PROPAGATION.md for the propagation contract.</p>
+  </article>
+
+</section>
+
+{% endblock %}

@@ -6,6 +6,22 @@ This is intentionally NOT part of `populate_live_demo.py` because the
 canonical seed needs to stay stable for `scripts/smoke_test.py` (the
 pre-commit gate asserts seed-user IDs and request IDs).
 
+ERP-AWARE: takes a mandatory `--erp` flag with no default. Per the
+"separate gits which serve specializations of the wrappers, separate
+data store" silo policy, wrong-target writes must be a loud error.
+
+  --erp lab        Apply to Lab ERP (CATALYST). Uses INST-001…INST-022
+                   instrument codes (demo-side codes).
+  --erp ravikiran  Refused — this overlay is Lab-ERP-specific. Ravikiran
+                   has its own household roster; use a different overlay
+                   when one exists.
+
+Use the `--db` flag to override the DB path (defaults to app.DB_PATH for
+--erp lab, which respects DEMO_MODE — i.e., the demo DB on dev MacBook,
+the operational DB on the mini). Use `--allow-operational` when you
+explicitly intend to write to an operational DB; without it, the script
+refuses to touch any DB whose path contains "/operational/".
+
 Run AFTER `smoke_test.py` (or AFTER `populate_live_demo.py` directly) when
 you want the running demo to show only:
 
@@ -20,11 +36,13 @@ Idempotent — safe to re-run. Hard cap on what it touches: only the tables
 listed below. Audit_logs are preserved (chain integrity).
 
 Usage:
-    .venv/bin/python scripts/onboard_qubit_overlay.py
+    .venv/bin/python scripts/onboard_qubit_overlay.py --erp lab
+    .venv/bin/python scripts/onboard_qubit_overlay.py --erp lab --db /path/to.db
 """
 
 from __future__ import annotations
 
+import argparse
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -39,14 +57,51 @@ if str(BASE_DIR) not in sys.path:
 import app as _app  # noqa: E402
 
 DEMO_PASSWORD = "DemoPass2026"
+SUPPORTED_ERPS = {"lab", "ravikiran"}
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat() + "Z"
 
 
-def main() -> int:
-    db_path = _app.DB_PATH
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="onboard_qubit_overlay",
+        description="Apply the Qubit (Lab ERP R&D) onboarding overlay to a CATALYST demo DB.",
+    )
+    ap.add_argument(
+        "--erp",
+        required=True,
+        choices=sorted(SUPPORTED_ERPS),
+        help="Target ERP. NO DEFAULT — wrong-target writes are a loud error per silo policy. "
+             "Currently only --erp lab is supported by THIS overlay; --erp ravikiran will be refused.",
+    )
+    ap.add_argument(
+        "--db",
+        type=Path,
+        default=None,
+        help="Explicit SQLite path. Defaults to app.DB_PATH (which respects DEMO_MODE).",
+    )
+    ap.add_argument(
+        "--allow-operational",
+        action="store_true",
+        help="Required to write to a DB whose path contains '/operational/'. "
+             "Default behaviour refuses operational writes (WORKFLOW.md §3.5).",
+    )
+    args = ap.parse_args(argv)
+
+    if args.erp != "lab":
+        print(f"refusing: --erp {args.erp} is not supported by this overlay. "
+              f"This overlay is Lab-ERP specific (instrument codes INST-001…INST-022). "
+              f"Use a wrapper-specific overlay for {args.erp}.", file=sys.stderr)
+        return 2
+
+    db_path = args.db if args.db else _app.DB_PATH
+    if "/operational/" in str(db_path) and not args.allow_operational:
+        print(f"refusing: {db_path} is an operational DB. Pass --allow-operational to override.",
+              file=sys.stderr)
+        return 2
+
     if not db_path.exists():
         print(f"DB not found: {db_path}. Run populate_live_demo first.", file=sys.stderr)
         return 2

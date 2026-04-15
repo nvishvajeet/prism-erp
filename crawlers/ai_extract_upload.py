@@ -11,23 +11,37 @@ The output of this module is the input to the (future) REVIEW UI / API,
 which in turn feeds the canonical APPLY paths in app.py
 (`bulk_create_users`, instrument admin, `instrument_operators`).
 
-This module is deliberately schema-light — it makes a best-effort guess
-at the upload's intent (currently: "operator list for instruments") and
-returns a structured proposal. A human picks it up from there.
+ERP-AWARE: takes a mandatory `--erp lab|ravikiran` flag that selects
+the right schema interpretation. There is no default — per the ERP
+silo policy ("separate gits which serve specializations of the
+wrappers, separate data store"), wrong-target writes must be a loud
+error, not a silent default.
+
+  --erp lab        instrument-list-with-operator-name spreadsheets
+                   (cols: SerialNo | Instrument | Operator(s))
+                   matches against `instruments` table on --db
+
+  --erp ravikiran  household-staff roster spreadsheets across
+                   KITCHEN / PF / TUCKSHOP / FLEET sheets
+                   (cols: SerialNo | Name | Designation | DateOfJoining
+                          | Salary | TotalDay | PresentDays)
+                   each row → a proposed user, role from designation,
+                   department from sheet name
 
 Usage:
-    python -m crawlers.ai_extract_upload <path-to-xlsx> [--db <sqlite-path>]
+    python -m crawlers.ai_extract_upload --erp <lab|ravikiran> <path-to-xlsx> [--db <sqlite>]
 
 Examples:
-    python -m crawlers.ai_extract_upload \\
-        data/demo/ai_uploads/9/2026-04-15_Instrument_list_with_operator_name.xlsx
+    python -m crawlers.ai_extract_upload --erp lab \\
+        data/demo/ai_uploads/9/2026-04-15_Instrument_list_with_operator_name.xlsx \\
+        --db data/demo/lab_scheduler.db
 
-    python -m crawlers.ai_extract_upload <file> --db data/demo/lab_scheduler.db
+    python -m crawlers.ai_extract_upload --erp ravikiran \\
+        ~/ravikiran-services/data/ai_uploads/18/2026-04-15_attendance_sheet.xlsx
 
-The `--db` flag is optional; without it the proposal will not be matched
-against existing instruments and the `matched_db_code` fields will be empty.
-Operational DB is intentionally not the default — per WORKFLOW.md §3.5,
-real lab data is off-limits to dev tooling.
+The `--db` flag is optional; without it, no match-against-existing is performed
+(matched_db_code fields stay empty). Operational DB is intentionally not
+defaulted — per WORKFLOW.md §3.5, real lab data is off-limits to dev tooling.
 """
 
 from __future__ import annotations
@@ -198,6 +212,23 @@ def read_sheet(path: Path) -> tuple[str, list[list[str]], dict]:
     return "(empty)", [], {"rows": 0, "cols": 0}
 
 
+def read_all_sheets(path: Path) -> list[tuple[str, list[list[str]], dict]]:
+    """Open every non-empty sheet, return [(sheet_name, rows, dims), ...]."""
+    out = []
+    wb = openpyxl.load_workbook(path, data_only=True)
+    for sn in wb.sheetnames:
+        ws = wb[sn]
+        rows = [
+            ["" if v is None else str(v).strip() for v in r]
+            for r in ws.iter_rows(values_only=True)
+        ]
+        while rows and not any(c.strip() for c in rows[-1]):
+            rows.pop()
+        if rows:
+            out.append((sn, rows, {"rows": ws.max_row, "cols": ws.max_column}))
+    return out
+
+
 def find_header_row(rows: list[list[str]]) -> int:
     """Heuristic: the first row that contains 'name', 'operator', or 'instrument'
     in any cell (case-insensitive)."""
@@ -297,20 +328,193 @@ def extract_operator_list(path: Path, db_path: Path | None) -> Proposal:
 
 
 # ---------------------------------------------------------------------------
+# Ravikiran extractor — household staff roster across multiple sheets
+# ---------------------------------------------------------------------------
+
+# Map sheet name → role / office_location prefix
+RAVIKIRAN_SHEET_DEPT = {
+    "KITCHEN":  ("operator", "Kitchen"),
+    "PF":       ("operator", "Office (PF)"),
+    "TUCKSHOP": ("operator", "Tuck Shop"),
+    "TUCK":     ("operator", "Tuck Shop"),
+    "FLEET":    ("operator", "Fleet · Driver"),
+    "DRIVERS":  ("operator", "Fleet · Driver"),
+    "LAUNDRY":  ("operator", "Laundry"),
+    "OFFICE":   ("operator", "Office"),
+}
+
+# Designation → 3-letter prefix for short_code
+_DESIGNATION_PREFIX = {
+    "cook":      "CK",
+    "helper":    "HL",
+    "chapati":   "CH",
+    "wash":      "WS",
+    "bekar":     "BK",
+    "utility":   "UT",
+    "supervisor":"SP",
+    "account":   "AC",
+    "cashier":   "CS",
+    "driver":    "DR",
+    "waiter":    "WT",
+    "cleaner":   "CL",
+    "laundry":   "LD",
+}
+
+
+def _ravikiran_short_code(name: str, designation: str, taken: set[str]) -> str:
+    cleaned = re.sub(r"[^A-Za-z]+", " ", name).upper().split()
+    if not cleaned:
+        return ""
+    initials = "".join(p[0] for p in cleaned[:3])
+    # Prefix from designation if recognised (improves readability across rows)
+    desg = (designation or "").lower()
+    desg_prefix = ""
+    for k, p in _DESIGNATION_PREFIX.items():
+        if k in desg:
+            desg_prefix = p
+            break
+    base = (desg_prefix + initials)[:5] if desg_prefix else initials[:5]
+    candidate = base
+    n = 2
+    while candidate in taken:
+        candidate = f"{base[:4]}{n}"
+        n += 1
+        if n > 99:
+            break
+    return candidate
+
+
+def _ravikiran_email(name: str, sheet_dept: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z]+", " ", name).strip().lower()
+    parts = cleaned.split()
+    if not parts:
+        return ""
+    return f"{'.'.join(parts)}@ravikiran.local"
+
+
+def _ravikiran_find_header(rows: list[list[str]]) -> int:
+    """Find the header row containing NAME and Designation (case-insensitive)."""
+    for idx, row in enumerate(rows):
+        joined = " ".join(c.lower() for c in row)
+        if "name" in joined and ("designation" in joined or "desig" in joined):
+            return idx
+    # Fallback: first row with "name" and a serial column heading
+    for idx, row in enumerate(rows):
+        joined = " ".join(c.lower() for c in row)
+        if "name" in joined and ("sr" in joined or "no" in joined):
+            return idx
+    return 0
+
+
+def _column_index(header: list[str], *needles: str) -> int | None:
+    """Find the first column whose header contains any of the needles (lowercase substring)."""
+    for i, cell in enumerate(header):
+        c = cell.lower()
+        if any(n in c for n in needles):
+            return i
+    return None
+
+
+def extract_ravikiran_roster(path: Path) -> Proposal:
+    """Iterate every sheet, treat each row as a household-staff member."""
+    proposal = Proposal(
+        source_file=str(path),
+        detected_action_type="household_staff_roster",
+        sheet_dimensions={},
+    )
+    sheets = read_all_sheets(path)
+    if not sheets:
+        proposal.notes.append("Workbook has no non-empty sheets.")
+        return proposal
+
+    proposal.sheet_dimensions = {sn: dims for sn, _, dims in sheets}
+    seen_codes: set[str] = set()
+    seen_emails: dict[str, ProposedUser] = {}
+
+    for sheet_name, rows, _ in sheets:
+        sheet_key = sheet_name.strip().upper()
+        # Pick role / dept defaults from sheet name
+        default_role, dept_label = ("operator", sheet_name.strip())
+        for k, (r, lbl) in RAVIKIRAN_SHEET_DEPT.items():
+            if k in sheet_key:
+                default_role, dept_label = r, lbl
+                break
+
+        header_idx = _ravikiran_find_header(rows)
+        header = rows[header_idx] if header_idx < len(rows) else []
+        col_name  = _column_index(header, "name")
+        col_desig = _column_index(header, "designation", "desig")
+        col_doj   = _column_index(header, "joining", "doj")
+        col_sal   = _column_index(header, "salary", "wage")
+        if col_name is None:
+            proposal.notes.append(f"[{sheet_name}] could not locate NAME column — skipped.")
+            continue
+
+        rows_used = 0
+        for ridx, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
+            if not any(c.strip() for c in row):
+                continue
+            name = row[col_name] if col_name < len(row) else ""
+            name = re.sub(r"\s+", " ", name).strip()
+            if not name or name.lower() in {"name"}:
+                continue
+            # Filter out designation-only rows (no real personal name)
+            if name.upper() == name and len(name.split()) == 1 and len(name) <= 4:
+                continue
+            designation = (row[col_desig] if (col_desig is not None and col_desig < len(row)) else "").strip()
+            doj         = (row[col_doj]   if (col_doj   is not None and col_doj   < len(row)) else "").strip()
+            salary      = (row[col_sal]   if (col_sal   is not None and col_sal   < len(row)) else "").strip()
+
+            email = _ravikiran_email(name, dept_label)
+            if email in seen_emails:
+                continue  # duplicate name across sheets — keep first occurrence
+            sc = _ravikiran_short_code(name, designation, seen_codes)
+            seen_codes.add(sc)
+            seen_emails[email] = ProposedUser(
+                name=name.title() if name.upper() == name else name,
+                email=email,
+                role=default_role,
+                short_code=sc,
+                source_row=ridx,
+            )
+            rows_used += 1
+
+        proposal.notes.append(f"[{sheet_name}] department={dept_label} → {rows_used} staff extracted.")
+
+    proposal.proposed_users = list(seen_emails.values())
+    return proposal
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
+EXTRACTORS = {
+    "lab": extract_operator_list,
+    "ravikiran": extract_ravikiran_roster,
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ai_extract_upload", description=__doc__.split("\n\n")[0])
+    ap.add_argument(
+        "--erp",
+        required=True,
+        choices=sorted(EXTRACTORS.keys()),
+        help="Which ERP wrapper this upload belongs to. NO DEFAULT — wrong-target writes "
+             "must be a loud error per the silo policy. Choices: lab, ravikiran.",
+    )
     ap.add_argument("file", type=Path, help="Path to the uploaded .xlsx")
     ap.add_argument(
         "--db",
         type=Path,
         default=None,
-        help="Optional sqlite path for matching against existing instruments. "
-             "Operational DB is intentionally NOT a default (see WORKFLOW.md §3.5).",
+        help="Optional sqlite path for matching against existing entities. "
+             "Operational DB is intentionally NOT defaulted (WORKFLOW.md §3.5).",
     )
     ap.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="Write JSON to this file in addition to stdout.")
     args = ap.parse_args(argv)
 
     if not args.file.exists():
@@ -320,9 +524,18 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"error": f"only .xlsx/.xlsm supported, got {args.file.suffix}"}), file=sys.stderr)
         return 2
 
-    proposal = extract_operator_list(args.file, args.db)
+    extractor = EXTRACTORS[args.erp]
+    if args.erp == "lab":
+        proposal = extractor(args.file, args.db)
+    else:
+        proposal = extractor(args.file)
+    proposal_dict = asdict(proposal)
+    proposal_dict["erp"] = args.erp
     indent = 2 if args.pretty else None
-    print(json.dumps(asdict(proposal), indent=indent, ensure_ascii=False))
+    rendered = json.dumps(proposal_dict, indent=indent, ensure_ascii=False)
+    print(rendered)
+    if args.out:
+        args.out.write_text(rendered, encoding="utf-8")
     return 0
 
 

@@ -515,7 +515,13 @@ def _user_portals(user_id: int) -> list:
 
 def _active_portal_modules() -> set:
     """Get modules for the currently active portal from session.
-    Returns ALL_MODULES if no portal is selected (backwards compat)."""
+    Returns ALL_MODULES if no portal is selected (backwards compat).
+    Safe to call outside a request context (e.g. during __main__
+    startup probes like _should_start_compute_queue_manager) — the
+    has_request_context guard falls back to ALL_MODULES so callers
+    that haven't got a session yet still get a sensible answer."""
+    if not has_request_context():
+        return ALL_MODULES
     portal_slug = session.get("active_portal")
     if not portal_slug:
         return ALL_MODULES
@@ -531,7 +537,11 @@ def module_visible_in_active_portal(name: str) -> bool:
 
 
 def _active_portal_config() -> dict | None:
-    """Get the config dict for the active portal, or None."""
+    """Get the config dict for the active portal, or None. Safe
+    outside a request context — returns None if no request is in
+    flight (same reason as _active_portal_modules above)."""
+    if not has_request_context():
+        return None
     slug = session.get("active_portal")
     if slug and slug in ERP_PORTALS:
         return {"slug": slug, **ERP_PORTALS[slug]}
@@ -28246,6 +28256,16 @@ if __name__ == "__main__":
     # devices can reach it at http://<host>:5055/.
     bind_host = os.environ.get("LAB_SCHEDULER_HOST", "127.0.0.1")
 
+    # LAB_SCHEDULER_PORT controls the bind port. Default 5055 matches
+    # the historical single-instance convention. Set explicitly when
+    # running the three-ERP-variant triad (scripts/start_erp_triad.sh)
+    # so each variant binds a distinct port (5101/5102/5103) without
+    # colliding with the production :5055.
+    try:
+        bind_port = int(os.environ.get("LAB_SCHEDULER_PORT", "5055"))
+    except ValueError:
+        bind_port = 5055
+
     # use_reloader watches .py files and auto-restarts on code changes.
     # Decoupled from LAB_SCHEDULER_DEBUG as of v1.4.5 — a laptop
     # operator editing app.py wants reload even without the debug
@@ -28269,7 +28289,7 @@ if __name__ == "__main__":
     else:
         auto_reload = bind_host in ("127.0.0.1", "localhost", "::1")
 
-    app.run(debug=is_debug, use_reloader=auto_reload, host=bind_host, port=5055,
+    app.run(debug=is_debug, use_reloader=auto_reload, host=bind_host, port=bind_port,
             extra_files=[
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),

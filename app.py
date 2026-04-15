@@ -7692,6 +7692,10 @@ def seed_data() -> None:
         "balaji.phunde@catalyst.local", "mangesh.ghule@catalyst.local",
         # 2026-04-15 · Tester
         "tejveer",
+        # 2026-04-15 · Test accounts (one per non-tester role, see real_team)
+        "test.super_admin", "test.site_admin", "test.instrument_admin",
+        "test.faculty", "test.operator", "test.professor",
+        "test.finance", "test.requester",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -7722,6 +7726,26 @@ def seed_data() -> None:
         # Username "tejveer", password "12345" (demo default, must_change on first login).
         ("Tejveer",            "tejveer",                       "tester",
          "Ravikiran · Tester",         ["lab", "hq"]),
+        # 2026-04-15 · Test accounts — one per non-tester role, so Tejveer
+        # can walk §7 of /me/testing-plan as every role. All passwords
+        # '12345', must_change on first login. Names prefixed "TEST " so
+        # no one confuses them with real team.
+        ("TEST Super Admin",   "test.super_admin",              "super_admin",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Site Admin",    "test.site_admin",               "site_admin",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Instrument Admin", "test.instrument_admin",      "instrument_admin",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Faculty",       "test.faculty",                  "faculty_in_charge",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Operator",      "test.operator",                 "operator",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Professor",     "test.professor",                "professor_approver",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Finance",       "test.finance",                  "finance_admin",
+         "Test · Kothrud HQ",          ["hq"]),
+        ("TEST Requester",     "test.requester",                "requester",
+         "Test · Lab",                 ["lab"]),
     ]
     for name, email, role, office, _portals in real_team:
         db.execute(
@@ -8140,7 +8164,7 @@ ROLE_NEXT_ACTIONS = {
     "professor_approver": "Approve pending requests. Start at Schedule → Under Review.",
     "finance_admin": "Clear finance approvals. Start at Schedule → Under Review.",
     "requester": "Submit and track your samples. Start at New Request.",
-    "tester": "Walk every page, file bugs via the debugger. Start anywhere.",
+    "tester": "Walk every page, file bugs. Your plan: /me/testing-plan",
 }
 
 ROLE_MANUAL_HEADLINES = {
@@ -16881,6 +16905,162 @@ def my_history():
 @login_required
 def my_profile():
     return redirect(url_for("user_profile", user_id=current_user()["id"]))
+
+
+# ── Testing plan page (tester + admin access) ─────────────────────
+# Renders docs/TESTING_PLAN_TEJVEER.md as HTML for Tejveer (role
+# 'tester') to read on-site. Admins can see it too so they can
+# review what Tejveer is working against. No markdown library
+# dependency — converter below handles the limited subset of
+# markdown used in the plan file (headings, lists, bold, code,
+# tables, blockquotes, horizontal rules).
+
+_TESTING_PLAN_PATH = BASE_DIR / "docs" / "TESTING_PLAN_TEJVEER.md"
+
+
+def _render_plan_markdown(text: str) -> str:
+    """Tiny markdown → HTML converter. Deliberately minimal; covers
+    the syntax actually used in TESTING_PLAN_TEJVEER.md. Not a
+    general-purpose markdown engine."""
+    import html as _html
+
+    escaped = _html.escape(text)
+    lines = escaped.split("\n")
+    out = []
+    in_ul = False
+    in_ol = False
+    in_table = False
+    table_rows = []
+
+    def close_lists():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+        if in_ol:
+            out.append("</ol>")
+            in_ol = False
+
+    def flush_table():
+        nonlocal in_table, table_rows
+        if not in_table:
+            return
+        # table_rows is list of lists of cell strings
+        # header row is first; separator row (---) is second
+        if len(table_rows) >= 2:
+            header = table_rows[0]
+            body = table_rows[2:]  # skip the --- separator
+            out.append("<table>")
+            out.append("<thead><tr>")
+            for cell in header:
+                out.append(f"<th>{cell.strip()}</th>")
+            out.append("</tr></thead>")
+            if body:
+                out.append("<tbody>")
+                for row in body:
+                    out.append("<tr>")
+                    for cell in row:
+                        out.append(f"<td>{cell.strip()}</td>")
+                    out.append("</tr>")
+                out.append("</tbody>")
+            out.append("</table>")
+        in_table = False
+        table_rows = []
+
+    def inline(s: str) -> str:
+        # **bold** → <strong>
+        import re as _re
+        s = _re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+        # `code` → <code>
+        s = _re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+        return s
+
+    import re as _re
+    for raw in lines:
+        line = raw.rstrip()
+        # Table detection: lines with | and at least 2 pipes
+        if line.startswith("|") and line.count("|") >= 2:
+            close_lists()
+            cells = [c for c in line.strip().strip("|").split("|")]
+            in_table = True
+            table_rows.append([inline(c) for c in cells])
+            continue
+        if in_table:
+            flush_table()
+
+        if not line.strip():
+            close_lists()
+            out.append("")
+            continue
+
+        # Horizontal rule
+        if line.strip() in ("---", "***", "___"):
+            close_lists()
+            out.append("<hr/>")
+            continue
+
+        # Headings
+        m = _re.match(r"^(#{1,6})\s+(.*)$", line)
+        if m:
+            close_lists()
+            level = len(m.group(1))
+            out.append(f"<h{level}>{inline(m.group(2))}</h{level}>")
+            continue
+
+        # Blockquote
+        m = _re.match(r"^>\s?(.*)$", line)
+        if m:
+            close_lists()
+            out.append(f"<blockquote>{inline(m.group(1))}</blockquote>")
+            continue
+
+        # Unordered list
+        m = _re.match(r"^(\s*)[-*]\s+(.*)$", line)
+        if m:
+            if not in_ul:
+                close_lists()
+                out.append("<ul>")
+                in_ul = True
+            out.append(f"<li>{inline(m.group(2))}</li>")
+            continue
+
+        # Ordered list
+        m = _re.match(r"^(\s*)\d+\.\s+(.*)$", line)
+        if m:
+            if not in_ol:
+                close_lists()
+                out.append("<ol>")
+                in_ol = True
+            out.append(f"<li>{inline(m.group(2))}</li>")
+            continue
+
+        # Plain paragraph
+        close_lists()
+        out.append(f"<p>{inline(line)}</p>")
+
+    close_lists()
+    flush_table()
+    return "\n".join(out)
+
+
+@app.route("/me/testing-plan")
+@login_required
+def testing_plan_page():
+    user = current_user()
+    role = (user["role"] if user else "") or ""
+    if role not in {"tester", "super_admin", "site_admin", "owner", "instrument_admin"}:
+        abort(404)
+    try:
+        plan_text = _TESTING_PLAN_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        plan_text = "(testing plan file not found on disk — ask the operator to sync from ~/.claude/agent-orchestration/TESTING_PLAN_TEJVEER.md)"
+    plan_html = _render_plan_markdown(plan_text)
+    return render_template(
+        "testing_plan.html",
+        plan_content=plan_text,
+        plan_html=plan_html,
+        current_user_name=(user["name"] if user else ""),
+    )
 
 
 @app.route("/manual")

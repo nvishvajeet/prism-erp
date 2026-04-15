@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Your testing plan — {{ current_user_name or "" }}{% endblock %}
+
+{% block content %}
+<div class="tiles-container" style="max-width: 860px; margin: 1.5rem auto;">
+  <div class="tile" style="padding: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem;">
+      <h1 style="margin: 0;">Your testing plan</h1>
+      <span class="badge badge-info">role: tester</span>
+    </div>
+    <p style="color: var(--muted, #888); font-size: 0.9rem; margin: 0 0 1.5rem 0;">
+      Read top to bottom. §1–§6 = walk the site as yourself. §7 = walk as each of the
+      eight <code>test.*</code> roles. §8 = how your bugs reach dev.
+      Canonical source lives outside this app; this page may lag by a commit.
+      Refresh the page if the operator tells you the plan was updated.
+    </p>
+    <hr/>
+    {% if plan_html %}
+      <div class="testing-plan-body" style="line-height: 1.55; font-size: 0.95rem;">
+        {{ plan_html|safe }}
+      </div>
+    {% else %}
+      <pre class="testing-plan-raw" style="white-space: pre-wrap; word-wrap: break-word; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.82rem; line-height: 1.5; background: rgba(0,0,0,0.03); padding: 1rem; border-radius: 6px;">{{ plan_content }}</pre>
+    {% endif %}
+    <hr style="margin-top: 2rem;"/>
+    <p style="color: var(--muted, #888); font-size: 0.85rem;">
+      Questions or stuck? WhatsApp the operator. For SEV1/SEV2/SEC bugs, use
+      the break-glass channel (§4). For SEV3/SEV4 bugs, submit via the
+      debugger (<code>?debug=1</code> in the URL) and note the bug in your
+      daily log per §8.
+    </p>
+  </div>
+</div>
+
+<style>
+  .testing-plan-body h1 { font-size: 1.5rem; margin-top: 2rem; }
+  .testing-plan-body h2 { font-size: 1.2rem; margin-top: 1.8rem; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 0.3rem; }
+  .testing-plan-body h3 { font-size: 1.05rem; margin-top: 1.4rem; color: var(--muted, #666); }
+  .testing-plan-body ul, .testing-plan-body ol { padding-left: 1.6rem; }
+  .testing-plan-body li { margin: 0.3rem 0; }
+  .testing-plan-body code { background: rgba(0,0,0,0.06); padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.88em; }
+  .testing-plan-body pre { background: rgba(0,0,0,0.04); padding: 0.8rem; border-radius: 6px; overflow-x: auto; font-size: 0.82rem; }
+  .testing-plan-body table { border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  .testing-plan-body th, .testing-plan-body td { border: 1px solid rgba(0,0,0,0.12); padding: 0.4rem 0.7rem; text-align: left; }
+  .testing-plan-body th { background: rgba(0,0,0,0.03); font-weight: 600; }
+  .testing-plan-body blockquote { border-left: 3px solid var(--primary, #4a90e2); padding-left: 1rem; color: var(--muted, #666); margin: 1rem 0; }
+  .testing-plan-body hr { border: 0; border-top: 1px solid rgba(0,0,0,0.1); margin: 1.5rem 0; }
+  .testing-plan-body strong { font-weight: 600; }
+</style>
+{% endblock %}

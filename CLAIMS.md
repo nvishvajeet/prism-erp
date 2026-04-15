@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| Codex | crawler-burn-noopener-onclick-takeover | 2026-04-15T17:48 | crawlers/strategies/external_link_noopener.py, crawlers/strategies/no_inline_onclick.py, crawlers/strategies/__init__.py, crawlers/waves.py, templates/_hub.html, templates/filing_retention.html, templates/letter_detail.html, templates/receipt_detail.html, templates/vendor_payment_detail.html, CLAIMS.md | pending |
 | Codex | live-portal-separation-search-personnel | 2026-04-15T17:22 | app.py, templates/search.html | pending |
 | Claude-sonnet-preventive-crawlers | crawler-burn-noopener-onclick-macroimport | 2026-04-15T17:18 | crawlers/strategies/external_link_noopener.py, crawlers/strategies/no_inline_onclick.py, crawlers/strategies/macro_import_unused.py, crawlers/strategies/__init__.py, crawlers/waves.py, templates/* (only files with findings from those crawlers) | pending |
 

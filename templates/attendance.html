@@ -19,6 +19,9 @@
     <a class="btn" href="{{ url_for('attendance_team') }}" data-vis="{{ V }}">Team Attendance</a>
     {% endif %}
     <a class="btn" href="{{ url_for('qr_attendance_kiosk') }}" data-vis="{{ V }}">QR Kiosk</a>
+    {% if is_admin or is_manager %}
+    <a class="btn" href="{{ url_for('attendance_quick_mark_page') }}" data-vis="{{ V }}">Quick Mark (#)</a>
+    {% endif %}
     <a class="btn" href="{{ url_for('qr_my_code') }}" data-vis="{{ V }}">My QR</a>
   </div>
 </header>

@@ -64,6 +64,78 @@ T+0 ──────────────────── T+55 ─── 
   Lab, nothing in Lab mentions Ravikiran, chooser works, and
   the audit docs round-trip.
 
+## START HERE if you're joining now (Claude 1 / Codex 0)
+
+> Claude 0 is the conductor for this sprint. Read this entire
+> doc once, then drop into your lane. Claude 0 issues all direction
+> via `STATUS:` commits on this branch — check them before picking
+> up a task and whenever you finish one.
+
+### Read the sprint history (30 seconds)
+
+```bash
+# from your working copy, on operation-trois-agents branch:
+git fetch origin operation-trois-agents
+git log origin/operation-trois-agents --grep '^STATUS:' --oneline -40
+```
+
+The most recent STATUS commits tell you:
+- Where in the timeline we are (T+NN)
+- What each agent just shipped
+- Your current assignment (look for commits addressed to you)
+
+### Post your own progress
+
+Every ~15 min, or whenever you finish a chunk:
+
+```bash
+git commit --allow-empty -m "STATUS: T+NN <your-tag> — <past-tense summary>"
+git push origin operation-trois-agents
+```
+
+Your tag is `Claude1` or `Codex0` (no spaces, no hyphens).
+
+### Current timeline (extended 2026-04-15 T+32)
+
+```
+T+0 ─── T+15 ──────────────────────── T+120 ── T+125 ────── T+140 ────── T+150
+│WARMUP│    PHASE 1 · BUILD            │ MERGE+ │  PHASE 3  │  PHASE 4  │
+│ 15m  │    105 min (extended)         │ SMOKE  │  CRAWL    │ WEAVE+TAG │
+│      │    evidence-driven            │  5 min │  15 min   │  10 min   │
+└──────┴───────────────────────────────┴────────┴───────────┴───────────┘
+  CL0/1/CO       CL0/1/CO                  CL0   CL0/1/CO     CL0 alone
+```
+
+The owner extended the build window by one hour at T+32 — Phase 1
+now runs until T+120. Match that cadence; no need to race.
+
+### Active lanes (current state)
+
+- **Claude 0 (MacBook)** — Lane 1 (chooser + Ravikiran silo +
+  playbook + configs) + Lane 4 (attendance-by-number) +
+  merge captain + weaving.
+- **Claude 1 (iMac)** — Lane 2 extended: Ravikiran UI audit
+  first (it's where Tejveer tests), then back-fill Lab-ERP P1/P2,
+  then responsive polish. See the §"Lane 2 — Claude 1" block
+  below for the hard rules; Claude 0's latest STATUS commit
+  addressed to Claude1 has the priority order.
+- **Codex 0 (MacBook)** — Lane 3 extended: time-logging feature
+  (user_work_sessions + heartbeat + /admin/users/<id>/hours +
+  heartbeat.js) after the gatekeeping audit. See Claude 0's
+  latest STATUS commit addressed to Codex0 for the full spec.
+
+### Hard rules — the short version
+
+1. **Only edit files listed in your lane.**
+2. **Smoke gate before every push:** `.venv/bin/python scripts/smoke_test.py`.
+3. **No touching** `templates/base.html`, `templates/nav.html`,
+   `static/css/global.css`, or `~/.cloudflared/*` on mini.
+4. **Commit small, push often.** Max 250 changed lines per commit.
+5. **Don't read other agents' chat transcripts.** All coordination
+   is in this file + `STATUS:` commits.
+6. **Blocker?** Push `STATUS: T+NN <agent> — BLOCKER: <what>` and
+   drop out. Claude 0 picks it up at T+120.
+
 ## T+15 PIVOT — read this BEFORE continuing past T+15
 
 The first 15 minutes are **Warmup** — inventory and orientation

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CATALYST dev queue-review agent — LaunchAgent for the laptop.
+
+  Dev only. Runs the AI/debug/action queue review loop every 60s so
+  local development feels near-real-time even when traffic is light.
+
+  Install:
+    ./scripts/install_launchd.sh --queue-review
+
+  Uninstall:
+    launchctl bootout gui/$(id -u)/local.catalyst.queue-review
+    rm ~/Library/LaunchAgents/local.catalyst.queue-review.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.catalyst.queue-review</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/venv/bin/python</string>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/scripts/queue_review.py</string>
+        <string>dev-minute</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/queue-review-agent.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/queue-review-agent.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

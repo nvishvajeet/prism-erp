@@ -2,9 +2,10 @@
 # Install CATALYST launchd agents for either the laptop or the Mac mini.
 #
 # Usage:
-#   ./scripts/install_launchd.sh           # install production service
-#   ./scripts/install_launchd.sh --demo    # install demo service
-#   ./scripts/install_launchd.sh --verify  # install mini deploy verifier
+#   ./scripts/install_launchd.sh                 # install production service
+#   ./scripts/install_launchd.sh --demo          # install demo service
+#   ./scripts/install_launchd.sh --verify        # install mini deploy verifier
+#   ./scripts/install_launchd.sh --queue-review  # install 60s dev queue-review agent
 
 set -euo pipefail
 
@@ -18,6 +19,8 @@ if [ "${1:-}" = "--demo" ]; then
   MODE="demo"
 elif [ "${1:-}" = "--verify" ]; then
   MODE="verify"
+elif [ "${1:-}" = "--queue-review" ]; then
+  MODE="queue-review"
 fi
 
 pick_plist() {
@@ -27,6 +30,14 @@ pick_plist() {
       return
     fi
     echo "ERROR: --verify is mini-only and expects ~/Scheduler/Main" >&2
+    exit 1
+  fi
+  if [ "$MODE" = "queue-review" ]; then
+    if [ "$HOST_USER" = "vishvajeetn" ] && [ -d "$HOME/Documents/Scheduler/Main" ]; then
+      echo "$ROOT_DIR/ops/launchd/local.catalyst.queue_review.laptop.plist"
+      return
+    fi
+    echo "ERROR: --queue-review currently targets the dev laptop at ~/Documents/Scheduler/Main" >&2
     exit 1
   fi
   if [ "$MODE" = "demo" ]; then
@@ -68,6 +79,10 @@ if [ "$MODE" = "demo" ]; then
 elif [ "$MODE" = "verify" ]; then
   echo "Mini deploy verifier installed."
   echo "Expected log file: $ROOT_DIR/logs/deploy-verify.log"
+elif [ "$MODE" = "queue-review" ]; then
+  echo "Dev queue-review agent installed."
+  echo "Cadence: every 60 seconds"
+  echo "Expected log file: $ROOT_DIR/logs/queue-review-agent.log"
 else
   echo "Production service installed."
   echo "Expected env file: $ROOT_DIR/.env"

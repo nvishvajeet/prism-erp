@@ -16,6 +16,12 @@ Mini-only helper:
 |---|---|---|
 | `local.catalyst.verify.plist` | Mac mini (`vishwajeet`) | runs `scripts/verify_deploy.sh` every 60s to confirm bare HEAD = worktree HEAD = served HEAD |
 
+Dev-only helper:
+
+| File | Host | Purpose |
+|---|---|---|
+| `local.catalyst.queue_review.laptop.plist` | Dev laptop (`vishvajeetn`) | runs `scripts/queue_review.py` every 60s so AI/debug/action queues are reviewed continuously during development |
+
 ## macOS TCC gotcha — Documents folder access
 
 **The laptop plist will fail silently with `last exit code = 126`
@@ -101,6 +107,27 @@ It is a recovery lane that checks for deploy drift every minute and
 kickstarts `local.catalyst` if the bare repo, worktree, and served
 HTTPS health endpoint disagree. If drift still persists, it attempts one
 automatic force-resync per day by default.
+
+## Dev queue review agent
+
+Install on the dev laptop only:
+
+```bash
+./scripts/install_launchd.sh --queue-review
+launchctl print gui/$(id -u)/local.catalyst.queue-review | head -20
+tail -f logs/queue-review-agent.log
+```
+
+This helper is intentionally dev-only. It runs `scripts/queue_review.py`
+every 60 seconds so lightweight Claude-side queue review happens even
+when the system is quiet. That means:
+
+- debug feedback gets summarized quickly
+- pending AI pane requests are re-checked continuously
+- `queue_review_latest.md` stays fresh during active UI testing
+
+It does not replace the main web service. It is a sidecar reviewer for
+development cadence, not a production runtime requirement.
 
 ## Why no reloader
 

@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| Codex | docs-refresh-architecture-summary-stats | 2026-04-15T17:42 | docs/ARCHITECTURE_SUMMARY.md, CLAIMS.md | pending |
 | Claude-sonnet-preventive-crawlers | crawler-burn-noopener-onclick-macroimport | 2026-04-15T17:18 | crawlers/strategies/external_link_noopener.py, crawlers/strategies/no_inline_onclick.py, crawlers/strategies/macro_import_unused.py, crawlers/strategies/__init__.py, crawlers/waves.py, templates/* (only files with findings from those crawlers) | pending |
 
 ## Stale-claim recovery

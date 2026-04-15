@@ -650,6 +650,49 @@ def main() -> None:
         app.get_db().execute("DELETE FROM users WHERE email = 'smoke-pending@test.local'")
         app.get_db().commit()
 
+    # /forgot-password smoke — unauthenticated flow, row lands, queue surfaces it.
+    # Spec: docs/ROLE_SURFACES.md §3.
+    client.get("/logout")
+    # (a) GET renders the form
+    r = client.get("/forgot-password")
+    assert r.status_code == 200, f"/forgot-password GET expected 200, got {r.status_code}"
+    assert b"Forgot password" in r.data, "/forgot-password body missing 'Forgot password' heading"
+    assert b'name="email"' in r.data, "/forgot-password form missing email input"
+    # (b) underscore alias works
+    r2 = client.get("/forgot_password")
+    assert r2.status_code == 200, "/forgot_password underscore alias should 200"
+    # (c) POST with unknown user → generic flash, no enumeration
+    r3 = client.post("/forgot-password", data={"email": "stranger@nobody.local"}, follow_redirects=True)
+    assert r3.status_code == 200
+    assert b"admin has been notified" in r3.data, (
+        "/forgot-password unknown-user POST should flash 'admin has been notified' generically. "
+        "If this fails, the enumeration-defense flash copy has drifted."
+    )
+    # (d) POST with known user → same vague flash + row lands
+    r4 = client.post("/forgot-password", data={"email": "kondhalkar@catalyst.local"}, follow_redirects=True)
+    assert r4.status_code == 200
+    assert b"admin has been notified" in r4.data
+    with app.app.app_context():
+        row = app.get_db().execute(
+            "SELECT username_entered, matched_user_id, status FROM password_reset_requests "
+            "WHERE username_entered = 'kondhalkar@catalyst.local' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        assert row is not None, "password_reset_requests row didn't land — schema missing or INSERT failed silently"
+        assert row["matched_user_id"] is not None, "matched_user_id should be set for known-user request"
+        assert row["status"] == "pending", f"new row should be 'pending', got {row['status']!r}"
+    # (e) Admin sees the reset in /queue (Kondhalkar as instrument_admin)
+    login(client, "kondhalkar@catalyst.local")
+    queue = client.get("/queue")
+    assert b"Password reset" in queue.data, (
+        "/queue should surface the password_reset_requests row as 'Password reset' pill. "
+        "Check _action_queue_items pwd_reset branch + MODULE_REGISTRY queue nav_access."
+    )
+    assert b"kondhalkar@catalyst.local" in queue.data, "/queue should show the reset request's username"
+    # Clean up so smoke is idempotent
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM password_reset_requests WHERE username_entered LIKE '%@%.local'")
+        app.get_db().commit()
+
     print("smoke test passed")
 
 

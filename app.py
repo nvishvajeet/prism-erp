@@ -6349,6 +6349,9 @@ def init_db() -> None:
     _drop_legacy_finance_columns()
     # v2.0.2 — sweep stale debug/trace logs older than 7 days.
     _purge_stale_logs()
+    # Insights — telemetry retention (90 days). Runs once per app
+    # start; bounded-volume tables, cheap enough to keep in init_db.
+    _purge_stale_telemetry()
 
 
 def _seed_erp_portals() -> None:
@@ -6530,6 +6533,40 @@ def _purge_stale_logs(retention_days: int = 7) -> None:
                     p.unlink()
             except OSError:
                 pass
+
+
+def _purge_stale_telemetry(retention_days: int = 90) -> None:
+    """Insights — delete telemetry rows older than N days.
+
+    Runs once at init_db time. Bounded-volume tables (seconds-
+    granularity per user per path per session), so a 90-day window
+    is generous — cohort-sized (~50 users) deployments stay well
+    under a million rows.
+
+    Privacy: deleted rows are unrecoverable (no audit chain; this is
+    usage telemetry, not compliance data). Deliberate — the shorter
+    the retention, the lower the user-tracking risk.
+    """
+    try:
+        db = get_db()
+    except Exception:
+        return
+    try:
+        with closing(db.cursor()) as cur:
+            cur.execute(
+                "DELETE FROM telemetry_page_time "
+                "WHERE created_at < datetime('now', ?)",
+                (f'-{int(retention_days)} day',),
+            )
+            cur.execute(
+                "DELETE FROM telemetry_click "
+                "WHERE created_at < datetime('now', ?)",
+                (f'-{int(retention_days)} day',),
+            )
+        db.commit()
+    except sqlite3.OperationalError:
+        # Tables don't exist yet on very first boot — safe to ignore.
+        pass
 
 
 def _drop_legacy_finance_columns() -> None:

@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0a0d">
   <title>CATALYST</title>
-  <!-- Warmup stub only. Styling in Phase 1 (T+15..T+60). -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='chooser.css') }}">
 </head>
 <body>
   <header>
@@ -13,23 +14,49 @@
   </header>
 
   <main>
-    <a class="tile" href="{{ mitwpu_url }}">
-      <h2>MITWPU R&amp;D</h2>
-      <p>Central Instrumentation Facility — sample requests,
-         queue, instruments, grants, and lab operations.</p>
-      <span class="cta">Enter →</span>
+    <a class="tile tile-mitwpu" href="{{ mitwpu_url }}">
+      <div>
+        <span class="eyebrow">Academic · lab</span>
+        <h2>MITWPU R&amp;D</h2>
+        <p>Instrument bookings, sample requests, grants, and the
+           operations cadence for the Central Instrumentation
+           Facility.</p>
+      </div>
+      <span class="cta" aria-hidden="true">Open</span>
+      <span class="visually-hidden">Open the MITWPU R&amp;D portal</span>
     </a>
 
-    <a class="tile" href="{{ personal_url }}">
-      <h2>Personal ERP</h2>
-      <p>Household and estate operations — people, fleet, mess,
-         finance, and day-to-day coordination.</p>
-      <span class="cta">Enter →</span>
+    <a class="tile tile-personal" href="{{ personal_url }}">
+      <div>
+        <span class="eyebrow">Household · estate</span>
+        <h2>Personal ERP</h2>
+        <p>People, fleet, mess, finance, and the day-to-day
+           coordination that keeps the estate running.</p>
+      </div>
+      <span class="cta" aria-hidden="true">Open</span>
+      <span class="visually-hidden">Open the Personal ERP portal</span>
     </a>
   </main>
 
   <footer>
-    <small>CATALYST · choose a portal to continue</small>
+    <span class="wordmark">CATALYST</span>
+    Choose a portal to continue
   </footer>
+
+  <style>
+    /* .visually-hidden: keep the CTA discoverable via screen
+       readers without duplicating the visible "Open →" glyph. */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
 </body>
 </html>

@@ -1,0 +1,245 @@
+/* chooser.css — portal picker landing, dark-first, fully system-font.
+ * No external dependencies. Two-tile desktop, stacked mobile. */
+
+:root {
+  --bg:          #0a0a0d;
+  --bg-elev-1:   #16161c;
+  --bg-elev-2:   #1f1f28;
+  --ink:         #f3f3f5;
+  --muted:       #9da0ab;
+  --line:        rgba(255, 255, 255, 0.08);
+  --accent:      #e4e4ea;
+  --accent-blue: #4c9aff;
+  --accent-warm: #e8a65a;
+  --shadow-lg:   0 30px 80px rgba(0, 0, 0, 0.45);
+  --radius-lg:   22px;
+  --radius-md:   14px;
+  --font-stack:  -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:          #f7f7fa;
+    --bg-elev-1:   #ffffff;
+    --bg-elev-2:   #ffffff;
+    --ink:         #0b0b0e;
+    --muted:       #5a5d67;
+    --line:        rgba(0, 0, 0, 0.08);
+    --accent:      #1b1b22;
+    --shadow-lg:   0 20px 50px rgba(0, 0, 0, 0.12);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-stack);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  padding: max(1.25rem, env(safe-area-inset-top, 1rem))
+           max(1.25rem, env(safe-area-inset-right, 1rem))
+           max(1.25rem, env(safe-area-inset-bottom, 1rem))
+           max(1.25rem, env(safe-area-inset-left, 1rem));
+}
+
+header {
+  text-align: center;
+  margin: 2.5rem 0 2rem;
+}
+
+header h1 {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 700;
+}
+
+header p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+main {
+  flex: 1;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+@media (min-width: 900px) {
+  main {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.75rem;
+  }
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2rem 1.75rem;
+  min-height: 16rem;
+  background: linear-gradient(
+    155deg,
+    var(--bg-elev-1) 0%,
+    var(--bg-elev-2) 100%
+  );
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 200ms ease, border-color 200ms ease,
+              box-shadow 200ms ease;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.tile::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    var(--accent-blue) 100%
+  );
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+  z-index: -1;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+}
+
+.tile:hover,
+.tile:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.tile:hover::before,
+.tile:focus-visible::before {
+  opacity: 0.85;
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 3px;
+}
+
+.tile-mitwpu {
+  /* academic / lab visual accent — cool blue gradient underlay */
+  background-image:
+    radial-gradient(circle at 80% 10%,
+      rgba(76, 154, 255, 0.18) 0,
+      transparent 55%),
+    linear-gradient(155deg, var(--bg-elev-1) 0%, var(--bg-elev-2) 100%);
+}
+
+.tile-personal {
+  /* household / estate accent — warm amber underlay */
+  background-image:
+    radial-gradient(circle at 80% 10%,
+      rgba(232, 166, 90, 0.16) 0,
+      transparent 55%),
+    linear-gradient(155deg, var(--bg-elev-1) 0%, var(--bg-elev-2) 100%);
+}
+
+.tile .eyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tile h2 {
+  margin: 0.25rem 0 0.35rem;
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tile p {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.98rem;
+  max-width: 26rem;
+}
+
+.tile .cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink);
+  min-height: 44px;   /* Apple HIG tap target */
+}
+
+.tile .cta::after {
+  content: "→";
+  transition: transform 200ms ease;
+  font-size: 1.1em;
+}
+
+.tile:hover .cta::after,
+.tile:focus-visible .cta::after {
+  transform: translateX(4px);
+}
+
+footer {
+  text-align: center;
+  padding: 1.5rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+footer .wordmark {
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.6rem;
+  letter-spacing: 0.12em;
+}
+
+/* Reduced-motion: kill the lift + arrow slide */
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile .cta::after {
+    transition: none;
+  }
+  .tile:hover,
+  .tile:focus-visible {
+    transform: none;
+  }
+  .tile:hover .cta::after,
+  .tile:focus-visible .cta::after {
+    transform: none;
+  }
+}

@@ -47,7 +47,7 @@
       <p class="hint" data-vis="{{ V }}">Attached: {{ e.file_name }}</p>
       {% endif %}
       {% if e.response %}
-      <div style="margin-top:0.5rem;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;white-space:pre-wrap;font-size:0.9rem;line-height:1.6;" data-vis="{{ V }}">{{ e.response }}</div>
+      <div style="margin-top:0.5rem;padding:0.75rem;background:var(--surface-alt);border-radius:8px;white-space:pre-wrap;font-size:0.9rem;line-height:1.6;" data-vis="{{ V }}">{{ e.response }}</div>
       {% endif %}
       {% if e.batch_id %}
       <p class="hint" style="margin-top:0.25rem;" data-vis="{{ V }}">Batch: {{ e.batch_id }} &middot; Processed: {{ e.processed_at[:16] if e.processed_at else 'pending' }}</p>

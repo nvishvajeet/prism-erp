@@ -72,7 +72,7 @@
         <input type="hidden" name="estimated_cores" id="estCores" value="4" data-vis="{{ V }}">
 
         {# ── AI Estimate panel ── #}
-        <div id="estimatePanel" style="background:var(--bg-secondary);border-radius:8px;padding:1rem;display:none;" data-vis="{{ V }}">
+        <div id="estimatePanel" style="background:var(--surface-alt);border-radius:8px;padding:1rem;display:none;" data-vis="{{ V }}">
           <div class="section-head" data-vis="{{ V }}">✨ AI Resource Estimate</div>
           <div id="estimateContent" data-vis="{{ V }}"></div>
         </div>
@@ -183,8 +183,8 @@ function runEstimate() {
       + '<div><strong>Cores:</strong> ' + (data.cores || '?') + '</div>'
       + '<div><strong>Est. Time:</strong> ' + (data.estimated_minutes || '?') + ' min</div>'
       + '<div><strong>Est. Output:</strong> ' + (data.estimated_output_mb || '?') + ' MB</div>'
-      + '</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">' + (data.reasoning || '') + '</div>';
-  }).catch(() => { content.innerHTML = '<span style="color:var(--color-error);">Estimate failed — submit anyway with defaults.</span>'; });
+      + '</div><div style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);">' + (data.reasoning || '') + '</div>';
+  }).catch(() => { content.innerHTML = '<span style="color:var(--danger);">Estimate failed — submit anyway with defaults.</span>'; });
 }
 </script>
 {% endblock %}

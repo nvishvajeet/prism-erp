@@ -21,7 +21,7 @@
     {% endfor %}
   </div>
   {% endif %}
-  <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;border-top:1px solid var(--color-separator);" data-vis="{{ V }}">
+  <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;border-top:1px solid var(--line);" data-vis="{{ V }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="portal" value="dashboard">
     <div class="control-flex-wrap" data-vis="{{ V }}">

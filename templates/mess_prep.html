@@ -21,7 +21,7 @@
         <p style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.15em;color:var(--muted);" data-vis="{{ V }}">{{ m|title }}{% if m == current_meal %} ●{% endif %}</p>
         <p style="font-size:2rem;font-weight:800;" data-vis="{{ V }}">{{ predictions.get(m, 0) }}</p>
         <p class="hint" data-vis="{{ V }}">plates needed</p>
-        <p style="font-size:1rem;font-weight:600;color:var(--color-green);margin-top:0.25rem;" data-vis="{{ V }}">{{ today_counts.get(m, 0) }} served</p>
+        <p style="font-size:1rem;font-weight:600;color:var(--lifecycle-ok);margin-top:0.25rem;" data-vis="{{ V }}">{{ today_counts.get(m, 0) }} served</p>
       </div>
       {% endfor %}
     </div>

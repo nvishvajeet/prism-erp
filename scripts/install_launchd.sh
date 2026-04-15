@@ -41,6 +41,10 @@ pick_plist() {
     exit 1
   fi
   if [ "$MODE" = "demo" ]; then
+    if [ "$HOST_USER" = "vishvajeetn" ] && [ -d "$HOME/Documents/Scheduler/Main" ]; then
+      echo "$ROOT_DIR/ops/launchd/local.catalyst.demo.laptop.plist"
+      return
+    fi
     echo "$ROOT_DIR/ops/launchd/local.catalyst.demo.plist"
     return
   fi
@@ -72,6 +76,15 @@ echo "==> launchctl print"
 launchctl print "gui/$(id -u)/$LABEL" | sed -n '1,20p'
 
 echo ""
+if [ "$HOST_USER" = "vishvajeetn" ] && [ -d "$HOME/Documents/Scheduler/Main" ] && [ "$MODE" != "queue-review" ]; then
+  echo "NOTE: this laptop worktree lives under ~/Documents."
+  echo "      launchd will keep failing until /bin/bash has Full Disk Access"
+  echo "      or the worktree is moved out of ~/Documents."
+  echo "      A symlink such as ~/Scheduler does not bypass macOS TCC."
+  echo ""
+fi
+
+echo ""
 if [ "$MODE" = "demo" ]; then
   echo "Demo service installed."
   echo "Expected env file: $ROOT_DIR/.env.demo"
@@ -85,6 +98,11 @@ elif [ "$MODE" = "queue-review" ]; then
   echo "Expected log file: $ROOT_DIR/logs/queue-review-agent.log"
 else
   echo "Production service installed."
-  echo "Expected env file: $ROOT_DIR/.env"
-  echo "Expected log file: $ROOT_DIR/logs/server.log"
+  if [ "$HOST_USER" = "vishvajeetn" ] && [ -d "$HOME/Documents/Scheduler/Main" ]; then
+    echo "Expected env file: $ROOT_DIR/.env.live"
+    echo "Expected log file: $ROOT_DIR/logs/server-live.log"
+  else
+    echo "Expected env file: $ROOT_DIR/.env"
+    echo "Expected log file: $ROOT_DIR/logs/server.log"
+  fi
 fi

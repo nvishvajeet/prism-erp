@@ -1,14 +1,21 @@
 # CATALYST launchd agents
 
-Two plists live here. Same `Label` (`local.catalyst`), different
-absolute paths. `scripts/install_launchd.sh` picks the right one
-by probing `$PWD`, so a fresh clone onto either machine bootstraps
-automatically.
+Two live-service plists live here. Same `Label` (`local.catalyst`),
+different absolute paths. `scripts/install_launchd.sh` picks the
+right one by probing the host/user, so a fresh clone onto either
+machine bootstraps automatically.
 
 | File | Host | Working copy |
 |---|---|---|
 | `local.catalyst.plist`         | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
 | `local.catalyst.laptop.plist`  | Dev laptop (`your-user`) | `~/Documents/Scheduler/Main` |
+
+Demo-service plists:
+
+| File | Host | Working copy |
+|---|---|---|
+| `local.catalyst.demo.plist` | Mac mini (`vishwajeet`) | `~/Scheduler/Main` |
+| `local.catalyst.demo.laptop.plist` | Dev laptop (`vishvajeetn`) | `~/Documents/Scheduler/Main` |
 
 Mini-only helper:
 
@@ -50,6 +57,9 @@ Three fixes, pick one:
    not gate home-root subdirectories, so launchd can read them
    without any grant. If you do this, also update the plist's
    path block and `CATALYST_WORKTREE` in the pre-receive hook.
+   A symlink from `~/Scheduler` back into `~/Documents/...` does
+   not help; launchd still resolves the protected target and fails
+   before `start.sh` can run.
 
 3. **Skip launchd, use `nohup`.** `nohup bash scripts/start.sh
    --service > logs/server.log 2>&1 &` gives you a persistent-
@@ -85,11 +95,11 @@ rm ~/Library/LaunchAgents/local.catalyst.plist
 launchctl print gui/$(id -u)/local.catalyst | head -20
 
 # smoke the URL
-curl -ks -o /dev/null -w "%{http_code}\n" https://127.0.0.1:5055/login
+curl -ks -o /dev/null -w "%{http_code}\n" https://127.0.0.1:5056/login
 # expect: 200
 
 # tail the log (one file for both stdout and stderr)
-tail -f logs/server.log
+tail -f logs/server-live.log
 ```
 
 ## Mini deploy verifier

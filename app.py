@@ -5944,6 +5944,46 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_prospective_approver ON ai_prospective_actions(assigned_approver_id, status);
             CREATE INDEX IF NOT EXISTS idx_prospective_submitter ON ai_prospective_actions(submitted_by_user_id);
 
+            -- Debug issue ledger: every feedback/debug report becomes a
+            -- structured issue that stays active until multiple crawlers
+            -- independently confirm the fix. Markdown logs remain the raw
+            -- narrative source; this table makes lifecycle/state queryable.
+            CREATE TABLE IF NOT EXISTS debug_issues (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                portal TEXT NOT NULL DEFAULT '',
+                page TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'feedback',
+                issue_text TEXT NOT NULL DEFAULT '',
+                context_json TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                severity TEXT NOT NULL DEFAULT 'normal',
+                fix_candidate_note TEXT NOT NULL DEFAULT '',
+                fix_candidate_at TEXT,
+                fix_candidate_by TEXT NOT NULL DEFAULT '',
+                verification_target INTEGER NOT NULL DEFAULT 3,
+                verification_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                resolved_at TEXT,
+                archived_at TEXT,
+                archive_reason TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_debug_issues_status ON debug_issues(status);
+            CREATE INDEX IF NOT EXISTS idx_debug_issues_page ON debug_issues(page);
+            CREATE INDEX IF NOT EXISTS idx_debug_issues_created ON debug_issues(created_at);
+
+            CREATE TABLE IF NOT EXISTS debug_issue_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL REFERENCES debug_issues(id),
+                crawler_name TEXT NOT NULL DEFAULT '',
+                verdict TEXT NOT NULL DEFAULT 'confirmed_fixed',
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT '',
+                UNIQUE(issue_id, crawler_name)
+            );
+            CREATE INDEX IF NOT EXISTS idx_debug_issue_verifications_issue ON debug_issue_verifications(issue_id);
+
             -- Routing table: maps an action_type to the role that owns the
             -- "area admin" (domain check) stage and the role that owns the
             -- "fin admin" (money release) stage. Either may be empty to
@@ -23866,6 +23906,141 @@ def _append_feedback_entry(
         raise last_error
     return FEEDBACK_LOG
 
+
+def _record_debug_issue(
+    *,
+    user: sqlite3.Row | None,
+    page: str,
+    source: str,
+    text: str,
+    context_json: str = "",
+) -> int | None:
+    """Persist a structured debug issue beside the markdown log.
+
+    The markdown log remains the human-readable evidence stream. This table
+    gives crawlers and queue-review jobs something stable to track, verify,
+    and mine for repeated UX failures without deleting the original report.
+    """
+    cleaned_text = _normalize_feedback_text(text)
+    if not cleaned_text:
+        return None
+    try:
+        issue_id = execute(
+            "INSERT INTO debug_issues "
+            "(user_id, portal, page, source, issue_text, context_json, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (
+                row_value(user, "id") if user else None,
+                active_portal_slug() or "?",
+                page or "?",
+                source or "feedback",
+                cleaned_text,
+                (context_json or "")[:4000],
+                now_iso(),
+            ),
+        )
+    except sqlite3.OperationalError:
+        return None
+    return issue_id
+
+
+def crawler_confirm_debug_issue(
+    issue_id: int,
+    crawler_name: str,
+    *,
+    note: str = "",
+    verdict: str = "confirmed_fixed",
+) -> bool:
+    """Record one crawler's verification for a debug issue.
+
+    An issue is only considered resolved after three distinct crawler names
+    confirm the fix. Until then it remains active for future crawls.
+    """
+    crawler = (crawler_name or "").strip()
+    if issue_id <= 0 or not crawler:
+        return False
+    try:
+        execute(
+            "INSERT OR IGNORE INTO debug_issue_verifications "
+            "(issue_id, crawler_name, verdict, note, created_at) VALUES (?,?,?,?,?)",
+            (issue_id, crawler, verdict or "confirmed_fixed", (note or "")[:400], now_iso()),
+        )
+    except sqlite3.OperationalError:
+        return False
+    count_row = query_one(
+        "SELECT COUNT(*) AS c FROM debug_issue_verifications "
+        "WHERE issue_id = ? AND verdict = 'confirmed_fixed'",
+        (issue_id,),
+    )
+    count = count_row["c"] if count_row else 0
+    issue = query_one(
+        "SELECT verification_target, status FROM debug_issues WHERE id = ?",
+        (issue_id,),
+    )
+    if not issue:
+        return False
+    target = max(1, row_value(issue, "verification_target", 3))
+    new_status = "resolved" if count >= target else "fix_confirmed_partial"
+    execute(
+        "UPDATE debug_issues SET verification_count = ?, status = ?, resolved_at = ? "
+        "WHERE id = ?",
+        (count, new_status, now_iso() if count >= target else None, issue_id),
+    )
+    return count >= target
+
+
+def debug_issue_summary(limit: int = 10) -> dict[str, object]:
+    """Summarise open/recent debug issues for crawlers and nightly review."""
+    try:
+        open_rows = query_all(
+            "SELECT id, page, source, status, verification_count, verification_target, issue_text, created_at "
+            "FROM debug_issues WHERE status NOT IN ('resolved', 'archived') "
+            "ORDER BY created_at DESC LIMIT ?",
+            (max(1, int(limit)),),
+        )
+        repeats = query_all(
+            "SELECT page, COUNT(*) AS c FROM debug_issues "
+            "WHERE created_at >= ? GROUP BY page HAVING COUNT(*) > 1 ORDER BY c DESC, page ASC LIMIT ?",
+            (((datetime.now() - timedelta(days=7)).isoformat()), max(1, int(limit))),
+        )
+        count_row = query_one(
+            "SELECT COUNT(*) AS c FROM debug_issues WHERE status NOT IN ('resolved', 'archived')"
+        )
+    except sqlite3.OperationalError:
+        return {"open_count": 0, "recent_open": [], "repeat_hotspots": []}
+    return {
+        "open_count": count_row["c"] if count_row else 0,
+        "recent_open": [dict(r) for r in open_rows],
+        "repeat_hotspots": [dict(r) for r in repeats],
+    }
+
+
+def action_queue_summary(limit: int = 10) -> dict[str, object]:
+    """Summarise active + archived action queue patterns for improvement crawls."""
+    try:
+        recent_actions = query_all(
+            "SELECT parsed_action, status, COUNT(*) AS c FROM command_queue "
+            "GROUP BY parsed_action, status ORDER BY c DESC, parsed_action ASC LIMIT ?",
+            (max(1, int(limit)),),
+        )
+        archived_actions = query_all(
+            "SELECT parsed_action, status, COUNT(*) AS c FROM command_queue_archive "
+            "GROUP BY parsed_action, status ORDER BY c DESC, parsed_action ASC LIMIT ?",
+            (max(1, int(limit)),),
+        )
+        routed_reviews = query_all(
+            "SELECT action_type, status, COUNT(*) AS c FROM ai_prospective_actions "
+            "GROUP BY action_type, status ORDER BY c DESC, action_type ASC LIMIT ?",
+            (max(1, int(limit)),),
+        )
+    except sqlite3.OperationalError:
+        return {"active_queue": [], "archive": [], "human_review": []}
+    return {
+        "active_queue": [dict(r) for r in recent_actions],
+        "archive": [dict(r) for r in archived_actions],
+        "human_review": [dict(r) for r in routed_reviews],
+    }
+
 @app.route("/debug/feedback", methods=["POST"])
 @csrf.exempt
 @login_required
@@ -23899,8 +24074,20 @@ def debug_feedback():
         page=f"{page} ({grid})",
         source="debug-feedback",
     )
+    issue_id = _record_debug_issue(
+        user=user,
+        page=f"{page} ({grid})",
+        source="debug-feedback",
+        text=f"{text}\n\n{click_lines}".strip(),
+        context_json=json.dumps({
+            "timestamp": ts,
+            "grid_visible": bool(data.get("grid_visible")),
+            "clicks": clicks,
+            "client_context": data.get("context", {}),
+        }),
+    )
 
-    return jsonify(ok=True, saved_to=str(saved_to))
+    return jsonify(ok=True, saved_to=str(saved_to), issue_id=issue_id)
 
 
 @app.route("/feedback", methods=["POST"])
@@ -23916,6 +24103,13 @@ def site_feedback_submit():
     if raw_text:
         _append_feedback_entry(
             user=user, text=raw_text, page=page, source=source,
+            context_json=context_json,
+        )
+        _record_debug_issue(
+            user=user,
+            page=page,
+            source=source,
+            text=raw_text,
             context_json=context_json,
         )
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":

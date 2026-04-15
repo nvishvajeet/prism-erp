@@ -53,6 +53,26 @@ if [ "$FEEDBACK_LINES" -gt 10 ]; then
     echo "  ⚠ New feedback needs review" >> "$LOG"
     tail -20 logs/debug_feedback.md >> "$LOG"
 fi
+echo "" >> "$LOG"
+echo "--- Structured Debug Issues ---" >> "$LOG"
+$VENV -c "
+import app
+with app.app.app_context():
+    summary = app.debug_issue_summary(limit=5)
+    print('  Open issues: %d' % summary.get('open_count', 0))
+    for row in summary.get('recent_open', []):
+        print('  - #%s [%s/%s] %s :: %s' % (
+            row.get('id'),
+            row.get('verification_count', 0),
+            row.get('verification_target', 3),
+            row.get('page', '?'),
+            (row.get('issue_text', '')[:120]).replace('\\n', ' ')
+        ))
+    if summary.get('repeat_hotspots'):
+        print('  Repeat hotspots:')
+        for row in summary.get('repeat_hotspots', []):
+            print('    * %s (%s reports)' % (row.get('page', '?'), row.get('c', 0)))
+" >> "$LOG" 2>&1
 
 # 1b. Smoke test
 echo "" >> "$LOG"
@@ -94,6 +114,16 @@ with app.app.app_context():
     print('  Awaiting approval: %d' % (awaiting['c'] if awaiting else 0))
 pruned = app.prune_command_queue(days=30)
 print('  Pruned (>30d): completed=%d failed=%d' % (pruned.get('completed', 0), pruned.get('failed', 0)))
+summary = app.action_queue_summary(limit=5)
+for lane, rows in summary.items():
+    print('  %s:' % lane.replace('_', ' ').title())
+    if not rows:
+        print('    - none')
+        continue
+    for row in rows:
+        action = row.get('parsed_action') or row.get('action_type') or 'manual_review'
+        status = row.get('status', '?')
+        print('    - %s [%s] x%d' % (action, status, row.get('c', 0)))
 " >> "$LOG" 2>&1
 
 # ─── PHASE 2: HEALTH (5 min) ──────────────────────────────

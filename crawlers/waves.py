@@ -66,8 +66,8 @@ WAVES: dict[str, Wave] = {
     ),
     "accessibility": Wave(
         name="accessibility",
-        description="WCAG contrast + palette-drift detection",
-        strategies=("contrast_audit", "color_improvement"),
+        description="WCAG contrast + palette-drift + ARIA-label presence",
+        strategies=("contrast_audit", "color_improvement", "aria_label_present"),
         stop_on_fail=False,
     ),
     "cleanup": Wave(
@@ -196,7 +196,7 @@ WAVES: dict[str, Wave] = {
             # coverage
             "performance", "random_walk",
             # accessibility
-            "color_improvement",
+            "color_improvement", "aria_label_present",
             # cleanup
             "cleanup",
         ),

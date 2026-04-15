@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, empty_state with context %}
+{% block breadcrumb_insights %}{{ item["name"] }} / Form Control{% endblock %}
+{% block hover_back %}{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ item["name"] }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">Form Control</span>
+  </div>
+</header>
+
+<div class="insights-tiles" data-vis="{{ V }}">
+
+  {# -- Tile 1: Approval Sequence (full width) --------------- #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Approval Sequence") }}
+    <p class="tile-lead" data-vis="{{ V }}">Configure approval steps for this insight.</p>
+    <form method="post" data-vis="{{ V }}">
+      <input type="hidden" name="action" value="save_approval">
+      <div class="form-control-approval-grid" data-vis="{{ V }}">
+        {% for idx in range(1, 7) %}
+        {% set cfg = approval_config[idx - 1] if approval_config|length >= idx else none %}
+        <div class="form-control-field-row" data-vis="{{ V }}">
+          <span class="approval-edit-num" data-vis="{{ V }}">{{ idx }}</span>
+          {% if cfg %}
+          <span data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ cfg["approver_role"].replace("_"," ").title() }}</strong>
+            {% if cfg["approver_name"] %}<small class="hint" data-vis="{{ V }}">{{ cfg["approver_name"] }}</small>{% endif %}
+          </span>
+          {% else %}
+          <span class="hint" data-vis="{{ V }}">-- empty --</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="small-button top-gap" data-vis="{{ V }}">Save</button>
+    </form>
+  </section>
+
+  {# -- Tile 2: Custom Fields (full width) ------------------- #}
+  <section class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Custom Fields") }}
+    {% if custom_fields %}
+    <table class="sortable-table" data-vis="{{ V }}">
+      <thead data-vis="{{ V }}">
+        <tr data-vis="{{ V }}">
+          <th data-vis="{{ V }}">Label</th>
+          <th data-vis="{{ V }}">Type</th>
+          <th data-vis="{{ V }}">Required</th>
+        </tr>
+      </thead>
+      <tbody data-vis="{{ V }}">
+        {% for field in custom_fields %}
+        <tr data-vis="{{ V }}">
+          <td data-vis="{{ V }}">{{ field["label"] }}</td>
+          <td data-vis="{{ V }}">{{ field["field_type"] }}</td>
+          <td data-vis="{{ V }}">{{ "Yes" if field["required"] else "No" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ empty_state("No custom fields defined.") }}
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

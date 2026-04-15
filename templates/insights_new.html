@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('insights_list') }}" class="hover-back-btn" title="Back">&#8592;</a>{% endblock %}
+{% block content %}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('insights_list') }}" data-vis="{{ V }}">&#8592; Insights</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">New insight</h2>
+  </div>
+</header>
+<section class="insights-tiles" data-vis="{{ V }}">
+  <article class="card tile" style="grid-column: span 6;" data-vis="{{ V }}">
+    {{ card_heading("", "Create insight") }}
+    <form method="post" class="form-grid" style="padding:0.75rem;" data-vis="{{ V }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label data-vis="{{ V }}">Name
+        <input type="text" name="name" required data-vis="{{ V }}">
+      </label>
+      <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Create</button>
+    </form>
+  </article>
+</section>
+{% endblock %}

@@ -2,7 +2,7 @@
 
 This directory documents the three-machine Catalyst verifier pool:
 
-- `macbook` — editing + throttled local verification
+- `macbook` — editing + aggressive local verification, while leaving about 10% interactive headroom
 - `mini` — production-serving verifier, preferred for heavy waves
 - `imac` — optional dev-pool verifier, full-power when reachable
 
@@ -47,6 +47,7 @@ If `CATALYST_IMAC_HOST` is unset, the iMac lane is skipped automatically.
 
 - This runner is verification-only. It does not pull, push, rebase, or edit tracked files.
 - The MacBook remains the write coordinator.
+- The MacBook may also be used aggressively for verification now, as long as roughly 10% headroom remains for the human's foreground work.
 - The Mac mini is used for heavy verification, not ad-hoc editing.
 - The iMac is optional until it has a stable SSH endpoint.
 

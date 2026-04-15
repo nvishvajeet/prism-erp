@@ -354,7 +354,7 @@ into a maze of one-off subsystems.
 
 Three engines work in parallel:
 - **LLM** — designs, writes code, orchestrates
-- **MacBook Pro** (M1 Pro 32GB) — local crawlers, smoke tests
+- **MacBook Pro** (M1 Pro 32GB) — local crawlers, smoke tests, and aggressive verification load with about 10% headroom reserved for human use
 - **Mac Mini** (M4 24GB) — remote crawlers via SSH, production deploy
 
 132,700+ automated checks. Zero server errors. 1-year simulation passed.

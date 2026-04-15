@@ -486,13 +486,16 @@ machines confirm asynchronously.
 
 ### 5.2.1  Max local crawler budget
 
-To avoid making the editor workstation unresponsive, use this default
-budget unless the user explicitly asks for more:
+Use this default budget on the primary MacBook Pro unless the user says
+otherwise:
 
-- max **2 local crawler processes** at once on a single MacBook
+- target roughly **90% usable machine budget**
+- preserve about **10% interactive headroom** for normal human work
+  such as Zoom, browser tabs, music, messaging, or light terminal use
+- run up to **4 local crawler processes** at once on a single MacBook
 - plus **1 local smoke/test process** (`scripts/smoke_test.py`) in parallel
 - heavy waves (`random_walk`, `dead_link`, `wave all`) prefer the mini
-- if two MacBooks are active, each keeps its own 2-crawler budget
+- if two MacBooks are active, each may use the same rule on its own host
 - each local crawler must still have an LLM supervisor; more machines
   increase throughput, not autonomy
 
@@ -504,8 +507,9 @@ Priority order:
 4. mini heavy crawlers / overflow waves
 5. second MacBook local smoke / sanity when available
 
-Rule: keep the editing laptop responsive. The goal is maximum useful
-throughput, not pegging one machine for vanity parallelism.
+Rule: keep the editing laptop comfortably usable, not mostly idle. The
+goal is maximum useful throughput while still leaving enough headroom
+for ordinary human foreground activity.
 
 ### 5.3  Token economy
 
@@ -524,6 +528,95 @@ When building a new ERP module:
 6. Commit + push (pre-receive gate runs on the bare)
 
 This loop takes ~2 minutes per module vs ~15 minutes of pure LLM work.
+
+### 5.5  Continuous development — always-on crawlers + three-machine budget
+
+_Policy anchor 2026-04-15. Precondition for the compressed
+commercialization timeline in `docs/COMMERCIALIZATION_POLICY.md §5`._
+
+PRISM development is a 24×7 operation, not a working-hours activity.
+Machines verify continuously; humans + LLM step in to fix what the
+crawlers find. This section defines the cadence and the per-machine
+load contract so the editing laptop stays responsive while the other
+hosts run as hot as they can.
+
+**Machine pool (three hosts):**
+
+| Host | Role | Load policy when user is actively typing | Load policy when user is idle / on Codex / on another Claude session |
+|------|------|-------------------------------------------|----------------------------------------------------------------------|
+| Primary MacBook Pro (M1 Pro, 32 GB) | Editor + local verifier | **Aggressive by default** — use most of the machine, but preserve roughly 10% foreground headroom for the human | Same — it can run hot unless the human experience degrades |
+| Mac mini (M4, 24 GB) | Production host + heavy verifier | **100%** — max out. It's a server, not an editor. | Same — 100% always. |
+| iMac (dev pool) | Heavy verifier, full sudo | **100%** — max out. Not an editing surface. Full sudo access for anything dev-needed (package installs, system tweaks, storage provisioning). | Same — 100% always. |
+
+"User is actively typing on the MBP" is detected by: (a) an interactive
+Claude Code session on the MBP that is not this one, or (b) an open
+Codex / Cursor / VS Code window with recent input activity. When in
+doubt, default to the newer rule: leave roughly 10% interactive
+headroom and use the rest.
+
+**Continuous crawler schedule (all three machines):**
+
+```
+hourly   — crawlers wave sanity   (~15 s; low-budget, hot path)
+hourly   — smoke_test.py          (~5 s; pre-commit gate sanity)
+every 4h — crawlers wave rhythm   (~1 min; fastest per-category)
+every 6h — crawlers wave feature  (lifecycle coverage)
+daily    — crawlers wave all      (~15 min; full matrix; off-hours on mini)
+daily    — wave security          (to land with §6 of ERP_MODULARIZATION_ARCHITECTURE)
+weekly   — pip-audit + gitleaks + dependency-upgrade check
+```
+
+Each hourly tick is launched by a per-host launchd agent (mini) /
+launchd agent (iMac) / launchd agent (MBP with headroom-aware policy).
+Results land in
+`reports/` with a per-run timestamp and are tailed by the supervising
+LLM session on next wake-up. Crawler ownership and claim rules from
+§3.1.2 still apply — hourly runs are read-only by default and never
+touch tracked files without a claim.
+
+**Why always-on crawlers:** the 2-week cohort exit gate in
+`COMMERCIALIZATION_POLICY.md §1` is only meaningful if the defect
+backlog stays near zero during the cohort. Hourly crawlers catch
+regressions within an hour of landing, not on the next manual
+smoke run. This converts "cohort feedback window" from a
+noisy, days-long signal to a clean, hours-long one.
+
+**Load-budget enforcement on the MBP:**
+
+- Use `nice -n 10` + `renice` on hourly crawler PIDs on the MBP.
+- Hard cap via `launchctl` `LowPriorityIO` + `ProcessType = Background`.
+- If foreground human work becomes visibly sluggish, the MBP crawler
+  daemon should back off until roughly the 10% interactive reserve is
+  restored. The mini and iMac keep running unchanged.
+- If the MBP battery is <20% and unplugged, the crawler daemon
+  suspends (not paused — suspends until power is back).
+
+**Full sudo on the iMac:** the iMac is designated a dev-pool host.
+Agents may install packages, provision storage, adjust launchd, and
+otherwise configure it freely as long as every such action is logged
+via `ai-log` (per Level 1 rules). Do NOT take the same liberties on
+the mini — the mini runs production, treat its config as frozen
+unless a deploy wave explicitly touches it.
+
+**First-cut deployment checklist:**
+
+1. On the iMac: install the `lab-scheduler` working copy, `.venv`,
+   and a launchd agent that runs the hourly + daily crawler schedule
+   above. `ai-log` the install.
+2. On the MBP: install a launchd agent that runs the same schedule
+   under `nice`/`LowPriorityIO` but uses the 10%-headroom rule above
+   instead of the old 50% throttle.
+3. On the mini: extend the existing launchd service so that crawler
+   waves run on the hourly/daily schedule alongside production
+   serving. The mini is already running; this is an additive wave,
+   not a new deployment.
+4. Verify all three schedules land output in `reports/` that the
+   supervising LLM session can tail on next wake-up.
+5. Commit the launchd plists and runner scripts under
+   `ops/continuous_crawlers/` so the config is versioned.
+
+Read `ops/continuous_crawlers/README.md` (to create alongside item 5)
+for the runbook once this lands.
 
 ## 6. ERP Module System
 
@@ -546,6 +639,12 @@ adds route stubs, and prints enable instructions. See
 
 ## 7. Change log (of this workflow file)
 
+- **2026-04-15** — Added §5.5 continuous-development policy: hourly
+  crawlers across three-machine pool (MBP throttled to 50% when user
+  is editing, mini + iMac maxed out), daily full waves, weekly
+  security sweep. Added iMac as dev-pool host with full sudo.
+  Precondition for the 2-week cohort exit gate in
+  `docs/COMMERCIALIZATION_POLICY.md §1`.
 - **2026-04-13** — Added three-engine development model (§5),
   ERP module system (§6), token economy documentation. Updated
   for v1.1 architecture (MODULE_REGISTRY, dynamic nav, Homebrew

@@ -156,7 +156,8 @@
     </div>
   </section>
 
-  {# ─── 3b. AUDIT EXPORT ─── #}
+  {# ─── 3b. AUDIT EXPORT — gated: can_view_debug (Codex 0 handoff T+15) ─── #}
+  {% if can_view_debug %}
   <section class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("AUDIT", "Export audit trail") }}
     <div class="tile-info-body" data-vis="{{ V }}">
@@ -166,6 +167,7 @@
       </div>
     </div>
   </section>
+  {% endif %}
 
   {# ─── 4. RECENT COMMITS — Last 5 in a clean list ─── #}
   <section class="card tile tile-stats" data-vis="{{ V }}">

@@ -291,9 +291,14 @@
       <summary data-vis="{{ V }}">Approval Chain ({{ approval_steps|length }} steps)</summary>
       <div class="top-gap" data-vis="{{ V }}">
         {% for step in approval_steps %}
+        {% set _step_badge = 'status-completed' if step['status'] == 'approved'
+                            else 'status-rejected' if step['status'] == 'rejected'
+                            else 'status-submitted' if step['status'] == 'pending'
+                            else 'status-attention' if step['status'] == 'skipped'
+                            else 'status-' ~ step['status'] %}
         <div class="approval-chain-step approval-chain-{{ step['status'] }}" data-vis="{{ V }}">
           <span class="approval-chain-role" data-vis="{{ V }}">{{ step["step_order"] }}. {{ step["approver_role"].replace("_", " ").title() }}</span>
-          <span class="badge status-{{ step['status'] }}" data-vis="{{ V }}">{{ step["status"].title() }}</span>
+          <span class="badge {{ _step_badge }}" data-vis="{{ V }}">{{ step["status"].title() }}</span>
           {% if step["approver_name"] %}<span class="hint" data-vis="{{ V }}"> — {{ step["approver_name"] }}</span>{% endif %}
           {% if step["remarks"] %}<p class="hint" data-vis="{{ V }}">{{ step["remarks"] }}</p>{% endif %}
           {% if step["acted_at"] %}<p class="hint" data-vis="{{ V }}">{{ format_dt(step["acted_at"]) }}</p>{% endif %}

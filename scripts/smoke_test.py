@@ -735,10 +735,56 @@ def main() -> None:
     client.get("/logout")
     login(client, "anika@catalyst.local")
     assert client.get("/admin/password-reset").status_code == 403, "operator should 403 on admin pw-reset"
-    # Clean up
+    # Clean up — reset Kondhalkar's password hash to the seed default AND clear
+    # the must_change_password flag. The resolve-password-reset earlier set BOTH
+    # (must_change_password=1 plus a fresh temp password), so subsequent logins
+    # with "12345" would fail without restoring the hash.
     with app.app.app_context():
         app.get_db().execute("DELETE FROM password_reset_requests")
-        app.get_db().execute("UPDATE users SET must_change_password = 0 WHERE id = 9")
+        app.get_db().execute(
+            "UPDATE users SET must_change_password = 0, password_hash = ? WHERE id = 9",
+            (_gph("12345", method="pbkdf2:sha256"),),
+        )
+        app.get_db().commit()
+
+    # Inline Approve on /queue: admin can approve a pending_approval user
+    # from the queue with ?next=queue redirecting them back. Reuses the
+    # existing approve_pending_user handler in /admin/users.
+    with app.app.app_context():
+        app.get_db().execute(
+            "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status, active) "
+            "VALUES ('Inline Pending', 'inline-pending@test.local', '', 'operator', 'pending_approval', 0)"
+        )
+        app.get_db().commit()
+        target = app.get_db().execute(
+            "SELECT id FROM users WHERE email = 'inline-pending@test.local'"
+        ).fetchone()
+        target_id = target["id"]
+    login(client, "kondhalkar@catalyst.local")
+    qbody = client.get("/queue").data
+    assert b'name="action" value="approve_pending_user"' in qbody, (
+        "/queue should render inline Approve form for account_pending rows"
+    )
+    approve = client.post(
+        "/admin/users?next=queue",
+        data={"action": "approve_pending_user", "user_id": str(target_id)},
+        follow_redirects=False,
+    )
+    assert approve.status_code == 302, f"expected 302 on approve with ?next=queue, got {approve.status_code}"
+    assert "/queue" in approve.headers.get("Location", ""), (
+        f"?next=queue should redirect to /queue, got {approve.headers.get('Location')!r}"
+    )
+    with app.app.app_context():
+        row = app.get_db().execute(
+            "SELECT invite_status, active, must_change_password FROM users WHERE id = ?",
+            (target_id,),
+        ).fetchone()
+        assert row["invite_status"] == "active"
+        assert row["active"] == 1
+        assert row["must_change_password"] == 1
+    # Clean up
+    with app.app.app_context():
+        app.get_db().execute("DELETE FROM users WHERE email = 'inline-pending@test.local'")
         app.get_db().commit()
 
     print("smoke test passed")

@@ -46,7 +46,23 @@
         <td data-vis="all">{{ it.submitted_by }}</td>
         <td data-vis="all" class="hint" style="font-size:0.9em;">{{ it.created_at or '—' }}</td>
         <td data-vis="all">
+          {% if it.kind == 'account_pending' and it.target_user_id %}
+          <form method="post" action="{{ url_for('admin_users') }}?next=queue" style="display:inline;" data-vis="all">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
+            <input type="hidden" name="action" value="approve_pending_user" data-vis="all">
+            <input type="hidden" name="user_id" value="{{ it.target_user_id }}" data-vis="all">
+            <button type="submit" class="btn btn-primary btn-sm" data-vis="all">Approve</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_users') }}?next=queue" style="display:inline;margin-left:0.25rem;" data-vis="all">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="all">
+            <input type="hidden" name="action" value="reject_pending_user" data-vis="all">
+            <input type="hidden" name="user_id" value="{{ it.target_user_id }}" data-vis="all">
+            <button type="submit" class="btn btn-sm" data-vis="all">Reject</button>
+          </form>
+          <a class="text-link" href="{{ it.action_url }}" style="margin-left:0.5rem;font-size:0.85em;" data-vis="all">Open ↗</a>
+          {% else %}
           <a class="text-link" href="{{ it.action_url }}" data-vis="all">{{ it.action_label }} →</a>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

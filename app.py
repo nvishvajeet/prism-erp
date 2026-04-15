@@ -9908,6 +9908,10 @@ def _action_queue_items(user: sqlite3.Row) -> list[dict]:
                 "created_at": "",  # not available on users; keep key for template uniformity
                 "action_url": url_for("admin_users") + f"#user-{r['id']}",
                 "action_label": "Open in Admin → Users",
+                # For inline Approve/Reject forms on /queue. Only populated
+                # for account_pending kind; other kinds leave it None.
+                "target_user_id": r["id"],
+                "target_email": r["email"],
             })
     except sqlite3.OperationalError:
         pass
@@ -19356,6 +19360,18 @@ def admin_users():
     user = current_user()
     permissions = _admin_users_permissions(user)
     if _admin_users_handle_post(user, permissions):
+        # Allow safe return-to-origin redirects — /queue's inline Approve/Reject
+        # forms pass ?next=queue (or ?next=/queue) so the admin stays on the
+        # Action Queue. We allow only known internal routes by name to prevent
+        # open-redirect abuse.
+        next_target = (request.args.get("next") or request.form.get("next") or "").strip()
+        safe_next = {
+            "queue": "action_queue",
+            "/queue": "action_queue",
+            "admin_password_reset": "admin_password_reset",
+        }.get(next_target)
+        if safe_next:
+            return redirect(url_for(safe_next))
         return redirect(url_for("admin_users"))
     list_payload = _admin_users_list_payload(user)
     return render_template(

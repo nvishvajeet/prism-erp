@@ -22,7 +22,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import gettempdir
 
-from flask import Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
+from flask import Flask, abort, flash, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, session, url_for, has_request_context
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from openpyxl import Workbook
 from werkzeug.utils import secure_filename

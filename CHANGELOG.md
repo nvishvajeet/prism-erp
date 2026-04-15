@@ -15,6 +15,42 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+### Added — Insights module (2026-04-15)
+
+New framework-level instrumentation module — user-behavior
+telemetry for product optimization. Applies to every CATALYST
+deployment; opt-out via `window.__CATALYST_TELEMETRY_OFF = true`.
+
+- **Backend.** New routes `/insights`, `/insights/<id>`,
+  `/insights/<id>/form-control`, `/insights/new`, plus the
+  ingest endpoint `/api/telemetry/batch`. Two new tables in
+  `init_db`: `telemetry_page_time`, `telemetry_click`. 90-day
+  retention purge runs at app start alongside `_purge_stale_logs`.
+- **Client.** New `static/telemetry.js` (~190 LOC, no deps).
+  Captures active-time per page (tab visible AND user input in
+  last 30 s), batch-flushes on `visibilitychange` + `pagehide`
+  via `sendBeacon`, falls back to `fetch` with `keepalive` for
+  live flushes. Click capture uses explicit `data-action`
+  attributes when present and auto-infers `auto:<slug>` from
+  button/link text otherwise, so the click feed fills without
+  sprinkling `data-action` across existing templates.
+- **Dashboard.** `/insights` renders a read-only admin dashboard
+  (top pages by active minutes, top clicked actions, KPI strip,
+  sortable detail table) with a window selector
+  (`?window=24h|7d|30d`). Role-gated to owner, super_admin,
+  site_admin, instrument_admin, academic_admin.
+- **Privacy floor.** No raw mouse coordinates, no keystroke
+  contents, no cross-session fingerprinting. Session ID is a
+  per-tab UUID, never persisted.
+
+### Fixed
+
+- Pre-existing stable bug: `change_password` used
+  `make_response(...)` without importing it. The import is
+  merged into the existing `from flask import ...` line; the
+  bug only surfaced under the `visibility` crawler so smoke
+  never caught it. Sanity wave is now green on stable.
+
 ## [1.0.0] — 2026-04-15
 
 **CATALYST ERP — the final stable 1.0.**

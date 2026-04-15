@@ -1,7 +1,7 @@
-{# ── TILE: AI ADVISOR — directive recommendations + prompt ── #}
+{# ── TILE: CATALYST COMMAND DESK — directive recommendations + prompt ── #}
 <article class="card tile tile-full-width tile-accent-blue" data-vis="{{ V }}">
   <div class="section-head" data-vis="{{ V }}">
-    AI Advisor
+    Catalyst Command Desk
     <span style="float:right;display:flex;gap:0.5rem;align-items:center;" data-vis="{{ V }}">
       <a href="{{ url_for('ai_advisor_log') }}" class="text-link" style="font-size:0.85rem;" data-vis="{{ V }}">History</a>
       <a href="?refresh_advice=1" class="text-link" style="font-size:0.85rem;" data-vis="{{ V }}">Refresh</a>
@@ -26,8 +26,8 @@
     <input type="hidden" name="portal" value="dashboard">
     <div class="control-flex-wrap" data-vis="{{ V }}">
       <label class="control-flex-fill-wide" data-vis="{{ V }}">
-        Ask AI
-        <input type="text" name="ai_prompt" placeholder="e.g. How do I submit a sample request?" autocomplete="off" data-vis="{{ V }}">
+        Request or feedback
+        <input type="text" name="ai_prompt" placeholder="e.g. Create accounts from this list, route this fuel bill, test this sample, or explain what I should do next" autocomplete="off" data-vis="{{ V }}">
       </label>
       <label class="control-min-width-sm" data-vis="{{ V }}">
         File
@@ -35,6 +35,6 @@
       </label>
       <button type="submit" class="btn btn-primary control-min-width-md" style="align-self:flex-end;" data-vis="{{ V }}">Send</button>
     </div>
-    <p class="hint" data-vis="{{ V }}">Questions are processed in 4-hour batch cycles. Attach a file for context (CSV, PDF, text).</p>
+    <p class="hint" data-vis="{{ V }}">Use this for work requests, approvals, onboarding, routing, or feedback. Attach a file for context (CSV, PDF, text).</p>
   </form>
 </article>

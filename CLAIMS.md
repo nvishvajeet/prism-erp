@@ -101,5 +101,4 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Codex | ai pane naming + capability UI | CLAIMS.md, app.py, templates/_base_ai_pane.html, templates/dashboard.html, templates/instrument_detail.html | 2026-04-15 13:20 CEST |
 | Codex | bulk user intake + user/vendor approval queues | app.py, templates/users.html, templates/vendors.html, templates/vendor_form.html, templates/vendor_detail.html | 2026-04-14 21:48 CEST |

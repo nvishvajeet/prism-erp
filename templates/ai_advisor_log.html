@@ -6,7 +6,7 @@
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
     <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">&larr; Home</a>
-    <h2 class="inst-header-title" data-vis="{{ V }}">AI Advisor Log</h2>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Catalyst Command Desk History</h2>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     {% if current_user and (is_owner_user or 'super_admin' in current_role_set) %}
@@ -57,7 +57,7 @@
   {% endfor %}
   {% else %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ empty_state("No AI advisor entries yet. Ask a question from the dashboard, instrument, or finance page.") }}
+    {{ empty_state("No Catalyst Command Desk entries yet. Send a request or feedback from the dashboard, instrument, or finance page.") }}
   </article>
   {% endif %}
 

@@ -238,17 +238,17 @@
   </section>
   {% endif %}
 
-  {# ── Tile: AI Advisor ── #}
+  {# ── Tile: Catalyst Command Desk ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    {{ card_heading("AI ADVISOR", "Ask about this instrument, samples, or requests") }}
+    {{ card_heading("CATALYST COMMAND DESK", "Ask for work, route samples, onboard people, or leave feedback from here") }}
     <form method="post" action="{{ url_for('ai_advisor_submit') }}" enctype="multipart/form-data" style="padding:0.75rem;" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="portal" value="instrument">
       <input type="hidden" name="instrument_id" value="{{ instrument['id'] }}">
       <div class="control-flex-wrap" data-vis="{{ V }}">
         <label class="control-flex-fill-wide" data-vis="{{ V }}">
-          Ask AI
-          <input type="text" name="ai_prompt" placeholder="e.g. What samples are pending? How to schedule maintenance?" autocomplete="off" data-vis="{{ V }}">
+          Request or feedback
+          <input type="text" name="ai_prompt" placeholder="e.g. Test this sample, create accounts from this list, or explain what this instrument needs next" autocomplete="off" data-vis="{{ V }}">
         </label>
         <label class="control-min-width-sm" data-vis="{{ V }}">
           File
@@ -256,7 +256,7 @@
         </label>
         <button type="submit" class="btn btn-primary control-min-width-md" style="align-self:flex-end;" data-vis="{{ V }}">Send</button>
       </div>
-      <p class="hint" data-vis="{{ V }}">Processed in 4-hour batch cycles. <a href="{{ url_for('ai_advisor_log') }}" class="text-link">View history</a></p>
+      <p class="hint" data-vis="{{ V }}">This desk can take instrument work, routing, onboarding, and feedback. <a href="{{ url_for('ai_advisor_log') }}" class="text-link">View history</a></p>
     </form>
   </article>
 

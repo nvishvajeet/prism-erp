@@ -1,21 +1,21 @@
   {# ── AI Hover Pane — available on every page ── #}
   {% if current_user_obj %}
-  <button id="aiPaneToggle" title="Catalyst Assistant" data-vis="{{ V }}"
+  <button id="aiPaneToggle" title="Catalyst Command Desk" data-vis="{{ V }}"
           style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;width:3.5rem;height:3.5rem;border-radius:50%;border:none;background:var(--tone-blue, #007AFF);color:var(--bg, #fff);font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:transform 0.2s;"
           onmouseenter="this.style.transform='scale(1.1)'" onmouseleave="this.style.transform='scale(1)'">
-    CA
+    CD
   </button>
   <div id="aiPaneHoverPrompt" data-vis="{{ V }}"
        style="display:none;position:fixed;bottom:5.45rem;right:1.5rem;z-index:9999;max-width:18rem;padding:0.5rem 0.7rem;border-radius:999px;background:color-mix(in srgb, var(--card-bg, #1c1c1e) 92%, var(--tone-blue, #007AFF) 8%);border:1px solid var(--color-separator, rgba(255,255,255,0.12));box-shadow:0 10px 28px rgba(0,0,0,0.24);font-size:0.72rem;line-height:1.25;color:inherit;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity 0.16s ease, transform 0.16s ease;">
-    Make any request or tell me anything
+    Ask for work, actions, onboarding, approvals, or feedback
   </div>
   <aside id="aiPane" data-vis="{{ V }}"
          style="display:none;position:fixed;bottom:5.5rem;right:1.5rem;z-index:9998;width:24rem;max-height:70vh;border-radius:12px;background:var(--card-bg, #1c1c1e);border:1px solid var(--color-separator, rgba(255,255,255,0.1));box-shadow:0 8px 40px rgba(0,0,0,0.5);overflow:hidden;flex-direction:column;">
     {# Header #}
     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--color-separator, rgba(255,255,255,0.1));display:flex;justify-content:space-between;align-items:center;" data-vis="{{ V }}">
       <div data-vis="{{ V }}">
-        <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst Assistant</strong>
-        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">Human-supervised rapid AI routing</span>
+        <strong style="font-size:0.9rem;" data-vis="{{ V }}">Catalyst Command Desk</strong>
+        <span class="hint" style="margin-left:0.5rem;font-size:0.7rem;" data-vis="{{ V }}">AI request intake with human oversight</span>
       </div>
       <button id="aiPaneClose" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;padding:0.2rem;" data-vis="{{ V }}">✕</button>
     </div>
@@ -25,15 +25,17 @@
         <div class="hint" style="font-size:0.7rem;margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.06em;" data-vis="{{ V }}">Try one of these</div>
         <div class="ai-example-chips" style="display:flex;flex-wrap:wrap;gap:0.35rem;" data-vis="{{ V }}">
           <button type="button" class="ai-example-chip" data-prompt="Summarize what I need to do today" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Today's to-do</button>
-          <button type="button" class="ai-example-chip" data-prompt="Where are my samples right now?" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">My samples</button>
-          <button type="button" class="ai-example-chip" data-prompt="Show my pending approvals" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Pending approvals</button>
-          <button type="button" class="ai-example-chip" data-prompt="Explain this page" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Explain this page</button>
+          <button type="button" class="ai-example-chip" data-prompt="Create accounts from this staff list and leave them pending human approval" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Onboard people</button>
+          <button type="button" class="ai-example-chip" data-prompt="Route this fuel bill to the right finance review queue" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Expense / fuel</button>
+          <button type="button" class="ai-example-chip" data-prompt="Test this sample and route it to the right lab review flow" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Test sample</button>
+          <button type="button" class="ai-example-chip" data-prompt="Show my pending approvals and requests" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Pending work</button>
+          <button type="button" class="ai-example-chip" data-prompt="I want to report a bug or give feedback about this page" style="padding:0.3rem 0.6rem;border-radius:999px;border:1px solid var(--color-separator, rgba(255,255,255,0.12));background:transparent;color:inherit;font-size:0.7rem;cursor:pointer;" data-vis="{{ V }}">Feedback</button>
         </div>
       </div>
       <div class="hint" style="text-align:center;padding:1rem;font-size:0.8rem;" data-vis="{{ V }}">
-        Make any request, ask for help, or just tell me anything.<br>I can help draft, route, summarize, and move work forward.
+        Put any job here: requests, expenses, onboarding, account creation, approvals, routing, explanations, or feedback.<br>I can draft, route, summarize, and push work into the right human review lane.
         <div style="margin-top:0.45rem;font-size:0.72rem;" data-vis="{{ V }}">
-          Built on Claude with human supervision. Fast requests can move quickly, and sensitive changes stay reviewable before they go live.
+          Built on Claude with human supervision. Fast requests can move quickly, and sensitive actions stay reviewable before they go live.
         </div>
       </div>
     </div>
@@ -50,13 +52,13 @@
         </label>
         <button type="button" id="aiPaneMic" title="Start voice input" aria-label="Toggle microphone"
                 style="background:none;border:none;cursor:pointer;padding:0.4rem;font-size:1.05rem;color:var(--muted);" data-vis="{{ V }}">🎤</button>
-        <textarea id="aiPaneInput" rows="2" placeholder="Make any request or tell me anything..."
+        <textarea id="aiPaneInput" rows="2" placeholder="Ask for any job, request, approval, onboarding action, or feedback..."
                   style="flex:1;resize:none;font-size:0.85rem;border-radius:8px;padding:0.5rem;background:var(--color-separator, rgba(255,255,255,0.06));border:1px solid transparent;color:inherit;"
                   data-vis="{{ V }}"></textarea>
-        <button type="button" id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Route</button>
+        <button type="button" id="aiPaneSend" style="background:var(--tone-blue, #007AFF);color:var(--bg, #fff);border:none;border-radius:8px;padding:0.5rem 0.75rem;cursor:pointer;font-weight:700;font-size:0.85rem;" data-vis="{{ V }}">Send</button>
       </div>
       <p class="hint" style="margin-top:0.25rem;font-size:0.65rem;" data-vis="{{ V }}">
-        Tip: attach a file with 📎, tap 🎤 to dictate, press Enter to send. Human-supervised rapid AI routing for requests, questions, and quick drafting. Manual forms still work, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
+        This desk accepts normal work requests and feedback. Attach a file with 📎, tap 🎤 to dictate, or press Enter to send. Manual forms still work, and sensitive actions remain reviewable{% if is_owner_user %} • <a href="{{ url_for('admin_ai_settings') }}" class="text-link" data-vis="{{ V }}">AI settings</a>{% endif %}
       </p>
     </div>
   </aside>
@@ -102,7 +104,7 @@
     }
 
     function promptCopy(label){
-      return label ? ('Ask about ' + label + ' or tell me what you need') : 'Make any request or tell me anything';
+      return label ? ('Ask about ' + label + ', submit work, or leave feedback') : 'Ask for work, actions, onboarding, approvals, or feedback';
     }
 
     function showHoverPrompt(label){
@@ -255,7 +257,7 @@
       addBubble(displayMsg, 'user');
       input.value = '';
 
-      var thinking = addBubble('<span style="opacity:0.5;">Catalyst Assistant is thinking and routing…</span>', 'ai');
+      var thinking = addBubble('<span style="opacity:0.5;">Catalyst Command Desk is routing your request…</span>', 'ai');
       var currentContext = hoverContext || lastHoverContext;
       var pageContext = document.title + ' | ' + window.location.pathname + (currentContext ? ' | Hovered pane: ' + currentContext : '');
 
@@ -290,7 +292,7 @@
             (data.action !== 'unknown' && data.action !== 'general_query' ? ' <span style="display:inline-block;padding:0.1rem 0.4rem;border-radius:4px;background:var(--tone-amber);color:var(--bg);font-size:0.65rem;font-weight:700;margin-left:0.3rem;">QUEUED</span>' : '');
           addBubble(data.summary + routeHtml + oversightHtml + actionBadge, 'ai');
         } else {
-          addBubble(data.error || 'Catalyst Assistant could not handle that cleanly just yet.', 'ai', 'error');
+          addBubble(data.error || 'Catalyst Command Desk could not handle that cleanly just yet.', 'ai', 'error');
         }
       })
       .catch(function(){
@@ -344,7 +346,7 @@
         .then(function(data){
           chat.innerHTML = '';
           // Greeting
-          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Human-supervised rapid AI routing for requests, questions, and quick help.</div>';
+          var greeting = '<strong>Hi ' + data.name.split(' ')[0] + '</strong><div style="margin-top:0.2rem;font-size:0.72rem;opacity:0.72;">Catalyst Command Desk handles requests, jobs, routing, onboarding, and feedback with human oversight.</div>';
           if(data.items.length){
             greeting += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
             data.items.forEach(function(it){

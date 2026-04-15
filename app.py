@@ -27928,15 +27928,15 @@ def ai_pane_summary():
     # Context hints based on current page
     hints = []
     if "instrument" in page.lower():
-        hints.append("You can ask AI to submit a sample request or check instrument availability")
+        hints.append("You can ask Catalyst Command Desk to submit a sample request, route a sample, onboard operators, explain the page, or take feedback")
     elif "finance" in page.lower():
-        hints.append("You can ask AI to create an expense receipt or check grant balances")
+        hints.append("You can ask Catalyst Command Desk to route expenses, fuel bills, grants, payment work, or finance feedback")
     elif "attendance" in page.lower() or "personnel" in page.lower():
-        hints.append("You can ask AI to mark attendance or create a salary note")
+        hints.append("You can ask Catalyst Command Desk to mark attendance, prepare account requests, create salary notes, or capture onboarding tasks")
     elif "mess" in page.lower() or "tuck" in page.lower():
-        hints.append("You can ask AI about today's meal stats or token reconciliation")
+        hints.append("You can ask Catalyst Command Desk about today's meal stats, token reconciliation, requests, or site feedback")
     else:
-        hints.append("Try: 'Submit a request for FESEM analysis' or 'Mark Prashant present today'")
+        hints.append("Try: 'Create accounts from this list', 'Route this fuel bill', 'Test this sample', or 'I want to give feedback about this page'")
 
     return jsonify({"items": items, "hints": hints, "role": role, "name": user["name"]})
 

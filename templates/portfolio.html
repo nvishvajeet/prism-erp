@@ -74,12 +74,12 @@
   <table data-vis="{{ V }}">
     <thead data-vis="{{ V }}">
       <tr data-vis="{{ V }}">
-        <th data-vis="{{ V }}" style="width:36px"><input type="checkbox" id="selectAllToday" title="Select all" data-vis="{{ V }}"></th>
+        <th data-vis="{{ V }}" class="cell-checkbox"><input type="checkbox" id="selectAllToday" title="Select all" data-vis="{{ V }}"></th>
         <th data-vis="{{ V }}">Fund</th>
-        <th data-vis="{{ V }}" style="text-align:right">Today ₹</th>
-        <th data-vis="{{ V }}" style="text-align:right">Spent (MTD)</th>
-        <th data-vis="{{ V }}" style="text-align:right">Monthly target</th>
-        <th data-vis="{{ V }}" style="width:30%">Progress</th>
+        <th data-vis="{{ V }}" class="cell-currency">Today ₹</th>
+        <th data-vis="{{ V }}" class="cell-currency">Spent (MTD)</th>
+        <th data-vis="{{ V }}" class="cell-currency">Monthly target</th>
+        <th data-vis="{{ V }}" class="cell-progress">Progress</th>
       </tr>
     </thead>
     <tbody data-vis="{{ V }}">
@@ -92,17 +92,17 @@
           {% endif %}
         </td>
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ row.label }}</strong></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">
+        <td class="cell-currency" data-vis="{{ V }}">
           {% if today > 0 %}
           ₹<input type="number" name="amount_{{ row.tag }}" aria-label="Amount" value="{{ today }}" min="0" step="1000"
-                  class="todayAmt" style="width:90px;text-align:right;font-variant-numeric:tabular-nums;background:transparent;border:1px solid transparent;padding:2px 4px;border-radius:4px"
+                  class="todayAmt portfolio-today-input"
                   title="Edit to override the recommended amount before logging" data-vis="{{ V }}">
           {% else %}
           ₹{{ "{:,}".format(today) }}
           {% endif %}
         </td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(row.spent) }}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(row.target) }}</td>
+        <td class="cell-currency" data-vis="{{ V }}">₹{{ "{:,}".format(row.spent) }}</td>
+        <td class="cell-currency" data-vis="{{ V }}">₹{{ "{:,}".format(row.target) }}</td>
         <td data-vis="{{ V }}">{{ chart_bar("", (row.pct|string) ~ "%", row.pct) }}</td>
       </tr>
       {% endfor %}
@@ -111,14 +111,14 @@
       <tr data-vis="{{ V }}">
         <td data-vis="{{ V }}"></td>
         <td data-vis="{{ V }}"><strong data-vis="{{ V }}">Total</strong></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(pf.daily.today.total or 0) }}</strong></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(pf.mtd_progress | sum(attribute='spent')) }}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums" data-vis="{{ V }}">₹{{ "{:,}".format(pf.mtd_progress | sum(attribute='target')) }}</td>
+        <td class="cell-currency" data-vis="{{ V }}"><strong>₹{{ "{:,}".format(pf.daily.today.total or 0) }}</strong></td>
+        <td class="cell-currency" data-vis="{{ V }}">₹{{ "{:,}".format(pf.mtd_progress | sum(attribute='spent')) }}</td>
+        <td class="cell-currency" data-vis="{{ V }}">₹{{ "{:,}".format(pf.mtd_progress | sum(attribute='target')) }}</td>
         <td data-vis="{{ V }}"></td>
       </tr>
     </tfoot>
   </table>
-  <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap" data-vis="{{ V }}">
+  <div class="portfolio-actions-row" data-vis="{{ V }}">
     <button type="button" class="link-button subtle" id="buyOneOfEach" data-vis="{{ V }}">✓✓ Buy one of each</button>
     <span class="hint" style="align-self:center" data-vis="{{ V }}">
       One-click: tick a row's checkbox to log that fund at the recommended amount + latest NAV.

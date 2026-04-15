@@ -254,3 +254,41 @@ label:has(> textarea[required])::after {
 .mess-photo-preview-info {
   font-size: 0.75rem;
 }
+
+/* ─────────────────────────────────────────────────────────────
+ * F-10 · portfolio.html currency-table inline styles → classes
+ *
+ * templates/portfolio.html had 9 occurrences of
+ * `style="text-align:right;font-variant-numeric:tabular-nums"`
+ * scattered through the daily-recommendation table thead/tbody/
+ * tfoot. Plus a few width/layout overrides on the progress cell
+ * and the action-row below the table. Extracting to three small
+ * utility classes.
+ * ───────────────────────────────────────────────────────────── */
+.cell-currency,
+th.cell-currency,
+td.cell-currency {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cell-progress {
+  width: 30%;
+}
+.cell-checkbox {
+  width: 36px;
+}
+.portfolio-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.portfolio-today-input {
+  width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  border-radius: 4px;
+}

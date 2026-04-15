@@ -64,6 +64,11 @@ RGB_COLOR_RE = re.compile(r"rgb\(")
 NO_TILE_GRID_OK = {
     "change_password.html",
     "notifications.html",  # single feed, no multi-tile composition
+    # Dispatch is a single-purpose command surface (voice/text input +
+    # priority queues) — it uses `.dispatch-console` as its layout
+    # primitive with `.dispatch-list` / `.dispatch-item` internals,
+    # not the dashboard-style multi-tile grid. Exempt by design.
+    "dispatch.html",
 }
 
 

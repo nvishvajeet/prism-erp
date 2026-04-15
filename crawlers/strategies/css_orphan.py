@@ -64,6 +64,12 @@ ALLOWLIST_PREFIXES: tuple[str, ...] = (
     # dev_panel.html as `dev-now-reports-{{ age_tone }}` where age_tone
     # ∈ {fresh, ok, stale}. One class per freshness bucket (W1.4.3 c2).
     "dev-now-reports-",
+    # Dispatch console age / bottleneck tone — composed in dispatch.html
+    # as `dispatch-age-{{ b['age_tier'] }}` and
+    # `dispatch-bottleneck--{{ b['age_tier'] }}` with age_tier ∈
+    # {default, amber, red}. One class per age bucket.
+    "dispatch-age-",
+    "dispatch-bottleneck--",
     # Dynamic families composed through Jinja / runtime state
     "approval-chain-",
     "finance-grant-",

@@ -104,7 +104,7 @@
       {% else %}
       {{ empty_state("No crawler reports yet.", hint="Run `python -m crawlers wave sanity` to generate.") }}
       {% endif %}
-      <div style="margin-top:var(--sp-3)" data-vis="{{ V }}">
+      <div class="top-gap" data-vis="{{ V }}">
         <a class="btn btn-sm" href="{{ url_for('dev_panel') }}?run=smoke" data-vis="{{ V }}">Run smoke test</a>
       </div>
     </div>
@@ -115,7 +115,7 @@
     {{ card_heading("AUDIT", "Export audit trail") }}
     <div class="tile-info-body" data-vis="{{ V }}">
       <p class="hint" data-vis="{{ V }}">Download the full audit log as CSV (up to 10 000 rows).</p>
-      <div style="margin-top:var(--sp-3)" data-vis="{{ V }}">
+      <div class="top-gap" data-vis="{{ V }}">
         <a class="btn btn-sm" href="{{ url_for('audit_export') }}" data-vis="{{ V }}">Export Audit Log</a>
       </div>
     </div>

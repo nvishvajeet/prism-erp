@@ -232,6 +232,16 @@
     const initialInstrument = {{ filters.instrument_id|tojson }};
     if (instrumentEl && initialInstrument) instrumentEl.value = initialInstrument;
 
+    // Sort is client-side only; persist the user's choice via CatalystPrefs
+    // (same storage layer as queue_view) so "By status" / "By instrument"
+    // survives a reload of /schedule. Falls back to the default option if
+    // prefs are unavailable or the saved value is stale.
+    const savedSort = (window.CatalystPrefs && window.CatalystPrefs.get("queue_sort")) || null;
+    if (sortEl && savedSort) {
+      const hasOption = Array.from(sortEl.options).some(function (o) { return o.value === savedSort; });
+      if (hasOption) sortEl.value = savedSort;
+    }
+
     const statusRank = {
       under_review: 1, sample_submitted: 2, sample_received: 3,
       scheduled: 4, in_progress: 5, submitted: 6, awaiting_sample_submission: 7,
@@ -329,7 +339,11 @@
     if (instrumentEl) instrumentEl.addEventListener("change", applyFilters);
     if (dateFrom) dateFrom.addEventListener("change", applyFilters);
     if (dateTo) dateTo.addEventListener("change", applyFilters);
-    if (sortEl) sortEl.addEventListener("change", function () { sortRows(); applyFilters(); });
+    if (sortEl) sortEl.addEventListener("change", function () {
+      if (window.CatalystPrefs) window.CatalystPrefs.set("queue_sort", sortEl.value);
+      sortRows();
+      applyFilters();
+    });
 
     syncPills();
     sortRows();

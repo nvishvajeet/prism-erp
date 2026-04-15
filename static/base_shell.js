@@ -12,12 +12,13 @@
     /* ── Local preference storage only — no cookie banner, no tracking ── */
     window.CatalystPrefs = (function () {
       var keyPrefix = "catalyst_pref_";
-      var knownKeys = ["theme", "pane_heights", "dash_collapsed", "queue_view"];
+      var knownKeys = ["theme", "pane_heights", "dash_collapsed", "queue_view", "queue_sort"];
       var legacyMap = {
         "theme": "labTheme",
         "pane_heights": "labPaneHeights",
         "dash_collapsed": "labDashCollapsed",
         "queue_view": "labQueueView"
+        // queue_sort is new in 2026-04 — no legacy key to migrate.
       };
 
       function readValue(name) {

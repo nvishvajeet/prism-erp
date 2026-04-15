@@ -29,6 +29,7 @@
     {{ metadata_grid([
       ("Name", employee.name),
       ("Username", employee.email or "—"),
+      ("Attendance Number", employee.attendance_number or "—"),
       ("Role", employee.role or "—"),
       ("Line Manager", manager_row.name if manager_row else ("Required" if manager_required else "Top level")),
       ("Designation", salary_cfg.designation if salary_cfg else "—"),

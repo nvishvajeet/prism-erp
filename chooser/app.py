@@ -13,9 +13,20 @@ Run:
     # or via launchd plist: chooser/launchd/local.catalyst.chooser.plist
 """
 
+from pathlib import Path
+
 from flask import Flask, render_template
 
-app = Flask(__name__, template_folder="templates")
+HERE = Path(__file__).resolve().parent
+
+# Resolve template + static dirs to absolute paths so the app works
+# regardless of the launching shell's CWD (launchd plists, cron jobs,
+# ad-hoc shells all land here cleanly).
+app = Flask(
+    __name__,
+    template_folder=str(HERE / "templates"),
+    static_folder=str(HERE / "static"),
+)
 
 # The two subdomains this chooser points at. Keep in sync with
 # ~/.cloudflared/config.yml on mini.

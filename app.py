@@ -26044,6 +26044,11 @@ def _mess_access(user) -> bool:
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
 
 
+def _mess_portal_guard() -> None:
+    if not portal_route_enabled("mess"):
+        abort(404)
+
+
 # ── Monthly / Semester rotating pass tokens ──────────────────────
 def _mess_pass_secret() -> str:
     """Server-side secret for HMAC-based pass tokens. Derived from
@@ -26141,6 +26146,7 @@ def mess_camera_scan():
     """Phone camera scanner — uses html5-qrcode JS library to scan
     student QR codes from their phone screen. No app install needed."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -26160,6 +26166,7 @@ def mess_api_validate_scan():
     """AJAX endpoint for the camera scanner. Accepts a scanned token,
     validates it, records the entry, returns JSON."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     from datetime import date as _date, datetime as _dt
@@ -26218,6 +26225,7 @@ def mess_api_validate_scan():
 def mess_dashboard():
     """Mess management dashboard — today's meal counts, live scan."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, datetime as _dt
@@ -26268,6 +26276,7 @@ def mess_dashboard():
 def mess_scan():
     """Scan a student QR/barcode for mess entry."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, datetime as _dt
@@ -26349,6 +26358,7 @@ def mess_scan():
 def mess_students_list():
     """List all registered mess students."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     students = query_all(
@@ -26369,6 +26379,7 @@ def mess_students_list():
 def mess_student_new():
     """Register a new mess student."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     if request.method == "POST":
@@ -26425,6 +26436,7 @@ def mess_student_new():
 def mess_student_detail(student_id: int):
     """Student detail — meal history, QR code."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one(
@@ -26484,6 +26496,7 @@ def mess_student_detail(student_id: int):
 def mess_student_qr(student_id: int):
     """Printable QR card for a student."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT * FROM mess_students WHERE id = ?", (student_id,))
@@ -26497,6 +26510,7 @@ def mess_student_qr(student_id: int):
 def mess_student_toggle(student_id: int):
     """Activate/deactivate a student (graduation, withdrawal, etc)."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT id, name, is_active FROM mess_students WHERE id = ?", (student_id,))
@@ -26515,6 +26529,7 @@ def mess_student_toggle(student_id: int):
 def mess_student_edit(student_id: int):
     """Update student details."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT id FROM mess_students WHERE id = ?", (student_id,))
@@ -26558,6 +26573,7 @@ def mess_student_edit(student_id: int):
 def mess_api_search_student():
     """AJAX search for students — supports partial name, roll, department."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify([])
     q = request.args.get("q", "").strip()
@@ -26587,6 +26603,7 @@ def mess_api_search_student():
 def mess_api_lookup(code: str):
     """Quick lookup by roll number, QR token, or short numeric ID. Returns student info + photo for security gate."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify({"error": "access denied"}), 403
     code = code.strip().upper()
@@ -26614,6 +26631,7 @@ def mess_api_lookup(code: str):
 @login_required
 def mess_student_photo(student_id: int):
     """Serve student photo from data directory."""
+    _mess_portal_guard()
     student = query_one("SELECT photo_path FROM mess_students WHERE id=?", (student_id,))
     if not student or not student["photo_path"]:
         abort(404)
@@ -26628,6 +26646,7 @@ def mess_student_photo(student_id: int):
 def mess_students_import():
     """Bulk import students from CSV. Columns: name, roll_number, department, year, hostel, room, meal_plan, phone"""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     import csv, io, secrets
@@ -26679,6 +26698,7 @@ def mess_batch_passes():
     """Generate pass links for all active students. Admin can copy/share
     or export as CSV for WhatsApp/SMS distribution."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -26728,6 +26748,7 @@ def mess_batch_passes():
 def mess_reports():
     """Mess reports — daily/weekly/monthly meal counts."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, timedelta
@@ -26786,6 +26807,7 @@ def mess_prep_log():
     """Food preparation planning — log plates prepared, track wastage.
     Uses 7-day historical average to predict demand."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, timedelta, datetime as _dt
@@ -26891,6 +26913,7 @@ def mess_tally_export():
     """Export monthly mess consumption as Tally-compatible CSV for journal entries.
     Each day's total becomes a journal entry: debit Mess Expenses, credit Students' Mess Fee."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -26950,6 +26973,11 @@ def _tuck_shop_access(user) -> bool:
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
 
 
+def _tuck_shop_portal_guard() -> None:
+    if not portal_route_enabled("tuck_shop"):
+        abort(404)
+
+
 def _next_token_number(issue_date: str) -> int:
     """Return the next token number for a given date (resets daily)."""
     row = query_one(
@@ -26964,8 +26992,7 @@ def _next_token_number(issue_date: str) -> int:
 def tuck_shop_dashboard():
     """Tuck shop overview: today's sales, tokens, quick links."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27020,8 +27047,7 @@ def tuck_shop_dashboard():
 def tuck_shop_terminal():
     """POS terminal — tap items, record sale."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     items = query_all(
@@ -27038,8 +27064,7 @@ def tuck_shop_terminal():
 def tuck_shop_items_manage():
     """Manage tuck shop item catalog."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     if request.method == "POST":
@@ -27063,6 +27088,7 @@ def tuck_shop_items_manage():
 def tuck_shop_item_toggle(item_id: int):
     """Toggle active/inactive for a tuck shop item."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
@@ -27079,6 +27105,7 @@ def tuck_shop_item_toggle(item_id: int):
 def tuck_shop_api_record_sale():
     """AJAX: Record a POS sale with line items. JSON in, JSON out."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27128,8 +27155,7 @@ def tuck_shop_api_record_sale():
 def tuck_shop_token_issue():
     """Payment counter screen — issue tokens."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27165,6 +27191,7 @@ def tuck_shop_token_issue():
 def tuck_shop_api_issue_token():
     """AJAX: Issue a new token at the payment counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27201,8 +27228,7 @@ def tuck_shop_api_issue_token():
 def tuck_shop_token_redeem():
     """Serving counter screen — redeem tokens."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27229,6 +27255,7 @@ def tuck_shop_token_redeem():
 def tuck_shop_api_redeem_token():
     """AJAX: Redeem a token at the serving counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27267,8 +27294,7 @@ def tuck_shop_api_redeem_token():
 def tuck_shop_daily_report():
     """Daily sales & token reconciliation report."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27350,6 +27376,7 @@ def tuck_shop_daily_report():
 def tuck_shop_api_void_token():
     """AJAX: Void a token (cancellation at payment counter)."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27375,6 +27402,7 @@ def tuck_shop_api_void_token():
 def tuck_shop_item_edit(item_id: int):
     """Update a tuck shop item's price, name, or category."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
@@ -27394,6 +27422,7 @@ def tuck_shop_item_edit(item_id: int):
 def tuck_shop_report_csv():
     """CSV export of daily tuck shop report."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27443,6 +27472,7 @@ def tuck_shop_report_csv():
 def tuck_shop_api_pending_tokens():
     """AJAX: Live-refresh pending tokens for serving counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify([])
     from datetime import date as _date
@@ -27468,6 +27498,7 @@ def tuck_shop_api_pending_tokens():
 def tuck_shop_api_today_stats():
     """AJAX: Live stats for payment counter header."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({})
     from datetime import date as _date
@@ -27495,6 +27526,7 @@ def tuck_shop_api_bank_match():
            "issue_date": "YYYY-MM-DD", "matched": 0|1}
     """
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27539,6 +27571,7 @@ def tuck_shop_bank_reconcile():
     manual review.
     """
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     report_date = (request.form.get("date") or "").strip()

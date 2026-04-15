@@ -8,6 +8,9 @@
   {% if is_self %}
   <a class="text-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">My History</a>
   {% endif %}
+  {% if can_edit_user %}
+  <a class="text-link" href="{{ url_for('admin_user_hours', user_id=target_user['id']) }}" data-vis="{{ V }}">Hours</a>
+  {% endif %}
   <a class="text-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
 {% endcall %}
 
@@ -35,6 +38,7 @@
             <a class="text-link" href="mailto:{{ target_user['email'] }}" data-vis="{{ V }}">{{ target_user["email"] }}</a>
           </dd>
           <dt data-vis="{{ V }}">Member Code</dt><dd data-vis="{{ V }}">{{ target_user["member_code"] or "-" }}</dd>
+          <dt data-vis="{{ V }}">Attendance Number</dt><dd data-vis="{{ V }}">{{ target_user["attendance_number"] or "—" }}</dd>
           <dt data-vis="{{ V }}">Role</dt><dd data-vis="{{ V }}">{{ role_display_name(target_user["role"]) }}</dd>
           <dt data-vis="{{ V }}">Office</dt>
           <dd data-vis="{{ V }}">{{ target_user["office_location"] or "—" }}</dd>

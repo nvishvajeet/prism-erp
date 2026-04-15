@@ -97,6 +97,8 @@ ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
+WORK_SESSION_IDLE_MINUTES = 30
+WORK_SESSION_HEARTBEAT_MAX_SECONDS = 300
 
 
 def _runtime_slug(*parts: str) -> str:
@@ -3759,6 +3761,112 @@ def current_user() -> sqlite3.Row | None:
     return query_one("SELECT * FROM users WHERE id = ?", (user_id,))
 
 
+def _new_work_session_key(user: sqlite3.Row) -> str:
+    seed = f"{user['id']}:{now_iso()}:{random.random()}:{request.headers.get('User-Agent', '')}"
+    return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:24]
+
+
+def _work_session_timeout_cutoff() -> str:
+    return (datetime.utcnow() - timedelta(minutes=WORK_SESSION_IDLE_MINUTES)).isoformat(timespec="seconds")
+
+
+def _touch_work_session(
+    user: sqlite3.Row | None,
+    *,
+    path: str | None = None,
+    add_active_seconds: int = 0,
+    heartbeat: bool = False,
+) -> sqlite3.Row | None:
+    if user is None or not has_request_context():
+        return None
+    if request.endpoint in {"static", "api_health_check", "me_heartbeat"}:
+        return None
+    path_value = (path or request.path or "")[:200]
+    db = get_db()
+    now = now_iso()
+    session_key = session.get("_work_session_key")
+    session_row = None
+    if session_key:
+        session_row = query_one(
+            "SELECT * FROM user_work_sessions WHERE user_id = ? AND session_key = ?",
+            (user["id"], session_key),
+        )
+    if session_row is not None and row_value(session_row, "ended_at"):
+        session_row = None
+    if session_row is not None and row_value(session_row, "last_seen_at", "") < _work_session_timeout_cutoff():
+        db.execute(
+            "UPDATE user_work_sessions SET ended_at = COALESCE(ended_at, ?) WHERE id = ?",
+            (row_value(session_row, "last_seen_at", now), session_row["id"]),
+        )
+        session_row = None
+        session.pop("_work_session_key", None)
+    if session_row is None:
+        session_key = _new_work_session_key(user)
+        session["_work_session_key"] = session_key
+        db.execute(
+            """
+            INSERT INTO user_work_sessions
+                (user_id, session_key, started_at, last_seen_at, ended_at,
+                 request_count, heartbeat_count, active_seconds, last_path,
+                 user_agent, ip_address)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["id"],
+                session_key,
+                now,
+                now,
+                0,
+                0,
+                0,
+                path_value,
+                (request.headers.get("User-Agent") or "")[:255],
+                (request.remote_addr or "")[:64],
+            ),
+        )
+        session_row = query_one(
+            "SELECT * FROM user_work_sessions WHERE user_id = ? AND session_key = ?",
+            (user["id"], session_key),
+        )
+    if session_row is None:
+        return None
+    safe_active_seconds = max(0, min(int(add_active_seconds or 0), WORK_SESSION_HEARTBEAT_MAX_SECONDS))
+    db.execute(
+        """
+        UPDATE user_work_sessions
+           SET last_seen_at = ?,
+               ended_at = NULL,
+               request_count = request_count + ?,
+               heartbeat_count = heartbeat_count + ?,
+               active_seconds = active_seconds + ?,
+               last_path = ?,
+               user_agent = CASE WHEN user_agent = '' THEN ? ELSE user_agent END,
+               ip_address = CASE WHEN ip_address = '' THEN ? ELSE ip_address END
+         WHERE id = ?
+        """,
+        (
+            now,
+            0 if heartbeat else 1,
+            1 if heartbeat else 0,
+            safe_active_seconds,
+            path_value,
+            (request.headers.get("User-Agent") or "")[:255],
+            (request.remote_addr or "")[:64],
+            session_row["id"],
+        ),
+    )
+    return query_one("SELECT * FROM user_work_sessions WHERE id = ?", (session_row["id"],))
+
+
+@app.before_request
+def track_work_session():
+    user = current_user()
+    if user is None:
+        return None
+    _touch_work_session(user)
+    return None
+
+
 def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str | None = None) -> str | None:
     """Return the best active portal slug from the requested slug + assignments."""
     valid_slugs = {row_value(p, "slug", "") for p in portals}
@@ -5146,6 +5254,24 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_tc_action ON telemetry_click(action, created_at);
             CREATE INDEX IF NOT EXISTS idx_tc_user   ON telemetry_click(user_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS user_work_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_key TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                ended_at TEXT,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                heartbeat_count INTEGER NOT NULL DEFAULT 0,
+                active_seconds INTEGER NOT NULL DEFAULT 0,
+                last_path TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                UNIQUE(user_id, session_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_uws_user_started ON user_work_sessions(user_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_uws_user_last_seen ON user_work_sessions(user_id, last_seen_at DESC);
 
             -- sample_requests gains a project_id FK for forward-lookup.
             -- Nullable in alpha.1 because the backfill stitches it after
@@ -8806,6 +8932,7 @@ def inject_globals():
         "current_role_display": role_display_name(user["role"]) if user else "",
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_hint": role_next_action(user["role"]) if user else "",
+        "attendance_number": row_value(user, "attendance_number") if user else None,
         "current_role_set": role_set,
         "user_has_role": lambda role: user_has_role(user, role),
         "instrument_groups_all": instrument_groups_all,
@@ -12628,6 +12755,12 @@ def portal_switch_legacy(slug: str):
 def logout():
     uid = session.get("user_id")
     if uid:
+        work_session_key = session.get("_work_session_key")
+        if work_session_key:
+            execute(
+                "UPDATE user_work_sessions SET ended_at = ?, last_seen_at = ? WHERE user_id = ? AND session_key = ? AND ended_at IS NULL",
+                (now_iso(), now_iso(), uid, work_session_key),
+            )
         log_action(uid, "auth", uid, "logout", {})
     session.clear()
     return redirect(url_for("login"))
@@ -17486,7 +17619,7 @@ def processed_history():
 
 def _user_profile_target(viewer, user_id: int):
     target_user = query_one(
-        "SELECT id, name, email, role, invite_status, active, member_code, "
+        "SELECT id, name, email, role, invite_status, active, member_code, attendance_number, "
         "COALESCE(office_location, '') AS office_location, "
         "COALESCE(website, '') AS website "
         "FROM users WHERE id = ?",
@@ -18119,6 +18252,117 @@ def user_profile(user_id: int):
             int(g["id"]): instrument_group_member_ids(int(g["id"]))
             for g in instrument_groups
         },
+    )
+
+
+def _can_view_user_hours(viewer: sqlite3.Row | None, target_user: sqlite3.Row) -> bool:
+    if viewer is None:
+        return False
+    if viewer["id"] == target_user["id"]:
+        return True
+    return can_manage_members(viewer)
+
+
+@app.route("/me/heartbeat", methods=["POST"])
+@login_required
+@csrf.exempt
+def me_heartbeat():
+    user = current_user()
+    payload = request.get_json(silent=True) or {}
+    try:
+        active_seconds = int(payload.get("active_seconds") or 0)
+    except (TypeError, ValueError):
+        active_seconds = 0
+    session_row = _touch_work_session(
+        user,
+        path=(payload.get("path") or request.path),
+        add_active_seconds=active_seconds,
+        heartbeat=True,
+    )
+    return jsonify(
+        ok=True,
+        session_key=row_value(session_row, "session_key", ""),
+        active_seconds=row_value(session_row, "active_seconds", 0),
+    )
+
+
+@app.route("/admin/users/<int:user_id>/hours")
+@login_required
+def admin_user_hours(user_id: int):
+    viewer = current_user()
+    target_user = query_one(
+        "SELECT id, name, email, role, attendance_number FROM users WHERE id = ?",
+        (user_id,),
+    )
+    if target_user is None:
+        abort(404)
+    if not _can_view_user_hours(viewer, target_user):
+        abort(403)
+    sessions = query_all(
+        """
+        SELECT *
+          FROM user_work_sessions
+         WHERE user_id = ?
+         ORDER BY started_at DESC
+         LIMIT 120
+        """,
+        (user_id,),
+    )
+    daily_rows = query_all(
+        """
+        SELECT substr(started_at, 1, 10) AS day,
+               COUNT(*) AS session_count,
+               COALESCE(SUM(active_seconds), 0) AS active_seconds,
+               COALESCE(SUM(request_count), 0) AS request_count,
+               MIN(started_at) AS first_seen_at,
+               MAX(last_seen_at) AS last_seen_at
+          FROM user_work_sessions
+         WHERE user_id = ?
+         GROUP BY substr(started_at, 1, 10)
+         ORDER BY day DESC
+         LIMIT 30
+        """,
+        (user_id,),
+    )
+    totals = query_one(
+        """
+        SELECT COUNT(*) AS session_count,
+               COALESCE(SUM(active_seconds), 0) AS active_seconds,
+               COALESCE(SUM(request_count), 0) AS request_count,
+               COALESCE(SUM(heartbeat_count), 0) AS heartbeat_count
+          FROM user_work_sessions
+         WHERE user_id = ?
+        """,
+        (user_id,),
+    ) or {"session_count": 0, "active_seconds": 0, "request_count": 0, "heartbeat_count": 0}
+    last_7 = query_one(
+        """
+        SELECT COALESCE(SUM(active_seconds), 0) AS active_seconds
+          FROM user_work_sessions
+         WHERE user_id = ? AND started_at >= ?
+        """,
+        (user_id, (datetime.utcnow() - timedelta(days=7)).isoformat(timespec="seconds")),
+    )
+    last_30 = query_one(
+        """
+        SELECT COALESCE(SUM(active_seconds), 0) AS active_seconds
+          FROM user_work_sessions
+         WHERE user_id = ? AND started_at >= ?
+        """,
+        (user_id, (datetime.utcnow() - timedelta(days=30)).isoformat(timespec="seconds")),
+    )
+    open_session = next((row for row in sessions if not row_value(row, "ended_at")), None)
+    return render_template(
+        "admin_user_hours.html",
+        target_user=target_user,
+        sessions=sessions,
+        daily_rows=daily_rows,
+        totals=totals,
+        open_session=open_session,
+        last_7_seconds=(last_7["active_seconds"] if last_7 else 0),
+        last_30_seconds=(last_30["active_seconds"] if last_30 else 0),
+        can_manage_members=can_manage_members(viewer),
+        title=f"{target_user['name']} Hours",
     )
 
 

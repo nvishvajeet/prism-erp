@@ -59,7 +59,7 @@
     {{ card_heading("✨ AI ANALYSIS", "") }}
     {% if jd.get('ai_analysis') %}<pre class="code-scroll" data-vis="{{ V }}">{{ jd.get('ai_analysis') }}</pre>{% endif %}
     {% if jd.get('conversion_log') %}
-    <div style="padding:0.5rem;background:var(--bg-secondary);border-radius:6px;margin-top:0.5rem;" data-vis="{{ V }}">
+    <div style="padding:0.5rem;background:var(--surface-alt);border-radius:6px;margin-top:0.5rem;" data-vis="{{ V }}">
       <span class="hint" data-vis="{{ V }}">Conversion:</span> {{ jd.get('conversion_log') }}
     </div>
     {% endif %}
@@ -119,9 +119,9 @@
 
   {# ── Error ── #}
   {% if job.error %}
-  <article class="card tile tile-full-width" style="border-left:3px solid var(--color-error);" data-vis="{{ V }}">
+  <article class="card tile tile-full-width" style="border-left:3px solid var(--danger);" data-vis="{{ V }}">
     {{ card_heading("ERROR", "") }}
-    <pre class="code-scroll" style="color:var(--color-error);" data-vis="{{ V }}">{{ job.error }}</pre>
+    <pre class="code-scroll" style="color:var(--danger);" data-vis="{{ V }}">{{ job.error }}</pre>
   </article>
   {% endif %}
 </section>

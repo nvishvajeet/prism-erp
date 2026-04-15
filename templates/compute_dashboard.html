@@ -33,10 +33,10 @@
     <div class="section-head" data-vis="{{ V }}">Storage</div>
     <div style="padding:0.75rem;" data-vis="{{ V }}">
       {% set pct = ((storage_used_mb / storage_cap_mb) * 100) if storage_cap_mb > 0 else 0 %}
-      <div style="background:var(--bg-secondary);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
-        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--color-error){% elif pct > 50 %}var(--color-warning){% else %}var(--color-success){% endif %};border-radius:6px;transition:width 0.3s;" data-vis="{{ V }}"></div>
+      <div style="background:var(--surface-alt);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
+        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--danger){% elif pct > 50 %}var(--warm){% else %}var(--lifecycle-ok){% endif %};border-radius:6px;transition:width 0.3s;" data-vis="{{ V }}"></div>
       </div>
-      <div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);" data-vis="{{ V }}">
+      <div style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);" data-vis="{{ V }}">
         {{ "%.1f"|format(storage_used_mb / 1024) }} GB / {{ "%.0f"|format(storage_cap_mb / 1024) }} GB used
         ({{ "%.1f"|format(pct) }}%)
       </div>
@@ -57,7 +57,7 @@
          style="text-decoration:none;padding:0.35rem 0.75rem;cursor:pointer;"
          data-vis="{{ V }}">{{ label }}</a>
       {% endfor %}
-      <span style="margin-left:1rem;color:var(--text-secondary);" data-vis="{{ V }}">|</span>
+      <span style="margin-left:1rem;color:var(--muted);" data-vis="{{ V }}">|</span>
       {% for val, label in [("all","All Types"),("hpc_job","HPC"),("ai_prompt","AI Prompt")] %}
       <a href="{{ url_for('compute_list', status=status_filter, type=val) }}"
          class="badge {% if job_type_filter == val %}status-active{% endif %}"

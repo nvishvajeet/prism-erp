@@ -79,7 +79,7 @@
       <div id="cartItems" style="min-height:100px;" data-vis="{{ V }}">
         <p class="hint" id="cartEmpty" data-vis="{{ V }}">Tap items or type codes…</p>
       </div>
-      <hr style="border-color:var(--color-separator);" data-vis="{{ V }}">
+      <hr style="border-color:var(--line);" data-vis="{{ V }}">
       <div style="display:flex;justify-content:space-between;align-items:center;margin:0.5rem 0;" data-vis="{{ V }}">
         <span style="font-size:1rem;font-weight:600;" data-vis="{{ V }}">Total</span>
         <span id="cartTotal" style="font-size:1.5rem;font-weight:800;" data-vis="{{ V }}">₹0</span>
@@ -150,7 +150,7 @@
       var it = cart[id];
       var line = document.createElement('div');
       line.className = 'cart-line';
-      line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--color-separator);';
+      line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid var(--line);';
       line.innerHTML =
         '<div style="flex:1;">' +
           '<span style="font-weight:600;">' + it.name + '</span>' +

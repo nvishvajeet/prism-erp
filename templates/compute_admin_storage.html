@@ -20,8 +20,8 @@
       {{ stat_blob("%.1f"|format(pct) ~ "%", "Utilization", tone="wait" if pct > 50 else "completed") }}
     </div>
     <div style="padding:0.75rem;" data-vis="{{ V }}">
-      <div style="background:var(--bg-secondary);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
-        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--color-error){% elif pct > 50 %}var(--color-warning){% else %}var(--color-success){% endif %};border-radius:6px;" data-vis="{{ V }}"></div>
+      <div style="background:var(--surface-alt);border-radius:6px;height:1.5rem;overflow:hidden;" data-vis="{{ V }}">
+        <div style="width:{{ pct|round(1) }}%;height:100%;background:{% if pct > 80 %}var(--danger){% elif pct > 50 %}var(--warm){% else %}var(--lifecycle-ok){% endif %};border-radius:6px;" data-vis="{{ V }}"></div>
       </div>
     </div>
   </article>
@@ -54,7 +54,7 @@
       </tbody>
     </table>
     {% else %}
-    <div style="padding:1rem;color:var(--text-secondary);" data-vis="{{ V }}">No jobs with output files.</div>
+    <div style="padding:1rem;color:var(--muted);" data-vis="{{ V }}">No jobs with output files.</div>
     {% endif %}
   </article>
 

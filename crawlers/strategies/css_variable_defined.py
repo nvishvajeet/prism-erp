@@ -133,6 +133,11 @@ class CSSVariableDefinedStrategy(CrawlerStrategy):
                 ))
 
         # templates/**/*.html — inline style="" attrs and <style> blocks
+        # Also harvest --NAME: definitions from any <style>…</style> block
+        # so self-contained standalone pages (e.g. the dev hub, the mess
+        # student-pass PWA) that declare their own :root palette don't
+        # flag as undefined.
+        style_block_re = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
         if templates_dir.exists():
             for html_path in sorted(templates_dir.rglob("*.html")):
                 text = html_path.read_text(encoding="utf-8", errors="ignore")
@@ -140,6 +145,9 @@ class CSSVariableDefinedStrategy(CrawlerStrategy):
                     text,
                     str(html_path.relative_to(root)),
                 ))
+                for m in style_block_re.finditer(text):
+                    block = re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.DOTALL)
+                    defined.update(_collect_definitions(block))
 
         # ── 3. Classify each reference ────────────────────────────────
         undefined_no_fallback: list[VarRef] = []

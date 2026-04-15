@@ -4096,6 +4096,23 @@ def login_required(view):
     return wrapped
 
 
+def permission_required(check):
+    """Stack after @login_required to enforce a pure boolean permission helper."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(**kwargs):
+            user = current_user()
+            if user is None:
+                return redirect(url_for("login"))
+            if not check(user):
+                abort(403)
+            return view(**kwargs)
+
+        return wrapped
+
+    return decorator
+
+
 def role_required(*roles: str):
     def decorator(view):
         @wraps(view)
@@ -4236,6 +4253,46 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
     if cache is not None:
         cache[user_id] = result
     return result
+
+
+def _can_open_user_admin(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    allowed_open_roles = {"super_admin", "site_admin"}
+    if lab_profile_mode_active():
+        allowed_open_roles.add("instrument_admin")
+    return is_owner(user) or user["role"] in allowed_open_roles
+
+
+def _can_invite_users(user: sqlite3.Row | None) -> bool:
+    return _can_open_user_admin(user)
+
+
+def _can_view_debug_surfaces(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(is_owner(user) or user_role_set(user) & {"tester", "super_admin", "site_admin"})
+
+
+def _can_manage_any_instrument(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    if is_owner(user) or user_role_set(user) & {"super_admin", "site_admin", "instrument_admin"}:
+        return True
+    for table in INSTRUMENT_MANAGEMENT_TABLES:
+        if query_one(f"SELECT 1 FROM {table} WHERE user_id = ? LIMIT 1", (user["id"],)) is not None:
+            return True
+    return False
+
+
+def _can_view_audit_log(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(is_owner(user) or user_role_set(user) & {"super_admin", "site_admin"})
+
+
+def _can_view_ai_admin_log(user: sqlite3.Row | None) -> bool:
+    return _can_view_audit_log(user)
 
 
 def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.Row]:
@@ -8611,6 +8668,11 @@ def inject_globals():
     role_set = user_role_set(user)
     ai_settings = _ai_settings_snapshot()
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
+    can_edit_user = bool(user and can_manage_members(user))
+    can_approve_finance = bool(user and _user_can_edit_finance(user))
+    can_manage_instruments = bool(user and _can_manage_any_instrument(user))
+    can_view_debug = bool(user and _can_view_debug_surfaces(user))
+    can_invite = bool(user and _can_invite_users(user))
     # Every db role must appear here — base.html's [data-vis] filter hides
     # elements whose data-vis list doesn't include the current user's role,
     # so a role omitted here renders as a completely blank page. "owner" is
@@ -8710,7 +8772,12 @@ def inject_globals():
         "google_oauth_enabled": bool(_oauth),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
-        "can_use_debug_overlay_user": bool(user and (is_owner(user) or bool(role_set & {"tester", "super_admin", "site_admin"}))),
+        "can_edit_user": can_edit_user,
+        "can_approve_finance": can_approve_finance,
+        "can_manage_instruments": can_manage_instruments,
+        "can_view_debug": can_view_debug,
+        "can_invite": can_invite,
+        "can_use_debug_overlay_user": can_view_debug,
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
         "can_use_role_switcher_user": bool(access_profile["can_use_role_switcher"]),
         "can_access_schedule_user": bool(access_profile["can_access_schedule"]),
@@ -9662,6 +9729,7 @@ def admin_notices():
 
 @app.route("/admin/notices/new", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_notices_new():
     """Create a new notice. Validates scope + severity + required
     subject, persists with the authenticated user as author."""
@@ -9723,6 +9791,7 @@ def admin_notices_new():
 
 @app.route("/admin/notices/<int:notice_id>/delete", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_notices_delete(notice_id: int):
     """Delete a notice. Same write gate as posting."""
     user = current_user()
@@ -9741,6 +9810,7 @@ def admin_notices_delete(notice_id: int):
 # ─── Mailing list management routes ──────────────────────────────────
 @app.route("/admin/mailing-lists", methods=["GET"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_lists():
     user = current_user()
     if not _user_can_post_notice(user):
@@ -9758,6 +9828,7 @@ def admin_mailing_lists():
 
 @app.route("/admin/mailing-lists/new", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_list_create():
     user = current_user()
     if not _user_can_post_notice(user):
@@ -9787,6 +9858,7 @@ def admin_mailing_list_create():
 
 @app.route("/admin/mailing-lists/<int:list_id>/delete", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_list_delete(list_id: int):
     user = current_user()
     if not _user_can_post_notice(user):
@@ -10827,6 +10899,7 @@ def _finance_portal_cross_module_kpis() -> tuple[dict, dict]:
 
 @app.route("/finance")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_portal():
     """v2.0.0-alpha.2 — Finance portal reads from the new peer aggregates.
 
@@ -10902,6 +10975,12 @@ def _user_can_edit_finance(user: sqlite3.Row | None) -> bool:
         return False
     roles = user_role_set(user)
     return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
+
+
+def _user_can_control_grant_forms(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(user_role_set(user) & {"finance_admin", "super_admin"}) or is_owner(user)
 
 
 def grant_utilization(grant_id: int) -> tuple[float, float, int, str]:
@@ -11014,6 +11093,7 @@ def _next_invoice_number():
 
 @app.route("/finance/invoices")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_invoices_list():
     """Invoice list page with filters."""
     user = current_user()
@@ -11113,6 +11193,7 @@ def finance_invoices_list():
 
 @app.route("/finance/invoices/new", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_edit_finance(user))
 def finance_invoice_new():
     """Create a new invoice."""
     user = current_user()
@@ -11242,6 +11323,7 @@ def finance_invoice_new():
 
 @app.route("/finance/invoices/<int:invoice_id>")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_invoice_detail(invoice_id):
     """Invoice detail with payment timeline."""
     user = current_user()
@@ -11314,6 +11396,7 @@ def finance_invoice_detail(invoice_id):
 
 @app.route("/finance/invoices/<int:invoice_id>/pay", methods=["POST"])
 @login_required
+@permission_required(lambda user: _user_can_edit_finance(user))
 def finance_invoice_pay(invoice_id):
     """Record a payment against an invoice."""
     user = current_user()
@@ -11707,6 +11790,7 @@ def _finance_grant_detail_post(user, grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_grant_detail(grant_id: int):
     """v2.0.0-alpha.2 — Single-grant drill-down via the peer graph.
 
@@ -11864,6 +11948,7 @@ def finance_grant_detail(grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>/expenses", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_grant_expenses(grant_id: int):
     """Grant expenses — non-sample charges (equipment, reagents, vendors)."""
     user = current_user()
@@ -11950,6 +12035,7 @@ def finance_grant_expenses(grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>/form-control", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_control_grant_forms(user))
 def finance_grant_form_control(grant_id: int):
     """Grant form-control — approval config, budget rules, overview."""
     user = current_user()
@@ -18873,6 +18959,7 @@ def leave_request_new():
 
 @app.route("/admin/leave", methods=["GET"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_queue():
     """Admin view: all pending leave requests across the facility."""
     user = current_user()
@@ -18907,6 +18994,7 @@ def admin_leave_queue():
 
 @app.route("/admin/leave/<int:leave_id>/approve", methods=["POST"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_approve(leave_id: int):
     """Approve a leave request."""
     user = current_user()
@@ -18923,6 +19011,7 @@ def admin_leave_approve(leave_id: int):
 
 @app.route("/admin/leave/<int:leave_id>/reject", methods=["POST"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_reject(leave_id: int):
     """Reject a leave request."""
     user = current_user()
@@ -18940,6 +19029,7 @@ def admin_leave_reject(leave_id: int):
 
 @app.route("/admin/attendance", methods=["GET"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_attendance_calendar():
     """Admin view: attendance overview for all users on a given date."""
     user = current_user()
@@ -19103,6 +19193,7 @@ def instrument_notify(instrument_id: int):
 
 @app.route("/admin/maintenance/upcoming")
 @login_required
+@permission_required(_can_view_audit_log)
 def admin_calibrations_upcoming():
     """NABL-facing dashboard: calibrations due in the next 30 days
     across all instruments. Admin/owner gated."""
@@ -19897,6 +19988,7 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
 
 @app.route("/admin/users", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_open_user_admin)
 def admin_users():
     user = current_user()
     permissions = _admin_users_permissions(user)
@@ -20084,6 +20176,7 @@ def personnel_chart_pin():
 
 @app.route("/admin/org/setup", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_edit_org_chart)
 def admin_org_setup():
     """HR-admin wizard: bulk-create a fresh org in one pass.
 
@@ -20140,6 +20233,7 @@ def admin_org_setup():
 
 @app.route("/admin/onboard", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_invite_users)
 def admin_onboard():
     """Streamlined new-member onboarding wizard.
 
@@ -21198,6 +21292,7 @@ def company_books():
 
 @app.route("/vendors")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_list():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -21227,6 +21322,7 @@ def vendor_list():
 
 @app.route("/vendors/bulk", methods=["POST"])
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_bulk_create():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -21278,6 +21374,7 @@ def vendor_bulk_create():
 
 @app.route("/vendors/new", methods=["GET", "POST"])
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_new():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -21335,6 +21432,7 @@ def vendor_new():
 
 @app.route("/vendors/<int:vendor_id>")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_detail(vendor_id):
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -21374,6 +21472,7 @@ def vendor_detail(vendor_id):
 
 @app.route("/vendors/<int:vendor_id>/approval", methods=["POST"])
 @login_required
+@permission_required(_user_can_approve_vendors)
 def vendor_approval_action(vendor_id: int):
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -21421,6 +21520,7 @@ def vendor_approval_action(vendor_id: int):
 
 @app.route("/payments")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_payments_list():
     """Main payment list — shows all POs grouped by status."""
     if not portal_route_enabled("vendor_payments"):
@@ -22232,6 +22332,7 @@ def _user_is_ca_auditor(user) -> bool:
 
 @app.route("/audit")
 @login_required
+@permission_required(_user_is_ca_auditor)
 def ca_audit_dashboard():
     """CA audit dashboard — overview of audit status across all transactions."""
     if not portal_route_enabled("vendor_payments"):
@@ -26058,6 +26159,7 @@ def global_search():
 # ── Feature: Audit Log Viewer (admin-only) ──────────────────────────
 @app.route("/admin/audit-log")
 @login_required
+@permission_required(_can_view_audit_log)
 def audit_log_viewer():
     """Central audit log — visible only to owner, super_admin, site_admin."""
     user = current_user()
@@ -29514,6 +29616,7 @@ def ai_pane_summary():
 
 @app.route("/admin/ai-log")
 @login_required
+@permission_required(_can_view_ai_admin_log)
 def ai_admin_log():
     """Admin view: all AI interactions across all users."""
     user = current_user()

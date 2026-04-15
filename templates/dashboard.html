@@ -14,20 +14,9 @@
        info. Each notice is a terminal-style card with a
        monospaced SCOPE eyebrow + severity badge. ── #}
   {% if quick_actions %}
-  <article class="card tile tile-full-width tile-dash-quick-actions tile-dash-hero" data-vis="{{ V }}">
-    {% call card_heading("FOCUS", "What matters now") %}
-      <span class="dash-hero-status" data-vis="{{ V }}">
-        {% if dash_action_items %}{{ dash_action_items|length }} active item{% if dash_action_items|length != 1 %}s{% endif %}{% else %}Clear runway{% endif %}
-      </span>
-    {% endcall %}
-    <p class="dash-hero-copy" data-vis="{{ V }}">
-      {{ portal_text("Move the system forward with one deliberate next step. Everything here is chosen to reduce decisions, not add them.", lab="Move the lab forward with one deliberate next step. Everything here is chosen to reduce decisions, not add them.") }}
-    </p>
-    <div class="dash-hero-meta" data-vis="{{ V }}">
-      <span class="dash-hero-chip" data-vis="{{ V }}">{{ portal_text("Queue", lab="Lab queue") }}{% if quick_intake_total %} · {{ quick_intake_total }} intake{% endif %}</span>
-      <span class="dash-hero-chip" data-vis="{{ V }}">Noticeboard · {{ active_notices|length if active_notices else 0 }}</span>
-      <span class="dash-hero-chip" data-vis="{{ V }}">Precision first</span>
-    </div>
+  <article class="card tile tile-full-width tile-dash-quick-actions tile-dash-brief" data-vis="{{ V }}">
+    {{ card_heading("BRIEF", "What to do next") }}
+    <p class="dash-brief-line" data-vis="{{ V }}">{{ dash_action_items|length }} item{{ '' if dash_action_items|length == 1 else 's' }} need you{% if req_pulse and req_pulse.ready_count %} · {{ req_pulse.ready_count }} ready{% endif %}{% if req_pulse and req_pulse.awaiting_operator_count %} · {{ req_pulse.awaiting_operator_count }} awaiting operator{% endif %}{% if not dash_action_items %}. Clear runway.{% endif %}</p>
     <div class="qa-grid" data-vis="{{ V }}">
       {% for a in quick_actions %}
       <a class="qa-card qa-card-{{ a.accent }}{% if loop.first %} qa-card-primary{% endif %}" href="{{ a.href }}" data-vis="{{ V }}">
@@ -35,6 +24,10 @@
         <span class="qa-label" data-vis="{{ V }}">{{ a.label }}</span>
       </a>
       {% endfor %}
+      <a class="qa-card qa-card-ghost" href="{{ url_for('getting_started') }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">HELP</span>
+        <span class="qa-label" data-vis="{{ V }}">How to use the site</span>
+      </a>
     </div>
   </article>
   {% endif %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading with context %}
+{% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Dashboard">←</a>{% endblock %}
+{% block content %}
+
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <a class="text-link back-link" href="{{ url_for('index') }}" data-vis="{{ V }}">← Home</a>
+    <h2 class="inst-header-title" data-vis="{{ V }}">Help &amp; Getting Started</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ role_label }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    {% if has_role_manual %}
+    <a class="btn btn-primary" href="{{ url_for('role_manual') }}" data-vis="{{ V }}">Open full role manual</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('docs') }}" data-vis="{{ V }}">Project docs</a>
+  </div>
+</header>
+
+<section class="dashboard-tiles" data-vis="{{ V }}">
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("START HERE", "Fastest paths for your role") }}
+    <p class="hint" data-vis="{{ V }}">
+      You're signed in as <strong data-vis="{{ V }}">{{ role_label }}</strong>. Here are the fastest paths for your role.
+      Everything is also reachable from the top nav and from the CA assistant (blue bubble, bottom-right).
+    </p>
+    <div class="qa-grid" data-vis="{{ V }}" style="margin-top:0.5rem;">
+      {% if has_role_manual %}
+      <a class="qa-card qa-card-primary" href="{{ url_for('role_manual') }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">MANUAL</span>
+        <span class="qa-label" data-vis="{{ V }}">Open full role manual</span>
+      </a>
+      {% endif %}
+      <a class="qa-card qa-card-ghost" href="{{ url_for('docs') }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">DOCS</span>
+        <span class="qa-label" data-vis="{{ V }}">Project docs</span>
+      </a>
+    </div>
+  </article>
+
+  {% if quickpaths %}
+  {% for qp in quickpaths %}
+  <article class="card tile tile-span-3" data-vis="{{ V }}">
+    {{ card_heading("FAST PATH", qp.title) }}
+    <ol class="notice-list" data-vis="{{ V }}" style="padding-left:1.25rem;">
+      {% for step in qp.steps %}
+      <li data-vis="{{ V }}" style="margin:0.25rem 0;">{{ step }}</li>
+      {% endfor %}
+    </ol>
+    {% if qp.primary %}
+    <p style="margin-top:0.75rem;" data-vis="{{ V }}">
+      <a class="btn btn-primary" href="{{ qp.primary.href }}" data-vis="{{ V }}">{{ qp.primary.label }} →</a>
+    </p>
+    {% endif %}
+  </article>
+  {% endfor %}
+  {% endif %}
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("AI ASSISTANT", "The blue CA bubble (bottom-right)") }}
+    <p class="hint" data-vis="{{ V }}">
+      Click the CA bubble on any page. It can answer questions, summarize pending
+      work, draft requests, and route you to the right screen. Every action that
+      changes data goes to human review before taking effect — the AI never deletes
+      anything on its own.
+    </p>
+    <div class="qa-grid" data-vis="{{ V }}">
+      {% for ex in ai_examples %}
+      <button type="button" class="qa-card gs-ai-example" data-prompt="{{ ex }}" data-vis="{{ V }}"
+              style="text-align:left;cursor:pointer;border:1px solid var(--line);background:transparent;color:inherit;">
+        <span class="qa-eyebrow" data-vis="{{ V }}">EXAMPLE</span>
+        <code class="qa-label" data-vis="{{ V }}" style="white-space:normal;font-size:0.82rem;">{{ ex }}</code>
+      </button>
+      {% endfor %}
+    </div>
+    <script>
+      (function(){
+        document.querySelectorAll('.gs-ai-example').forEach(function(el){
+          el.addEventListener('click', function(){
+            var toggle = document.getElementById('aiPaneToggle');
+            var pane = document.getElementById('aiPane');
+            var input = document.getElementById('aiPaneInput');
+            if(pane && pane.style.display !== 'flex' && toggle){ toggle.click(); }
+            setTimeout(function(){
+              if(input){ input.value = el.dataset.prompt || ''; input.focus(); }
+            }, 60);
+          });
+        });
+      })();
+    </script>
+    <p class="hint" style="margin-top:0.6rem;" data-vis="{{ V }}">
+      Tips: attach a file with 📎, tap 🎤 to dictate, press Enter to send.
+    </p>
+  </article>
+
+  <article class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("STUCK", "Where to get help") }}
+    <ul class="notice-list" data-vis="{{ V }}">
+      <li class="notice notice-info" data-vis="{{ V }}">
+        <span class="notice-content" data-vis="{{ V }}">Open the CA assistant and ask — it sees the page you are on.</span>
+      </li>
+      <li class="notice notice-info" data-vis="{{ V }}">
+        <span class="notice-content" data-vis="{{ V }}">Message a site admin from <a class="text-link" href="{{ url_for('inbox') }}" data-vis="{{ V }}">Inbox</a>.</span>
+      </li>
+      <li class="notice notice-info" data-vis="{{ V }}">
+        <span class="notice-content" data-vis="{{ V }}">Read the full <a class="text-link" href="{{ url_for('role_manual') }}" data-vis="{{ V }}">role manual</a> for your role.</span>
+      </li>
+    </ul>
+  </article>
+
+</section>
+
+{% endblock %}

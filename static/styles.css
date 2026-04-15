@@ -1980,6 +1980,14 @@ th {
 
 /* Cookie-banner styles retired with the banner itself. */
 
+.app-footer {
+  margin: 2rem 0 0.5rem 0;
+  padding: 0.75rem 0;
+  text-align: center;
+  border-top: 1px solid var(--line);
+  font-size: var(--font-xs);
+}
+
 .onboarding-hint {
   margin: 0.5rem 0 0.75rem 0;
   padding: 0.65rem 0.9rem;
@@ -5458,6 +5466,7 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
 .dashboard-tiles > .tile-dash-quick-actions {
   grid-column: span 2;
 }
+.dashboard-tiles > .tile-dash-brief { grid-column: 1 / -1; }
 /* This Week + This Month: side by side, span 2 each */
 .dashboard-tiles > .tile-dash-week,
 .dashboard-tiles > .tile-dash-month {
@@ -5492,6 +5501,20 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 28px 70px -36px rgba(18, 22, 29, 0.72);
 }
+
+.tile-dash-brief {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel) 96%, #ffffff),
+    var(--panel));
+  border: 1px solid var(--line);
+}
+.dash-brief-line {
+  margin: 0 0 0.75rem;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.tile-dash-brief .qa-grid { margin-top: 0.4rem; }
 
 .tile-dash-hero > .section-head h2,
 .tile-dash-hero .section-kicker,

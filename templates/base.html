@@ -88,12 +88,13 @@
     </div>
     {# ── Demo channel flip switch ──
        Lives between brand and user-box in the topbar. Visible only
-       when DEMO_MODE is on, so catalysterp.org (live) never shows it.
-       Each pill links to the gunicorn instance running that channel's
-       git worktree — stable, beta, alpha. Per-pill URLs are configured
-       via CATALYST_DEMO_VARIANT_URLS at launch, defaulting to
+       to the owner — catalysterp.org is the live site for everyone
+       else and the channel switcher is a dev tool. Each pill links
+       to the gunicorn instance running that channel's git worktree
+       — stable, beta, alpha. Per-pill URLs are configured via
+       CATALYST_DEMO_VARIANT_URLS at launch, defaulting to
        localhost:5055 / 5057 / 5058. #}
-    {% if demo_mode and demo_variant_pills %}
+    {% if is_owner_user and demo_variant_pills %}
     <div class="demo-variant-switch" role="group" aria-label="Demo channel" data-vis="{{ V }}">
       <span class="demo-variant-switch-label" data-vis="{{ V }}">CHANNEL</span>
       {% for pill in demo_variant_pills %}
@@ -136,6 +137,17 @@
 
     {# Home — always first #}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+
+    {# Queue + Statistics — top-level, always visible (these were buried in the Instruments dropdown and users couldn't find them) #}
+    {% if portal_module_enabled('schedule') and can_access_schedule_user %}
+    <a class="{% if endpoint == 'schedule' %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
+    {% endif %}
+    {% if portal_module_enabled('stats') and can_access_stats_user %}
+    <a class="{% if endpoint == 'stats' %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Stats</a>
+    {% endif %}
+
+    {# Help — onboarding landing, always visible. Role manual + docs linked from there. #}
+    <a class="{% if endpoint in ['getting_started', 'role_manual', 'docs'] %}nav-active{% endif %}" href="{{ url_for('getting_started') }}" data-vis="{{ V }}">Help</a>
 
     {# ── Dynamic nav generated from MODULE_REGISTRY ── #}
     {% for nav in enabled_modules_nav %}
@@ -303,6 +315,9 @@
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
+    <footer class="app-footer" data-vis="{{ V }}">
+      <span class="hint" data-vis="{{ V }}">CATALYST ERP · v{{ app_version }} · live</span>
+    </footer>
   </main>
 
   {# ── AI Hover Pane — extracted to partial ── #}

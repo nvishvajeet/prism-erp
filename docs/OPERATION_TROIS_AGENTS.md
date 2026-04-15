@@ -64,6 +64,109 @@ T+0 ──────────────────── T+55 ─── 
   Lab, nothing in Lab mentions Ravikiran, chooser works, and
   the audit docs round-trip.
 
+## T+15 PIVOT — read this BEFORE continuing past T+15
+
+The first 15 minutes are **Warmup** — inventory and orientation
+only. At T+15 each agent:
+
+1. Commits whatever inventory / setup work is done, with a
+   commit message starting `warmup:`.
+2. Pushes to `origin/operation-trois-agents`.
+3. Writes a status commit: `STATUS: T+15 <agent> — warmup done, N items logged`.
+4. Re-reads this §"T+15 PIVOT" section top to bottom.
+5. Proceeds to **Phase 1 — Apply-Fixes** (below).
+
+Nobody applies fixes before T+15. During Warmup, do not change
+`app.py`, `templates/`, or `static/css/`. Only audit docs and
+the chooser directory scaffolding get writes. This gives Phase 1
+a clean, evidence-based fix list.
+
+### Revised phase timeline
+
+```
+T+0 ─── T+15 ────────────── T+50 ──── T+55 ───── T+75 ───── T+90
+│WARMUP│  PHASE 1 · APPLY   │ MERGE + │  PHASE 3  │  PHASE 4 │
+│      │   FIXES (35 min)   │ SMOKE   │  CRAWL    │ WEAVE    │
+│15min │   evidence-driven  │  5 min  │  20 min   │ + TAG    │
+│      │                    │         │           │  15 min  │
+└──────┴────────────────────┴─────────┴───────────┴──────────┘
+ CL0/1/CO    CL0/1/CO          CL0     CL0/1/CO      CL0 alone
+```
+
+### Warmup deliverables (T+0 → T+15) — no code changes
+
+| Agent | Deliver at T+15 |
+|---|---|
+| Claude 0 | `chooser/` skeleton (Flask stub, no styling); `docs/ERP_TENANT_ONBOARDING.md` outline; grep list of MITWPU/lab strings in `ravikiran-erp/` committed as an appendix |
+| Claude 1 | `docs/UI_AUDIT_2026_04_15.md` inventory table: every `<form method=post>` with path, line, has-save-button, label-complete; every view pane with `overflow:hidden`/fixed-height; three priority buckets — P0 blocks-Tejveer, P1 visible-breakage, P2 nice-to-have |
+| Codex 0 | `docs/GATEKEEPING_AUDIT_2026_04_15.md` — route table: path, methods, decorators, endpoint fn; "Template gates to apply" handoff table; "Ravikiran parallel findings" section. **Inventory only, no code changes yet.** |
+
+### Phase 1 — Apply Fixes (T+15 → T+50), 35 minutes
+
+Now change code. Work from each agent's own warmup inventory.
+
+**Claude 0 (MacBook):**
+- Finish chooser app (styling + launchd plist staged).
+- Ravikiran `real_team` seed port (idempotent block from
+  `lab-scheduler/app.py:7706–7783` → `ravikiran-erp/app.py seed_data()`).
+- Ravikiran branding scrub (use warmup grep list).
+- Cloudflare ingress staging → `docs/cloudflared_config_pending.yml`.
+- Ravikiran launchd plist staged at `chooser/launchd/local.catalyst.ravikiran.plist`.
+- If HEADROOM yes from all three at T+6 → attendance-by-number
+  (sequential `short_code` populated + quick-mark page).
+
+**Claude 1 (iMac):**
+- Work through P0 and P1 from `UI_AUDIT_*.md`.
+- For each P0: add save button, fix clipped fields, wrap
+  overflowing view panes. Commit in chunks of ≤5 templates
+  per commit (keeps each commit under the 250-line rule).
+- P2s skipped unless time permits after P0+P1 are done.
+- No touching `base.html` / `nav.html` / `global.css`.
+- No app.py edits. If a template needs a context var that
+  doesn't exist, write it into a "Handoff to Codex 0" section
+  in `UI_AUDIT_*.md` — don't add the var yourself.
+
+**Codex 0 (MacBook):**
+- Add `@login_required` + role decorators to every route
+  flagged in the warmup inventory.
+- Add the `@app.context_processor` exposing the boolean flags
+  (`can_edit_user`, `can_approve_finance`,
+  `can_manage_instruments`, `can_view_debug`, `can_invite`, …).
+- Resolve Claude 1's "Handoff to Codex 0" items (add new
+  context vars they asked for).
+- No template edits. No new routes. No schema changes.
+- **Stretch if done early:** mobile-debug stub — add
+  `@app.route("/debug", methods=["GET"])` returning a minimal
+  HTML body. Claude 1 owns the proper template if time permits
+  in their own stretch slot.
+
+### Phase 2 — Merge + smoke (T+50 → T+55), 5 minutes, Claude 0
+
+Git pull, apply Codex's nav gates to `base.html`+`nav.html` as a
+single commit, run smoke gate, local `/health` probe, push.
+
+### Phase 3 — Crawl (T+55 → T+75), 20 minutes
+
+Three lanes and isolated test accounts as scripted above. Output
+as planned. Rsync crawl outputs to `jack.local` at T+73.
+
+### Phase 4 — Weave + tag (T+75 → T+90), 15 minutes, Claude 0
+
+Same 6-check weaving. `docs/OPERATION_TROIS_AGENTS_RESULT.md` as
+executive summary. `v2.0.0-rc1` tag if all 6 checks pass.
+
+### Stretch items
+
+Only start one if you finish Phase 1 **≥ 5 min early** (i.e.
+before T+45):
+
+1. Mobile-debug body — Claude 1, if UI P0+P1 done.
+2. `user_work_sessions` schema + heartbeat — Codex 0, if
+   gatekeeping done.
+3. `CHANGELOG.md` v2.0.0-rc1 entry — Claude 0.
+
+No stretch work may bleed past T+48.
+
 ## North-star
 
 > "Whatever after 1.5 hours of 3 machines we should be able to

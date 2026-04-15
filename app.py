@@ -16100,6 +16100,109 @@ def role_manual():
     )
 
 
+@app.route("/help")
+@app.route("/getting-started")
+@login_required
+def getting_started():
+    """Fast-onboarding landing page. Role-aware 'how to do X in 3
+    clicks' cards, AI panel usage guide, and example prompts. Lives
+    at /help (and /getting-started alias) and is linked top-level
+    from the nav so anyone can reach it in one click."""
+    user = current_user()
+    role = row_value(user, "role", "")
+    role_label = role_display_name(role)
+    roles = user_role_set(user)
+    profile = user_access_profile(user)
+    is_owner_flag = is_owner(user)
+
+    # ── Quick-path cards: "fastest way to do X" per role cluster ──
+    quickpaths: list[dict] = []
+
+    if "requester" in roles or "faculty_in_charge" in roles or not roles:
+        quickpaths.append({
+            "title": "Submit a new sample request",
+            "steps": [
+                "Click 'New Request' from Home or the nav.",
+                "Pick the instrument, fill sample + purpose, attach any protocol or SOP.",
+                "Submit — the AI will route it and you will get updates on the request page.",
+            ],
+            "primary": {"label": "New Request", "href": url_for("new_request")},
+        })
+        quickpaths.append({
+            "title": "Track your samples",
+            "steps": [
+                "Open 'Queue' from the nav.",
+                "Filter by 'Mine' to see only your active requests.",
+                "Click any row for the full audit trail, files, and status.",
+            ],
+            "primary": {"label": "My Queue", "href": url_for("schedule") + "?mine=1"},
+        })
+
+    if "operator" in roles:
+        quickpaths.append({
+            "title": "Receive a sample + move it through the queue",
+            "steps": [
+                "Open Home — new arrivals show in the 'Quick Intake' tile.",
+                "Click 'Confirm receipt' on the card to mark it received.",
+                "On the request page, set scheduled time, status, and result notes as you work.",
+            ],
+            "primary": {"label": "Open Queue", "href": url_for("schedule") + "?today=1"},
+        })
+
+    if ("professor_approver" in roles or "finance_admin" in roles or "faculty_in_charge" in roles
+            or "site_admin" in roles or "super_admin" in roles or is_owner_flag):
+        quickpaths.append({
+            "title": "Approve or reject a pending request",
+            "steps": [
+                "Open 'Queue' and switch to the 'Under Review' bucket.",
+                "Click the request to read sample context, instrument, and grant.",
+                "Use the approval stack on the right to approve, ask for changes, or reject.",
+            ],
+            "primary": {"label": "Under Review", "href": url_for("schedule", bucket="under_review")},
+        })
+
+    if profile.get("can_access_stats") or is_owner_flag:
+        quickpaths.append({
+            "title": "Read the war-room (live stats + queue health)",
+            "steps": [
+                "Click 'Stats' in the nav for the global dashboard.",
+                "Use the slicers for per-instrument or per-role views.",
+                "Use 'Queue' for the live operating ledger.",
+            ],
+            "primary": {"label": "Open Stats", "href": url_for("stats")},
+        })
+
+    if roles & {"site_admin", "super_admin"} or is_owner_flag:
+        quickpaths.append({
+            "title": "Onboard a new person",
+            "steps": [
+                "Open Settings → Users (or the Admin Onboard shortcut).",
+                "Add name, email, and pick a role — portal access maps automatically.",
+                "Send the invite link; on first login they get their role manual.",
+            ],
+            "primary": {"label": "Onboard a user", "href": url_for("admin_onboard")},
+        })
+
+    # ── AI panel usage guide ── always shown, role-flavoured ──
+    ai_examples = [
+        "Summarize what I need to do today",
+        "Show my pending approvals and the oldest one",
+        "Where are my samples right now?",
+        "Draft a sample request for XRD on compound A",
+        "Who is the operator for AFM?",
+        "Explain this page",
+    ]
+
+    return render_template(
+        "getting_started.html",
+        title="Help & Getting Started",
+        role_label=role_label,
+        quickpaths=quickpaths,
+        ai_examples=ai_examples,
+        has_role_manual=True,
+    )
+
+
 @app.route("/profile/change-password", methods=["GET", "POST"])
 @login_required
 def change_password():

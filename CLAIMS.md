@@ -77,7 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| Codex | live-portal-separation-search-personnel | 2026-04-15T17:22 | app.py, templates/search.html | pending |
+| Codex | admin-user-category-review | 2026-04-15T18:44 | app.py, templates/users.html, CLAIMS.md | pending |
 
 ## Stale-claim recovery
 

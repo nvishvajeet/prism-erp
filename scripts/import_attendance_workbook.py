@@ -48,6 +48,7 @@ HEADER_ALIASES = {
 class EmployeeRecord:
     source_sheet: str
     company_name: str
+    company_flair: str
     business_unit: str
     sr_no: str
     employee_name: str
@@ -126,6 +127,16 @@ def suggest_role(designation: str, unit: str) -> str:
     return "requester"
 
 
+def company_flair(company_name: str) -> str:
+    flairs = {
+        "Ravikiran Services": "RAVIKIRAN GROUP · RAVIKIRAN SERVICES",
+        "Gopal Doodh Dairy": "RAVIKIRAN GROUP · GOPAL DOODH DAIRY",
+        "RK Services": "RAVIKIRAN GROUP · RK SERVICES",
+        "Suryajyoti Services": "RAVIKIRAN GROUP · SURYAJYOTI SERVICES",
+    }
+    return flairs.get(company_name, f"RAVIKIRAN GROUP · {company_name.upper()}")
+
+
 def attendance_ratio(present: str, total: str) -> str:
     try:
         present_value = float(present)
@@ -182,6 +193,7 @@ def parse_workbook(path: Path) -> list[EmployeeRecord]:
             record = EmployeeRecord(
                 source_sheet=ws.title.strip(),
                 company_name=company_name,
+                company_flair=company_flair(company_name),
                 business_unit=unit,
                 sr_no=row_values.get("sr_no", ""),
                 employee_name=clean_text(employee_name),
@@ -229,6 +241,7 @@ def write_markdown(path: Path, source_path: Path, records: list[EmployeeRecord])
         f"Source workbook: `{source_path}`",
         "",
         "This import keeps each company separate inside the Ravikiran group.",
+        "Each employee row now carries an explicit company flair for review and downstream imports.",
         "It does not invent reporting lines or family ownership relationships.",
         "Every row is staged for Nikita / Prashant review before account creation.",
         "",

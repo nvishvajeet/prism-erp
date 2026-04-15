@@ -3,6 +3,7 @@
 Source workbook: `/Users/vishvajeetn/Downloads/attendance sheet.xlsx`
 
 This import keeps each company separate inside the Ravikiran group.
+Each employee row now carries an explicit company flair for review and downstream imports.
 It does not invent reporting lines or family ownership relationships.
 Every row is staged for Nikita / Prashant review before account creation.
 

@@ -9909,6 +9909,26 @@ def _complaint_admin_user_ids() -> list[int]:
     return [row["id"] for row in rows]
 
 
+def _message_report_subject(message_id: int) -> str:
+    return f"Message safety report #{message_id}"
+
+
+def _message_report_target_user_id(message_row: sqlite3.Row | dict, reporter_id: int) -> int | None:
+    sender_id = row_value(message_row, "sender_id")
+    recipient_id = row_value(message_row, "recipient_id")
+    if reporter_id == sender_id:
+        return recipient_id
+    if reporter_id == recipient_id:
+        return sender_id
+    return sender_id or recipient_id
+
+
+def _user_can_review_message_reports(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(user_role_set(user) & {"super_admin", "site_admin", "finance_admin"}) or is_owner(user)
+
+
 def _inbox_prospective_actions(target_user_id: int) -> list[dict]:
     """AI action queue — prospective drafts awaiting this user's decision.
 
@@ -10156,12 +10176,40 @@ def message_detail(message_id: int):
             (parent_id["parent_message_id"],),
         )
 
+    can_review_reports = _user_can_review_message_reports(user)
+    report_subject = _message_report_subject(message_id)
+    existing_report = query_one(
+        """
+        SELECT id, created_at, status
+          FROM complaints
+         WHERE complainant_user_id = ?
+           AND subject = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+        """,
+        (user["id"], report_subject),
+    ) if is_own_message else None
+    message_reports = query_all(
+        """
+        SELECT c.*, reporter.name AS reporter_name, reviewer.name AS reviewer_name
+          FROM complaints c
+          LEFT JOIN users reporter ON reporter.id = c.complainant_user_id
+          LEFT JOIN users reviewer ON reviewer.id = c.reviewed_by_user_id
+         WHERE c.subject = ?
+         ORDER BY c.created_at DESC, c.id DESC
+        """,
+        (report_subject,),
+    ) if can_review_reports else []
+
     return render_template(
         "message_detail.html",
         message=row,
         attachments=attachments,
         parent_message=parent_message,
         is_own_message=is_own_message,
+        existing_report=existing_report,
+        message_reports=message_reports,
+        can_review_reports=can_review_reports,
     )
 
 
@@ -10295,6 +10343,143 @@ def message_reply(message_id: int):
     _save_message_attachments(new_id, request.files.getlist("attachments"), now_iso)
     flash("Reply sent.", "success")
     return redirect(url_for("message_detail", message_id=new_id))
+
+
+@app.route("/messages/<int:message_id>/report", methods=["POST"])
+@login_required
+def message_report(message_id: int):
+    """Report a message for harassment, threats, or other misuse.
+
+    Uses the existing complaints table so the report is retained in the
+    main admin queue instead of a side log.
+    """
+    user = current_user()
+    row = query_one(
+        "SELECT id, sender_id, recipient_id, subject, body FROM messages WHERE id = ?",
+        (message_id,),
+    )
+    if not row:
+        abort(404)
+    if user["id"] not in (row["sender_id"], row["recipient_id"]) and not is_owner(user):
+        abort(403)
+    if request.form.get("confirm_report") != "yes":
+        flash("Confirm the report before sending it to admins.", "warning")
+        return redirect(url_for("message_detail", message_id=message_id))
+    category = (request.form.get("category") or "other").strip()
+    allowed_categories = {"harassment", "sexual_harassment", "threat", "misuse", "other"}
+    if category not in allowed_categories:
+        category = "other"
+    note = (request.form.get("note") or "").strip()
+    report_subject = _message_report_subject(message_id)
+    existing = query_one(
+        """
+        SELECT id FROM complaints
+         WHERE complainant_user_id = ? AND subject = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+        """,
+        (user["id"], report_subject),
+    )
+    if existing:
+        flash("This message is already in the safety review queue.", "warning")
+        return redirect(url_for("message_detail", message_id=message_id))
+    target_user_id = _message_report_target_user_id(row, user["id"])
+    assigned_admins = _complaint_admin_user_ids()
+    assigned_to_user_id = assigned_admins[0] if assigned_admins else None
+    manager_user_id = _line_manager_id_for_user(target_user_id) if target_user_id else None
+    body_lines = [
+        f"Message ID: {message_id}",
+        f"Original subject: {row_value(row, 'subject', '')}",
+        f"Original body: {row_value(row, 'body', '')}",
+    ]
+    if note:
+        body_lines.append(f"Reporter note: {note}")
+    complaint_id = execute(
+        """
+        INSERT INTO complaints (
+            complainant_user_id, target_user_id, manager_user_id, assigned_to_user_id,
+            category, subject, body, status, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)
+        """,
+        (
+            user["id"],
+            target_user_id,
+            manager_user_id,
+            assigned_to_user_id,
+            f"message_{category}",
+            report_subject,
+            "\n".join(body_lines),
+            now_iso(),
+        ),
+    )
+    log_action(
+        user["id"],
+        "message",
+        message_id,
+        "message_reported",
+        {"complaint_id": complaint_id, "category": category},
+    )
+    for admin_user_id in assigned_admins:
+        notify(
+            admin_user_id,
+            "warning",
+            "Message safety report submitted",
+            f"A message safety report was filed for message #{message_id}.",
+            href=url_for("message_detail", message_id=message_id),
+            source_type="complaint",
+            source_id=complaint_id,
+        )
+    flash("Report submitted to admins for review.", "success")
+    return redirect(url_for("message_detail", message_id=message_id))
+
+
+@app.route("/messages/report/<int:report_id>/review", methods=["POST"])
+@login_required
+def message_report_review(report_id: int):
+    user = current_user()
+    if not _user_can_review_message_reports(user):
+        abort(403)
+    report = query_one(
+        """
+        SELECT * FROM complaints
+         WHERE id = ? AND subject LIKE 'Message safety report #%'
+        """,
+        (report_id,),
+    )
+    if not report:
+        abort(404)
+    status = (request.form.get("status") or "open").strip()
+    allowed_statuses = {"open", "in_review", "resolved", "dismissed"}
+    if status not in allowed_statuses:
+        status = "open"
+    resolution_note = (request.form.get("resolution_note") or "").strip()
+    execute(
+        """
+        UPDATE complaints
+           SET status = ?, reviewed_at = ?, reviewed_by_user_id = ?, resolution_note = ?
+         WHERE id = ?
+        """,
+        (status, now_iso(), user["id"], resolution_note, report_id),
+    )
+    log_action(
+        user["id"],
+        "complaint",
+        report_id,
+        "message_report_reviewed",
+        {"status": status},
+    )
+    notify(
+        row_value(report, "complainant_user_id"),
+        "task" if status in {"resolved", "dismissed"} else "warning",
+        "Message safety report updated",
+        f"Your reported message is now marked {status.replace('_', ' ')}.",
+        href=url_for("message_detail", message_id=int(str(row_value(report, 'subject', '')).split('#')[-1])),
+        source_type="complaint",
+        source_id=report_id,
+    )
+    flash("Safety review updated.", "success")
+    return redirect(url_for("message_detail", message_id=int(str(row_value(report, "subject", "")).split("#")[-1])))
 
 
 @app.route("/messages/<int:message_id>/delete", methods=["POST"])

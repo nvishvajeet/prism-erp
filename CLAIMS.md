@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| Claude-sonnet-preventive-crawlers | preventive-crawlers-burn-ship-label-for | 2026-04-15T17:12 | crawlers/strategies/label_for_matches_id.py, crawlers/strategies/__init__.py, crawlers/waves.py | pending |
 | Codex | message-safety-routes-view-wiring-and-insights-crawl-fixes | 2026-04-15T16:57 | app.py, templates/insights_detail.html, templates/insights_new.html, CLAIMS.md | pending |
 
 ## Stale-claim recovery

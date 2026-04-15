@@ -1,50 +1,86 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, paginated_pane, empty_state with context %}
+{% from "_page_macros.html" import card_heading, paginated_pane, empty_state, stat_blob, chart_bar, page_intro with context %}
 {% block content %}
 
-<header class="inst-header" data-vis="{{ V }}">
-  <div class="inst-header-main" data-vis="{{ V }}">
-    <h2 class="inst-header-title" data-vis="{{ V }}">insights</h2>
-    <span class="inst-header-code" data-vis="{{ V }}">{{ items|length }} total</span>
-  </div>
-  <div class="inst-header-actions" data-vis="{{ V }}">
-    <a class="btn btn-primary" href="{{ url_for('insights_new') }}" data-vis="{{ V }}">New insight</a>
-  </div>
-</header>
+{{ page_intro("Insights", "User activity — " ~ window_label, "Privacy: paths and data-action names only; no mouse coords, no keystrokes.") }}
 
 <section class="insights-tiles" data-vis="{{ V }}">
+
+  {# ── KPI strip ────────────────────────────────────────────────── #}
+  <article class="card tile" style="grid-column: span 12" data-vis="{{ V }}">
+    <div class="kpi-row" data-vis="{{ V }}">
+      {{ stat_blob(totals['active_users'] or 0, 'active users') }}
+      {{ stat_blob(totals['pt_rows'] or 0,    'page-time samples') }}
+      {{ stat_blob(totals['click_rows'] or 0, 'click events') }}
+      {{ stat_blob(window_label, 'window',
+                   sub='<a href="?window=24h" data-action="insights-window-24h" data-vis="' ~ V ~ '">24h</a> · ' ~
+                       '<a href="?window=7d"  data-action="insights-window-7d"  data-vis="' ~ V ~ '">7d</a> · ' ~
+                       '<a href="?window=30d" data-action="insights-window-30d" data-vis="' ~ V ~ '">30d</a>') }}
+    </div>
+  </article>
+
+  {# ── Top pages by active minutes ───────────────────────────────── #}
   <article class="card tile" style="grid-column: span 6" data-vis="{{ V }}">
-    {{ card_heading("", "insights") }}
-    {% if items %}
-    {% call paginated_pane('mainUinsights', page_size=25, max_height='none') %}
-    <table class="insights-table sortable-table" data-vis="{{ V }}">
+    {{ card_heading("Where they spend time", "Top pages") }}
+    {% if top_pages %}
+      <div class="chart-stack" data-vis="{{ V }}">
+        {% for p in top_pages %}
+          {% set minutes = (p['total_ms'] / 60000.0) %}
+          {% set pct = (p['total_ms'] * 100.0 / max_ms) | round(1) %}
+          {{ chart_bar(p['path'], '%.1f min (%d users)' | format(minutes, p['users']), pct) }}
+        {% endfor %}
+      </div>
+    {% else %}
+      {{ empty_state("No page-time samples yet.", "Telemetry starts collecting once logged-in users visit pages.") }}
+    {% endif %}
+  </article>
+
+  {# ── Top actions clicked ───────────────────────────────────────── #}
+  <article class="card tile" style="grid-column: span 6" data-vis="{{ V }}">
+    {{ card_heading("What they do", "Top actions") }}
+    {% if top_actions %}
+      <div class="chart-stack" data-vis="{{ V }}">
+        {% for a in top_actions %}
+          {% set pct = (a['clicks'] * 100.0 / max_clicks) | round(1) %}
+          {{ chart_bar(a['action'], '%d clicks (%d users)' | format(a['clicks'], a['users']), pct) }}
+        {% endfor %}
+      </div>
+    {% else %}
+      {{ empty_state("No click events yet.", "Clicks are only tracked on elements with a data-action attribute.") }}
+    {% endif %}
+  </article>
+
+  {# ── Detail table: top pages with sortable columns ─────────────── #}
+  <article class="card tile" style="grid-column: span 12" data-vis="{{ V }}">
+    {{ card_heading("Detail", "Page engagement breakdown") }}
+    {% if top_pages %}
+    {% call paginated_pane('insightsPagesDetail', page_size=25, max_height='none') %}
+    <table class="sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
-          <th data-vis="{{ V }}">Name</th>
-          <th data-vis="{{ V }}">Status</th>
-          <th data-vis="{{ V }}">Created</th>
-          <!-- ADD MORE COLUMNS HERE -->
+          <th data-vis="{{ V }}">Path</th>
+          <th data-vis="{{ V }}">Active minutes</th>
+          <th data-vis="{{ V }}">Distinct users</th>
+          <th data-vis="{{ V }}">Samples</th>
         </tr>
       </thead>
       <tbody data-vis="{{ V }}">
-        {% for item in items %}
+        {% for p in top_pages %}
         <tr data-pane-item data-vis="{{ V }}">
-          <td data-vis="{{ V }}">
-            <a href="{{ url_for('insights_detail', insight_id=item['id']) }}" data-vis="{{ V }}">{{ item["name"] }}</a>
-          </td>
-          <td data-vis="{{ V }}">
-            <span class="badge status-{{ item['status'] }}" data-vis="{{ V }}">{{ item["status"].replace("_", " ").title() }}</span>
-          </td>
-          <td data-vis="{{ V }}">{{ item["created_at"] }}</td>
+          <td data-vis="{{ V }}"><code data-vis="{{ V }}">{{ p['path'] }}</code></td>
+          <td data-vis="{{ V }}">{{ '%.1f' | format(p['total_ms'] / 60000.0) }}</td>
+          <td data-vis="{{ V }}">{{ p['users'] }}</td>
+          <td data-vis="{{ V }}">{{ p['samples'] }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% endcall %}
     {% else %}
-    {{ empty_state("No insights yet.") }}
+      {{ empty_state("No page-time samples yet.") }}
     {% endif %}
   </article>
+
 </section>
 
 {% endblock %}

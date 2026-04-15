@@ -45,6 +45,28 @@ Recommended fix:
 - Prefer a rotating handler in the Flask entrypoint or an external logrotate
   job if the mini uses a stable file layout.
 
+## 5. HSTS preload readiness
+
+Current state: the app now emits HSTS only for HTTPS requests, but the header
+does not yet include the `preload` token and should not be submitted to the
+browser preload lists until the full domain fleet is consistently HTTPS.
+
+Recommended fix:
+- Serve `Strict-Transport-Security` with:
+  `max-age=31536000; includeSubDomains; preload`
+- Confirm every production hostname and subdomain redirects to HTTPS without
+  mixed-content exceptions or certificate gaps.
+- Keep `includeSubDomains` enabled permanently once adopted; preload is a
+  one-way operational commitment, not a casual toggle.
+- Verify readiness at [hstspreload.org](https://hstspreload.org) before
+  submission.
+
+Why this is deferred:
+- The sprint patch intentionally avoided forcing preload semantics before the
+  branded hosts, playground hosts, and any future tenant subdomains are all
+  known-good under TLS.
+- A bad preload submission can brick HTTP recovery paths for every subdomain.
+
 ## Appendix A — backup plist stub
 
 ```xml

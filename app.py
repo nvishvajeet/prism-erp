@@ -5861,6 +5861,31 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_command_queue_status ON command_queue(status);
             CREATE INDEX IF NOT EXISTS idx_command_queue_user ON command_queue(user_id);
 
+            -- Append-only archive for aged command queue rows. This keeps
+            -- historical requests reviewable even after the active queue is
+            -- pruned for operational hygiene.
+            CREATE TABLE IF NOT EXISTS command_queue_archive (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                original_queue_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                raw_text TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'text',
+                status TEXT NOT NULL DEFAULT 'pending',
+                parsed_action TEXT NOT NULL DEFAULT '',
+                parsed_data TEXT NOT NULL DEFAULT '',
+                result_message TEXT NOT NULL DEFAULT '',
+                result_entity_type TEXT NOT NULL DEFAULT '',
+                result_entity_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT '',
+                processed_at TEXT,
+                archived_at TEXT NOT NULL DEFAULT '',
+                archive_reason TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_command_queue_archive_status ON command_queue_archive(status);
+            CREATE INDEX IF NOT EXISTS idx_command_queue_archive_user ON command_queue_archive(user_id);
+            CREATE INDEX IF NOT EXISTS idx_command_queue_archive_original ON command_queue_archive(original_queue_id);
+
             -- AI Advisor queue: prompts submitted from dashboard / instrument / finance
             -- processed in 4-hour batch intervals, logged as entries
             CREATE TABLE IF NOT EXISTS ai_advisor_queue (
@@ -23518,12 +23543,22 @@ def expense_receipt_review(receipt_id):
 # relying on the code checkout being writable.
 
 FEEDBACK_LOG = _ACTIVE_DATA_DIR / "logs" / "debug_feedback.md"
+FEEDBACK_HISTORY_LOG = _ACTIVE_DATA_DIR / "logs" / "debug_feedback_history.md"
 FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / "catalyst_feedback" / "debug_feedback.md"
+FALLBACK_FEEDBACK_HISTORY_LOG = Path(gettempdir()) / "catalyst_feedback" / "debug_feedback_history.md"
 
 
 def _feedback_log_targets() -> list[Path]:
     targets: list[Path] = []
     for candidate in [FEEDBACK_LOG, BASE_DIR / "logs" / "debug_feedback.md", FALLBACK_FEEDBACK_LOG]:
+        if candidate not in targets:
+            targets.append(candidate)
+    return targets
+
+
+def _feedback_history_targets() -> list[Path]:
+    targets: list[Path] = []
+    for candidate in [FEEDBACK_HISTORY_LOG, BASE_DIR / "logs" / "debug_feedback_history.md", FALLBACK_FEEDBACK_HISTORY_LOG]:
         if candidate not in targets:
             targets.append(candidate)
     return targets
@@ -23586,12 +23621,30 @@ def _append_feedback_entry(
             ctx = ctx[:4000] + "\n…truncated…"
         entry += f"\n```context\n{ctx}\n```\n"
     last_error: OSError | None = None
+    active_written = False
     for target in _feedback_log_targets():
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             with open(target, "a", encoding="utf-8") as f:
                 f.write(entry)
-            return target
+            active_written = True
+            break
+        except OSError as exc:
+            last_error = exc
+            continue
+    history_entry = (
+        f"\n## archived {now_iso()}\n\n"
+        f"> copied from live debug queue before any future cleanup\n"
+        f"{entry}"
+    )
+    for target in _feedback_history_targets():
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(target, "a", encoding="utf-8") as f:
+                f.write(history_entry)
+            if active_written:
+                return FEEDBACK_LOG
+            break
         except OSError as exc:
             last_error = exc
             continue
@@ -24496,6 +24549,24 @@ def prune_command_queue(days: int = 30) -> dict[str, int]:
             )
             stats[status] = row["c"] if row else 0
             if stats[status]:
+                execute(
+                    """
+                    INSERT INTO command_queue_archive (
+                        original_queue_id, user_id, raw_text, source, status,
+                        parsed_action, parsed_data, result_message,
+                        result_entity_type, result_entity_id, created_at,
+                        processed_at, archived_at, archive_reason
+                    )
+                    SELECT
+                        id, user_id, raw_text, source, status,
+                        parsed_action, parsed_data, result_message,
+                        result_entity_type, result_entity_id, created_at,
+                        processed_at, ?, ?
+                    FROM command_queue
+                    WHERE status = ? AND COALESCE(processed_at, created_at) < ?
+                    """,
+                    (now_iso(), f"prune>{days}d", status, cutoff),
+                )
                 execute(
                     "DELETE FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
                     (status, cutoff),

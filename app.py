@@ -27478,6 +27478,25 @@ def _current_meal() -> str:
     return "lunch"
 
 
+@app.route("/attendance/quick")
+@login_required
+def attendance_quick_mark_page():
+    """Mobile-first numeric quick-mark page (Nikita 2026-04-15).
+
+    People call out their attendance_number (1, 2, 3 …) and an
+    admin-role user on a phone/kiosk types it into a big keypad,
+    confirms the name, and taps Mark Present. Backed by existing
+    APIs — see templates/attendance_quick.html header comment.
+    """
+    user = current_user()
+    if not (user_role_set(user) & {
+        "super_admin", "site_admin", "operator",
+        "instrument_admin", "finance_admin",
+    } or is_owner(user)):
+        abort(403)
+    return render_template("attendance_quick.html")
+
+
 @app.route("/attendance/qr")
 @login_required
 def qr_attendance_kiosk():

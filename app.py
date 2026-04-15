@@ -168,7 +168,7 @@ ERP_PORTALS = {
     },
 }
 
-APP_VERSION = "1.2"
+APP_VERSION = "1.0.0"
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")

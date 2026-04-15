@@ -15,6 +15,132 @@ Forward plan lives in `docs/NEXT_WAVES.md`. The iOS-style patch
 cadence (`docs/PHILOSOPHY.md` §3.1) tags whenever trunk is green;
 see the per-tag sections below for what shipped.
 
+## [1.0.0] — 2026-04-15
+
+**CATALYST ERP — the final stable 1.0.**
+
+This tag is the v1.0 launch of CATALYST as a unified ERP. Two
+portals (Lab R&D + Ravikiran Group HQ) share one codebase, one
+SQLite database, one deploy pipeline; `sample_requests` is still
+the single source of truth. Every module from the v1.7.0 feature
+build has now been hardened, crawl-verified, and release-gated —
+this is the release the mini runs in production.
+
+### What "1.0" means here
+
+- `APP_VERSION` resets `1.2` → `1.0.0`. The prior `1.x` numbers
+  were placeholder strings on an in-dev branch; this is the first
+  tagged release of the unified ERP product and starts semver
+  from a clean baseline. Historical tags (`v1.3.8`–`v3.2.0-stable`)
+  are retained for archaeology but not in the current lineage.
+- Full release gate (`wave all`, 15 strategies) was run on both
+  the laptop and the mini and came back identical: **0 failures
+  across 8,815 checks**, 35 informational warnings (template
+  architecture hints, CSS orphans, cleanup suggestions). No
+  release-blocking regressions.
+
+### ERP portals — both active
+
+Both portals ship in v1.0.0. Which modules a user sees depends
+on `session["active_portal"]`:
+
+- **Lab R&D portal** (`/?portal=lab`) — sample requests,
+  instrument booking, operator scheduling, finance & grants,
+  lab attendance, sample submissions, per-instrument queues.
+  Lab-mode role aliases: super_admin → Dean, site_admin →
+  Conductor. Instrument admins gain `/admin/users` access in
+  this mode (they are the lab heads).
+- **Ravikiran Group HQ portal** (`/?portal=hq`) — vendor
+  payments + receipts, company books + payment rails, bank
+  statement reconciliation, purchase orders, vendor directory,
+  onboarding import from the Ravikiran workbook.
+
+### Added — Dispatch console hardening
+
+- **Bottleneck tile on `/dispatch`** — surfaces the oldest open
+  requests and who is currently gating each one. Tap-to-call or
+  tap-to-text the blocker directly from the tile; phone numbers
+  are normalised, SMS bodies are pre-filled with request number
+  + days-stuck + current status + sender name. Three age tiers
+  (default / amber 3–6 d / red 7 d+) shown as a left-border pill.
+- **Auto-refresh every 90 s** — silent reload of the dispatch
+  console so bottlenecks, AI drafts, and pending receipts stay
+  live without a manual refresh. Five guard rails: skips when
+  the command textarea is focused, has any text, has a file
+  attached, when the tab is hidden, or the user interacted in
+  the last 10 s. Full reload (preserves Jinja state + CSRF) not
+  partial swap.
+- **Action-queue GC (`prune_command_queue`)** — nightly
+  housekeeping prunes completed / failed rows older than 30
+  days; preserves `pending`, `processing`, and `awaiting_approval`
+  forever. Invoked by `scripts/nightly_dev.sh`.
+
+### Added — Receipt + finance flow
+
+- **Receipt upload hardening** on `/receipts/submit`: server-side
+  extension allowlist (JPG / PNG / HEIC / WEBP / PDF), 10 MB cap
+  enforced both client + server, truncated multipart uploads no
+  longer leave dangling DB rows, double-submit guard disables the
+  button on click with a 60 s safety re-enable, phone cameras
+  open the rear lens directly via `capture="environment"`, flash
+  message now reports vendor + amount + whether a photo was
+  attached.
+- **Company books + payment rails** — separate books per company
+  while keeping vendors shared across the organisation; vendor
+  directory sees all payments across books.
+- **Onboarding export** with company flair added to the Ravikiran
+  workbook importer.
+
+### Added — AI action queue
+
+- AI requests coming in through `/ai/ask` are classified, routed
+  to the right approver queue, and materialised into the real
+  table only after a human clicks approve. Rejection and audit
+  trail preserved.
+- AI account drafts now route to the relevant lab instrument
+  admin's approval queue in lab-portal deployments.
+- Users are notified when an AI request is routed on their
+  behalf.
+
+### Added — Help + onboarding
+
+- Help landing + dashboard brief tile + AI panel example chips.
+- `/admin/users` bulk intake flow with inline cheat sheet.
+- Launch credentials PDFs shipped under `docs/`.
+
+### Fixed
+
+- **Visibility crawler ACCESS_MATRIX** — now reflects the
+  lab-portal policy granting instrument_admin access to
+  `/admin/users`; the sanity wave is back to 84/0/0.
+- **Login** — single-username enforcement, login form accepts
+  email or username, CSRF hardening + lab portal defaults.
+- **Action queue** — items are transformed into reviews rather
+  than silently completing; debug + action queue evidence is
+  retained.
+- **Vendors** — shared across company books (previously vendors
+  were silo'd per book).
+- **Dean/Kondhalkar login hotfix** lands stably.
+
+### Shipping policy + rollback
+
+- `docs/SHIPPING_POLICY.md` is the live reference. Stable vs dev
+  lanes, patch vs minor cadence, pre-receive smoke gate on the
+  LOCAL bare, post-receive mirror to the mini, gunicorn HUP for
+  zero-downtime reload, one-command rollback via `git revert` or
+  `scripts/rollback_to.sh`.
+- Downtime budget for this release: < 5 s reload glitch on
+  gunicorn HUP.
+
+### Known in-flight work NOT in this tag
+
+- **Catalyst Assistant → Catalyst Command Desk** rename
+  (templates/_base_ai_pane.html + 4 siblings) — Codex has an
+  active CLAIMS.md lock for "ai pane naming + capability UI"
+  as of 2026-04-15 13:20 CEST. Ships as a follow-up patch once
+  Codex releases the lock; purely a UX relabel, no behaviour
+  change.
+
 ## [1.7.0] — 2026-04-11
 
 **Finance portal + grants & budgets — the ERP-ready proof point.**

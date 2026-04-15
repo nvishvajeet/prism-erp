@@ -503,6 +503,14 @@ MODULE_REGISTRY = {
         "nav_active_endpoints": {"dev_panel"},
         "nav_access": lambda ap, is_owner: is_owner,
     },
+    "insights": {
+        "label": "Insights",
+        "icon": "📊",
+        "nav_order": 14,
+        "description": "User behavior telemetry & analytics",
+        "nav_endpoint": "insights_list",
+        "nav_active_endpoints": {"insights_list", "insights_detail", "insights_new"},
+    },
 }
 
 ALL_MODULES = set(MODULE_REGISTRY.keys())
@@ -28436,6 +28444,95 @@ def _handle_quick_entry_submit(user):
     )
     return redirect(url_for("quick_entry"))
 
+
+
+# ── INSIGHTS MODULE ROUTES ────────────────────────────────────
+
+@app.route('/insights')
+@login_required
+def insights_list():
+    """List all insights."""
+    if not module_enabled('insights'):
+        abort(404)
+    user = current_user()
+    items = query_all('SELECT * FROM insights ORDER BY created_at DESC')
+    stats = {
+        'total': len(items),
+        'active': sum(1 for i in items if i['status'] == 'active'),
+        'completed': sum(1 for i in items if i['status'] == 'completed'),
+    }
+    return render_template('insights_list.html', items=items, stats=stats)
+
+
+@app.route('/insights/<int:insight_id>', methods=['GET', 'POST'])
+@login_required
+def insights_detail(insight_id):
+    """Detail page for a single insight."""
+    if not module_enabled('insights'):
+        abort(404)
+    user = current_user()
+    item = query_one('SELECT * FROM insights WHERE id = ?', (insight_id,))
+    if not item:
+        abort(404)
+    events = query_all(
+        'SELECT e.*, u.name AS actor_name FROM insights_events e LEFT JOIN users u ON u.id = e.user_id WHERE e.insight_id = ? ORDER BY e.created_at DESC',
+        (insight_id,),
+    )
+    if request.method == 'POST':
+        action = request.form.get('action', '')
+        if action == 'update_status':
+            new_status = request.form.get('status', '').strip()
+            execute('UPDATE insights SET status = ?, updated_at = ? WHERE id = ?', (new_status, now_iso(), insight_id))
+            log_action(user['id'], 'insights', insight_id, 'status_changed', {'status': new_status})
+            flash('Status updated.', 'success')
+        return redirect(url_for('insights_detail', insight_id=insight_id))
+    return render_template('insights_detail.html', item=item, events=events)
+
+
+@app.route('/insights/<int:insight_id>/form-control', methods=['GET', 'POST'])
+@login_required
+def insights_form_control(insight_id):
+    """Approval config + custom fields for a insight."""
+    if not module_enabled('insights'):
+        abort(404)
+    user = current_user()
+    item = query_one('SELECT * FROM insights WHERE id = ?', (insight_id,))
+    if not item:
+        abort(404)
+    approval_config = query_all(
+        'SELECT ac.*, u.name AS approver_name FROM insights_approval_config ac LEFT JOIN users u ON u.id = ac.approver_user_id WHERE ac.insight_id = ? ORDER BY ac.step_order',
+        (insight_id,),
+    )
+    custom_fields = query_all(
+        'SELECT * FROM insights_custom_fields WHERE insight_id = ? ORDER BY sort_order',
+        (insight_id,),
+    )
+    return render_template(
+        'insights_form_control.html',
+        item=item, approval_config=approval_config, custom_fields=custom_fields,
+    )
+
+
+@app.route('/insights/new', methods=['GET', 'POST'])
+@login_required
+def insights_new():
+    """Create a new insight."""
+    if not module_enabled('insights'):
+        abort(404)
+    user = current_user()
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('Name is required.', 'error')
+            return redirect(url_for('insights_new'))
+        new_id = execute(
+            "INSERT INTO insights (name, status, created_by_user_id, created_at, updated_at) VALUES (?, 'draft', ?, ?, ?)",
+            (name, user['id'], now_iso(), now_iso()),
+        )
+        log_action(user['id'], 'insights', new_id, 'insight_created', {'name': name})
+        flash('insight created.', 'success')
+        return redirect(url_for('insights_detail', insight_id=new_id))
+    return render_template('insights_new.html')
 
 if __name__ == "__main__":
     init_db()

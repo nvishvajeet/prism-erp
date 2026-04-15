@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_page_macros.html" import card_heading, stat_blob, empty_state, metadata_grid with context %}
+{% block breadcrumb_insights %}{{ item["name"] }}{% endblock %}
+{% block hover_back %}{% endblock %}
+{% block content %}
+
+{# --- Header ------------------------------------------------- #}
+<header class="inst-header" data-vis="{{ V }}">
+  <div class="inst-header-main" data-vis="{{ V }}">
+    <h2 class="inst-header-title" data-vis="{{ V }}">{{ item["name"] }}</h2>
+    <span class="inst-header-code" data-vis="{{ V }}">{{ item["code"] if item["code"] else "" }}</span>
+    <span class="badge status-{{ item['status'] }}" data-vis="{{ V }}">{{ item["status"].replace("_", " ").title() }}</span>
+  </div>
+  <div class="inst-header-actions" data-vis="{{ V }}">
+    <a class="btn btn-secondary" href="{{ url_for('insights_form_control', insight_id=item['id']) }}" data-vis="{{ V }}">Form Control</a>
+  </div>
+</header>
+
+{# --- Tile Grid ---------------------------------------------- #}
+<div class="insights-tiles" data-vis="{{ V }}">
+
+  {# -- Tile: Info -------------------------------------------- #}
+  <section class="card tile tile-info" data-vis="{{ V }}">
+    {{ card_heading("", "insight Info") }}
+    {% set info_items = [
+      ('Name', item["name"]),
+      ('Status', item["status"].replace("_", " ").title()),
+      ('Created', item["created_at"]),
+    ] %}
+    {{ metadata_grid(info_items, compact=True) }}
+  </section>
+
+  {# -- Tile: Stats ------------------------------------------- #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("", "At A Glance") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(stats.get("total", 0), "Total") }}
+      {{ stat_blob(stats.get("active", 0), "Active", tone='active') }}
+      {{ stat_blob(stats.get("completed", 0), "Completed", tone='completed') }}
+    </div>
+  </section>
+
+  {# -- Tile: Event Stream ------------------------------------ #}
+  <section class="card tile" style="grid-column: span 6" data-vis="{{ V }}">
+    {{ card_heading("", "Activity") }}
+    {% if events %}
+    <ul class="event-stream" data-vis="{{ V }}">
+      {% for ev in events %}
+      <li data-vis="{{ V }}">{{ ev["description"] }} <time data-vis="{{ V }}">{{ ev["created_at"] }}</time></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {{ empty_state("No activity yet.") }}
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

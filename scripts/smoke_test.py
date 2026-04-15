@@ -611,6 +611,24 @@ def main() -> None:
     response = client.post("/login", data={"email": "member.temp@catalyst.local", "password": "12345"}, follow_redirects=True)
     assert b"Invalid login" in response.data
 
+    # Action Queue smoke — admin roles see the nav link and page, non-admin roles don't.
+    # Spec: docs/ROLE_SURFACES.md §4 + universal-queue principle.
+    client.get("/logout")
+    login(client, "kondhalkar@catalyst.local")
+    home = client.get("/")
+    assert b'href="/queue"' in home.data, "Action Queue nav link missing for instrument_admin"
+    queue = client.get("/queue")
+    assert queue.status_code == 200, f"/queue expected 200 for instrument_admin, got {queue.status_code}"
+    assert b"Action queue" in queue.data, "/queue body missing 'Action queue' heading"
+
+    client.get("/logout")
+    login(client, "anika@catalyst.local")
+    home = client.get("/")
+    assert b'href="/queue"' not in home.data, "Action Queue nav link should be hidden for operators"
+    # /queue still returns 200 with empty-state — intentionally friendlier than 403
+    queue = client.get("/queue")
+    assert queue.status_code == 200, f"/queue expected 200 (empty state) for operator, got {queue.status_code}"
+
     print("smoke test passed")
 
 

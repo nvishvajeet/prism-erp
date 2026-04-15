@@ -22531,6 +22531,9 @@ def ai_advisor_batch_process(batch_label: str = "") -> int:
 # deterministic, and auditable — the LLM's job is to extract the payload
 # from a noisy prompt, not to pick who approves it.
 _AI_CLASSIFY_PATTERNS: list[tuple[str, str]] = [
+    (r"\b(create|add|onboard|register|setup)\b.*\b(account|user|users|login|operator|staff|employee|people)\b", "create_account"),
+    (r"\b(account|user|users|login|operator|staff|employee|people)\b.*\b(create|add|onboard|register|setup)\b", "create_account"),
+    (r"\b(operator list|staff list|employee list|people list|onboarding list)\b", "create_account"),
     (r"\bfuel\b|\bpetrol\b|\bdiesel\b|\brefill\b", "fuel_receipt"),
     (r"\b(car|camry|vehicle|bike|scooter|van|truck)\b.*\b(expense|receipt|bill|repair|service|toll|parking|tyre|tire|wash)\b", "vehicle_expense"),
     (r"\b(expense|receipt|bill|repair|service|toll|parking|tyre|tire|wash)\b.*\b(car|camry|vehicle|bike|scooter|van|truck)\b", "vehicle_expense"),

@@ -8606,7 +8606,7 @@ def inject_globals():
     # so a role omitted here renders as a completely blank page. "owner" is
     # a real db role (see users.role), and historical member/requester rows
     # may still exist, so list them all.
-    V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
+    V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin tester"
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
     nav_instruments_truncated = False

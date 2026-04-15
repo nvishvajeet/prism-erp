@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | harden-feedback-widget-capture | 2026-04-15T19:18:00Z | CLAIMS.md, templates/_base_feedback_widgets.html | pending |
 | codex | docs-feedback-contrast | 2026-04-15T19:12:57Z | CLAIMS.md, static/styles.css, templates/login.html | pending |
 | claude-imac | rig-schedule-home-tile | 2026-04-15T18:56:29Z | CLAIMS.md, app.py, templates/dashboard.html, templates/_rig_schedule_tile.html | pending |
 | codex | unify-debugger-system | 2026-04-15T20:28:00Z | CLAIMS.md, static/debug-grid.js, templates/base.html, docs/TESTING_PLAN_TEJVEER.md | pending |

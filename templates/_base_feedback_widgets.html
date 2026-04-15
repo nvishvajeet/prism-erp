@@ -153,6 +153,7 @@
     var pointerTrailLimit = 40;
     var capturedClicks = [];
     var captureCounter = 0;
+    var lastCapturedSignature = '';
     document.addEventListener('mousemove', function(e){
       lastPointer.x = e.clientX;
       lastPointer.y = e.clientY;
@@ -194,8 +195,27 @@
       return parts.join('');
     }
 
+    function captureSignature(target, clientX, clientY, mode) {
+      return [
+        mode || '',
+        describeElement(target) || '',
+        Math.round(clientX || 0),
+        Math.round(clientY || 0)
+      ].join('|');
+    }
+
+    function shortElementText(el) {
+      if (!el || el.nodeType !== 1) return '';
+      return ((el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ')).slice(0, 120);
+    }
+
+    function elementHref(el) {
+      if (!el || !el.closest) return '';
+      var link = el.closest('a[href]');
+      return link ? (link.getAttribute('href') || '') : '';
+    }
+
     function clickCaptureMode(ev) {
-      if (panel.hidden) return '';
       if (listening) return 'voice';
       if (ev && (ev.metaKey || ev.ctrlKey)) return 'modifier';
       return '';
@@ -206,6 +226,8 @@
       var snippet = '<snapshot selector="' + (marker.selector || '') +
         '" x="' + marker.x + '" y="' + marker.y +
         '" page_x="' + marker.page_x + '" page_y="' + marker.page_y +
+        (marker.text ? '" text="' + marker.text.replace(/"/g,'\\"') : '') +
+        (marker.href ? '" href="' + marker.href.replace(/"/g,'\\"') : '') +
         '" kind="click"/>';
       if (text.value && !/\s$/.test(text.value)) text.value += ' ';
       text.value += snippet;
@@ -214,7 +236,9 @@
     function collectContext(snapshot){
       var ctx = {
         path: location.pathname + location.search,
+        title: document.title || '',
         viewport: {w: window.innerWidth, h: window.innerHeight},
+        scroll: {x: window.scrollX || 0, y: window.scrollY || 0},
         pointer: lastPointer,
         hover: lastHoverSelector,
         ts: new Date().toISOString(),
@@ -265,17 +289,25 @@
       }, 520);
     }
 
-    document.addEventListener('click', function(ev){
-      var mode = clickCaptureMode(ev);
-      if (!mode) return;
-      if (widget.contains(ev.target)) return;
+    function recordCapture(ev, mode) {
+      if (!mode) return false;
+      if (!ev || widget.contains(ev.target)) return false;
       var el = ev.target;
+      var signature = captureSignature(el, ev.clientX, ev.clientY, mode);
+      if (signature && signature === lastCapturedSignature) return false;
+      lastCapturedSignature = signature;
+      window.setTimeout(function(){
+        if (lastCapturedSignature === signature) lastCapturedSignature = '';
+      }, 250);
+      if (panel.hidden) openPanel();
       var selector = describeElement(el) || lastHoverSelector;
       var marker = {
         idx: ++captureCounter,
         mode: mode,
         path: location.pathname + location.search,
         selector: selector,
+        text: shortElementText(el),
+        href: elementHref(el),
         x: ev.clientX,
         y: ev.clientY,
         page_x: ev.clientX + window.scrollX,
@@ -295,9 +327,25 @@
           : 'Pinned this click without leaving the page.',
         'live'
       );
+      return true;
+    }
 
-      var blocksNavigation = !!el.closest('a[href], button, input[type="submit"], input[type="button"], summary');
-      if (blocksNavigation) {
+    document.addEventListener('pointerdown', function(ev){
+      var mode = clickCaptureMode(ev);
+      if (!mode || !ev.isPrimary) return;
+      if (recordCapture(ev, mode)) {
+        var blocksNavigation = !!ev.target.closest('a[href], button, input, select, summary, label[for]');
+        if (blocksNavigation) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      }
+    }, true);
+
+    document.addEventListener('click', function(ev){
+      var mode = clickCaptureMode(ev);
+      if (!mode) return;
+      if (recordCapture(ev, mode)) {
         ev.preventDefault();
         ev.stopPropagation();
       }

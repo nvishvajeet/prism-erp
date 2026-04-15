@@ -2,10 +2,21 @@
 {% from "_page_macros.html" import card_heading, paginated_pane with context %}
 {% block content %}
 
+{% macro login_label(email) -%}
+  {% set value = (email or '')|trim %}
+  {% set handle = value.split('@')[0] if value else '' %}
+  {% set cleaned = handle.replace('-archived', '') %}
+  {% if value.endswith('@catalyst.local') %}
+    <span data-vis="{{ V }}">{{ cleaned or value }}</span>
+  {% else %}
+    <span data-vis="{{ V }}">{{ value }}</span>
+  {% endif %}
+{%- endmacro %}
+
 {% macro user_row(user, show_actions=False) -%}
 <tr data-pane-item class="clickable-row" data-href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">
   <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["name"] }}</a></td>
-  <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["email"] }}</a></td>
+  <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ login_label(user["email"]) }}</a></td>
   <td data-vis="{{ V }}">{{ user["member_code"] or "-" }}</td>
   <td data-vis="{{ V }}">{{ role_display_name(user["role"]) }}</td>
   {% if show_actions %}
@@ -126,7 +137,7 @@
         {% for pending in pending_users %}
         <tr data-vis="{{ V }}">
           <td data-vis="{{ V }}"><strong data-vis="{{ V }}">{{ pending.name }}</strong></td>
-          <td data-vis="{{ V }}">{{ pending.email }}</td>
+          <td data-vis="{{ V }}">{{ login_label(pending.email) }}</td>
           <td data-vis="{{ V }}">{{ role_display_name(pending.role) }}</td>
           <td data-vis="{{ V }}">{{ pending.phone or "—" }}</td>
           <td data-vis="{{ V }}">
@@ -270,7 +281,7 @@
         {% for user in owners %}
         <tr data-vis="{{ V }}">
           <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["name"] }}</a></td>
-          <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ user["email"] }}</a></td>
+          <td data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=user['id']) }}" data-vis="{{ V }}">{{ login_label(user["email"]) }}</a></td>
           <td data-vis="{{ V }}">{{ user["member_code"] or "-" }}</td>
           <td data-vis="{{ V }}">{{ role_display_name(user["role"]) }}</td>
           <td data-vis="{{ V }}">{{ "Yes" if user["active"] else "No" }}</td>

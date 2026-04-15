@@ -21,8 +21,10 @@
 <section data-vis="{{ V }}">
   <div class="breadcrumb-trail" data-vis="{{ V }}">
     <a class="breadcrumb-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+    {% if can_access_schedule_user %}
     <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
     <a class="breadcrumb-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    {% endif %}
     <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
     <span class="breadcrumb-current" data-vis="{{ V }}">{{ sample_request["request_id"] }}</span>
   </div>

@@ -30,7 +30,8 @@
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Recent Commands") }}
     {% if commands %}
-    <table class="data-table" data-vis="{{ V }}">
+    <div class="table-scroll quick-entry-table-scroll" data-vis="{{ V }}">
+    <table class="data-table quick-entry-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
           <th data-vis="{{ V }}">Command</th>
@@ -55,6 +56,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     {{ empty_state("No commands yet.", "Type or speak your first request above.") }}
     {% endif %}

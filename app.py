@@ -3943,6 +3943,25 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
+    "tester": {
+        "_is_operational_nav": False,
+        "_is_lab_staff": False,
+        "can_access_instruments": True,
+        "can_access_schedule": True,
+        "can_access_calendar": True,
+        "can_access_stats": True,
+        "can_manage_members": False,
+        "can_use_role_switcher": False,
+        "can_view_all_requests": True,
+        "can_view_all_instruments": True,
+        "can_view_user_profiles": True,
+        "can_view_finance_stage": True,
+        "can_view_professor_stage": True,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
+        "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity", "finance_data"},
+        "card_action_fields": set(),
+    },
 }
 
 FULL_REQUEST_ACCESS_ROLES = {"super_admin", "site_admin", "professor_approver"}
@@ -17135,6 +17154,26 @@ def getting_started():
                 "Click any row for the full audit trail, files, and status.",
             ],
             "primary": {"label": "My Queue", "href": url_for("schedule") + "?mine=1"},
+        })
+
+    if role == "tester":
+        quickpaths.append({
+            "title": "Run the tester sweep in order",
+            "steps": [
+                "Open your testing plan first so the sequence stays consistent.",
+                "Use Sitemap to open every area and log bugs the moment you hit them.",
+                "Turn on debug mode when needed so click-pinning and voice notes capture the exact surface.",
+            ],
+            "primary": {"label": "Open testing plan", "href": url_for("testing_plan_page")},
+        })
+        quickpaths.append({
+            "title": "Check restricted and operational pages safely",
+            "steps": [
+                "Use Queue, Sitemap, and Profile pages as a read-only sweep unless the operator gives a specific mutation to test.",
+                "If a page blocks you unexpectedly, file feedback from that exact page before moving on.",
+                "For visual bugs, call out whether the problem appears in light mode, dark mode, mobile width, or desktop width.",
+            ],
+            "primary": {"label": "Open sitemap", "href": url_for("sitemap")},
         })
 
     if "operator" in roles:

@@ -43,7 +43,13 @@ ACCESS_MATRIX: dict[str, dict[str, bool]] = {
     "/admin/users": {
         "super_admin": True,
         "site_admin": True,
-        "instrument_admin": False,
+        # Lab-portal policy (intended, landed in 1a07efe 2026-04-15): when the
+        # lab portal is active an instrument_admin IS the lab head and needs
+        # to onboard / manage that lab's people, so _admin_users_permissions
+        # grants the page. The harness seeds into lab-portal mode, so we
+        # expect True here. Non-lab deployments still gate it via the mode
+        # check in app.py.
+        "instrument_admin": True,
         "operator": False,
         "professor_approver": False,
         "finance_admin": False,

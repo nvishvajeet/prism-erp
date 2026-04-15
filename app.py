@@ -6139,6 +6139,34 @@ def _seed_erp_portals() -> None:
 
 AI_ACTION_ROUTES_SEED: list[tuple[str, str, str, str, str, str]] = [
     # (action_type, label, area_admin_role, fin_admin_role, target_table, notes)
+    ("manual_review",   "Manual review",    "site_admin",     "",
+     "",                "Generic fallback for transformed queue items that still need a human check."),
+    ("submit_request",  "Request draft",    "instrument_admin", "",
+     "sample_requests", "AI/sample-request drafts should always land in an operator/admin review queue."),
+    ("bulk_sample_intake", "Bulk sample intake", "instrument_admin", "",
+     "sample_requests", "Bulk intake drafts need a lab/admin check before they count as operational truth."),
+    ("attach_results",  "Results review",   "instrument_admin", "",
+     "sample_requests", "AI-attached results need a human to confirm the request record."),
+    ("create_account",  "Account request",  "site_admin",      "finance_admin",
+     "users",           "New accounts need operations + finance/admin metadata review."),
+    ("create_instrument", "Instrument draft", "site_admin",    "",
+     "instruments",     "New instruments must be reviewed before activation."),
+    ("create_custom_field", "Instrument field change", "instrument_admin", "",
+     "instrument_custom_fields", "Form/schema-level changes require a human check."),
+    ("create_approval_workflow", "Approval workflow change", "site_admin", "",
+     "instrument_approval_config", "Approval-chain changes should never bypass review."),
+    ("create_receipt",  "Expense receipt",  "site_admin",      "finance_admin",
+     "expense_receipts", "Expense receipts should land in a finance-reviewable lane."),
+    ("mark_attendance", "Attendance mark",  "site_admin",      "",
+     "attendance",      "Attendance changes need a human check."),
+    ("vehicle_log",     "Vehicle log",      "site_admin",      "finance_admin",
+     "vehicle_logs",    "Fleet and spend entries need review."),
+    ("salary_note",     "Salary note",      "site_admin",      "finance_admin",
+     "salary_payments", "Payroll-adjacent notes need oversight."),
+    ("approve_request", "Request approval check", "instrument_admin", "",
+     "sample_requests", "AI-suggested approval actions should be checked by a human."),
+    ("route_request",   "Request routing check", "instrument_admin", "",
+     "sample_requests", "Routing changes should be checked by the instrument/admin team."),
     ("vehicle_expense",  "Vehicle expense",  "fleet_admin",    "finance_admin",
      "expense_receipts", "Fuel / repair / toll — area admin verifies vehicle, fin admin releases."),
     ("fuel_receipt",     "Fuel receipt",     "fleet_admin",    "finance_admin",
@@ -22395,6 +22423,89 @@ def create_prospective_action(
     return row["id"] if row else None
 
 
+def _create_prospective_action_from_command_queue(
+    queue_row: sqlite3.Row,
+    *,
+    archive_reason: str,
+) -> int | None:
+    """Transform a command-queue row into a human-review inbox item.
+
+    The goal is operational continuity: queue items should not simply vanish
+    after pruning. They become reviewable requests with the original text,
+    parse result, and any created entity references preserved in payload_json.
+    """
+    parsed_action = (row_value(queue_row, "parsed_action", "") or "").strip()
+    action_type = parsed_action or "manual_review"
+    route = query_one(
+        "SELECT * FROM ai_action_routes WHERE action_type = ?",
+        (action_type,),
+    )
+    if not route:
+        action_type = "manual_review"
+        route = query_one(
+            "SELECT * FROM ai_action_routes WHERE action_type = ?",
+            (action_type,),
+        )
+    if not route:
+        return None
+
+    stage = "area_admin" if row_value(route, "area_admin_role") else "fin_admin"
+    role = row_value(route, "area_admin_role") or row_value(route, "fin_admin_role")
+    approver_id = _resolve_ai_approver(role, "")
+    if approver_id is None and OWNER_EMAILS:
+        placeholders = ",".join("?" for _ in OWNER_EMAILS)
+        owner_row = query_one(
+            f"SELECT id FROM users WHERE lower(email) IN ({placeholders}) ORDER BY id LIMIT 1",
+            tuple(OWNER_EMAILS),
+        )
+        if owner_row:
+            approver_id = owner_row["id"]
+
+    try:
+        parsed_payload = json.loads(row_value(queue_row, "parsed_data", "{}") or "{}")
+    except Exception:
+        parsed_payload = {}
+
+    payload = {
+        "prompt": row_value(queue_row, "raw_text", ""),
+        "action_type": action_type,
+        "label": row_value(route, "label", action_type),
+        "target_table": row_value(route, "target_table", ""),
+        "queue_origin": {
+            "queue_row_id": row_value(queue_row, "id"),
+            "source": row_value(queue_row, "source", ""),
+            "status": row_value(queue_row, "status", ""),
+            "summary": row_value(queue_row, "result_message", ""),
+            "result_entity_type": row_value(queue_row, "result_entity_type", ""),
+            "result_entity_id": row_value(queue_row, "result_entity_id"),
+            "created_at": row_value(queue_row, "created_at", ""),
+            "processed_at": row_value(queue_row, "processed_at", ""),
+            "archive_reason": archive_reason,
+        },
+        "parsed_data": parsed_payload,
+    }
+    execute(
+        "INSERT INTO ai_prospective_actions "
+        "(action_type, submitted_by_user_id, assigned_approver_id, approver_stage, "
+        "region, payload_json, file_path, file_name, status, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (
+            action_type,
+            row_value(queue_row, "user_id"),
+            approver_id,
+            stage,
+            "",
+            json.dumps(payload),
+            "",
+            "",
+            "awaiting_review",
+            now_iso(),
+        ),
+    )
+    row = query_one("SELECT last_insert_rowid() AS id")
+    return row["id"] if row else None
+
+
 @app.route("/ai/ask", methods=["POST"])
 @login_required
 def ai_advisor_submit():
@@ -24527,28 +24638,47 @@ def process_all_pending_commands():
 
 
 def prune_command_queue(days: int = 30) -> dict[str, int]:
-    """Garbage-collect old finished rows from the action queue.
+    """Transform old finished rows from the action queue into review items.
 
-    Only terminal rows are pruned. We deliberately keep ``awaiting_approval``
-    rows forever — they represent drafts that still need a human decision
-    and must never silently disappear. ``pending`` / ``processing`` are
-    also kept (they mean work is still queued up).
+    Only terminal rows are pruned from the *active* queue. Before removal,
+    each row is:
+
+    1. copied into ``command_queue_archive`` for audit/recovery, and
+    2. transformed into an ``ai_prospective_actions`` inbox item so a
+       human can still review what the queue item became.
+
+    We deliberately keep ``awaiting_approval`` rows forever — they
+    already represent drafts that need a human decision and must never
+    silently disappear. ``pending`` / ``processing`` are also kept
+    (they mean work is still queued up).
 
     Usage (nightly cron, called from scripts/nightly_dev.sh):
         python -c "import app; print(app.prune_command_queue())"
 
-    Returns a dict with the per-status row counts that were deleted.
+    Returns a dict with the per-status row counts that were transformed.
     """
     with app.app_context():
         cutoff = (datetime.now() - timedelta(days=max(1, int(days)))).isoformat()
         stats: dict[str, int] = {}
         for status in ("completed", "failed"):
+            stale_rows = query_all(
+                "SELECT * FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
+                (status, cutoff),
+            )
             row = query_one(
                 "SELECT COUNT(*) AS c FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
                 (status, cutoff),
             )
             stats[status] = row["c"] if row else 0
             if stats[status]:
+                archive_reason = f"prune>{days}d"
+                transformed = 0
+                for queue_row in stale_rows:
+                    if _create_prospective_action_from_command_queue(
+                        queue_row,
+                        archive_reason=archive_reason,
+                    ):
+                        transformed += 1
                 execute(
                     """
                     INSERT INTO command_queue_archive (
@@ -24565,12 +24695,13 @@ def prune_command_queue(days: int = 30) -> dict[str, int]:
                     FROM command_queue
                     WHERE status = ? AND COALESCE(processed_at, created_at) < ?
                     """,
-                    (now_iso(), f"prune>{days}d", status, cutoff),
+                    (now_iso(), archive_reason, status, cutoff),
                 )
                 execute(
                     "DELETE FROM command_queue WHERE status = ? AND COALESCE(processed_at, created_at) < ?",
                     (status, cutoff),
                 )
+                stats[f"{status}_review_items"] = transformed
         stats["cutoff"] = cutoff
         return stats
 

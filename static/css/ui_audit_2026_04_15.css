@@ -96,3 +96,76 @@
  *        vendor_form.html, new_request.html, finance_grant_detail
  *        .html). No template-level changes required.
  * ───────────────────────────────────────────────────────────── */
+
+/* =============================================================
+ * P3 · Mobile-responsive polish sweep (added T+45 on extended
+ * Phase 1). No redesigns — accessibility and usability only.
+ * Desktop widths unchanged; rules live under ≤768px media queries.
+ * ============================================================= */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-05 · 44x44 tap-target floor on mobile viewports
+ *
+ * Apple HIG + WCAG 2.5.5 (AAA) specify 44x44 px minimum for
+ * interactive touch targets. CATALYST's .btn base sets ~36-40px
+ * and .btn-sm / .btn-pill-sm land below that. Desktop with mouse
+ * input is unaffected — this rule only applies when the viewport
+ * is narrow enough that a touch device is likely.
+ * ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .btn,
+  a.btn,
+  a.btn-sm,
+  button.btn-sm,
+  input[type="submit"],
+  input[type="button"],
+  .btn-pill-sm,
+  .qi-btn {
+    min-height: 44px;
+    min-width: 44px;
+    box-sizing: border-box;
+  }
+  /* Text links get a slightly smaller floor — they sit inline in
+     body copy and 44px would blow vertical rhythm. 32px is still
+     comfortable with a thumb. */
+  a.text-link {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-06 · Safe-area insets for fixed-bottom floating chrome
+ *
+ * AI pane trigger, toast bars, and any floating-action class sit
+ * at viewport bottom on mobile. Without safe-area padding they
+ * land under the iOS home indicator or Android gesture bar.
+ * Adds env(safe-area-inset-bottom) where it matters.
+ * ───────────────────────────────────────────────────────────── */
+.toast-bar,
+.fixed-bottom-bar,
+[class*="floating-action"],
+#aiPaneToggle,
+#aiPane {
+  padding-bottom: max(
+    var(--fixed-bottom-pad, 0.5rem),
+    calc(0.5rem + env(safe-area-inset-bottom, 0px))
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-07 · Defensive overflow:auto on tile children taller than
+ *        the tile cap
+ *
+ * For grid containers that cap tile height (stats-tiles 320px,
+ * inbox-tiles 600px, dashboard-tiles default, etc.) the existing
+ * rule `.tile > :not(section-head) { overflow-y: auto }` handles
+ * scrolling. This adds the same fallback for tiles inside the
+ * mc-drill-tiles grid (used by dev_panel_tag / dev_panel_commit)
+ * which inherits the default cap but has no per-grid scroll rule.
+ * ───────────────────────────────────────────────────────────── */
+.mc-drill-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}

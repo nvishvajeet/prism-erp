@@ -7488,8 +7488,8 @@ def _seed_demo_grants() -> None:
         existing = db.execute("SELECT COUNT(*) AS c FROM grants").fetchone()["c"]
         if existing:
             return
-        admin_row = db.execute("SELECT id FROM users WHERE email = 'admin@lab.local'").fetchone()
-        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@lab.local'").fetchone()
+        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner@catalyst.local'").fetchone()
+        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@catalyst.local'").fetchone()
         pi_admin = admin_row["id"] if admin_row else None
         pi_approver = approver_row["id"] if approver_row else None
         now_iso = datetime.utcnow().isoformat(timespec="seconds")
@@ -7552,10 +7552,10 @@ def _seed_demo_messages() -> None:
         def uid(email: str) -> int | None:
             row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             return row["id"] if row else None
-        admin = uid("admin@lab.local")
-        operator = uid("operator@lab.local")
-        requester = uid("requester@lab.local")
-        approver = uid("approver@lab.local")
+        admin = uid("owner@catalyst.local")
+        operator = uid("anika@catalyst.local")
+        requester = uid("user1@catalyst.local")
+        approver = uid("approver@catalyst.local")
         now = datetime.utcnow()
         seeds = [
             # (sender, recipient, subject, body, sent_offset_minutes, read)
@@ -7607,7 +7607,7 @@ def _seed_demo_notices() -> None:
         if existing:
             return
         admin_id_row = db.execute(
-            "SELECT id FROM users WHERE email = 'admin@lab.local'"
+            "SELECT id FROM users WHERE email = 'owner@catalyst.local'"
         ).fetchone()
         admin_id = admin_id_row["id"] if admin_id_row else None
         demo_notices = [
@@ -10904,6 +10904,44 @@ def _user_can_edit_finance(user: sqlite3.Row | None) -> bool:
     return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
 
 
+def grant_utilization(grant_id: int) -> tuple[float, float, int, str]:
+    """v2/w2.0.a3-budget-alerts — single-source utilization helper.
+
+    Returns (allocated, spent, pct, tier) where:
+      - allocated: grants.total_budget (₹)
+      - spent:     SUM(payments on invoices for grant) + SUM(grant_expenses)
+      - pct:       int percent used (0 if no budget)
+      - tier:      'ok' (<80), 'warn' (>=80 and <100), 'crit' (>=100)
+
+    Mirrors the spend math used by check_budget() / finance_grant_detail()
+    so the alert tier always matches what the user sees on the bar.
+    """
+    grant = query_one("SELECT id, total_budget FROM grants WHERE id = ?", (grant_id,))
+    if not grant:
+        return 0.0, 0.0, 0, "ok"
+    allocated = float(grant["total_budget"] or 0)
+    inv_spend = query_one(
+        """SELECT COALESCE(SUM(p.amount), 0) AS s
+             FROM payments p
+             JOIN invoices inv ON inv.id = p.invoice_id
+            WHERE inv.grant_id = ?""",
+        (grant_id,),
+    )
+    exp_spend = query_one(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM grant_expenses WHERE grant_id = ?",
+        (grant_id,),
+    )
+    spent = float((inv_spend["s"] if inv_spend else 0) + (exp_spend["s"] if exp_spend else 0))
+    pct = int((spent / allocated * 100)) if allocated > 0 else 0
+    if pct >= 100:
+        tier = "crit"
+    elif pct >= 80:
+        tier = "warn"
+    else:
+        tier = "ok"
+    return allocated, spent, pct, tier
+
+
 def check_budget(grant_id, amount):
     """Returns (allowed: bool, warning: str|None).
 
@@ -11765,6 +11803,25 @@ def finance_grant_detail(grant_id: int):
     else:
         budget_util_class = "budget-bar-green"
 
+    # v2/w2.0.a3-budget-alerts — MVP alert surface on detail page.
+    # Tier mirrors grant_utilization(); kept inline here to avoid a
+    # second SQL round-trip (percent_used already matches that helper).
+    if percent_used >= 100:
+        utilization_tier = "crit"
+        utilization_tone = "red"
+        utilization_alert = "Over budget — spending has exceeded the allocated total."
+    elif percent_used >= 80:
+        utilization_tier = "warn"
+        utilization_tone = "amber"
+        utilization_alert = "Approaching budget cap — over 80% of the allocated total is committed."
+    else:
+        utilization_tier = "ok"
+        utilization_tone = ""
+        utilization_alert = ""
+    # TODO(v2/w2.0.a3): fire notify(...) for PI + portfolio manager on
+    # first transition to warn/crit. Needs a `grant_alert_state` table
+    # (or a column on grants) to dedupe — tracked in docs/V2_GAP_MAP.md.
+
     # Expenses (non-sample charges)
     expenses = query_all(
         """SELECT ge.*, u.name AS recorder_name
@@ -11790,6 +11847,9 @@ def finance_grant_detail(grant_id: int):
         remaining_fmt=remaining_fmt,
         billed_fmt=billed_fmt,
         utilization_pct=percent_used,
+        utilization_tier=utilization_tier,
+        utilization_tone=utilization_tone,
+        utilization_alert=utilization_alert,
         budget_util_class=budget_util_class,
         expenses=expenses,
         total_expenses=total_expenses,

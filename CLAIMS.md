@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| Claude-sonnet-preventive-crawlers | macro-import-unused-crawler | 2026-04-15T17:30 | crawlers/strategies/macro_import_unused.py, crawlers/strategies/__init__.py, crawlers/waves.py, templates/* (only files with unused macro imports, if any) | pending |
 
 ## Stale-claim recovery
 

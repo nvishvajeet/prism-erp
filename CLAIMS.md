@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| codex | unify-debugger-system | 2026-04-15T20:28:00Z | CLAIMS.md, static/debug-grid.js, templates/base.html, docs/TESTING_PLAN_TEJVEER.md | pending |
 
 ## Stale-claim recovery
 

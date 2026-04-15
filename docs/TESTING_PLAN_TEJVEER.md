@@ -336,8 +336,8 @@ Where to file: append to `lab-scheduler/logs/debug_feedback.md`
 
 ### 3.3 The in-page debugger (`?debug=1`)
 
-Every page supports an overlay debugger that captures a video +
-audio narration of what you're seeing. This is often faster than
+Every page supports a unified overlay debugger that captures voice
+feedback plus pinned on-screen locations. This is often faster than
 typing a full report.
 
 **Turn it on:** append `?debug=1` to any URL (e.g.
@@ -349,16 +349,15 @@ panel appears at the bottom-right of the screen.
 1. Navigate to where the bug is visible.
 2. Click **Record** in the debugger panel.
 3. **Speak** what's wrong ("the status badge is green but the
-   status says rejected") — the debugger captures your voice
-   + the screen.
+   status says rejected") — the debugger captures your voice.
 4. **Click-to-pin** the specific element you're pointing at.
    This drops a marker in the recording tied to that DOM node
    + its CSS path.
-5. Click **Stop**. A transcript + video preview appears.
-6. Review. If it captures what you meant, click **Submit**.
-   The debugger attaches the recording + a structured metadata
-   blob (URL, role, page state, pinned element path) to a bug
-   report that's pre-filled using the §3.2 template.
+5. Click **Stop**. The transcript is saved together with the
+   pinned markers.
+6. Review the saved report if needed. The debugger attaches the
+   voice transcript + structured metadata (URL, role, page state,
+   pinned element path) to the bug log.
 
 **Hold-⌘ shortcut (TBD — ships with task 0103):** once
 `<commit-SHA-placeholder>` lands, holding ⌘ for 1 second on any

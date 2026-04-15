@@ -19293,6 +19293,51 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
     return True
 
 
+def _admin_user_category(row: sqlite3.Row | dict[str, object]) -> dict[str, str | int]:
+    designation = (row_value(row, "designation", "") or "").strip()
+    department = (row_value(row, "department", "") or "").strip()
+    role = (row_value(row, "role", "") or "").strip()
+    designation_l = designation.lower()
+    department_l = department.lower()
+    role_l = role.lower()
+
+    if "cook" in designation_l or "chef" in designation_l:
+        label, rank = "Cooks", 10
+    elif "mess boy" in designation_l or "messboy" in designation_l:
+        label, rank = "Mess Boys", 20
+    elif "mess" in designation_l:
+        label, rank = "Mess Staff", 25
+    elif "driver" in designation_l:
+        label, rank = "Drivers", 30
+    elif "clean" in designation_l or "housekeep" in designation_l:
+        label, rank = "Housekeeping", 40
+    elif "security" in designation_l:
+        label, rank = "Security", 50
+    elif "account" in designation_l or "finance" in designation_l:
+        label, rank = "Accounts & Finance", 60
+    elif "manager" in designation_l or "supervisor" in designation_l:
+        label, rank = "Managers", 70
+    elif designation:
+        label, rank = designation.title(), 80
+    elif role_l in {"site_admin", "super_admin"}:
+        label, rank = "Managers", 90
+    elif role_l == "finance_admin":
+        label, rank = "Accounts & Finance", 100
+    elif role_l == "operator":
+        label, rank = "Operators", 110
+    elif role_l in {"instrument_admin", "faculty_in_charge", "professor_approver"}:
+        label, rank = "Academic & Instrument Leads", 120
+    elif department_l:
+        label, rank = department.title(), 130
+    else:
+        label, rank = "General Profiles", 140
+
+    slug = "-".join(
+        part for part in "".join(ch.lower() if ch.isalnum() else " " for ch in label).split()
+    ) or "general-profiles"
+    return {"slug": slug, "label": label, "rank": rank}
+
+
 def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, object]:
     # 5000-user scaling fix: admins + owners are always small sets
     # (< ~100 combined) so an unbounded query is fine. Members
@@ -19318,8 +19363,10 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         # Lab operators expect this directory to show the active people
         # who actually run the facility, not only the top-level admins.
         admin_rows = query_all(
-            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+            "       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
             f"FROM users {portal_join}"
+            "LEFT JOIN salary_config sc ON sc.user_id = users.id "
             f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
             f"ORDER BY CASE WHEN LOWER(users.email) IN ({owner_placeholders}) THEN 0 ELSE 1 END, "
             "CASE users.role "
@@ -19333,8 +19380,10 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         )
     else:
         admin_rows = query_all(
-            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+            "       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
             f"FROM users {portal_join}"
+            "LEFT JOIN salary_config sc ON sc.user_id = users.id "
             f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
             "ORDER BY users.role, users.name",
             tuple(portal_params),
@@ -19357,6 +19406,7 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         )
         member_where += " AND ep.slug = ? AND ep.is_active = 1"
         member_params.append(portal_slug)
+    member_from += " LEFT JOIN salary_config sc ON sc.user_id = users.id"
     if member_q:
         member_where += " AND (LOWER(users.name) LIKE ? OR LOWER(users.email) LIKE ? OR LOWER(COALESCE(users.member_code, '')) LIKE ?)"
         like = f"%{member_q.lower()}%"
@@ -19366,7 +19416,8 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         tuple(member_params),
     )["c"]
     members = query_all(
-        f"SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+        f"SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+        f"       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
         f"{member_from} {member_where} ORDER BY users.name LIMIT ?",
         tuple(member_params) + (MEMBERS_CAP,),
     )
@@ -19402,6 +19453,34 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
             admin_groups["operators"].append(row)
         else:
             admin_groups["other_profiles"].append(row)
+    category_filter = ((request.args.get("category") or "").strip().lower())
+    category_buckets: dict[str, dict[str, object]] = {}
+    category_source = list(admins) + list(members) + list(owners)
+    for row in category_source:
+        cat = _admin_user_category(row)
+        bucket = category_buckets.setdefault(
+            cat["slug"],
+            {
+                "slug": cat["slug"],
+                "label": cat["label"],
+                "rank": cat["rank"],
+                "count": 0,
+                "users": [],
+            },
+        )
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["users"].append(row)
+    category_groups = sorted(
+        (
+            {
+                **bucket,
+                "users": sorted(bucket["users"], key=lambda item: ((row_value(item, "name", "") or "").lower())),
+            }
+            for bucket in category_buckets.values()
+            if not category_filter or bucket["slug"] == category_filter
+        ),
+        key=lambda bucket: (int(bucket["rank"]), -(int(bucket["count"])), str(bucket["label"]).lower()),
+    )
     return {
         "members": members,
         "members_total": members_total,
@@ -19412,6 +19491,8 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         "owners": owners,
         "pending_users": pending_users,
         "lab_profile_mode": lab_profile_mode_active(),
+        "category_groups": category_groups,
+        "category_filter": category_filter,
     }
 
 
@@ -19433,6 +19514,8 @@ def admin_users():
         admin_groups=list_payload["admin_groups"],
         owners=list_payload["owners"],
         pending_users=list_payload["pending_users"],
+        category_groups=list_payload["category_groups"],
+        category_filter=list_payload["category_filter"],
         can_create_users=permissions["can_create_users"],
         can_delete_members=permissions["can_delete_members"],
         can_elevate_members=permissions["can_elevate_members"],

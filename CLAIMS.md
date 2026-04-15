@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| Codex | admin-user-category-review | 2026-04-15T18:44 | app.py, templates/users.html, CLAIMS.md | pending |
 
 ## Stale-claim recovery
 

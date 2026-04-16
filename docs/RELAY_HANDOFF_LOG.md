@@ -167,3 +167,27 @@ Append-only. Each agent adds their round at the bottom after shipping.
 ### Next checks
 - Load the demo-variant chooser in a browser and confirm the pills point at the expected live tenant hosts.
 - Continue the batch-3 parity work from `docs/THREE_AGENT_MASTER_PLAN_2026_04_16.md` if this relay slot remains active.
+
+---
+
+## Round R23 — Agent B Relay Slot — 2026-04-16 09:00 Europe/Paris
+
+### Shipped
+- Added `docs/NETWORK_ARCHITECTURE_2026_04_16.md` with the live tunnel map from the mini, including the current `catalyst-mini` SSH alias, the Cloudflare tunnel ID, and the active ingress targets.
+- Captured the current live state that `catalysterp.org` still resolves to the mini apex service on port `5055`, so the chooser cutover is not live yet.
+- Recorded the read-only verification commands and the current ingress table so the next agent can rerun the same probe without guessing.
+
+### Verification
+- `.venv/bin/python scripts/smoke_test.py`
+- `curl -I -L --max-redirs 3 'https://catalysterp.org/login?portal=hq'`
+- `curl -I -L --max-redirs 3 'https://catalysterp.org/login?portal=lab'`
+- `ssh catalyst-mini 'sed -n "1,220p" ~/.cloudflared/config.yml'`
+
+### Blockers
+- `ssh prism-mini` no longer resolves locally; the canonical alias is `catalyst-mini`. I documented that rename rather than reviving the old host alias.
+- `docs/NETWORK_ARCHITECTURE_2026_04_16.md` did not exist yet, so the task needed a new file instead of an in-place edit.
+
+### Next checks
+- Confirm whether the chooser service is meant to replace the mini apex surface next.
+- If the cutover is next, update the tunnel ingress and deploy checklist together so the topology docs stay aligned.
+- Keep the `catalyst-mini` alias as the only canonical mini SSH name.

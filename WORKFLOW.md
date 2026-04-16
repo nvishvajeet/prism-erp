@@ -61,6 +61,22 @@ Rule:
 - if another agent is preparing a go-live push, do **not** pile
   unrelated work onto the stable branch; keep shipping in dev
 
+## 1.2 Runtime Lanes
+
+The live code path is now expected to sit inside the isolated runtime
+tree:
+
+| Lane | App root | Data root |
+|---|---|---|
+| `live` | `/Users/vishvajeetn/ERP-Instances/lab-erp/live/app` | `/Users/vishvajeetn/ERP-Instances/lab-erp/live/data` |
+| `dev` | `/Users/vishvajeetn/ERP-Instances/lab-erp/dev/app` | `/Users/vishvajeetn/ERP-Instances/lab-erp/dev/data` |
+
+Rule:
+
+- stable/live verification should happen from `live/app`
+- live mutable state must stay in `live/data`
+- do not point the live lane at any dev database or dev uploads path
+
 ## 2. Topology
 
 CATALYST is the only project on this laptop with a Level-2 mini

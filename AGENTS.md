@@ -42,6 +42,18 @@ If your agent session runs on a host that does not have the `origin`
 remote configured, stop and ask the human operator — do not invent a
 new remote.
 
+## 2.1 Runtime lane isolation
+
+For stable/live work, prefer the isolated runtime lane:
+
+| Lane | App root | Data root |
+|---|---|---|
+| `live` | `/Users/vishvajeetn/ERP-Instances/lab-erp/live/app` | `/Users/vishvajeetn/ERP-Instances/lab-erp/live/data` |
+| `dev` | `/Users/vishvajeetn/ERP-Instances/lab-erp/dev/app` | `/Users/vishvajeetn/ERP-Instances/lab-erp/dev/data` |
+
+Live validation, deploy checks, and release smoke should run from the
+`live` lane. Do not let stable/live work share `dev/data`.
+
 ## 3. The commit / push rhythm
 
 - **One commit per meaningful unit of work.** A unit is something

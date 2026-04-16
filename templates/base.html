@@ -78,7 +78,7 @@
       };
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
 </head>
 <body{% if current_user %} data-user-role="{{ current_user.role }}"{% endif %}>
   <a class="skip-nav" href="#main-content">Skip to main content</a>

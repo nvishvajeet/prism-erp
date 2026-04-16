@@ -47,15 +47,30 @@ BASE_DIR = Path(__file__).resolve().parent
 # demo runs can never corrupt a real deployment. The mode is chosen at
 # boot by LAB_SCHEDULER_DEMO_MODE — "1"/"true" → demo; else operational.
 #
-# CATALYST_DATA_DIR overrides the default data root, allowing the data
-# directory to live on an external SSD or a separate volume. When set,
-# the demo/operational subfolder structure is preserved under that path.
+# LAB_ERP_DATA_DIR / LAB_ERP_RUNTIME_ROOT are the preferred Lab-only
+# overrides. CATALYST_DATA_DIR remains as the legacy fallback. When a
+# runtime root is provided, the app keeps every mutable artefact under
+# `<runtime-root>/data`, so a live instance can be fenced into:
+#   live/app   ← code only
+#   live/data  ← sqlite, uploads, exports, logs, ai artefacts
+# Example: LAB_ERP_RUNTIME_ROOT=/srv/lab-erp/live → DB lives at
+#   /srv/lab-erp/live/data/demo/stable/lab_erp_data_demo_stable.db
+#   /srv/lab-erp/live/data/operational/lab_erp_data_operational_live.db
+#
+# CATALYST_DATA_DIR overrides the default data root for legacy callers.
+# When set, the demo/operational subfolder structure is preserved there.
 # Example: CATALYST_DATA_DIR=/Volumes/DataSSD/catalyst → DB lives at
 #   /Volumes/DataSSD/catalyst/demo/stable/lab_scheduler.db  (stable demo)
 #   /Volumes/DataSSD/catalyst/demo/beta/lab_scheduler.db    (beta demo)
 #   /Volumes/DataSSD/catalyst/operational/lab_scheduler.db  (production)
-_DATA_DIR_OVERRIDE = os.environ.get("CATALYST_DATA_DIR", "").strip()
-DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else (BASE_DIR / "data")
+_RUNTIME_ROOT_OVERRIDE = os.environ.get("LAB_ERP_RUNTIME_ROOT", "").strip()
+_DATA_DIR_OVERRIDE = (
+    os.environ.get("LAB_ERP_DATA_DIR", "").strip()
+    or os.environ.get("CATALYST_DATA_DIR", "").strip()
+)
+if not _DATA_DIR_OVERRIDE and _RUNTIME_ROOT_OVERRIDE:
+    _DATA_DIR_OVERRIDE = str((Path(_RUNTIME_ROOT_OVERRIDE).expanduser() / "data").resolve())
+DATA_DIR = Path(_DATA_DIR_OVERRIDE).expanduser() if _DATA_DIR_OVERRIDE else (BASE_DIR / "data")
 DATA_OPERATIONAL_DIR = DATA_DIR / "operational"
 DATA_DEMO_ROOT_DIR = DATA_DIR / "demo"
 

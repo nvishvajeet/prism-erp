@@ -11,6 +11,7 @@
 
 # Always run from repo root so relative paths (app.py, .env) resolve
 cd "$(dirname "$0")/.."
+APP_DIR="$(pwd)"
 
 # Source env file if present — launchd does NOT inherit your shell env, so this is
 # the only place the service mode learns SECRET_KEY / HOST / DEMO_MODE etc.
@@ -23,7 +24,15 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 export LAB_SCHEDULER_SECRET_KEY="${LAB_SCHEDULER_SECRET_KEY:-$(openssl rand -hex 32)}"
-export OWNER_EMAILS="${OWNER_EMAILS:-admin@lab.local}"
+export OWNER_EMAILS="${OWNER_EMAILS:-owner@mitwpu.edu.in,admin@mitwpu.edu.in}"
+
+if [ -n "${LAB_ERP_RUNTIME_ROOT:-}" ] && [ -z "${LAB_ERP_DATA_DIR:-}" ]; then
+  export LAB_ERP_DATA_DIR="${LAB_ERP_RUNTIME_ROOT%/}/data"
+fi
+if [ -n "${LAB_ERP_DATA_DIR:-}" ]; then
+  mkdir -p "$LAB_ERP_DATA_DIR"
+  export CATALYST_DATA_DIR="$LAB_ERP_DATA_DIR"
+fi
 
 # Pick the venv python if it exists, fall back to system python.
 PY_BIN="python"
@@ -69,7 +78,7 @@ case "$1" in
       echo "    https:   ON"
       export LAB_SCHEDULER_HTTPS=true
       export LAB_SCHEDULER_COOKIE_SECURE=true
-      exec .venv/bin/gunicorn app:app \
+      exec .venv/bin/gunicorn lab_erp_app:app \
         -w "$WORKERS" \
         -b "$BIND_ADDR" \
         --certfile "$CERT_FILE" \
@@ -78,7 +87,7 @@ case "$1" in
         --error-logfile -
     else
       echo "    https:   OFF (generate certs: mkcert -cert-file cert.pem -key-file key.pem localhost 127.0.0.1)"
-      exec .venv/bin/gunicorn app:app \
+      exec .venv/bin/gunicorn lab_erp_app:app \
         -w "$WORKERS" \
         -b "$BIND_ADDR" \
         --access-logfile - \
@@ -91,6 +100,6 @@ case "$1" in
     PROTO="http"
     [ "$HAS_CERT" -eq 1 ] && PROTO="https"
     ( sleep 2 && open -a "Google Chrome" "${PROTO}://127.0.0.1:${BIND_PORT}" 2>/dev/null || open "${PROTO}://127.0.0.1:${BIND_PORT}" ) &
-    exec "${PY_BIN}" app.py
+    exec "${PY_BIN}" "$APP_DIR/lab_erp_app.py"
     ;;
 esac

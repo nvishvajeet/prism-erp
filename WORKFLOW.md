@@ -76,6 +76,8 @@ Rule:
 - stable/live verification should happen from `live/app`
 - live mutable state must stay in `live/data`
 - do not point the live lane at any dev database or dev uploads path
+- live crawlers and service agents must run only from `live/app` with
+  `LAB_SCHEDULER_DEMO_MODE=0`
 
 ## 2. Topology
 

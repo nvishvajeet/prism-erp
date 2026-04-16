@@ -300,6 +300,12 @@ ERP_PORTALS = {
     },
 }
 
+HOST_PORTAL_BINDINGS = {
+    "mitwpu-rnd.catalysterp.org": "lab",
+    "mitwpurn.catalysterp.org": "lab",
+    "ravikiran.catalysterp.org": "ravikiran_ops",
+}
+
 APP_VERSION = "1.0.0"
 
 app = Flask(__name__)
@@ -3965,9 +3971,20 @@ def track_work_session():
     return None
 
 
+def _host_bound_portal_slug(hostname: str | None = None) -> str | None:
+    """Return the portal slug implied by the current tenant host."""
+    if not has_request_context() and hostname is None:
+        return None
+    host = (hostname or request.host or "").lower().split(":")[0]
+    return HOST_PORTAL_BINDINGS.get(host)
+
+
 def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str | None = None) -> str | None:
     """Return the best active portal slug from the requested slug + assignments."""
     valid_slugs = {row_value(p, "slug", "") for p in portals}
+    host_slug = _host_bound_portal_slug()
+    if host_slug:
+        return host_slug if host_slug in valid_slugs else None
     if requested_slug and requested_slug in valid_slugs:
         return requested_slug
     if len(portals) == 1:
@@ -3980,13 +3997,17 @@ def _ensure_active_portal_session(user: sqlite3.Row | None) -> str | None:
     if user is None or not has_request_context():
         return None
     current_slug = active_portal_slug()
-    if current_slug:
+    host_slug = _host_bound_portal_slug()
+    if current_slug and (not host_slug or current_slug == host_slug):
         return current_slug
     portals = _user_portals(user["id"])
-    selected_slug = _select_portal_slug(portals, session.get("requested_portal"))
+    selected_slug = _select_portal_slug(portals, session.get("requested_portal") or host_slug)
     if selected_slug:
+        session["requested_portal"] = selected_slug
         session["active_portal"] = selected_slug
         return selected_slug
+    if host_slug:
+        session["requested_portal"] = host_slug
     session.pop("active_portal", None)
     return None
 
@@ -8051,6 +8072,10 @@ def seed_data() -> None:
     # makes it safe to run on every startup.
     #
     # Shape:  (name, email, role, office_location, portals)
+    # Named real-team accounts are used live during tester sessions, so
+    # keep them on the shared demo password without forcing an immediate
+    # first-login reset. That avoids half-finished password changes
+    # masquerading as random logout/login failures during bug reporting.
     real_team = [
         ("Nikita Nagargoje",   "nikita",                        "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
@@ -8094,12 +8119,16 @@ def seed_data() -> None:
             """INSERT OR IGNORE INTO users
                  (name, email, password_hash, role, invite_status,
                   must_change_password, office_location)
-               VALUES (?, ?, ?, ?, 'active', 1, ?)""",
+               VALUES (?, ?, ?, ?, 'active', 0, ?)""",
             (name, email, demo_pw_hash, role, office),
         )
         db.execute(
             "UPDATE users SET office_location = ? WHERE email = ? AND (office_location IS NULL OR office_location = '')",
             (office, email),
+        )
+        db.execute(
+            "UPDATE users SET password_hash = ?, active = 1, must_change_password = 0 WHERE email = ?",
+            (demo_pw_hash, email),
         )
     db.commit()
 
@@ -12763,6 +12792,7 @@ def login():
     # shell. In-subdomain /login?portal=* still works normally.
     # See docs/DEPLOY_CHECKLIST_2026_04_16.md for the tenant map.
     host = (request.host or "").lower().split(":")[0]
+    host_portal_slug = _host_bound_portal_slug(host)
     APEX_HOSTS = {"catalysterp.org", "www.catalysterp.org"}
     TENANT_REDIRECTS = {
         "lab": "https://mitwpu-rnd.catalysterp.org/login",
@@ -12775,6 +12805,8 @@ def login():
         session["requested_portal"] = portal_arg
     elif request.method == "GET" and "portal" in request.args and portal_arg not in ERP_PORTALS:
         session.pop("requested_portal", None)
+    if host_portal_slug:
+        session["requested_portal"] = host_portal_slug
     if request.method == "GET" and current_user() is not None:
         return redirect(url_for("index"))
     if request.method == "POST":
@@ -12785,10 +12817,10 @@ def login():
                 f"Too many failed attempts. Try again in {seconds // 60}m {seconds % 60}s.",
                 "error",
             )
-            return _render_login_response(session.get("requested_portal"), status_code=429)
+            return _render_login_response(session.get("requested_portal") or host_portal_slug, status_code=429)
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
-        requested_portal = (request.form.get("portal") or session.get("requested_portal") or "").strip().lower() or None
+        requested_portal = (request.form.get("portal") or session.get("requested_portal") or host_portal_slug or "").strip().lower() or None
         # Accept either the full email OR just the short username (local-part
         # of the email) so users who type "kondhalkar" land the same row as
         # "kondhalkar@mitwpu.edu.in". When the input has no '@', we prefer
@@ -12832,13 +12864,24 @@ def login():
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             _login_limiter.clear(ip)
+            portals = _user_portals(user["id"])
+            portal_slugs = {row_value(p, "slug", "") for p in portals}
+            if host_portal_slug and host_portal_slug not in portal_slugs:
+                log_action(
+                    user["id"],
+                    "auth",
+                    user["id"],
+                    "login_blocked_wrong_tenant",
+                    {"host": host, "required_portal": host_portal_slug},
+                )
+                flash("This account is not enabled for this ERP.", "error")
+                return _render_login_response(host_portal_slug, status_code=403)
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
             if requested_portal in ERP_PORTALS:
                 session["requested_portal"] = requested_portal
             log_action(user["id"], "auth", user["id"], "login", {"ip": request.remote_addr or ""})
-            portals = _user_portals(user["id"])
             selected_portal = _select_portal_slug(portals, requested_portal)
             if selected_portal:
                 session["active_portal"] = selected_portal
@@ -12877,7 +12920,7 @@ def login():
         )
         _login_limiter.record_failure(ip)
         flash("Invalid login.", "error")
-    portal_slug = session.get("requested_portal")
+    portal_slug = session.get("requested_portal") or host_portal_slug
     return _render_login_response(portal_slug)
 
 
@@ -12940,6 +12983,7 @@ def _apply_no_store_headers(response):
 
 
 def _render_login_response(portal_slug: str | None = None, *, status_code: int = 200):
+    portal_slug = portal_slug or _host_bound_portal_slug()
     response = make_response(
         render_template(
             "login.html",

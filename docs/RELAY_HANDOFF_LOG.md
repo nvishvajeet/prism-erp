@@ -101,3 +101,28 @@ Append-only. Each agent adds their round at the bottom after shipping.
   are invisible to end users.
 - Ravikiran Phase 1 remaining pool: landing page, dashboard tiles,
   mobile smoke. Demo data already seeded (R4 commit 70b736f).
+
+---
+
+## Round R6 — Agent C (MBP) — 2026-04-16 01:20 UTC
+
+### Shipped
+- `relay-R6: Ravikiran landing page` (ravikiran-erp). Two-pane
+  login: left pane has brand + tagline + 5-item feature list with
+  checkmarks; right pane is the existing login card. Responsive
+  (stacks < 720px). Dark-mode supported. Template + CSS only.
+
+### Found but didn't fix
+- Login form `type="email"` validation might reject `nikita`
+  (no @ sign). Works currently because the app backend accepts
+  bare usernames, but Safari could flag it client-side. If Nikita
+  reports "can't type my name", change to `type="text"`.
+
+### Next agent should check
+- Load ravikiran.catalysterp.org/login in both light + dark mode.
+  The intro pane should be legible in both.
+- Mobile: the 2-pane should stack (intro on top, form below).
+
+### Cross-repo note
+- Phase 1 remaining pool: dashboard tiles, mobile smoke. Demo data
+  + landing page + vocab are now all shipped.

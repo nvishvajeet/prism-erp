@@ -51,4 +51,4 @@ echo "--------------------------------------"
 # Open browser after a short delay
 (sleep 2 && open "http://127.0.0.1:5055") &
 
-$PYTHON app.py
+$PYTHON lab_erp_app.py

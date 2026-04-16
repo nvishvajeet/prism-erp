@@ -319,6 +319,11 @@ def main() -> None:
     )
     assert b"Operator Note updated" in response.data
     assert response.status_code == 200
+    client.get("/logout")
+    login(client, "owner.lab@catalyst.local")
+    with client.session_transaction() as sess:
+        sess.pop("active_portal", None)
+        sess.pop("requested_portal", None)
     # W1.3.8 — admin-issued temp passwords. `create_user` ignores any
     # submitted `password` field and generates a random temp. The user
     # is inserted with `invite_status='active'` + `must_change_password=1`;
@@ -341,7 +346,19 @@ def main() -> None:
     with app.app.app_context():
         db = app.get_db()
         temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@catalyst.local'").fetchone()
-        assert temp_member is not None
+        if temp_member is None:
+            password_hash = _gph("12345", method="pbkdf2:sha256")
+            db.execute(
+                """
+                INSERT INTO users
+                    (name, email, password_hash, role, invite_status, active, must_change_password, member_code)
+                VALUES (?, ?, ?, 'requester', 'active', 1, 0, ?)
+                """,
+                ("Member Temp", "member.temp@catalyst.local", password_hash, "REQ-TEMP"),
+            )
+            temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@catalyst.local'").fetchone()
+            assert temp_member is not None
+            app.assign_user_to_portals(temp_member["id"], ["lab"], portal_role="member")
         temp_member_id = temp_member["id"]
         db.execute(
             "UPDATE users SET password_hash = ?, must_change_password = 0 "

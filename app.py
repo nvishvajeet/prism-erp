@@ -99,6 +99,7 @@ ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
+PROJECT_FILE_STEM = os.environ.get("LAB_ERP_PROJECT_FILE_STEM", "lab_erp").strip().lower() or "lab_erp"
 WORK_SESSION_IDLE_MINUTES = 30
 WORK_SESSION_HEARTBEAT_MAX_SECONDS = 300
 
@@ -174,6 +175,28 @@ def _runtime_slug(*parts: str) -> str:
     return "-".join(cleaned) or "default"
 
 
+def _runtime_artifact_name(kind: str, *, suffix: str = "") -> str:
+    stem = _runtime_slug(PROJECT_FILE_STEM, kind, RUNTIME_LANE, RUNTIME_INSTANCE).replace("-", "_")
+    return f"{stem}{suffix}"
+
+
+def _prefer_runtime_file(active_dir: Path, named_filename: str, legacy_filename: str) -> Path:
+    named_path = active_dir / named_filename
+    legacy_path = active_dir / legacy_filename
+    if not named_path.exists() and legacy_path.exists():
+        shutil.copy2(legacy_path, named_path)
+    return named_path
+
+
+def _prefer_runtime_dir(active_dir: Path, named_dirname: str, legacy_dirname: str) -> Path:
+    named_path = active_dir / named_dirname
+    legacy_path = active_dir / legacy_dirname
+    if not named_path.exists() and legacy_path.exists():
+        shutil.copytree(legacy_path, named_path, dirs_exist_ok=True)
+    named_path.mkdir(parents=True, exist_ok=True)
+    return named_path
+
+
 def _bootstrap_runtime_data_dir() -> Path:
     if not DEMO_MODE:
         DATA_OPERATIONAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -207,11 +230,11 @@ def _bootstrap_runtime_data_dir() -> Path:
 
 _ACTIVE_DATA_DIR = _bootstrap_runtime_data_dir()
 
-DB_PATH = _ACTIVE_DATA_DIR / "lab_scheduler.db"
-EXPORT_DIR = _ACTIVE_DATA_DIR / "exports"
-UPLOAD_DIR = _ACTIVE_DATA_DIR / "uploads"
-AI_UPLOAD_DIR = _ACTIVE_DATA_DIR / "ai_uploads"
-RUNTIME_LOG_DIR = _ACTIVE_DATA_DIR / "logs"
+DB_PATH = _prefer_runtime_file(_ACTIVE_DATA_DIR, _runtime_artifact_name("data", suffix=".db"), "lab_scheduler.db")
+EXPORT_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "exports", "exports")
+UPLOAD_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "uploads", "uploads")
+AI_UPLOAD_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "ai_uploads", "ai_uploads")
+RUNTIME_LOG_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "logs", "logs")
 STATIC_DIR = BASE_DIR / "static"
 INSTRUMENT_IMAGE_DIR = STATIC_DIR / "instrument_images"
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "xlsx", "csv", "txt"}
@@ -228,7 +251,7 @@ OWNER_EMAILS = {
     # Default: vishva (the demo seed super_admin).
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "owner@catalyst.local",
+        "owner.lab@catalyst.local,owner@catalyst.local",
     ).split(",")
     if email.strip()
 }
@@ -240,12 +263,12 @@ VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESH
 # var; the built-in default is the Nikita super-admin account (password 12345).
 DEMO_PUBLIC_EMAIL = os.environ.get(
     "DEMO_PUBLIC_EMAIL",
-    "nikita" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner@catalyst.local",
+    "nikita" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner.lab@catalyst.local",
 )
 
 DEMO_ROLE_SWITCHES = {
-    "owner": {"label": "Owner", "email": "owner@catalyst.local"},
-    "super_admin": {"label": "Super Admin", "email": "dean@catalyst.local"},
+    "owner": {"label": "Owner", "email": "owner.lab@catalyst.local"},
+    "super_admin": {"label": "Super Admin", "email": "admin.lab@catalyst.local"},
     "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@catalyst.local"},
     "site_admin": {"label": "Site Admin", "email": "siteadmin@catalyst.local"},
     "operator": {"label": "Operator", "email": "rahul.misal@catalyst.local"},
@@ -316,23 +339,29 @@ app.wsgi_app = ProxyFix(
     x_host=1,
     x_prefix=0,
 )
-app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
+app.config["SECRET_KEY"] = os.environ.get("LAB_ERP_SECRET_KEY") or os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-erp-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
 app.config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "25"))
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
+app.config["SESSION_COOKIE_SECURE"] = (
+    os.environ.get("LAB_ERP_COOKIE_SECURE")
+    or os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "")
+).lower() in {"1", "true", "yes"}
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
-session_cookie_name = os.environ.get("LAB_SCHEDULER_SESSION_COOKIE_NAME", "").strip()
+session_cookie_name = (
+    os.environ.get("LAB_ERP_SESSION_COOKIE_NAME", "").strip()
+    or os.environ.get("LAB_SCHEDULER_SESSION_COOKIE_NAME", "").strip()
+)
 if not session_cookie_name:
     # Keep local/dev lanes isolated, but use one stable cookie name for the
     # public secure deployment so old tabs do not bounce across runtime lanes.
     if app.config["SESSION_COOKIE_SECURE"]:
-        session_cookie_name = "catalyst_session"
+        session_cookie_name = "lab_erp_session"
     else:
-        session_cookie_name = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
+        session_cookie_name = f"{PROJECT_FILE_STEM}_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE).replace('-', '_')}_session"
 app.config["SESSION_COOKIE_NAME"] = session_cookie_name
 
 # CSRF protection — token machinery is wired up but enforcement is gated
@@ -4035,6 +4064,9 @@ def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str |
         return host_slug if host_slug in valid_slugs else None
     if requested_slug and requested_slug in valid_slugs:
         return requested_slug
+    for portal in portals:
+        if int(row_value(portal, "is_default", 0) or 0):
+            return row_value(portal, "slug", "")
     if len(portals) == 1:
         return row_value(portals[0], "slug", "")
     return None
@@ -6833,10 +6865,9 @@ def init_db() -> None:
 def _seed_erp_portals() -> None:
     """Seed the two ERP portals with conservative defaults.
 
-    Existing users default into the lab portal only, except the seeded
-    local owner account which keeps both portals for cross-ERP admin and
-    smoke-test coverage. HQ access for everyone else is granted explicitly
-    by later team seeding / admin actions.
+    Existing users default into the lab portal only. Cross-portal access
+    is granted explicitly later; no shared "god" account should drift
+    between tenant contexts by default.
     """
     db = sqlite3.connect(DB_PATH)
     db.row_factory = sqlite3.Row
@@ -6863,13 +6894,6 @@ def _seed_erp_portals() -> None:
                         "INSERT OR IGNORE INTO erp_user_portals (user_id, portal_id, portal_role, is_default, created_at) VALUES (?,?,?,?,?)",
                         (u[0], lab_portal[0], "member", 1, now_iso()),
                     )
-                    if (u["email"] or "").strip().lower() == "owner@catalyst.local":
-                        hq_portal_id = portal_id_by_slug.get("hq")
-                        if hq_portal_id:
-                            db.execute(
-                                "INSERT OR IGNORE INTO erp_user_portals (user_id, portal_id, portal_role, is_default, created_at) VALUES (?,?,?,?,?)",
-                                (u[0], hq_portal_id, "owner", 0, now_iso()),
-                            )
                 except Exception:
                     pass
         db.commit()
@@ -7912,7 +7936,7 @@ def _seed_demo_grants() -> None:
         existing = db.execute("SELECT COUNT(*) AS c FROM grants").fetchone()["c"]
         if existing:
             return
-        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner@catalyst.local'").fetchone()
+        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner.lab@catalyst.local'").fetchone()
         approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@catalyst.local'").fetchone()
         pi_admin = admin_row["id"] if admin_row else None
         pi_approver = approver_row["id"] if approver_row else None
@@ -7976,7 +8000,7 @@ def _seed_demo_messages() -> None:
         def uid(email: str) -> int | None:
             row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             return row["id"] if row else None
-        admin = uid("owner@catalyst.local")
+        admin = uid("owner.lab@catalyst.local")
         operator = uid("anika@catalyst.local")
         requester = uid("user1@catalyst.local")
         approver = uid("approver@catalyst.local")
@@ -8031,7 +8055,7 @@ def _seed_demo_notices() -> None:
         if existing:
             return
         admin_id_row = db.execute(
-            "SELECT id FROM users WHERE email = 'owner@catalyst.local'"
+            "SELECT id FROM users WHERE email = 'owner.lab@catalyst.local'"
         ).fetchone()
         admin_id = admin_id_row["id"] if admin_id_row else None
         demo_notices = [
@@ -8112,6 +8136,7 @@ def seed_data() -> None:
     # Rebind every seeded persona's password on every boot so existing
     # demo DBs catch up without a re-seed.
     _persona_emails = (
+        "owner.lab@catalyst.local", "admin.lab@catalyst.local",
         "owner@catalyst.local", "dean@catalyst.local", "kondhalkar@catalyst.local",
         "siteadmin@catalyst.local", "anika@catalyst.local", "ravi@catalyst.local",
         "chetan@catalyst.local", "meera@catalyst.local", "suresh@catalyst.local",
@@ -8163,6 +8188,10 @@ def seed_data() -> None:
         # Username "tejveer", password "12345" (demo default, must_change on first login).
         ("Tejveer",            "tejveer",                       "tester",
          "Ravikiran · Tester",         ["lab", "hq"]),
+        ("Lab Owner",          "owner.lab@catalyst.local",     "super_admin",
+         "MIT-WPU Research · Owner",   ["lab"]),
+        ("Lab Admin",          "admin.lab@catalyst.local",     "super_admin",
+         "MIT-WPU Research · Admin",   ["lab"]),
         # 2026-04-15 · Test accounts — one per non-tester role, so Tejveer
         # can walk §7 of /me/testing-plan as every role. All passwords
         # '12345', must_change on first login. Names prefixed "TEST " so
@@ -8234,6 +8263,8 @@ def seed_data() -> None:
             )
     db.commit()
 
+    _enforce_portal_isolation_defaults(db)
+
     existing = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
     if existing > len(real_team):
         # DB already has the broader demo roster — skip re-seeding the
@@ -8246,6 +8277,8 @@ def seed_data() -> None:
     # Password for ALL demo accounts: "12345"
     core_users = [
         # Owner (god-view via OWNER_EMAILS env var)
+        ("Facility Owner", "owner.lab@catalyst.local",  "super_admin"),
+        ("Lab Admin",      "admin.lab@catalyst.local",  "super_admin"),
         ("Facility Owner", "owner@catalyst.local",      "super_admin"),
         # Dean — super admin
         ("Dr Bharat Chaudhari",  "dean@catalyst.local",          "super_admin"),
@@ -8276,6 +8309,8 @@ def seed_data() -> None:
             "INSERT OR IGNORE INTO users (name, email, password_hash, role, invite_status) VALUES (?, ?, ?, ?, 'active')",
             (name, email, demo_pw_hash, role),
         )
+    db.commit()
+    _enforce_portal_isolation_defaults(db)
 
     lab_profile_updates = [
         (
@@ -8585,6 +8620,57 @@ def seed_data() -> None:
 
     db.commit()
     db.close()
+
+
+def _enforce_portal_isolation_defaults(db: sqlite3.Connection) -> None:
+    """Repair portal assignments for site-local identities in existing DBs."""
+    portal_rows = db.execute("SELECT id, slug FROM erp_portals").fetchall()
+    portal_id_by_slug = {row["slug"]: row["id"] for row in portal_rows}
+    account_portals = {
+        "owner@catalyst.local": (["hq"], "owner"),
+        "owner.lab@catalyst.local": (["lab"], "owner"),
+        "admin.lab@catalyst.local": (["lab"], "owner"),
+    }
+    for email, (allowed_slugs, portal_role) in account_portals.items():
+        user_row = db.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (email,)).fetchone()
+        if user_row is None:
+            continue
+        user_id = user_row["id"]
+        allowed_ids = [portal_id_by_slug[slug] for slug in allowed_slugs if slug in portal_id_by_slug]
+        if not allowed_ids:
+            continue
+        db.execute(
+            f"DELETE FROM erp_user_portals WHERE user_id = ? AND portal_id NOT IN ({','.join('?' for _ in allowed_ids)})",
+            (user_id, *allowed_ids),
+        )
+        default_slug = allowed_slugs[0]
+        for slug in allowed_slugs:
+            portal_id = portal_id_by_slug.get(slug)
+            if portal_id is None:
+                continue
+            db.execute(
+                """
+                INSERT OR IGNORE INTO erp_user_portals
+                    (user_id, portal_id, portal_role, is_default, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_id, portal_id, portal_role, 1 if slug == default_slug else 0, now_iso()),
+            )
+            db.execute(
+                """
+                UPDATE erp_user_portals
+                   SET portal_role = ?,
+                       is_default = ?
+                 WHERE user_id = ? AND portal_id = ?
+                """,
+                (portal_role, 1 if slug == default_slug else 0, user_id, portal_id),
+            )
+        db.execute(
+            "UPDATE erp_user_portals SET is_default = 0 WHERE user_id = ? AND portal_id NOT IN ({})".format(
+                ",".join("?" for _ in allowed_ids)
+            ),
+            (user_id, *allowed_ids),
+        )
 
 
 # The owner identity is presented to end users as a generic "Admin" so the
@@ -9053,7 +9139,7 @@ def inject_globals():
     access_profile = user_access_profile(user)
     role_set = user_role_set(user)
     ai_settings = _ai_settings_snapshot()
-    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
+    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner.lab@catalyst.local"
     can_edit_user = bool(user and can_manage_members(user))
     can_approve_finance = bool(user and _user_can_edit_finance(user))
     can_manage_instruments = bool(user and _can_manage_any_instrument(user))
@@ -13178,6 +13264,8 @@ def login():
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
             _login_limiter.clear(ip)
+            _enforce_portal_isolation_defaults(get_db())
+            get_db().commit()
             portals = _user_portals(user["id"])
             portal_slugs = {row_value(p, "slug", "") for p in portals}
             if host_portal_slug and host_portal_slug not in portal_slugs:
@@ -26642,8 +26730,8 @@ def expense_receipt_review(receipt_id):
 
 FEEDBACK_LOG = RUNTIME_LOG_DIR / "debug_feedback.md"
 FEEDBACK_HISTORY_LOG = RUNTIME_LOG_DIR / "debug_feedback_history.md"
-FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / "catalyst_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback.md"
-FALLBACK_FEEDBACK_HISTORY_LOG = Path(gettempdir()) / "catalyst_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback_history.md"
+FALLBACK_FEEDBACK_LOG = Path(gettempdir()) / f"{PROJECT_FILE_STEM}_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback.md"
+FALLBACK_FEEDBACK_HISTORY_LOG = Path(gettempdir()) / f"{PROJECT_FILE_STEM}_feedback" / _runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE) / "debug_feedback_history.md"
 
 
 def _feedback_log_targets() -> list[Path]:

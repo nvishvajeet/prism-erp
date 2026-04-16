@@ -34,8 +34,8 @@ for entry in "${CHANNELS[@]}"; do
   echo
   echo "--- $variant :: port $port :: $workdir ---"
 
-  if [ ! -f "$workdir/app.py" ]; then
-    echo "  [skip] app.py not found in $workdir"
+  if [ ! -f "$workdir/lab_erp_app.py" ]; then
+    echo "  [skip] lab_erp_app.py not found in $workdir"
     continue
   fi
 
@@ -66,7 +66,7 @@ for entry in "${CHANNELS[@]}"; do
   LAB_SCHEDULER_DEMO_MODE=1 \
   CATALYST_DEMO_VARIANT="$variant" \
   CATALYST_DEMO_VARIANT_URLS="$VARIANT_URLS" \
-  "$VENV_GUNICORN" app:app \
+  "$VENV_GUNICORN" lab_erp_app:app \
     -w 4 \
     -b "127.0.0.1:$port" \
     --certfile cert.pem \

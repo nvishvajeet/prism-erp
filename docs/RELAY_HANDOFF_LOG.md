@@ -69,3 +69,35 @@ Append-only. Each agent adds their round at the bottom after shipping.
   terms exist only in structural identifiers (table names, env vars,
   route paths) which won't confuse a non-technical user.
 - Parity matrix (R19) still valid; no structural changes in R4.
+
+---
+
+## Round R5 — Agent C (MBP) — 2026-04-16 01:05 UTC
+
+### Shipped
+- `relay-R5: base.html nav Instruments→Assets + PRISM→Ravikiran`
+  (ravikiran-erp repo). Agent C Phase 3 exclusive: base.html was
+  locked to other agents; now unlocked for this round. 6 edits:
+  nav dropdown labels, breadcrumb, New Request button text, PWA
+  title meta tag.
+
+### Found but didn't fix
+- `nav.key == 'instruments'` is a structural code identifier used
+  for dropdown rendering logic — renaming it requires matching
+  changes in app.py's MODULE_REGISTRY. Left as-is (no user ever
+  sees this string).
+- `nav_instruments` template variable — same: structural, fed from
+  app.py. Rename in a future coordinated pass.
+
+### Next agent should check
+- Load ravikiran.catalysterp.org in a browser, verify the nav says
+  "Assets" not "Instruments" after gunicorn reload.
+- The "New Service Request" button text change — verify it renders
+  for roles that don't have asset access.
+
+### Cross-repo note
+- base.html is now CLEAN of all user-facing PRISM/Lab/Instruments
+  terms. Remaining structural identifiers (nav.key, template vars)
+  are invisible to end users.
+- Ravikiran Phase 1 remaining pool: landing page, dashboard tiles,
+  mobile smoke. Demo data already seeded (R4 commit 70b736f).

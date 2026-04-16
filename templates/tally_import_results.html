@@ -24,7 +24,7 @@
   {% if tally_rows %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("TALLY ENTRIES", total|string ~ " rows") }}
-    <input type="text" id="tallySearch" class="table-search-input" placeholder="Search entries…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <input type="text" id="tallySearch" class="table-search-input" placeholder="Search entries…" aria-label="Search Tally entries" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">

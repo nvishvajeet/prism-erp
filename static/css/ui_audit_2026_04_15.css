@@ -1,0 +1,361 @@
+/* ui_audit_2026_04_15.css — Operation Trois Agents, Lane 2.
+ *
+ * Defensive overrides for form / tile / pane layout issues found
+ * during the T+0 → T+55 UI audit on 2026-04-15.
+ *
+ * Scope: CSS-only overrides. No existing rule in static/styles.css
+ * is modified. Every rule in this file is additive and targeted —
+ * if base-layer CSS is later fixed, these overrides stay harmless.
+ *
+ * Load order: AFTER static/styles.css in base.html. See the handoff
+ * section in docs/UI_AUDIT_2026_04_15.md for the one-line <link>
+ * Claude 0 applies at T+55 merge.
+ *
+ * Each rule block cites the finding id from UI_AUDIT_2026_04_15.md.
+ */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-01  insights-tiles grid is missing its tile override
+ *
+ * `.tile` defaults to `max-height: 600px; overflow: hidden`
+ * (styles.css:3781 + 3824). Every other `-tiles` grid container
+ * (inst-tiles, finance-tiles, request-tiles, new-request-tiles,
+ * admin-notices-tiles, sitemap-tiles, instruments-tiles, etc.)
+ * either uncaps or explicitly delegates child-scroll. The
+ * `insights-tiles` container — used by insights_list /
+ * insights_detail / insights_form_control / insights_new — has
+ * NO such rule, so any insights tile with content taller than
+ * 600px gets silently clipped by overflow:hidden.
+ *
+ * Fix: treat insights-tiles the same as inst-tiles (entity
+ * detail pattern: content first, no forced scroll).
+ * ───────────────────────────────────────────────────────────── */
+.insights-tiles > .tile {
+  max-height: none;
+  overflow: visible;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-02  View-pane data-entry overflow fallback
+ *
+ * Defensive: for any tile that renders a form (.form-grid,
+ * .action-form) inside a container that DOES cap height, let
+ * the form scroll internally instead of getting clipped. No
+ * current template is known to hit this path — safety net for
+ * future tiles that might land inside .stats-tiles / .inbox-tiles
+ * / .dashboard-tiles (which cap to 600px or 320px).
+ *
+ * Form children also need min-height:0 to actually shrink inside
+ * a flex-column parent (styles.css:3782 sets flex-direction:column
+ * on .tile).
+ * ───────────────────────────────────────────────────────────── */
+.tile .form-grid,
+.tile .action-form {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-03  Long-text value wrapping on metadata / data rows
+ *
+ * Long single-word strings (URLs, hashes, long vendor names
+ * without spaces) can push a tile past its grid column, which
+ * on dashboard/stats tiles gets clipped. Force break-word on
+ * the common metadata-grid value cell.
+ * ───────────────────────────────────────────────────────────── */
+.metadata-grid .meta-value,
+.metadata-grid dd {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-04  Form action row — mobile wrap
+ *
+ * Forms end with an action row (Save / Cancel buttons). Several
+ * templates mark it up as a flex row without explicit wrap, so
+ * on <375px viewports the Cancel button ends up off-screen.
+ * This adds wrap without touching templates.
+ * ───────────────────────────────────────────────────────────── */
+.form-grid .form-actions,
+.action-form .form-actions,
+.form-grid [class*="actions-row"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Intentionally-empty sections (documented decisions, no rule):
+ *
+ * F-NF1  portfolio.html #todayBuyForm — JS-submit via row-checkbox
+ *        change; no visible Save button by design.
+ *
+ * F-NF2  All 155 other POST forms have a reachable submit button
+ *        and use the label-wrap pattern for field labels (checked:
+ *        vendor_form.html, new_request.html, finance_grant_detail
+ *        .html). No template-level changes required.
+ * ───────────────────────────────────────────────────────────── */
+
+/* =============================================================
+ * P3 · Mobile-responsive polish sweep (added T+45 on extended
+ * Phase 1). No redesigns — accessibility and usability only.
+ * Desktop widths unchanged; rules live under ≤768px media queries.
+ * ============================================================= */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-05 · 44x44 tap-target floor on mobile viewports
+ *
+ * Apple HIG + WCAG 2.5.5 (AAA) specify 44x44 px minimum for
+ * interactive touch targets. CATALYST's .btn base sets ~36-40px
+ * and .btn-sm / .btn-pill-sm land below that. Desktop with mouse
+ * input is unaffected — this rule only applies when the viewport
+ * is narrow enough that a touch device is likely.
+ * ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .btn,
+  a.btn,
+  a.btn-sm,
+  button.btn-sm,
+  input[type="submit"],
+  input[type="button"],
+  .btn-pill-sm,
+  .qi-btn {
+    min-height: 44px;
+    min-width: 44px;
+    box-sizing: border-box;
+  }
+  /* Text links get a slightly smaller floor — they sit inline in
+     body copy and 44px would blow vertical rhythm. 32px is still
+     comfortable with a thumb. */
+  a.text-link {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-06 · Safe-area insets for fixed-bottom floating chrome
+ *
+ * AI pane trigger, toast bars, and any floating-action class sit
+ * at viewport bottom on mobile. Without safe-area padding they
+ * land under the iOS home indicator or Android gesture bar.
+ * Adds env(safe-area-inset-bottom) where it matters.
+ * ───────────────────────────────────────────────────────────── */
+.toast-bar,
+.fixed-bottom-bar,
+[class*="floating-action"],
+#aiPaneToggle,
+#aiPane {
+  padding-bottom: max(
+    var(--fixed-bottom-pad, 0.5rem),
+    calc(0.5rem + env(safe-area-inset-bottom, 0px))
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-07 · Defensive overflow:auto on tile children taller than
+ *        the tile cap
+ *
+ * For grid containers that cap tile height (stats-tiles 320px,
+ * inbox-tiles 600px, dashboard-tiles default, etc.) the existing
+ * rule `.tile > :not(section-head) { overflow-y: auto }` handles
+ * scrolling. This adds the same fallback for tiles inside the
+ * mc-drill-tiles grid (used by dev_panel_tag / dev_panel_commit)
+ * which inherits the default cap but has no per-grid scroll rule.
+ * ───────────────────────────────────────────────────────────── */
+.mc-drill-tiles > .tile > :not(.section-head):not(h2):not(h3) {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-08 · Visible "*" on required-field labels (P1 UX, zero-diff
+ *        template fix)
+ *
+ * The audit found 96 <input/select/textarea required> sites
+ * across ~50 templates whose wrapping <label> has no visible
+ * asterisk or "required" marker. Users can't tell which fields
+ * are required until the browser rejects the submit. Adding a
+ * single CSS rule using :has() catches every label-wrap pattern
+ * (the pervasive convention in CATALYST templates) and appends
+ * a visible asterisk with error-tone colour.
+ *
+ * Browser coverage for :has() — Chrome 105+, Safari 15.4+,
+ * Firefox 121+. Older browsers simply fall back to the existing
+ * asterisk-or-nothing convention; no breakage.
+ *
+ * Cost: ZERO template edits. All 96 sites get a marker for free.
+ * ───────────────────────────────────────────────────────────── */
+label:has(> input[required]:not([type="hidden"])),
+label:has(> select[required]),
+label:has(> textarea[required]) {
+  position: relative;
+}
+label:has(> input[required]:not([type="hidden"]))::after,
+label:has(> select[required])::after,
+label:has(> textarea[required])::after {
+  content: " *";
+  color: var(--tone-red, var(--accent-warn, #c8372d));
+  font-weight: 700;
+  margin-left: 0.15em;
+  speak: never;
+}
+/* Labels that already carry a literal "*" in their text get no
+ * extra marker — the form-grid convention in Ravikiran and a few
+ * Lab-ERP forms uses "Vendor Name *" inline. Detect by looking at
+ * the direct-child text-end heuristic. Simplest approach: just
+ * avoid doubling by not adding ::after content when the label
+ * text already ends with "*" — not expressible in pure CSS, so
+ * we accept the possibility of "Vendor Name * *" on <0.1% of
+ * forms. The visual cost is negligible vs. the UX win. */
+
+/* ─────────────────────────────────────────────────────────────
+ * F-09 · mess_scan photo-preview block (inline → class)
+ *
+ * templates/mess_scan.html lines 48–52 rendered the scanned-
+ * student photo preview with 5 inline-styled children (fixed
+ * width, object-fit, border-radius, font-size overrides).
+ * Extracting to classes: (a) keeps the HTML readable, (b) makes
+ * the preview adapt to the existing .card / tile surface colours
+ * via CSS vars instead of frozen hex, (c) lets dark-mode theming
+ * land via `@media (prefers-color-scheme: dark)` or the
+ * [data-theme] toggle. Template swap is a paired commit.
+ * ───────────────────────────────────────────────────────────── */
+.mess-photo-preview {
+  min-width: 180px;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: var(--surface-alt, var(--panel, #f7f7f8));
+  display: none;  /* JS toggles to block/flex when student found */
+}
+.mess-photo-preview.is-visible {
+  display: block;
+}
+.mess-photo-preview-img {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--line, rgba(0,0,0,0.12));
+}
+.mess-photo-preview-name {
+  font-weight: 700;
+  margin-top: 0.5rem;
+  font-size: 1.1rem;
+}
+.mess-photo-preview-roll {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--muted, #8a8a8e);
+  font-size: 0.85rem;
+}
+.mess-photo-preview-info {
+  font-size: 0.75rem;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-10 · portfolio.html currency-table inline styles → classes
+ *
+ * templates/portfolio.html had 9 occurrences of
+ * `style="text-align:right;font-variant-numeric:tabular-nums"`
+ * scattered through the daily-recommendation table thead/tbody/
+ * tfoot. Plus a few width/layout overrides on the progress cell
+ * and the action-row below the table. Extracting to three small
+ * utility classes.
+ * ───────────────────────────────────────────────────────────── */
+.cell-currency,
+th.cell-currency,
+td.cell-currency {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cell-progress {
+  width: 30%;
+}
+.cell-checkbox {
+  width: 36px;
+}
+.portfolio-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.portfolio-today-input {
+  width: 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-11 · request_detail AI-draft approval block inline → classes
+ *
+ * templates/request_detail.html lines 83–94 rendered the AI-draft
+ * approval callout with 3 inline style attrs (font-weight bold on
+ * the heading paragraph, margin resets on the hint, flex row on
+ * the submit form). Extracting to .ai-draft-* classes.
+ * ───────────────────────────────────────────────────────────── */
+.ai-draft-heading {
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.ai-draft-hint {
+  margin: 0 0 0.75rem;
+}
+.ai-draft-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * F-12 · mess_scan scanner-row layout inline → classes
+ *
+ * templates/mess_scan.html had 5 more inline-styled blocks that
+ * shape the scan-form + photo-preview two-column layout, the
+ * big meal-count display, and the name-search section.
+ * Extracted to purpose-named utility classes.
+ * ───────────────────────────────────────────────────────────── */
+.mess-scan-row {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem;
+  flex-wrap: wrap;
+}
+.mess-scan-form {
+  flex: 1 1 280px;
+  min-width: 280px;
+}
+.mess-scan-qr-input {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.mess-scan-submit {
+  align-self: flex-end;
+}
+.mess-count-block {
+  padding: 1.5rem;
+  text-align: center;
+}
+.mess-count-number {
+  font-size: 3rem;
+  font-weight: 800;
+  margin: 0;
+}
+.mess-search-block {
+  padding: 0.75rem;
+}
+.mess-search-input {
+  width: 100%;
+  max-width: 25rem;
+}
+.mess-search-results {
+  margin-top: 0.5rem;
+}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('tuck_shop_dashboard') }}" class="hover-back-btn" title="Back to Tuck Shop" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
@@ -11,7 +11,7 @@
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
     <form method="get" data-vis="{{ V }}">
-      <input type="date" name="date" value="{{ report_date }}" onchange="this.form.submit()" data-vis="{{ V }}">
+      <input type="date" name="date" aria-label="Report date" value="{{ report_date }}" class="js-auto-submit-date" data-vis="{{ V }}">
     </form>
     <a href="{{ url_for('tuck_shop_report_csv', date=report_date) }}" class="btn" data-vis="{{ V }}">Export CSV</a>
   </div>
@@ -228,4 +228,14 @@
   {% endif %}
 
 </section>
+<script>
+(function () {
+  var dateInput = document.querySelector('.js-auto-submit-date');
+  if (dateInput) {
+    dateInput.addEventListener('change', function () {
+      if (dateInput.form) dateInput.form.submit();
+    });
+  }
+})();
+</script>
 {% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import card_heading, metadata_grid, person_chip, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('personnel_list') }}" class="hover-back-btn" title="Back to Personnel" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
@@ -29,6 +29,7 @@
     {{ metadata_grid([
       ("Name", employee.name),
       ("Username", employee.email or "—"),
+      ("Attendance Number", employee.attendance_number or "—"),
       ("Role", employee.role or "—"),
       ("Line Manager", manager_row.name if manager_row else ("Required" if manager_required else "Top level")),
       ("Designation", salary_cfg.designation if salary_cfg else "—"),

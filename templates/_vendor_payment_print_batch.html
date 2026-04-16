@@ -56,8 +56,8 @@
 </head>
 <body>
   <div class="no-print">
-    <button onclick="window.print()">🖨 Print All ({{ orders|length }} pages)</button>
-    <button onclick="window.history.back()">← Back</button>
+    <button type="button" class="js-print-batch">🖨 Print All ({{ orders|length }} pages)</button>
+    <button type="button" class="js-history-back">← Back</button>
     <span style="font-size:10pt;color:#666;align-self:center;">{{ filter_label }} · ₹{{ "{:,.0f}".format(grand_total) }}</span>
   </div>
 
@@ -209,5 +209,21 @@
     No transactions match the selected filters.
   </div>
   {% endif %}
+  <script>
+    (function () {
+      var printBtn = document.querySelector('.js-print-batch');
+      var backBtn = document.querySelector('.js-history-back');
+      if (printBtn) {
+        printBtn.addEventListener('click', function () {
+          window.print();
+        });
+      }
+      if (backBtn) {
+        backBtn.addEventListener('click', function () {
+          window.history.back();
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

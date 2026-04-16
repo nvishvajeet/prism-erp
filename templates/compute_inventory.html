@@ -10,7 +10,7 @@
     <span class="inst-header-code" data-vis="{{ V }}">For IT Department & Research Dean</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    <button class="btn" onclick="window.print()" data-vis="{{ V }}">🖨️ Print</button>
+    <button type="button" class="btn js-print-page" data-vis="{{ V }}">🖨️ Print</button>
   </div>
 </header>
 
@@ -139,4 +139,14 @@
   </article>
 
 </section>
+<script>
+(function () {
+  var printBtn = document.querySelector('.js-print-page');
+  if (printBtn) {
+    printBtn.addEventListener('click', function () {
+      window.print();
+    });
+  }
+})();
+</script>
 {% endblock %}

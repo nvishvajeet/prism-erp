@@ -23,7 +23,7 @@
     {% if po.vendor_id %}
     <a class="btn" href="{{ url_for('vendor_detail', vendor_id=po.vendor_id) }}" data-vis="{{ V }}">🏢 Vendor Profile</a>
     {% endif %}
-    <a class="btn" href="{{ url_for('vendor_payment_print', po_id=po.id) }}" target="_blank" data-vis="{{ V }}">🖨 Print</a>
+    <a class="btn" href="{{ url_for('vendor_payment_print', po_id=po.id) }}" target="_blank" rel="noopener" data-vis="{{ V }}">🖨 Print</a>
   </div>
 </header>
 

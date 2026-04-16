@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <section style="max-width:32rem;margin:1.5rem auto;padding:1rem;">
+    <h1 style="margin-bottom:0.5rem;">Debug Report</h1>
+    <p style="margin-bottom:1rem;color:#666;">Send a quick mobile report with a title, severity, dictated notes, and an optional camera capture.</p>
+    <form action="{{ url_for('debug_feedback') }}" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="page" value="{{ request.args.get('page', '/debug') }}">
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Title</span>
+        <input type="text" name="title" required style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;">
+      </label>
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Severity</span>
+        <select name="severity" style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+      <label style="display:block;margin-bottom:0.75rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Description</span>
+        <textarea name="description" rows="8" required style="width:100%;padding:0.8rem;border:1px solid #ccc;border-radius:0.5rem;"></textarea>
+      </label>
+      <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+        <button type="button" id="debugVoiceToggle" style="flex:1 1 12rem;padding:0.8rem;border:1px solid #ccc;border-radius:999px;background:#fff;">Start voice dictation</button>
+        <span id="debugVoiceStatus" style="align-self:center;color:#666;">Tap and speak in Chrome.</span>
+      </div>
+      <label style="display:block;margin-bottom:1rem;">
+        <span style="display:block;margin-bottom:0.35rem;">Photo / screenshot</span>
+        <input type="file" name="screenshot" accept="image/*" capture="camera">
+      </label>
+      <button type="submit" style="width:100%;padding:0.9rem;border:0;border-radius:999px;background:#0b57d0;color:#fff;font-weight:600;">Send debug report</button>
+    </form>
+  </section>
+  <script>
+    (function () {
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var toggle = document.getElementById('debugVoiceToggle');
+      var status = document.getElementById('debugVoiceStatus');
+      var textarea = document.querySelector('textarea[name="description"]');
+      if (!toggle || !status || !textarea) return;
+      if (!SpeechRecognition) {
+        toggle.disabled = true;
+        status.textContent = 'Voice dictation is not available in this browser.';
+        return;
+      }
+      var recognition = new SpeechRecognition();
+      var listening = false;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-IN';
+      recognition.onstart = function () {
+        listening = true;
+        toggle.textContent = 'Stop voice dictation';
+        status.textContent = 'Listening… speak the bug report.';
+      };
+      recognition.onend = function () {
+        listening = false;
+        toggle.textContent = 'Start voice dictation';
+        status.textContent = 'Voice dictation stopped.';
+      };
+      recognition.onerror = function (event) {
+        status.textContent = 'Voice dictation error: ' + (event.error || 'unknown');
+      };
+      recognition.onresult = function (event) {
+        var finalBits = [];
+        for (var i = event.resultIndex; i < event.results.length; i += 1) {
+          var result = event.results[i];
+          if (result.isFinal && result[0] && result[0].transcript) {
+            finalBits.push(result[0].transcript.trim());
+          }
+        }
+        if (!finalBits.length) return;
+        var existing = textarea.value.trim();
+        textarea.value = existing ? (existing + '\n' + finalBits.join(' ')) : finalBits.join(' ');
+      };
+      toggle.addEventListener('click', function () {
+        if (listening) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      });
+    })();
+  </script>
+{% endblock %}

@@ -1,30 +1,45 @@
   {# ── Universal Feedback Button — all users ────────────────
      Compact by default so it never covers page content.
-     - Collapsed: a single 2rem circle in the bottom-right.
-     - Expanded: 280×auto panel, can be minimized or dismissed.
+     - Collapsed: a compact launcher in the bottom-right.
+     - Expanded: focused debug panel, can be minimized or dismissed.
      - Voice: Chrome SpeechRecognition with continuous+interim
        results, so the mic stays live while the user thinks and
        shows what's being transcribed in real time.
      - Context: auto-captures page path + viewport + last mouse
        position + last hovered element selector so the backend
        (AI crawler) can understand where the user was.
-     - Hotkeys: "c" captures the element currently under the
-       mouse pointer into the draft (adds a <snapshot> tag);
-       "m" toggles the mic; Esc closes the panel.
+     - Hotkeys: "f" opens the panel; Esc closes the panel.
   #}
   {% if current_user %}
   <div id="feedbackWidget" class="feedback-widget feedback-widget--compact" data-vis="{{ V }}">
-    <button id="feedbackToggle" class="feedback-toggle" title="Feedback / voice note / bug (press F)" aria-label="Open feedback" data-vis="{{ V }}">💬</button>
-    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Listening and tracking cursor</div>
+    <button id="feedbackToggle" class="feedback-toggle" title="Open debugger and feedback panel (press F)" aria-label="Open debugger and feedback panel" aria-expanded="false" data-vis="{{ V }}">
+      <span class="feedback-toggle-icon" aria-hidden="true" data-vis="{{ V }}">◎</span>
+      <span class="feedback-toggle-copy" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">Debug</strong>
+        <span data-vis="{{ V }}">Mic, pin, send</span>
+      </span>
+      <span id="feedbackToggleState" class="feedback-toggle-state" data-vis="{{ V }}">Ready</span>
+    </button>
+    <div id="feedbackVoiceBadge" class="feedback-voice-badge" hidden data-vis="{{ V }}">Recording live. Click the broken area to pin it.</div>
     <div id="feedbackCaptureFlash" class="feedback-capture-flash" hidden data-vis="{{ V }}">Captured</div>
     <div id="feedbackCaptureMarker" class="feedback-capture-marker" hidden data-vis="{{ V }}" aria-hidden="true"></div>
     <div id="feedbackPanel" class="feedback-panel" hidden data-vis="{{ V }}">
       <div class="feedback-header" data-vis="{{ V }}">
-        <strong data-vis="{{ V }}">Quick Feedback</strong>
+        <div class="feedback-header-copy" data-vis="{{ V }}">
+          <strong data-vis="{{ V }}">Debugger</strong>
+          <span data-vis="{{ V }}">Report bugs with voice, pinned clicks, and page context.</span>
+        </div>
         <span class="feedback-header-actions" data-vis="{{ V }}">
           <button id="feedbackMinimize" class="feedback-close" title="Minimize" aria-label="Minimize" data-vis="{{ V }}">–</button>
           <button id="feedbackClose" class="feedback-close" title="Close" aria-label="Close" data-vis="{{ V }}">✕</button>
         </span>
+      </div>
+      <p class="feedback-steps hint" data-vis="{{ V }}">1. Describe the issue. 2. Keep the mic live or use <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click to pin the exact spot. 3. Send the report.</p>
+      <div class="feedback-presets" data-vis="{{ V }}">
+        <button type="button" class="feedback-preset" data-feedback-preset="Button is broken. I clicked it and it did not do the expected action." data-vis="{{ V }}">Broken Button</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Layout issue. Something is off-screen, overlapped, or hard to use." data-vis="{{ V }}">Layout Issue</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Readability issue. The text, colors, or contrast are hard to read." data-vis="{{ V }}">Readability</button>
+        <button type="button" class="feedback-preset" data-feedback-preset="Flow issue. I am not sure what to do next on this page." data-vis="{{ V }}">Confusing Flow</button>
       </div>
       <form method="post" action="{{ url_for('site_feedback_submit') }}" class="feedback-form" data-vis="{{ V }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -32,15 +47,42 @@
         <input type="hidden" name="page" value="{{ request.path }}">
         <input type="hidden" name="return_to" value="{{ request.full_path if request.query_string else request.path }}">
         <input type="hidden" name="context_json" id="feedbackContext" value="">
-        <textarea name="text" id="feedbackText" rows="2" placeholder="Type or press mic — say what's wrong, press C to capture the thing under your cursor." data-vis="{{ V }}"></textarea>
+        <div class="form-grid" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Severity
+            <select id="feedbackSeverity" data-vis="{{ V }}">
+              <option value="">Select severity</option>
+              <option value="blocker">Blocker</option>
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+              <option value="polish">Polish</option>
+            </select>
+          </label>
+          <label data-vis="{{ V }}">Type
+            <select id="feedbackIssueType" data-vis="{{ V }}">
+              <option value="">Select type</option>
+              <option value="bug">Bug</option>
+              <option value="ui">UI / Layout</option>
+              <option value="content">Content / Copy</option>
+              <option value="flow">Flow / Guidance</option>
+              <option value="performance">Performance</option>
+            </select>
+          </label>
+        </div>
+        <textarea name="text" id="feedbackText" rows="3" placeholder="What broke? What did you expect? You can talk, then click the broken area while recording, or use Ctrl/Cmd + click to pin it without leaving the page." data-vis="{{ V }}"></textarea>
+        <div class="feedback-context-card" data-vis="{{ V }}">
+          <p class="feedback-context-title" data-vis="{{ V }}">Live Context</p>
+          <p id="feedbackContextPreview" class="feedback-context-preview hint" data-vis="{{ V }}">Page and pinned target will appear here as you test.</p>
+        </div>
         <div class="feedback-actions" data-vis="{{ V }}">
-          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤</button>
-          <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯</button>
-          <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send</button>
+          <button type="button" id="feedbackMic" class="btn feedback-mic" title="Start or stop voice input" aria-label="Toggle microphone" data-vis="{{ V }}">🎤 Record</button>
+          <button type="button" id="feedbackCapture" class="btn" title="Capture the element under the cursor" data-vis="{{ V }}">🎯 Pin</button>
+          <button type="button" id="feedbackClear" class="btn" title="Clear draft and pinned clicks" data-vis="{{ V }}">Reset</button>
+          <button type="submit" id="feedbackSubmit" class="btn btn-primary" data-vis="{{ V }}">Send Report</button>
         </div>
       </form>
+      <p id="feedbackCaptureSummary" class="feedback-status hint" data-vis="{{ V }}">No pinned clicks yet.</p>
       <p id="feedbackStatus" class="feedback-status hint" data-vis="{{ V }}" aria-live="polite"></p>
-      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open · buttons for mic/capture · <kbd>Esc</kbd> close.</p>
+      <p class="hint feedback-hint" data-vis="{{ V }}">Chrome needed for voice. <kbd>F</kbd> open debugger · mic live = click-to-pin · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click pins without leaving the page · <kbd>Esc</kbd> close.</p>
     </div>
   </div>
   <script>
@@ -59,6 +101,13 @@
     var voiceBadge = document.getElementById('feedbackVoiceBadge');
     var captureFlash = document.getElementById('feedbackCaptureFlash');
     var captureMarker = document.getElementById('feedbackCaptureMarker');
+    var captureSummary = document.getElementById('feedbackCaptureSummary');
+    var toggleState = document.getElementById('feedbackToggleState');
+    var clearBtn = document.getElementById('feedbackClear');
+    var contextPreview = document.getElementById('feedbackContextPreview');
+    var presetButtons = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-preset]'));
+    var severitySelect = document.getElementById('feedbackSeverity');
+    var issueTypeSelect = document.getElementById('feedbackIssueType');
     if (!toggle || !panel || !widget) return;
 
     function setStatus(message, tone) {
@@ -67,16 +116,82 @@
       status.setAttribute('data-tone', tone || '');
     }
 
+    function updateCaptureSummary() {
+      if (!captureSummary) return;
+      if (!capturedClicks.length) {
+        captureSummary.textContent = 'No pinned clicks yet.';
+        return;
+      }
+      var last = capturedClicks[capturedClicks.length - 1];
+      captureSummary.textContent =
+        capturedClicks.length + ' pinned click' + (capturedClicks.length === 1 ? '' : 's') +
+        ' · last: ' + (last.selector || 'unknown') + ' @ ' + last.page_x + ',' + last.page_y;
+    }
+
+    function updateContextPreview() {
+      if (!contextPreview) return;
+      var base = 'Page: ' + (location.pathname + location.search || '/');
+      var tags = [];
+      if (severitySelect && severitySelect.value) tags.push('Severity: ' + severitySelect.value);
+      if (issueTypeSelect && issueTypeSelect.value) tags.push('Type: ' + issueTypeSelect.value);
+      if (!capturedClicks.length) {
+        contextPreview.textContent = [base].concat(tags).concat(['No pinned target yet.']).join(' · ');
+        return;
+      }
+      var last = capturedClicks[capturedClicks.length - 1];
+      var parts = [base]
+        .concat(tags)
+        .concat([
+        'Target: ' + (last.selector || 'unknown'),
+        'Coords: ' + last.page_x + ',' + last.page_y
+      ]);
+      if (last.text) parts.push('Text: ' + last.text);
+      contextPreview.textContent = parts.join(' · ');
+    }
+
+    function resetFeedbackDraft(opts) {
+      opts = opts || {};
+      if (text && !opts.keepText) text.value = '';
+      if (ctxInput) ctxInput.value = '';
+      if (severitySelect) severitySelect.value = '';
+      if (issueTypeSelect) issueTypeSelect.value = '';
+      capturedClicks = [];
+      captureCounter = 0;
+      pointerTrail = [];
+      updateCaptureSummary();
+      updateContextPreview();
+      if (!opts.quiet) setStatus('Draft cleared. Start a fresh report.', '');
+    }
+
+    function syncWidgetViewport() {
+      var gutter = 10;
+      var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+      var maxWidth = Math.max(220, viewportWidth - (gutter * 2));
+      if (voiceBadge) voiceBadge.style.maxWidth = maxWidth + 'px';
+      if (!panel) return;
+      panel.style.maxWidth = maxWidth + 'px';
+      panel.style.maxHeight = Math.max(220, viewportHeight - 104) + 'px';
+    }
+
     function openPanel() {
+      syncWidgetViewport();
       panel.hidden = false;
       widget.classList.remove('feedback-widget--compact');
+      widget.setAttribute('data-open', 'true');
+      toggle.setAttribute('aria-expanded', 'true');
       setStatus('', '');
+      if (toggleState) toggleState.textContent = listening ? 'Live' : 'Open';
       // Pull focus into the textarea so voice + typing are immediate.
       if (text) { try { text.focus(); } catch(e) {} }
+      updateContextPreview();
     }
     function closePanel() {
       panel.hidden = true;
       widget.classList.add('feedback-widget--compact');
+      widget.setAttribute('data-open', 'false');
+      toggle.setAttribute('aria-expanded', 'false');
+      if (toggleState) toggleState.textContent = listening ? 'Live' : 'Ready';
       // Dr. Bharat 2026-04-14 — voice kept listening in the background
       // after Esc/× because closePanel didn't signal recognition.
       // Hard-stop so the browser's mic indicator goes away.
@@ -90,7 +205,9 @@
       listening = false;
       try { recognition.stop(); } catch(e) {}
       showVoiceBadge(false);
-      if (mic) { mic.textContent = '🎤'; mic.title = 'Start voice input'; }
+      widget.setAttribute('data-live', 'false');
+      if (toggleState) toggleState.textContent = panel.hidden ? 'Ready' : 'Open';
+      if (mic) { mic.textContent = '🎤 Record'; mic.title = 'Start voice input'; }
       if (reason && typeof setStatus === 'function') setStatus('', '');
     }
     // Referenced before declaration at module scope — keep forward-declared
@@ -99,18 +216,28 @@
     toggle.addEventListener('click', function(){ panel.hidden ? openPanel() : closePanel(); });
     if (close) close.addEventListener('click', closePanel);
     if (mini) mini.addEventListener('click', closePanel);
+    window.addEventListener('resize', syncWidgetViewport, {passive: true});
+    syncWidgetViewport();
 
     // ── Cursor + hover context tracking ───────────────────────────
-    var lastPointer = {x: 0, y: 0};
+    var lastPointer = {x: 0, y: 0, pageX: 0, pageY: 0};
     var lastHoverSelector = '';
     var pointerTrail = [];
     var pointerTrailLimit = 40;
+    var capturedClicks = [];
+    var captureCounter = 0;
+    var lastCapturedSignature = '';
     document.addEventListener('mousemove', function(e){
-      lastPointer.x = e.clientX; lastPointer.y = e.clientY;
+      lastPointer.x = e.clientX;
+      lastPointer.y = e.clientY;
+      lastPointer.pageX = e.clientX + window.scrollX;
+      lastPointer.pageY = e.clientY + window.scrollY;
       if (listening) {
         pointerTrail.push({
           x: e.clientX,
           y: e.clientY,
+          page_x: e.clientX + window.scrollX,
+          page_y: e.clientY + window.scrollY,
           ts: new Date().toISOString()
         });
         if (pointerTrail.length > pointerTrailLimit) {
@@ -130,15 +257,70 @@
       lastHoverSelector = parts.join('');
     }, {passive: true});
 
+    function describeElement(el) {
+      if (!el || el.nodeType !== 1) return '';
+      var parts = [el.tagName.toLowerCase()];
+      if (el.id) parts.push('#' + el.id);
+      if (el.className && typeof el.className === 'string') {
+        var classes = el.className.split(/\s+/).filter(Boolean).slice(0, 3);
+        if (classes.length) parts.push('.' + classes.join('.'));
+      }
+      return parts.join('');
+    }
+
+    function captureSignature(target, clientX, clientY, mode) {
+      return [
+        mode || '',
+        describeElement(target) || '',
+        Math.round(clientX || 0),
+        Math.round(clientY || 0)
+      ].join('|');
+    }
+
+    function shortElementText(el) {
+      if (!el || el.nodeType !== 1) return '';
+      return ((el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ')).slice(0, 120);
+    }
+
+    function elementHref(el) {
+      if (!el || !el.closest) return '';
+      var link = el.closest('a[href]');
+      return link ? (link.getAttribute('href') || '') : '';
+    }
+
+    function clickCaptureMode(ev) {
+      if (listening) return 'voice';
+      if (ev && (ev.metaKey || ev.ctrlKey)) return 'modifier';
+      return '';
+    }
+
+    function appendCaptureDraft(marker) {
+      if (!text || !marker) return;
+      var snippet = '<snapshot selector="' + (marker.selector || '') +
+        '" x="' + marker.x + '" y="' + marker.y +
+        '" page_x="' + marker.page_x + '" page_y="' + marker.page_y +
+        (marker.text ? '" text="' + marker.text.replace(/"/g,'\\"') : '') +
+        (marker.href ? '" href="' + marker.href.replace(/"/g,'\\"') : '') +
+        '" kind="click"/>';
+      if (text.value && !/\s$/.test(text.value)) text.value += ' ';
+      text.value += snippet;
+    }
+
     function collectContext(snapshot){
       var ctx = {
         path: location.pathname + location.search,
+        title: document.title || '',
         viewport: {w: window.innerWidth, h: window.innerHeight},
+        scroll: {x: window.scrollX || 0, y: window.scrollY || 0},
         pointer: lastPointer,
         hover: lastHoverSelector,
         ts: new Date().toISOString(),
       };
       if (pointerTrail.length) ctx.pointer_trail = pointerTrail.slice(-pointerTrailLimit);
+      if (capturedClicks.length) {
+        ctx.captured_clicks = capturedClicks.slice(-12);
+        ctx.last_click = capturedClicks[capturedClicks.length - 1];
+      }
       if (snapshot) ctx.snapshot = snapshot;
       if (ctxInput) ctxInput.value = JSON.stringify(ctx);
       return ctx;
@@ -161,6 +343,8 @@
       if (!voiceBadge) return;
       voiceBadge.hidden = !active;
       voiceBadge.classList.toggle('is-live', !!active);
+      widget.setAttribute('data-live', active ? 'true' : 'false');
+      if (toggleState) toggleState.textContent = active ? 'Live' : (panel.hidden ? 'Ready' : 'Open');
     }
 
     function pulseCaptureMarker(point) {
@@ -178,6 +362,69 @@
       }, 520);
     }
 
+    function recordCapture(ev, mode) {
+      if (!mode) return false;
+      if (!ev || widget.contains(ev.target)) return false;
+      var el = ev.target;
+      var signature = captureSignature(el, ev.clientX, ev.clientY, mode);
+      if (signature && signature === lastCapturedSignature) return false;
+      lastCapturedSignature = signature;
+      window.setTimeout(function(){
+        if (lastCapturedSignature === signature) lastCapturedSignature = '';
+      }, 250);
+      if (panel.hidden) openPanel();
+      var selector = describeElement(el) || lastHoverSelector;
+      var marker = {
+        idx: ++captureCounter,
+        mode: mode,
+        path: location.pathname + location.search,
+        selector: selector,
+        text: shortElementText(el),
+        href: elementHref(el),
+        x: ev.clientX,
+        y: ev.clientY,
+        page_x: ev.clientX + window.scrollX,
+        page_y: ev.clientY + window.scrollY,
+        ts: new Date().toISOString()
+      };
+      capturedClicks.push(marker);
+      if (capturedClicks.length > 20) capturedClicks.shift();
+      updateCaptureSummary();
+      updateContextPreview();
+      appendCaptureDraft(marker);
+      collectContext(null);
+      pulseCaptureMarker({x: ev.clientX, y: ev.clientY});
+      flashCapture('Pinned click #' + marker.idx, 'ok');
+      setStatus(
+        mode === 'voice'
+          ? 'Pinned this click. Keep talking or press Send when ready.'
+          : 'Pinned this click without leaving the page.',
+        'live'
+      );
+      return true;
+    }
+
+    document.addEventListener('pointerdown', function(ev){
+      var mode = clickCaptureMode(ev);
+      if (!mode || !ev.isPrimary) return;
+      if (recordCapture(ev, mode)) {
+        var blocksNavigation = !!ev.target.closest('a[href], button, input, select, summary, label[for]');
+        if (blocksNavigation) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      }
+    }, true);
+
+    document.addEventListener('click', function(ev){
+      var mode = clickCaptureMode(ev);
+      if (!mode) return;
+      if (recordCapture(ev, mode)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    }, true);
+
     // ── 🎯 capture element under cursor ───────────────────────────
     function captureElementUnderCursor() {
       var el = document.elementFromPoint(lastPointer.x, lastPointer.y);
@@ -194,10 +441,27 @@
         text.focus();
       }
       collectContext(descr);
+      updateContextPreview();
       pulseCaptureMarker({x: lastPointer.x, y: lastPointer.y});
       flashCapture('Captured under cursor', 'ok');
+      setStatus('Pinned the element under your cursor.', 'live');
     }
     if (captureBtn) captureBtn.addEventListener('click', function(ev){ ev.preventDefault(); captureElementUnderCursor(); });
+    if (clearBtn) clearBtn.addEventListener('click', function(ev){ ev.preventDefault(); resetFeedbackDraft({quiet: false}); });
+    if (severitySelect) severitySelect.addEventListener('change', updateContextPreview);
+    if (issueTypeSelect) issueTypeSelect.addEventListener('change', updateContextPreview);
+    presetButtons.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        if (!text) return;
+        var preset = btn.getAttribute('data-feedback-preset') || '';
+        if (!preset) return;
+        if (text.value && !/\s$/.test(text.value)) text.value += ' ';
+        text.value += preset + ' ';
+        openPanel();
+        text.focus();
+        setStatus('Starter text added. Add details, then pin the exact spot.', '');
+      });
+    });
 
     // ── Voice (SpeechRecognition) ─────────────────────────────────
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -237,7 +501,7 @@
           listening = false;
           showVoiceBadge(false);
           if (mic) {
-            mic.textContent = '🎤';
+            mic.textContent = '🎤 Record';
             mic.title = 'Mic permission blocked. Check site settings.';
           }
           setStatus('Voice input blocked — allow mic in the site settings and retry.', 'warn');
@@ -249,10 +513,10 @@
       r.onend = function(){
         // Auto-restart while the panel is open + user still wants voice.
         if (listening) {
-          try { r.start(); } catch(e) { listening = false; showVoiceBadge(false); if (mic) mic.textContent = '🎤'; }
+          try { r.start(); } catch(e) { listening = false; showVoiceBadge(false); if (mic) mic.textContent = '🎤 Record'; }
         } else if (mic) {
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
         }
       };
@@ -266,7 +530,7 @@
           listening = false;
           try { recognition.stop(); } catch(e) {}
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
           setStatus('Voice input stopped.', '');
           return;
@@ -274,17 +538,17 @@
         try {
           recognition.start();
           listening = true;
-          pointerTrail = [];
+          resetFeedbackDraft({keepText: true, quiet: true});
           showVoiceBadge(true);
-          mic.textContent = '🔴';
+          mic.textContent = '🔴 Recording';
           mic.title = 'Listening… click to stop.';
-          setStatus('Listening… speak naturally, then tap the mic to stop.', 'live');
+          setStatus('Listening… speak naturally, then click the broken thing to pin it without leaving the page.', 'live');
         } catch(e) {
           // start() throws if already started; treat as toggle-off.
           try { recognition.stop(); } catch(_) {}
           listening = false;
           showVoiceBadge(false);
-          mic.textContent = '🎤';
+          mic.textContent = '🎤 Record';
           mic.title = 'Start voice input';
           setStatus('Voice input could not start cleanly. Try once more.', 'warn');
         }
@@ -322,6 +586,17 @@
     if (form) form.addEventListener('submit', function(ev){
       ev.preventDefault();
       collectContext(null);
+      if (text) {
+        var tags = [];
+        if (severitySelect && severitySelect.value) tags.push('severity=' + severitySelect.value);
+        if (issueTypeSelect && issueTypeSelect.value) tags.push('type=' + issueTypeSelect.value);
+        if (tags.length) {
+          var prefix = '[' + tags.join(' | ') + '] ';
+          if (text.value.indexOf(prefix) !== 0) {
+            text.value = prefix + text.value;
+          }
+        }
+      }
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Saving...';
@@ -346,7 +621,7 @@
           throw new Error((result.data && (result.data.error || result.data.message)) || 'Feedback could not be saved.');
         }
         if (text) text.value = '';
-        if (ctxInput) ctxInput.value = '';
+        resetFeedbackDraft({quiet: true});
         setStatus(result.data.message || 'Feedback sent.', '');
         if (panel && !panel.hidden) {
           window.setTimeout(function(){

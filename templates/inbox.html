@@ -44,7 +44,7 @@
         </div>
         <form method="post" action="{{ url_for('ai_action_decide', action_id=a.id) }}" class="action-queue-form" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="text" name="note" class="action-queue-note" placeholder="Note (optional for approve, required for reject)" data-vis="{{ V }}">
+          <input type="text" name="note" class="action-queue-note" placeholder="Note (optional for approve, required for reject)" aria-label="Decision note" data-vis="{{ V }}">
           <button type="submit" name="decision" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
           <button type="submit" name="decision" value="reject" class="btn btn-danger" data-vis="{{ V }}">Reject</button>
         </form>
@@ -82,7 +82,7 @@
 
   <article class="card tile tile-span-4 tile-inbox-list" data-vis="{{ V }}">
     {{ card_heading("MESSAGES", unread|string ~ " unread") }}
-    <input type="text" id="inboxSearch" class="table-search-input" placeholder="Search messages…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="inboxSearch" class="table-search-input" placeholder="Search messages…" aria-label="Search inbox messages" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if messages %}
     <ul class="inbox-list" data-vis="{{ V }}">
       {% for m in messages %}

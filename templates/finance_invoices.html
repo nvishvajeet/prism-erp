@@ -51,11 +51,11 @@
       </div>
       <div class="finance-filter-group" data-vis="{{ V }}">
         <label data-vis="{{ V }}">From</label>
-        <input type="date" name="date_from" value="{{ date_from }}" data-vis="{{ V }}">
+        <input type="date" name="date_from" aria-label="Start date filter" value="{{ date_from }}" data-vis="{{ V }}">
       </div>
       <div class="finance-filter-group" data-vis="{{ V }}">
         <label data-vis="{{ V }}">To</label>
-        <input type="date" name="date_to" value="{{ date_to }}" data-vis="{{ V }}">
+        <input type="date" name="date_to" aria-label="End date filter" value="{{ date_to }}" data-vis="{{ V }}">
       </div>
       <button type="submit" class="btn" data-vis="{{ V }}">Apply</button>
       <a href="{{ url_for('finance_invoices_list') }}" class="btn btn-muted" data-vis="{{ V }}">Reset</a>

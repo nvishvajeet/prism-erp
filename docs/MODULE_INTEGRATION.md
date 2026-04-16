@@ -26,6 +26,11 @@ developers know what breaks when they change a table or route.
 | Compute | Admin | Worker-backed queue managed by admin roles | `compute_dashboard()` / `compute_software_list()` gate admin actions by owner/super/site admin |
 | Demo variants | Module registry | Different ERP sites from one codebase | `CATALYST_MODULES` presets in `docs/ERP_COMPOSITION.md` and `docs/ERP_DEMO_VARIANTS.md` |
 
+Use [`BUILD_ACCELERATION_PLAYBOOK.md`](BUILD_ACCELERATION_PLAYBOOK.md)
+when deciding *which* one of these integrations to add first for a new
+module. The rule is: ship Tier 1 first, then choose exactly one Tier 2
+integration that proves the module belongs in the ERP.
+
 ## Data flow diagram
 
 ```

@@ -6,7 +6,7 @@
 
   Hosts CATALYST as a persistent local service on the dev laptop
   itself, independent of the Mac mini + Tailscale path. Listens
-  only on 127.0.0.1:5055 by default (see .env) so nothing leaves
+  only on 127.0.0.1:5056 by default (see .env.live) so nothing leaves
   the machine.
 
   Sibling of ops/launchd/local.catalyst.plist, which targets the mini.
@@ -23,16 +23,20 @@
     rm ~/Library/LaunchAgents/local.catalyst.plist
 
   Tail logs:
-    tail -f ~/Documents/Scheduler/Main/logs/server.log
+    tail -f ~/Documents/Scheduler/Main/logs/server-live.log
 
   Notes:
     * KeepAlive=true restarts the process on any exit. ThrottleInterval
       caps crash loops at one restart per 10s.
     * RunAtLoad=true starts the service at user login, so CATALYST is
       already up the moment you unlock the laptop.
-    * .env is sourced by start.sh (see that script) so SECRET_KEY +
+    * .env.live is sourced by start.sh (see that script) so SECRET_KEY +
       DEMO_MODE + CSRF flags survive restarts without leaking into
       launchd's own EnvironmentVariables dict.
+    * This plist still needs Full Disk Access for /bin/bash because the
+      working tree lives under ~/Documents. A symlink such as ~/Scheduler
+      still resolves into the TCC-protected tree and does not bypass the
+      launchd restriction.
 -->
 <plist version="1.0">
 <dict>
@@ -50,10 +54,10 @@
     <string>/Users/vishvajeetn/Documents/Scheduler/Main</string>
 
     <key>StandardOutPath</key>
-    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server.log</string>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server-live.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server.log</string>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server-live.log</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -73,6 +77,8 @@
          is the explicit opt-out; see app.py's auto_reload block. -->
     <key>EnvironmentVariables</key>
     <dict>
+        <key>LAB_SCHEDULER_ENV_FILE</key>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/.env.live</string>
         <key>LAB_SCHEDULER_AUTORELOAD</key>
         <string>0</string>
     </dict>

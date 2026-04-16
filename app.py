@@ -12,6 +12,7 @@ import shutil
 import smtplib
 import sqlite3
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from contextlib import closing
@@ -28,6 +29,7 @@ from openpyxl import Workbook
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Google OAuth (optional — only active when GOOGLE_CLIENT_ID is set)
 try:
@@ -66,14 +68,14 @@ DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
 # base.html reads DEMO_VARIANT to highlight the active pill and uses
 # DEMO_VARIANT_URLS to link to the other two. DEMO_VARIANT_URLS is a
 # compile-time default that can be overridden at launch via
-# CATALYST_DEMO_VARIANT_URLS="stable=https://localhost:5055,beta=...,alpha=..."
+# CATALYST_DEMO_VARIANT_URLS="stable=https://mitwpu-rnd.catalysterp.org,beta=...,alpha=..."
 # so the ports are not locked in the source. Live (catalysterp.org) sets
 # LAB_SCHEDULER_DEMO_MODE=0 and the widget is skipped entirely.
 DEMO_VARIANT = os.environ.get("CATALYST_DEMO_VARIANT", "stable").strip().lower() or "stable"
 _DEFAULT_DEMO_VARIANT_URLS = {
-    "stable": "https://localhost:5055",
-    "beta":   "https://localhost:5057",
-    "alpha":  "https://localhost:5058",
+    "stable": "https://mitwpu-rnd.catalysterp.org",
+    "beta":   "https://ravikiran.catalysterp.org",
+    "alpha":  "https://playground.catalysterp.org",
 }
 _variant_urls_override = os.environ.get("CATALYST_DEMO_VARIANT_URLS", "").strip()
 if _variant_urls_override:
@@ -88,15 +90,78 @@ if _variant_urls_override:
 else:
     DEMO_VARIANT_URLS = dict(_DEFAULT_DEMO_VARIANT_URLS)
 DEMO_VARIANT_LABELS = {
-    "stable": "Stable",
-    "beta":   "Beta",
-    "alpha":  "Alpha",
+    "stable": "MITWPU",
+    "beta":   "Ravikiran",
+    "alpha":  "Dev",
 }
 
 ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
 RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
+WORK_SESSION_IDLE_MINUTES = 30
+WORK_SESSION_HEARTBEAT_MAX_SECONDS = 300
+
+
+class LoginRateLimiter:
+    """Sliding-window limiter for failed login attempts per client IP."""
+
+    def __init__(
+        self,
+        max_failures: int = 5,
+        window_seconds: int = 300,
+        block_seconds: int = 300,
+    ) -> None:
+        self._failures: dict[str, list[float]] = {}
+        self._blocked: dict[str, float] = {}
+        self.max_failures = max_failures
+        self.window_seconds = window_seconds
+        self.block_seconds = block_seconds
+
+    def _now(self) -> float:
+        return time.time()
+
+    def _prune(self, ip: str, now: float | None = None) -> list[float]:
+        current = self._now() if now is None else now
+        kept = [
+            ts for ts in self._failures.get(ip, [])
+            if current - ts <= self.window_seconds
+        ]
+        if kept:
+            self._failures[ip] = kept
+        else:
+            self._failures.pop(ip, None)
+        blocked_until = self._blocked.get(ip)
+        if blocked_until is not None and blocked_until <= current:
+            self._blocked.pop(ip, None)
+        return kept
+
+    def record_failure(self, ip: str) -> None:
+        current = self._now()
+        failures = self._prune(ip, now=current)
+        failures.append(current)
+        self._failures[ip] = failures
+        if len(failures) >= self.max_failures:
+            self._blocked[ip] = current + self.block_seconds
+
+    def is_blocked(self, ip: str) -> tuple[bool, int]:
+        current = self._now()
+        self._prune(ip, now=current)
+        blocked_until = self._blocked.get(ip)
+        if blocked_until is None:
+            return False, 0
+        remaining = max(0, int(blocked_until - current))
+        if remaining <= 0:
+            self._blocked.pop(ip, None)
+            return False, 0
+        return True, remaining
+
+    def clear(self, ip: str) -> None:
+        self._failures.pop(ip, None)
+        self._blocked.pop(ip, None)
+
+
+_login_limiter = LoginRateLimiter()
 
 
 def _runtime_slug(*parts: str) -> str:
@@ -199,7 +264,7 @@ ERP_PORTALS = {
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "schedule", "requests", "finance",
+            "instruments", "queue", "finance",
             "attendance", "inbox", "notifications", "todos", "admin",
         ],
     },
@@ -210,15 +275,47 @@ ERP_PORTALS = {
         "color": "green",
         "modules": [
             "mess", "tuck_shop", "attendance", "vehicles",
-            "payroll", "personnel", "finance", "vendor_payments", "filing",
+            "personnel", "finance", "vendor_payments",
             "inbox", "notifications", "todos", "admin",
         ],
     },
+    "ravikiran_ops": {
+        "name": "Ravikiran Operations",
+        "tagline": "Finance · Personnel · Vehicles · Receipts · Attendance",
+        "icon": "🧭",
+        "color": "amber",
+        "modules": [
+            "finance", "personnel", "vehicles", "attendance",
+            "receipts", "todos", "inbox", "notifications", "admin",
+        ],
+    },
+    "compute": {
+        "name": "Compute ERP",
+        "tagline": "Compute · Queue · Notifications",
+        "icon": "⚡",
+        "color": "violet",
+        "modules": [
+            "compute", "notifications", "inbox", "admin",
+        ],
+    },
+}
+
+HOST_PORTAL_BINDINGS = {
+    "mitwpu-rnd.catalysterp.org": "lab",
+    "mitwpurn.catalysterp.org": "lab",
+    "ravikiran.catalysterp.org": "ravikiran_ops",
 }
 
 APP_VERSION = "1.0.0"
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=1,
+    x_proto=1,
+    x_host=1,
+    x_prefix=0,
+)
 app.config["SECRET_KEY"] = os.environ.get("LAB_SCHEDULER_SECRET_KEY", "lab-scheduler-dev-secret")
 app.config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "localhost")
 app.config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "25"))
@@ -228,7 +325,15 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("LAB_SCHEDULER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"}
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
-app.config["SESSION_COOKIE_NAME"] = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
+session_cookie_name = os.environ.get("LAB_SCHEDULER_SESSION_COOKIE_NAME", "").strip()
+if not session_cookie_name:
+    # Keep local/dev lanes isolated, but use one stable cookie name for the
+    # public secure deployment so old tabs do not bounce across runtime lanes.
+    if app.config["SESSION_COOKIE_SECURE"]:
+        session_cookie_name = "catalyst_session"
+    else:
+        session_cookie_name = f"catalyst_{_runtime_slug(RUNTIME_LANE, RUNTIME_INSTANCE)}_session"
+app.config["SESSION_COOKIE_NAME"] = session_cookie_name
 
 # CSRF protection — token machinery is wired up but enforcement is gated
 # behind LAB_SCHEDULER_CSRF=1 so we can roll templates and tests over to
@@ -542,23 +647,46 @@ def _user_portals(user_id: int) -> list:
 
 def _active_portal_modules() -> set:
     """Get modules for the currently active portal from session.
-    Returns ALL_MODULES if no portal is selected (backwards compat)."""
-    portal_slug = session.get("active_portal")
-    if not portal_slug:
+    Safe to call outside a request context (e.g. during __main__
+    startup probes like _should_start_compute_queue_manager) — those
+    callers still get ALL_MODULES. Inside a request, however, missing
+    portal context must fail closed for ordinary users so Lab and HQ
+    never bleed together. The hidden owner keeps the global backstage
+    view even without an active portal selection.
+    """
+    if not has_request_context():
         return ALL_MODULES
-    cfg = ERP_PORTALS.get(portal_slug)
+    user = current_user()
+    portal_slug = active_portal_slug()
+    if not portal_slug and user is not None:
+        portal_slug = _ensure_active_portal_session(user)
+    cfg = ERP_PORTALS.get(portal_slug or "")
     if not cfg:
-        return ALL_MODULES
+        return ALL_MODULES if is_owner(user) else set()
     return set(cfg["modules"])
 
 
 def module_visible_in_active_portal(name: str) -> bool:
     """Check if a module is globally enabled and belongs to the active portal."""
-    return module_enabled(name) and name in _active_portal_modules()
+    aliases = {
+        # Queue/calendar/stats are instrument sub-surfaces in the current
+        # ERP model, but older templates and helpers sometimes refer to
+        # the route-family names instead of the portal module key.
+        "schedule": ("schedule", "queue", "instruments"),
+        "queue": ("queue", "schedule", "instruments"),
+        "calendar": ("calendar", "instruments"),
+        "stats": ("stats", "instruments"),
+    }
+    candidates = aliases.get(name, (name,))
+    return any(module_enabled(candidate) and candidate in _active_portal_modules() for candidate in candidates)
 
 
 def _active_portal_config() -> dict | None:
-    """Get the config dict for the active portal, or None."""
+    """Get the config dict for the active portal, or None. Safe
+    outside a request context — returns None if no request is in
+    flight (same reason as _active_portal_modules above)."""
+    if not has_request_context():
+        return None
     slug = session.get("active_portal")
     if slug and slug in ERP_PORTALS:
         return {"slug": slug, **ERP_PORTALS[slug]}
@@ -600,7 +728,7 @@ def users_share_active_portal(viewer_id: int | None, target_id: int | None, port
 def assign_user_to_portals(user_id: int, portal_slugs: list[str] | tuple[str, ...] | None = None, *, portal_role: str = "member") -> None:
     chosen = [slug for slug in (portal_slugs or []) if slug in ERP_PORTALS]
     if not chosen:
-        default_slug = active_portal_slug() or "lab"
+        default_slug = active_portal_slug() or session.get("requested_portal")
         if default_slug in ERP_PORTALS:
             chosen = [default_slug]
     for idx, slug in enumerate(dict.fromkeys(chosen)):
@@ -661,9 +789,22 @@ def lab_profile_role_choices() -> list[tuple[str, str]]:
     ]
 
 
+def operations_portal_active() -> bool:
+    return active_portal_slug() in {"hq", "ravikiran_ops"}
+
+
+def operations_profile_role_choices(viewer) -> list[str]:
+    base_roles = ["operator", "finance_admin"]
+    if user_has_role(viewer, "super_admin"):
+        base_roles += ["site_admin", "super_admin"]
+    return base_roles
+
+
 def allowed_user_creation_roles() -> set[str]:
     if lab_profile_mode_active():
         return {"operator", "instrument_admin", "site_admin", "super_admin"}
+    if operations_portal_active():
+        return {"operator", "finance_admin", "site_admin", "super_admin"}
     return {
         "requester", "operator", "instrument_admin", "faculty_in_charge",
         "professor_approver", "finance_admin", "site_admin", "super_admin",
@@ -673,9 +814,11 @@ def allowed_user_creation_roles() -> set[str]:
 def allowed_user_role_change_roles(viewer) -> list[str]:
     if lab_profile_mode_active():
         base_roles = ["site_admin"]
-        if is_owner(viewer) or viewer["role"] == "super_admin":
+        if is_owner(viewer) or user_has_role(viewer, "super_admin"):
             base_roles.append("super_admin")
         return base_roles
+    if operations_portal_active():
+        return operations_profile_role_choices(viewer)
     base_roles = [
         "requester",
         "operator",
@@ -684,7 +827,7 @@ def allowed_user_role_change_roles(viewer) -> list[str]:
         "professor_approver",
         "finance_admin",
     ]
-    if viewer["role"] == "super_admin":
+    if user_has_role(viewer, "super_admin"):
         base_roles += ["site_admin", "super_admin"]
     return base_roles
 
@@ -859,7 +1002,10 @@ def get_db() -> sqlite3.Connection:
         # already in WAL. See PHILOSOPHY §3 — this is the single perf
         # lever the hard-attribute contract permits.
         conn.execute("PRAGMA journal_mode = WAL")
-        conn.execute("PRAGMA synchronous = NORMAL")
+        if DEMO_MODE or os.environ.get("LAB_SCHEDULER_SQLITE_FAST"):
+            conn.execute("PRAGMA synchronous = NORMAL")
+        else:
+            conn.execute("PRAGMA synchronous = FULL")
         g.db = conn
     return g.db
 
@@ -869,6 +1015,31 @@ def close_db(_exc: object) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+@app.after_request
+def _add_security_headers(resp):
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if (
+        request.scheme == "https"
+        or request.headers.get("X-Forwarded-Proto") == "https"
+    ):
+        resp.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';",
+    )
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    return resp
 
 
 @app.route("/health")
@@ -924,7 +1095,15 @@ def handle_csrf_error(_exc):
         "Please retry the action from the refreshed page.",
         "error",
     )
-    return redirect(request.referrer or request.url or url_for("index"))
+    portal_slug = session.get("requested_portal")
+    if request.endpoint in {"login", "change_password"} or request.path.startswith("/login"):
+        return _render_login_response(portal_slug, status_code=400)
+    if request.endpoint == "change_password" or request.path.startswith("/profile/change-password"):
+        user = current_user()
+        if user is not None:
+            return _render_change_password_response(status_code=400)
+        return _render_login_response(portal_slug, status_code=400)
+    return redirect(request.referrer or request.path or url_for("index"))
 
 
 @app.errorhandler(403)
@@ -1002,6 +1181,42 @@ def generate_member_code(name: str, role: str) -> str:
     seq_num = (count["cnt"] if count else 0) + 1
     # Format: SHRQ001
     return f"{name_prefix}{role_abbr}{seq_num:03d}"
+
+
+def _generate_attendance_numbers_if_needed(cur) -> None:
+    """Populate attendance_number on users who don't have one, in
+    id-ascending order starting from max(attendance_number)+1.
+
+    Added 2026-04-15 per Nikita's ask: "instead of letters it is
+    better people have numbers so they can just tell their number
+    and mark their attendance quickly." Sequential integers (1, 2,
+    3, …) are easier to call out verbally than 3-letter codes.
+    """
+    try:
+        users_without = cur.execute(
+            "SELECT id FROM users WHERE attendance_number IS NULL ORDER BY id"
+        ).fetchall()
+    except Exception:
+        return  # Column might not exist yet
+    if not users_without:
+        return
+    try:
+        row = cur.execute(
+            "SELECT COALESCE(MAX(attendance_number), 0) AS mx FROM users"
+        ).fetchone()
+        next_n = (row[0] if isinstance(row, (tuple, list)) else row["mx"]) + 1
+    except Exception:
+        next_n = 1
+    for u in users_without:
+        uid = u[0] if isinstance(u, (tuple, list)) else u["id"]
+        try:
+            cur.execute(
+                "UPDATE users SET attendance_number = ? WHERE id = ?",
+                (next_n, uid),
+            )
+        except Exception:
+            pass
+        next_n += 1
 
 
 def _generate_short_codes_if_needed(cur) -> None:
@@ -2081,8 +2296,7 @@ def nav_pending_counts(user) -> dict[str, int]:
     ).fetchone()
     if step_row and step_row[0]:
         queue_total += int(step_row[0])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "requester":
+    if user_has_role(user, "requester"):
         own = db.execute(
             "SELECT COUNT(*) FROM sample_requests "
             "WHERE requester_id = ? AND status = 'awaiting_sample_submission'",
@@ -2582,8 +2796,7 @@ def request_card_actions(user: sqlite3.Row, request_row: sqlite3.Row) -> dict[st
         "reply": "reply" in set(profile["card_action_fields"]) and can_post_message(user, request_row),
         "upload_attachment": "upload_attachment" in set(profile["card_action_fields"]) and can_upload_attachment(user, request_row),
         "mark_submitted": "mark_submitted" in set(profile["card_action_fields"])
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        and user["role"] == "requester"
+        and user_has_role(user, "requester")
         and request_row["requester_id"] == user["id"]
         and request_row["status"] == "awaiting_sample_submission"
         and instrument_intake_mode(request_row) == "accepting",
@@ -2719,8 +2932,7 @@ def request_card_policy(user: sqlite3.Row, request_row: sqlite3.Row) -> dict:
 def can_flag_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
     if request_row["requester_id"] == user["id"]:
         return True
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "super_admin":
+    if user_has_role(user, "super_admin"):
         return True
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]) or can_operate_instrument(
@@ -2730,8 +2942,7 @@ def can_flag_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
 
 
 def can_respond_request_issue(user: sqlite3.Row, request_row: sqlite3.Row) -> bool:
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "super_admin":
+    if user_has_role(user, "super_admin"):
         return True
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     return can_manage_instrument(user["id"], request_row["instrument_id"], user["role"]) or can_operate_instrument(
@@ -3462,8 +3673,7 @@ def requester_pulse(user: sqlite3.Row) -> dict | None:
     Single SQL query with conditional aggregates; returns None for
     non-requester roles so the template skips rendering.
     """
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] != "requester":
+    if not user_has_role(user, "requester"):
         return None
     row = query_one(
         """
@@ -3686,7 +3896,6 @@ def generate_export_workbook(
     filename = f"{filename_prefix}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     path = EXPORT_DIR / filename
     workbook.save(path)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     scope_label = f"{user['role'] if user['role'] != 'requester' else 'requester-self'} | {report_window['label']}"
     existing = query_one("SELECT id FROM generated_exports WHERE filename = ?", (filename,))
     if existing is None:
@@ -3704,13 +3913,150 @@ def current_user() -> sqlite3.Row | None:
     return query_one("SELECT * FROM users WHERE id = ?", (user_id,))
 
 
+def _new_work_session_key(user: sqlite3.Row) -> str:
+    seed = f"{user['id']}:{now_iso()}:{random.random()}:{request.headers.get('User-Agent', '')}"
+    return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:24]
+
+
+def _work_session_timeout_cutoff() -> str:
+    return (datetime.utcnow() - timedelta(minutes=WORK_SESSION_IDLE_MINUTES)).isoformat(timespec="seconds")
+
+
+def _touch_work_session(
+    user: sqlite3.Row | None,
+    *,
+    path: str | None = None,
+    add_active_seconds: int = 0,
+    heartbeat: bool = False,
+) -> sqlite3.Row | None:
+    if user is None or not has_request_context():
+        return None
+    if request.endpoint in {"static", "api_health_check", "me_heartbeat"}:
+        return None
+    path_value = (path or request.path or "")[:200]
+    db = get_db()
+    now = now_iso()
+    session_key = session.get("_work_session_key")
+    session_row = None
+    if session_key:
+        session_row = query_one(
+            "SELECT * FROM user_work_sessions WHERE user_id = ? AND session_key = ?",
+            (user["id"], session_key),
+        )
+    if session_row is not None and row_value(session_row, "ended_at"):
+        session_row = None
+    if session_row is not None and row_value(session_row, "last_seen_at", "") < _work_session_timeout_cutoff():
+        db.execute(
+            "UPDATE user_work_sessions SET ended_at = COALESCE(ended_at, ?) WHERE id = ?",
+            (row_value(session_row, "last_seen_at", now), session_row["id"]),
+        )
+        session_row = None
+        session.pop("_work_session_key", None)
+    if session_row is None:
+        session_key = _new_work_session_key(user)
+        session["_work_session_key"] = session_key
+        db.execute(
+            """
+            INSERT INTO user_work_sessions
+                (user_id, session_key, started_at, last_seen_at, ended_at,
+                 request_count, heartbeat_count, active_seconds, last_path,
+                 user_agent, ip_address)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user["id"],
+                session_key,
+                now,
+                now,
+                0,
+                0,
+                0,
+                path_value,
+                (request.headers.get("User-Agent") or "")[:255],
+                (request.remote_addr or "")[:64],
+            ),
+        )
+        session_row = query_one(
+            "SELECT * FROM user_work_sessions WHERE user_id = ? AND session_key = ?",
+            (user["id"], session_key),
+        )
+    if session_row is None:
+        return None
+    safe_active_seconds = max(0, min(int(add_active_seconds or 0), WORK_SESSION_HEARTBEAT_MAX_SECONDS))
+    db.execute(
+        """
+        UPDATE user_work_sessions
+           SET last_seen_at = ?,
+               ended_at = NULL,
+               request_count = request_count + ?,
+               heartbeat_count = heartbeat_count + ?,
+               active_seconds = active_seconds + ?,
+               last_path = ?,
+               user_agent = CASE WHEN user_agent = '' THEN ? ELSE user_agent END,
+               ip_address = CASE WHEN ip_address = '' THEN ? ELSE ip_address END
+         WHERE id = ?
+        """,
+        (
+            now,
+            0 if heartbeat else 1,
+            1 if heartbeat else 0,
+            safe_active_seconds,
+            path_value,
+            (request.headers.get("User-Agent") or "")[:255],
+            (request.remote_addr or "")[:64],
+            session_row["id"],
+        ),
+    )
+    return query_one("SELECT * FROM user_work_sessions WHERE id = ?", (session_row["id"],))
+
+
+@app.before_request
+def track_work_session():
+    user = current_user()
+    if user is None:
+        return None
+    _touch_work_session(user)
+    return None
+
+
+def _host_bound_portal_slug(hostname: str | None = None) -> str | None:
+    """Return the portal slug implied by the current tenant host."""
+    if not has_request_context() and hostname is None:
+        return None
+    host = (hostname or request.host or "").lower().split(":")[0]
+    return HOST_PORTAL_BINDINGS.get(host)
+
+
 def _select_portal_slug(portals: list[sqlite3.Row | dict], requested_slug: str | None = None) -> str | None:
     """Return the best active portal slug from the requested slug + assignments."""
     valid_slugs = {row_value(p, "slug", "") for p in portals}
+    host_slug = _host_bound_portal_slug()
+    if host_slug:
+        return host_slug if host_slug in valid_slugs else None
     if requested_slug and requested_slug in valid_slugs:
         return requested_slug
     if len(portals) == 1:
         return row_value(portals[0], "slug", "")
+    return None
+
+
+def _ensure_active_portal_session(user: sqlite3.Row | None) -> str | None:
+    """Repair missing or invalid active-portal session state."""
+    if user is None or not has_request_context():
+        return None
+    current_slug = active_portal_slug()
+    host_slug = _host_bound_portal_slug()
+    if current_slug and (not host_slug or current_slug == host_slug):
+        return current_slug
+    portals = _user_portals(user["id"])
+    selected_slug = _select_portal_slug(portals, session.get("requested_portal") or host_slug)
+    if selected_slug:
+        session["requested_portal"] = selected_slug
+        session["active_portal"] = selected_slug
+        return selected_slug
+    if host_slug:
+        session["requested_portal"] = host_slug
+    session.pop("active_portal", None)
     return None
 
 
@@ -3902,6 +4248,25 @@ ROLE_ACCESS_PRESETS: dict[str, dict[str, object]] = {
         "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity"},
         "card_action_fields": {"reply", "upload_attachment", "finish_fast", "reassign", "mark_received", "update_status"},
     },
+    "tester": {
+        "_is_operational_nav": False,
+        "_is_lab_staff": False,
+        "can_access_instruments": True,
+        "can_access_schedule": True,
+        "can_access_calendar": True,
+        "can_access_stats": True,
+        "can_manage_members": False,
+        "can_use_role_switcher": False,
+        "can_view_all_requests": True,
+        "can_view_all_instruments": True,
+        "can_view_user_profiles": True,
+        "can_view_finance_stage": True,
+        "can_view_professor_stage": True,
+        "can_access_receipts": True,
+        "can_review_receipts": False,
+        "card_visible_fields": {"remarks", "results_summary", "submitted_documents", "conversation", "events", "requester_identity", "operator_identity", "finance_data"},
+        "card_action_fields": set(),
+    },
 }
 
 FULL_REQUEST_ACCESS_ROLES = {"super_admin", "site_admin", "professor_approver"}
@@ -3950,6 +4315,12 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
     preset = ROLE_ACCESS_PRESETS.get(user["role"], ROLE_ACCESS_PRESETS["requester"])
     instrument_ids = assigned_instrument_ids(user)
     is_owner_user = is_owner(user)
+    portal_has_instruments = module_visible_in_active_portal("instruments")
+    portal_has_schedule = module_visible_in_active_portal("queue")
+    portal_has_calendar = module_visible_in_active_portal("calendar")
+    portal_has_stats = module_visible_in_active_portal("stats")
+    portal_has_finance = module_visible_in_active_portal("finance")
+    portal_has_receipts = module_visible_in_active_portal("receipts")
     card_fields = set(preset["card_visible_fields"])
     card_actions = set(preset["card_action_fields"])
     profile = {
@@ -3957,22 +4328,22 @@ def user_access_profile(user: sqlite3.Row | None) -> dict[str, object]:
         "role": user["role"],
         "is_owner": is_owner_user,
         "assigned_instrument_ids": instrument_ids,
-        "has_instrument_scope": bool(instrument_ids),
-        "can_access_instruments": bool(preset["can_access_instruments"] or instrument_ids),
-        "can_access_schedule": bool(preset["can_access_schedule"] or instrument_ids),
-        "can_access_calendar": bool(preset["can_access_calendar"] or instrument_ids),
-        "can_access_stats": bool(preset["can_access_stats"] or instrument_ids),
+        "has_instrument_scope": bool(instrument_ids) and portal_has_instruments,
+        "can_access_instruments": bool(portal_has_instruments and (preset["can_access_instruments"] or instrument_ids)),
+        "can_access_schedule": bool(portal_has_schedule and (preset["can_access_schedule"] or instrument_ids)),
+        "can_access_calendar": bool(portal_has_calendar and (preset["can_access_calendar"] or instrument_ids)),
+        "can_access_stats": bool(portal_has_stats and (preset["can_access_stats"] or instrument_ids)),
         "can_manage_members": bool(preset["can_manage_members"] or is_owner_user),
         "can_use_role_switcher": bool(preset["can_use_role_switcher"] or is_owner_user),
         "can_view_all_requests": bool(preset["can_view_all_requests"] or is_owner_user),
         "can_view_all_instruments": bool(preset["can_view_all_instruments"] or is_owner_user),
         "can_view_user_profiles": bool(preset["can_view_user_profiles"] or is_owner_user),
-        "can_view_finance_stage": bool(preset["can_view_finance_stage"] or is_owner_user),
+        "can_view_finance_stage": bool(portal_has_finance and (preset["can_view_finance_stage"] or is_owner_user)),
         "can_view_professor_stage": bool(preset["can_view_professor_stage"] or is_owner_user),
-        "can_access_receipts": bool(preset.get("can_access_receipts", False) or is_owner_user),
+        "can_access_receipts": bool(portal_has_receipts and (preset.get("can_access_receipts", False) or is_owner_user)),
         "can_review_receipts": bool(preset.get("can_review_receipts", False) or is_owner_user),
         "_is_operational_nav": bool(preset.get("_is_operational_nav", False) or is_owner_user),
-        "_is_lab_staff": bool(preset.get("_is_lab_staff", False)),
+        "_is_lab_staff": bool(portal_has_instruments and preset.get("_is_lab_staff", False)),
         "card_visible_fields": card_fields,
         "card_action_fields": card_actions,
     }
@@ -4022,6 +4393,7 @@ def login_required(view):
         user = current_user()
         if user is None:
             return redirect(url_for("login"))
+        _ensure_active_portal_session(user)
         # W1.3.8 password hygiene: a user signed in with a temporary
         # admin-issued password can only reach the change-password
         # page and /logout until they set their own. Allow static-ish
@@ -4033,6 +4405,23 @@ def login_required(view):
         return view(**kwargs)
 
     return wrapped
+
+
+def permission_required(check):
+    """Stack after @login_required to enforce a pure boolean permission helper."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(**kwargs):
+            user = current_user()
+            if user is None:
+                return redirect(url_for("login"))
+            if not check(user):
+                abort(403)
+            return view(**kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 def role_required(*roles: str):
@@ -4177,6 +4566,46 @@ def assigned_instrument_ids(user: sqlite3.Row) -> list[int]:
     return result
 
 
+def _can_open_user_admin(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    allowed_open_roles = {"super_admin", "site_admin"}
+    if lab_profile_mode_active():
+        allowed_open_roles.add("instrument_admin")
+    return is_owner(user) or user["role"] in allowed_open_roles
+
+
+def _can_invite_users(user: sqlite3.Row | None) -> bool:
+    return _can_open_user_admin(user)
+
+
+def _can_view_debug_surfaces(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(is_owner(user) or user_role_set(user) & {"tester", "super_admin", "site_admin"})
+
+
+def _can_manage_any_instrument(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    if is_owner(user) or user_role_set(user) & {"super_admin", "site_admin", "instrument_admin"}:
+        return True
+    for table in INSTRUMENT_MANAGEMENT_TABLES:
+        if query_one(f"SELECT 1 FROM {table} WHERE user_id = ? LIMIT 1", (user["id"],)) is not None:
+            return True
+    return False
+
+
+def _can_view_audit_log(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(is_owner(user) or user_role_set(user) & {"super_admin", "site_admin"})
+
+
+def _can_view_ai_admin_log(user: sqlite3.Row | None) -> bool:
+    return _can_view_audit_log(user)
+
+
 def request_assignment_candidates(sample_request: sqlite3.Row) -> list[sqlite3.Row]:
     """Return users eligible to be assigned as the operator on a request.
 
@@ -4279,16 +4708,14 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
         if cache is not None and cache_key is not None:
             cache[cache_key] = result
         return list(result[0]), list(result[1])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "requester":
+    if user_has_role(user, "requester"):
         clauses.append(f"{alias}.requester_id = ?")
         params.append(user["id"])
         result = (tuple(clauses), tuple(params))
         if cache is not None and cache_key is not None:
             cache[cache_key] = result
         return list(result[0]), list(result[1])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "finance_admin":
+    if user_has_role(user, "finance_admin"):
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
             f"EXISTS (SELECT 1 FROM approval_steps aps WHERE aps.sample_request_id = {alias}.id AND aps.approver_role = 'finance')"
@@ -4297,8 +4724,7 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
         if cache is not None and cache_key is not None:
             cache[cache_key] = result
         return list(result[0]), list(result[1])
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "professor_approver":
+    if user_has_role(user, "professor_approver"):
         clauses.append(f"{alias}.status = 'under_review'")
         clauses.append(
             f"EXISTS (SELECT 1 FROM approval_steps aps WHERE aps.sample_request_id = {alias}.id AND aps.approver_role = 'professor')"
@@ -4323,8 +4749,7 @@ def scoped_instrument_count(user: sqlite3.Row) -> int:
         placeholders = ",".join("?" for _ in instrument_ids)
         row = query_one(f"SELECT COUNT(*) AS c FROM instruments WHERE status = 'active' AND id IN ({placeholders})", tuple(instrument_ids))
         return row["c"] if row else 0
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "requester":
+    if user_has_role(user, "requester"):
         return query_one("SELECT COUNT(DISTINCT instrument_id) AS c FROM sample_requests WHERE requester_id = ?", (user["id"],))["c"]
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"finance_admin", "professor_approver"}:
@@ -4355,7 +4780,10 @@ def init_db() -> None:
     # bootstraps is born in WAL. Also kick foreign_keys on for the
     # init path itself (get_db() handles runtime connections).
     db.execute("PRAGMA journal_mode = WAL")
-    db.execute("PRAGMA synchronous = NORMAL")
+    if DEMO_MODE or os.environ.get("LAB_SCHEDULER_SQLITE_FAST"):
+        db.execute("PRAGMA synchronous = NORMAL")
+    else:
+        db.execute("PRAGMA synchronous = FULL")
     db.execute("PRAGMA foreign_keys = ON")
     with closing(db.cursor()) as cur:
         cur.executescript(
@@ -4997,6 +5425,23 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_tc_action ON telemetry_click(action, created_at);
             CREATE INDEX IF NOT EXISTS idx_tc_user   ON telemetry_click(user_id, created_at);
 
+            CREATE TABLE IF NOT EXISTS user_work_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_key TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                ended_at TEXT,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                heartbeat_count INTEGER NOT NULL DEFAULT 0,
+                active_seconds INTEGER NOT NULL DEFAULT 0,
+                last_path TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                UNIQUE(user_id, session_key)
+            );
+            CREATE INDEX IF NOT EXISTS idx_uws_user_started ON user_work_sessions(user_id, started_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_uws_user_last_seen ON user_work_sessions(user_id, last_seen_at DESC);
             -- sample_requests gains a project_id FK for forward-lookup.
             -- Nullable in alpha.1 because the backfill stitches it after
             -- the fact; NOT NULL would block the tables-exist-before-
@@ -5132,8 +5577,21 @@ def init_db() -> None:
                 cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
             except:
                 pass
+
+        # 2026-04-15 · Nikita's attendance-by-number ask. Sequential
+        # integer per user for fast spoken check-in ("I'm #14"). Keep
+        # the 3-letter short_code untouched for existing UIs; this is
+        # a parallel column. First call populates the column in
+        # id-ascending order; new users inherited the next integer in
+        # the create_user flow (see users.py).
+        if "attendance_number" not in user_columns:
+            try:
+                cur.execute("ALTER TABLE users ADD COLUMN attendance_number INTEGER DEFAULT NULL")
+            except:
+                pass
         # Auto-generate short_codes for users who don't have one
         _generate_short_codes_if_needed(cur)
+        _generate_attendance_numbers_if_needed(cur)
 
         # W1.3.8 — Password hygiene. Admin-created / admin-reset
         # users must change their password on first login. Flag
@@ -5538,7 +5996,31 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_veh_logs_vehicle ON vehicle_logs(vehicle_id);
             CREATE INDEX IF NOT EXISTS idx_veh_logs_type ON vehicle_logs(log_type);
+
+            CREATE TABLE IF NOT EXISTS vehicle_driver_assignments (
+                vehicle_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (vehicle_id, user_id),
+                FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vehicle_driver_assignments_vehicle
+                ON vehicle_driver_assignments(vehicle_id);
+            CREATE INDEX IF NOT EXISTS idx_vehicle_driver_assignments_user
+                ON vehicle_driver_assignments(user_id);
         """)
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO vehicle_driver_assignments
+            (vehicle_id, user_id, is_primary, created_at)
+            SELECT id, assigned_driver_user_id, 1, COALESCE(created_at, ?)
+              FROM vehicles
+             WHERE assigned_driver_user_id IS NOT NULL
+            """,
+            (now_iso(),),
+        )
 
         # ── Personnel / Salary module ─────────────────────────────
         cur.executescript("""
@@ -7430,8 +7912,8 @@ def _seed_demo_grants() -> None:
         existing = db.execute("SELECT COUNT(*) AS c FROM grants").fetchone()["c"]
         if existing:
             return
-        admin_row = db.execute("SELECT id FROM users WHERE email = 'admin@lab.local'").fetchone()
-        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@lab.local'").fetchone()
+        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner@catalyst.local'").fetchone()
+        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@catalyst.local'").fetchone()
         pi_admin = admin_row["id"] if admin_row else None
         pi_approver = approver_row["id"] if approver_row else None
         now_iso = datetime.utcnow().isoformat(timespec="seconds")
@@ -7494,10 +7976,10 @@ def _seed_demo_messages() -> None:
         def uid(email: str) -> int | None:
             row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             return row["id"] if row else None
-        admin = uid("admin@lab.local")
-        operator = uid("operator@lab.local")
-        requester = uid("requester@lab.local")
-        approver = uid("approver@lab.local")
+        admin = uid("owner@catalyst.local")
+        operator = uid("anika@catalyst.local")
+        requester = uid("user1@catalyst.local")
+        approver = uid("approver@catalyst.local")
         now = datetime.utcnow()
         seeds = [
             # (sender, recipient, subject, body, sent_offset_minutes, read)
@@ -7549,7 +8031,7 @@ def _seed_demo_notices() -> None:
         if existing:
             return
         admin_id_row = db.execute(
-            "SELECT id FROM users WHERE email = 'admin@lab.local'"
+            "SELECT id FROM users WHERE email = 'owner@catalyst.local'"
         ).fetchone()
         admin_id = admin_id_row["id"] if admin_id_row else None
         demo_notices = [
@@ -7641,6 +8123,12 @@ def seed_data() -> None:
         "nikita", "prashant",
         "rahul.misal@catalyst.local", "sonal@catalyst.local",
         "balaji.phunde@catalyst.local", "mangesh.ghule@catalyst.local",
+        # 2026-04-15 · Tester
+        "tejveer",
+        # 2026-04-15 · Test accounts (one per non-tester role, see real_team)
+        "test.super_admin", "test.site_admin", "test.instrument_admin",
+        "test.faculty", "test.operator", "test.professor",
+        "test.finance", "test.requester",
     )
     db.executemany(
         "UPDATE users SET password_hash = ? WHERE email = ?",
@@ -7654,10 +8142,14 @@ def seed_data() -> None:
     # makes it safe to run on every startup.
     #
     # Shape:  (name, email, role, office_location, portals)
+    # Named real-team accounts are used live during tester sessions, so
+    # keep them on the shared demo password without forcing an immediate
+    # first-login reset. That avoids half-finished password changes
+    # masquerading as random logout/login failures during bug reporting.
     real_team = [
         ("Nikita Nagargoje",   "nikita",                        "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
-        ("Prashant Nagargoje", "prashant",                      "super_admin",
+        ("Prashant Chavre",    "prashant",                      "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
         ("Rahul Misal",        "rahul.misal@catalyst.local",    "operator",
          "Kothrud HQ · Ravikiran",     ["hq"]),
@@ -7667,6 +8159,30 @@ def seed_data() -> None:
          "Ravikiran Fleet · Driver",   ["hq"]),
         ("Mangesh Ghule",      "mangesh.ghule@catalyst.local",  "operator",
          "Ravikiran Fleet · Driver",   ["hq"]),
+        # 2026-04-15 · Tester — full-read, scoped-write (debugger/feedback only).
+        # Username "tejveer", password "12345" (demo default, must_change on first login).
+        ("Tejveer",            "tejveer",                       "tester",
+         "Ravikiran · Tester",         ["lab", "hq"]),
+        # 2026-04-15 · Test accounts — one per non-tester role, so Tejveer
+        # can walk §7 of /me/testing-plan as every role. All passwords
+        # '12345', must_change on first login. Names prefixed "TEST " so
+        # no one confuses them with real team.
+        ("TEST Super Admin",   "test.super_admin",              "super_admin",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Site Admin",    "test.site_admin",               "site_admin",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Instrument Admin", "test.instrument_admin",      "instrument_admin",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Faculty",       "test.faculty",                  "faculty_in_charge",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Operator",      "test.operator",                 "operator",
+         "Test · Kothrud HQ",          ["lab", "hq"]),
+        ("TEST Professor",     "test.professor",                "professor_approver",
+         "Test · Lab",                 ["lab"]),
+        ("TEST Finance",       "test.finance",                  "finance_admin",
+         "Test · Kothrud HQ",          ["hq"]),
+        ("TEST Requester",     "test.requester",                "requester",
+         "Test · Lab",                 ["lab"]),
     ]
     for name, email, role, office, _portals in real_team:
         # must_change_password=0 on demo — per "keep demo simple, single
@@ -7690,6 +8206,10 @@ def seed_data() -> None:
         db.execute(
             "UPDATE users SET office_location = ? WHERE email = ? AND (office_location IS NULL OR office_location = '')",
             (office, email),
+        )
+        db.execute(
+            "UPDATE users SET password_hash = ?, active = 1, must_change_password = 0 WHERE email = ?",
+            (demo_pw_hash, email),
         )
     db.commit()
 
@@ -8084,6 +8604,7 @@ ROLE_DISPLAY_NAMES = {
     "professor_approver": "Approver",
     "finance_admin": "Finance Admin",
     "requester": "Lab Member",
+    "tester": "Tester",
 }
 
 ROLE_NEXT_ACTIONS = {
@@ -8095,6 +8616,7 @@ ROLE_NEXT_ACTIONS = {
     "professor_approver": "Approve pending requests. Start at Schedule → Under Review.",
     "finance_admin": "Clear finance approvals. Start at Schedule → Under Review.",
     "requester": "Submit and track your samples. Start at New Request.",
+    "tester": "Walk every page, file bugs. Your plan: /me/testing-plan",
 }
 
 ROLE_MANUAL_HEADLINES = {
@@ -8184,6 +8706,75 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
                     ("Instrument pages", "When reality changes, update the instrument profile rather than spreading notes elsewhere."),
                 ],
                 "next_action": "Start at Queue, then check the instruments that own today’s work.",
+            },
+            "instrument_admin": {
+                "headline": "You keep specific instruments ready, documented, and operationally trustworthy.",
+                "responsibilities": [
+                    "Maintain the instrument profile so assignments, instructions, and status always match reality.",
+                    "Review queue items that depend on your machine and unblock issues before they become drift.",
+                    "Treat the instrument page as the source of truth instead of leaving important notes elsewhere.",
+                ],
+                "first_steps": [
+                    "Open Instruments and select the machine you own.",
+                    "Check whether the machine status, operators, and instructions are still accurate.",
+                    "Open Queue to review requests waiting on that instrument.",
+                ],
+                "modules": [
+                    ("Instruments", "Your machine profile is the operating handbook for that instrument."),
+                    ("Queue", "Use it to spot jobs waiting on your instrument and keep turnaround visible."),
+                    ("Requests", "Each request card is where sample-specific notes, files, and state changes belong."),
+                ],
+                "pane_guides": [
+                    ("Instrument page", "Update the instrument profile when the machine changes, not after confusion spreads."),
+                    ("Queue and request cards", "Use them as the operational ledger for what is blocked, scheduled, or done."),
+                ],
+                "next_action": "Start at your instrument page, then review the queue items tied to it.",
+            },
+            "operator": {
+                "headline": "You move real work through the lab: receive samples, run jobs, and keep the queue honest.",
+                "responsibilities": [
+                    "Keep sample state accurate from submission to completion.",
+                    "Record what happened on the request card instead of relying on memory or side channels.",
+                    "Escalate blocked or ambiguous work quickly so samples do not disappear into silence.",
+                ],
+                "first_steps": [
+                    "Open Queue and look for anything awaiting receipt, scheduling, or completion.",
+                    "Open the request card before acting so notes, files, and status stay together.",
+                    "Use instrument pages when you need operating detail, maintenance state, or assignment context.",
+                ],
+                "modules": [
+                    ("Queue", "This is your main operating surface for today’s sample flow."),
+                    ("Requests", "Use request cards to record each movement, note, and result."),
+                    ("Instruments", "Check machine readiness and local instructions before you run work."),
+                ],
+                "pane_guides": [
+                    ("Queue", "Treat it as the live list of commitments, not a rough reminder."),
+                    ("Request cards", "If work happened, the request card should show it."),
+                ],
+                "next_action": "Start at Queue and move the oldest blocked item first.",
+            },
+            "requester": {
+                "headline": "You submit samples clearly, track progress, and give the lab what it needs to execute well.",
+                "responsibilities": [
+                    "Provide enough sample detail that the lab can act without chasing missing context.",
+                    "Track your requests in the system instead of relying only on side conversations.",
+                    "Use the AI assistant to draft requests or report problems, but review the draft before submitting.",
+                ],
+                "first_steps": [
+                    "Open New Request when you need work started.",
+                    "Open your request cards to see status, notes, attachments, and next actions.",
+                    "Use Notifications to follow approvals, routing, and completion updates.",
+                ],
+                "modules": [
+                    ("New Request", "Create a clear, reviewable submission for the lab."),
+                    ("Requests", "Track what is open, completed, or waiting on you."),
+                    ("Notifications", "Watch for routing, review, and completion updates."),
+                ],
+                "pane_guides": [
+                    ("Request form", "Be specific about sample, instrument, and priority so the queue starts cleanly."),
+                    ("Request cards", "Use them as your source of truth for what the lab has done and what still needs input."),
+                ],
+                "next_action": "Start at New Request for new work, or open your latest request card to track progress.",
             },
         }
         manual = manual_map.get(role, {
@@ -8291,11 +8882,11 @@ def role_manual_payload(user: sqlite3.Row, reason: str | None = None, notice: st
     }.get(role, [])
 
     pane_guides = []
-    if access.get("can_access_instruments"):
+    if module_visible_in_active_portal("instruments") and access.get("can_access_instruments"):
         pane_guides.append(("Instrument pages", "Use the main tiles for metadata, downtime, approvals, inventory, pricing, and history. Change only the pane that owns the truth."))
-    if access.get("can_access_schedule"):
+    if module_visible_in_active_portal("schedule") and access.get("can_access_schedule"):
         pane_guides.append(("Queue and request panes", "Use queue for movement decisions and request detail for per-job context, conversation, attachments, and audit-safe updates."))
-    if access.get("can_view_finance_stage"):
+    if module_visible_in_active_portal("finance") and access.get("can_view_finance_stage"):
         pane_guides.append(("Finance panes", "Read grant health, invoice state, and payment progress together before changing financial state."))
     if module_visible_in_active_portal("compute"):
         pane_guides.append(("Compute panes", "Use the job list to see status, submit new AI prompts, and review results on the detail page."))
@@ -8460,18 +9051,24 @@ def _recent_combined_notifications(user) -> list[dict]:
 def inject_globals():
     user = current_user()
     access_profile = user_access_profile(user)
+    role_set = user_role_set(user)
     ai_settings = _ai_settings_snapshot()
     support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@catalyst.local"
+    can_edit_user = bool(user and can_manage_members(user))
+    can_approve_finance = bool(user and _user_can_edit_finance(user))
+    can_manage_instruments = bool(user and _can_manage_any_instrument(user))
+    can_view_debug = bool(user and _can_view_debug_surfaces(user))
+    can_invite = bool(user and _can_invite_users(user))
     # Every db role must appear here — base.html's [data-vis] filter hides
     # elements whose data-vis list doesn't include the current user's role,
     # so a role omitted here renders as a completely blank page. "owner" is
     # a real db role (see users.role), and historical member/requester rows
     # may still exist, so list them all.
-    V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin"
+    V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin tester"
     # Instruments for nav hover dropdown (only if user has instrument area access)
     nav_instruments = []
     nav_instruments_truncated = False
-    if user and access_profile["can_access_instruments"]:
+    if user and module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"]:
         _all_nav = query_all(
             "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' ORDER BY name"
         )
@@ -8546,7 +9143,8 @@ def inject_globals():
         "current_role_display": role_display_name(user["role"]) if user else "",
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
         "current_role_hint": role_next_action(user["role"]) if user else "",
-        "current_role_set": user_role_set(user),
+        "attendance_number": row_value(user, "attendance_number") if user else None,
+        "current_role_set": role_set,
         "user_has_role": lambda role: user_has_role(user, role),
         "instrument_groups_all": instrument_groups_all,
         "support_admin_email": support_admin_email,
@@ -8561,6 +9159,12 @@ def inject_globals():
         "google_oauth_enabled": bool(_oauth),
         "timedelta": timedelta,
         "is_owner_user": is_owner(user),
+        "can_edit_user": can_edit_user,
+        "can_approve_finance": can_approve_finance,
+        "can_manage_instruments": can_manage_instruments,
+        "can_view_debug": can_view_debug,
+        "can_invite": can_invite,
+        "can_use_debug_overlay_user": can_view_debug,
         "can_manage_members_user": bool(access_profile["can_manage_members"]),
         "can_use_role_switcher_user": bool(access_profile["can_use_role_switcher"]),
         "can_access_schedule_user": bool(access_profile["can_access_schedule"]),
@@ -8875,8 +9479,7 @@ def _dashboard_counts(user, db, where_sql: str, params: tuple, queue_statuses: t
                 f"SELECT COUNT(*) FROM sample_requests sr WHERE status NOT IN ('completed', 'rejected'){where_sql}",
                 tuple(params),
             ).fetchone()[0]
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            if user["role"] == "requester" and not has_instrument_area_access(user)
+            if user_has_role(user, "requester") and not has_instrument_area_access(user)
             else db.execute(
                 f"SELECT COUNT(*) FROM sample_requests sr WHERE status IN ({','.join('?' for _ in queue_statuses)}){where_sql}",
                 tuple(queue_statuses) + tuple(params),
@@ -8891,8 +9494,7 @@ def _dashboard_counts(user, db, where_sql: str, params: tuple, queue_statuses: t
 
 
 def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, recent_per_page: int) -> dict[str, object]:
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "requester" and not has_instrument_area_access(user):
+    if user_has_role(user, "requester") and not has_instrument_area_access(user):
         recent_total = db.execute(
             "SELECT COUNT(*) FROM sample_requests sr WHERE sr.requester_id = ?",
             (user["id"],),
@@ -8969,8 +9571,7 @@ def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, rece
 
 def _dashboard_queue_payload(user, where_sql: str, params: tuple) -> dict[str, object]:
     instruments = query_all("SELECT * FROM instruments ORDER BY name")
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] == "requester" and not has_instrument_area_access(user):
+    if user_has_role(user, "requester") and not has_instrument_area_access(user):
         instruments = []
     instrument_fifo_queue: list[dict] = []
     instrument_fifo_total = 0
@@ -9085,9 +9686,14 @@ def index():
         # At the bare apex (catalysterp.org), the two landing panes
         # are cross-tenant entry points, not in-app portal switches —
         # each link sends the visitor to the right tenant's own
-        # subdomain (different machine, different DB). Inside a
-        # subdomain (mitwpu-rnd / ravikiran / playground), keep the
-        # classic in-tenant portal behaviour.
+        # subdomain, which is served from a different machine with
+        # its own DB (see docs/NETWORK_AND_SERVER_ARCHITECTURE.md).
+        #
+        # Inside a tenant subdomain (e.g. `mitwpu-rnd.catalysterp.org`
+        # or `ravikiran.catalysterp.org`), the visitor is already in
+        # one tenant's instance; keep the classic in-app portal
+        # behaviour (login?portal=lab / login?portal=hq) so the
+        # Lab-vs-Private split within a single tenant still works.
         host = (request.host or "").lower().split(":")[0]
         APEX_HOSTS = {"catalysterp.org", "www.catalysterp.org"}
         if host in APEX_HOSTS:
@@ -9144,6 +9750,7 @@ def index():
             public_portals=public_portals,
             demo_info=demo_info,
         )
+    _ensure_active_portal_session(user)
     db = get_db()
     recent_page = page_value(int(request.args.get("recent_page", "1") or 1))
     clauses, params = request_scope_sql(user, "sr")
@@ -9178,6 +9785,25 @@ def index():
     attendance_streak = _dashboard_attendance_streak(user, db)
     cross_module_tiles = _dashboard_cross_module_tiles(user)
 
+    # Rig schedule (v1): hardcoded snapshot of the agent-rig status +
+    # weekly burst plan. Rendered by templates/_rig_schedule_tile.html.
+    # Wiring to a live source is a later task.
+    rig_schedule = {
+        "now": {"primary": "codex", "badge": "🟢", "note": "5h fresh · wk 79%"},
+        "on_deck": {"agent": "imac", "badge": "🟢", "note": "full tank"},
+        "capped": [{"agent": "mbp", "resets": "20:00", "note": "session 100%"}],
+        "next_burst": {"agent": "mbp", "at": "20:00"},
+        "week_plan": [
+            {"day": "Wed", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Thu", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Fri", "blocks": ["iMac★", "Codex", "MBP★", "Codex"]},
+            {"day": "Sat", "blocks": ["iMac★", "Codex", "Codex", "Codex"]},
+            {"day": "Sun", "blocks": ["Codex", "Codex", "Codex", "Codex"]},
+            {"day": "Mon", "blocks": ["Codex", "Codex", "Codex", "Codex"]},
+        ],
+        "bursts": {"mbp_used": 1, "mbp_budget": 4, "imac_used": 0, "imac_budget": 4},
+    }
+
     return render_template(
         "dashboard.html",
         counts=counts,
@@ -9203,6 +9829,7 @@ def index():
         attendance_streak=attendance_streak,
         dash_fleet_status=cross_module_tiles["dash_fleet_status"],
         dash_payroll_due=cross_module_tiles["dash_payroll_due"],
+        rig_schedule=rig_schedule,
         ai_advice=session.get("ai_advisor") if session.get("ai_advisor") and not request.args.get("refresh_advice") else _ai_dashboard_advice_cached(user),
     )
 
@@ -9529,6 +10156,7 @@ def admin_notices():
 
 @app.route("/admin/notices/new", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_notices_new():
     """Create a new notice. Validates scope + severity + required
     subject, persists with the authenticated user as author."""
@@ -9590,6 +10218,7 @@ def admin_notices_new():
 
 @app.route("/admin/notices/<int:notice_id>/delete", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_notices_delete(notice_id: int):
     """Delete a notice. Same write gate as posting."""
     user = current_user()
@@ -9608,6 +10237,7 @@ def admin_notices_delete(notice_id: int):
 # ─── Mailing list management routes ──────────────────────────────────
 @app.route("/admin/mailing-lists", methods=["GET"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_lists():
     user = current_user()
     if not _user_can_post_notice(user):
@@ -9625,6 +10255,7 @@ def admin_mailing_lists():
 
 @app.route("/admin/mailing-lists/new", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_list_create():
     user = current_user()
     if not _user_can_post_notice(user):
@@ -9654,6 +10285,7 @@ def admin_mailing_list_create():
 
 @app.route("/admin/mailing-lists/<int:list_id>/delete", methods=["POST"])
 @login_required
+@permission_required(_user_can_post_notice)
 def admin_mailing_list_delete(list_id: int):
     user = current_user()
     if not _user_can_post_notice(user):
@@ -9849,6 +10481,26 @@ def _complaint_admin_user_ids() -> list[int]:
         tuple(params),
     )
     return [row["id"] for row in rows]
+
+
+def _message_report_subject(message_id: int) -> str:
+    return f"Message safety report #{message_id}"
+
+
+def _message_report_target_user_id(message_row: sqlite3.Row | dict, reporter_id: int) -> int | None:
+    sender_id = row_value(message_row, "sender_id")
+    recipient_id = row_value(message_row, "recipient_id")
+    if reporter_id == sender_id:
+        return recipient_id
+    if reporter_id == recipient_id:
+        return sender_id
+    return sender_id or recipient_id
+
+
+def _user_can_review_message_reports(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(user_role_set(user) & {"super_admin", "site_admin", "finance_admin"}) or is_owner(user)
 
 
 def _inbox_prospective_actions(target_user_id: int) -> list[dict]:
@@ -10225,12 +10877,40 @@ def message_detail(message_id: int):
             (parent_id["parent_message_id"],),
         )
 
+    can_review_reports = _user_can_review_message_reports(user)
+    report_subject = _message_report_subject(message_id)
+    existing_report = query_one(
+        """
+        SELECT id, created_at, status
+          FROM complaints
+         WHERE complainant_user_id = ?
+           AND subject = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+        """,
+        (user["id"], report_subject),
+    ) if is_own_message else None
+    message_reports = query_all(
+        """
+        SELECT c.*, reporter.name AS reporter_name, reviewer.name AS reviewer_name
+          FROM complaints c
+          LEFT JOIN users reporter ON reporter.id = c.complainant_user_id
+          LEFT JOIN users reviewer ON reviewer.id = c.reviewed_by_user_id
+         WHERE c.subject = ?
+         ORDER BY c.created_at DESC, c.id DESC
+        """,
+        (report_subject,),
+    ) if can_review_reports else []
+
     return render_template(
         "message_detail.html",
         message=row,
         attachments=attachments,
         parent_message=parent_message,
         is_own_message=is_own_message,
+        existing_report=existing_report,
+        message_reports=message_reports,
+        can_review_reports=can_review_reports,
     )
 
 
@@ -10364,6 +11044,143 @@ def message_reply(message_id: int):
     _save_message_attachments(new_id, request.files.getlist("attachments"), now_iso)
     flash("Reply sent.", "success")
     return redirect(url_for("message_detail", message_id=new_id))
+
+
+@app.route("/messages/<int:message_id>/report", methods=["POST"])
+@login_required
+def message_report(message_id: int):
+    """Report a message for harassment, threats, or other misuse.
+
+    Uses the existing complaints table so the report is retained in the
+    main admin queue instead of a side log.
+    """
+    user = current_user()
+    row = query_one(
+        "SELECT id, sender_id, recipient_id, subject, body FROM messages WHERE id = ?",
+        (message_id,),
+    )
+    if not row:
+        abort(404)
+    if user["id"] not in (row["sender_id"], row["recipient_id"]) and not is_owner(user):
+        abort(403)
+    if request.form.get("confirm_report") != "yes":
+        flash("Confirm the report before sending it to admins.", "warning")
+        return redirect(url_for("message_detail", message_id=message_id))
+    category = (request.form.get("category") or "other").strip()
+    allowed_categories = {"harassment", "sexual_harassment", "threat", "misuse", "other"}
+    if category not in allowed_categories:
+        category = "other"
+    note = (request.form.get("note") or "").strip()
+    report_subject = _message_report_subject(message_id)
+    existing = query_one(
+        """
+        SELECT id FROM complaints
+         WHERE complainant_user_id = ? AND subject = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+        """,
+        (user["id"], report_subject),
+    )
+    if existing:
+        flash("This message is already in the safety review queue.", "warning")
+        return redirect(url_for("message_detail", message_id=message_id))
+    target_user_id = _message_report_target_user_id(row, user["id"])
+    assigned_admins = _complaint_admin_user_ids()
+    assigned_to_user_id = assigned_admins[0] if assigned_admins else None
+    manager_user_id = _line_manager_id_for_user(target_user_id) if target_user_id else None
+    body_lines = [
+        f"Message ID: {message_id}",
+        f"Original subject: {row_value(row, 'subject', '')}",
+        f"Original body: {row_value(row, 'body', '')}",
+    ]
+    if note:
+        body_lines.append(f"Reporter note: {note}")
+    complaint_id = execute(
+        """
+        INSERT INTO complaints (
+            complainant_user_id, target_user_id, manager_user_id, assigned_to_user_id,
+            category, subject, body, status, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)
+        """,
+        (
+            user["id"],
+            target_user_id,
+            manager_user_id,
+            assigned_to_user_id,
+            f"message_{category}",
+            report_subject,
+            "\n".join(body_lines),
+            now_iso(),
+        ),
+    )
+    log_action(
+        user["id"],
+        "message",
+        message_id,
+        "message_reported",
+        {"complaint_id": complaint_id, "category": category},
+    )
+    for admin_user_id in assigned_admins:
+        notify(
+            admin_user_id,
+            "warning",
+            "Message safety report submitted",
+            f"A message safety report was filed for message #{message_id}.",
+            href=url_for("message_detail", message_id=message_id),
+            source_type="complaint",
+            source_id=complaint_id,
+        )
+    flash("Report submitted to admins for review.", "success")
+    return redirect(url_for("message_detail", message_id=message_id))
+
+
+@app.route("/messages/report/<int:report_id>/review", methods=["POST"])
+@login_required
+def message_report_review(report_id: int):
+    user = current_user()
+    if not _user_can_review_message_reports(user):
+        abort(403)
+    report = query_one(
+        """
+        SELECT * FROM complaints
+         WHERE id = ? AND subject LIKE 'Message safety report #%'
+        """,
+        (report_id,),
+    )
+    if not report:
+        abort(404)
+    status = (request.form.get("status") or "open").strip()
+    allowed_statuses = {"open", "in_review", "resolved", "dismissed"}
+    if status not in allowed_statuses:
+        status = "open"
+    resolution_note = (request.form.get("resolution_note") or "").strip()
+    execute(
+        """
+        UPDATE complaints
+           SET status = ?, reviewed_at = ?, reviewed_by_user_id = ?, resolution_note = ?
+         WHERE id = ?
+        """,
+        (status, now_iso(), user["id"], resolution_note, report_id),
+    )
+    log_action(
+        user["id"],
+        "complaint",
+        report_id,
+        "message_report_reviewed",
+        {"status": status},
+    )
+    notify(
+        row_value(report, "complainant_user_id"),
+        "task" if status in {"resolved", "dismissed"} else "warning",
+        "Message safety report updated",
+        f"Your reported message is now marked {status.replace('_', ' ')}.",
+        href=url_for("message_detail", message_id=int(str(row_value(report, 'subject', '')).split('#')[-1])),
+        source_type="complaint",
+        source_id=report_id,
+    )
+    flash("Safety review updated.", "success")
+    return redirect(url_for("message_detail", message_id=int(str(row_value(report, "subject", "")).split("#")[-1])))
 
 
 @app.route("/messages/<int:message_id>/delete", methods=["POST"])
@@ -10636,6 +11453,7 @@ def _finance_portal_cross_module_kpis() -> tuple[dict, dict]:
 
 @app.route("/finance")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_portal():
     """v2.0.0-alpha.2 — Finance portal reads from the new peer aggregates.
 
@@ -10713,6 +11531,50 @@ def _user_can_edit_finance(user: sqlite3.Row | None) -> bool:
     return bool(roles & {"finance_admin", "super_admin", "site_admin"}) or is_owner(user)
 
 
+def _user_can_control_grant_forms(user: sqlite3.Row | None) -> bool:
+    if not user:
+        return False
+    return bool(user_role_set(user) & {"finance_admin", "super_admin"}) or is_owner(user)
+
+
+def grant_utilization(grant_id: int) -> tuple[float, float, int, str]:
+    """v2/w2.0.a3-budget-alerts — single-source utilization helper.
+
+    Returns (allocated, spent, pct, tier) where:
+      - allocated: grants.total_budget (₹)
+      - spent:     SUM(payments on invoices for grant) + SUM(grant_expenses)
+      - pct:       int percent used (0 if no budget)
+      - tier:      'ok' (<80), 'warn' (>=80 and <100), 'crit' (>=100)
+
+    Mirrors the spend math used by check_budget() / finance_grant_detail()
+    so the alert tier always matches what the user sees on the bar.
+    """
+    grant = query_one("SELECT id, total_budget FROM grants WHERE id = ?", (grant_id,))
+    if not grant:
+        return 0.0, 0.0, 0, "ok"
+    allocated = float(grant["total_budget"] or 0)
+    inv_spend = query_one(
+        """SELECT COALESCE(SUM(p.amount), 0) AS s
+             FROM payments p
+             JOIN invoices inv ON inv.id = p.invoice_id
+            WHERE inv.grant_id = ?""",
+        (grant_id,),
+    )
+    exp_spend = query_one(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM grant_expenses WHERE grant_id = ?",
+        (grant_id,),
+    )
+    spent = float((inv_spend["s"] if inv_spend else 0) + (exp_spend["s"] if exp_spend else 0))
+    pct = int((spent / allocated * 100)) if allocated > 0 else 0
+    if pct >= 100:
+        tier = "crit"
+    elif pct >= 80:
+        tier = "warn"
+    else:
+        tier = "ok"
+    return allocated, spent, pct, tier
+
+
 def check_budget(grant_id, amount):
     """Returns (allowed: bool, warning: str|None).
 
@@ -10785,6 +11647,7 @@ def _next_invoice_number():
 
 @app.route("/finance/invoices")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_invoices_list():
     """Invoice list page with filters."""
     user = current_user()
@@ -10884,6 +11747,7 @@ def finance_invoices_list():
 
 @app.route("/finance/invoices/new", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_edit_finance(user))
 def finance_invoice_new():
     """Create a new invoice."""
     user = current_user()
@@ -11013,6 +11877,7 @@ def finance_invoice_new():
 
 @app.route("/finance/invoices/<int:invoice_id>")
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_invoice_detail(invoice_id):
     """Invoice detail with payment timeline."""
     user = current_user()
@@ -11085,6 +11950,7 @@ def finance_invoice_detail(invoice_id):
 
 @app.route("/finance/invoices/<int:invoice_id>/pay", methods=["POST"])
 @login_required
+@permission_required(lambda user: _user_can_edit_finance(user))
 def finance_invoice_pay(invoice_id):
     """Record a payment against an invoice."""
     user = current_user()
@@ -11478,6 +12344,7 @@ def _finance_grant_detail_post(user, grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_grant_detail(grant_id: int):
     """v2.0.0-alpha.2 — Single-grant drill-down via the peer graph.
 
@@ -11574,6 +12441,25 @@ def finance_grant_detail(grant_id: int):
     else:
         budget_util_class = "budget-bar-green"
 
+    # v2/w2.0.a3-budget-alerts — MVP alert surface on detail page.
+    # Tier mirrors grant_utilization(); kept inline here to avoid a
+    # second SQL round-trip (percent_used already matches that helper).
+    if percent_used >= 100:
+        utilization_tier = "crit"
+        utilization_tone = "red"
+        utilization_alert = "Over budget — spending has exceeded the allocated total."
+    elif percent_used >= 80:
+        utilization_tier = "warn"
+        utilization_tone = "amber"
+        utilization_alert = "Approaching budget cap — over 80% of the allocated total is committed."
+    else:
+        utilization_tier = "ok"
+        utilization_tone = ""
+        utilization_alert = ""
+    # TODO(v2/w2.0.a3): fire notify(...) for PI + portfolio manager on
+    # first transition to warn/crit. Needs a `grant_alert_state` table
+    # (or a column on grants) to dedupe — tracked in docs/V2_GAP_MAP.md.
+
     # Expenses (non-sample charges)
     expenses = query_all(
         """SELECT ge.*, u.name AS recorder_name
@@ -11599,6 +12485,9 @@ def finance_grant_detail(grant_id: int):
         remaining_fmt=remaining_fmt,
         billed_fmt=billed_fmt,
         utilization_pct=percent_used,
+        utilization_tier=utilization_tier,
+        utilization_tone=utilization_tone,
+        utilization_alert=utilization_alert,
         budget_util_class=budget_util_class,
         expenses=expenses,
         total_expenses=total_expenses,
@@ -11613,6 +12502,7 @@ def finance_grant_detail(grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>/expenses", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_view_finance(user))
 def finance_grant_expenses(grant_id: int):
     """Grant expenses — non-sample charges (equipment, reagents, vendors)."""
     user = current_user()
@@ -11699,6 +12589,7 @@ def finance_grant_expenses(grant_id: int):
 
 @app.route("/finance/grants/<int:grant_id>/form-control", methods=["GET", "POST"])
 @login_required
+@permission_required(lambda user: _user_can_control_grant_forms(user))
 def finance_grant_form_control(grant_id: int):
     """Grant form-control — approval config, budget rules, overview."""
     user = current_user()
@@ -11837,9 +12728,12 @@ def sitemap():
     })
 
     # Operations section — if user has instrument/schedule access
-    if access_profile["can_access_instruments"] or access_profile["can_access_schedule"]:
+    if (
+        (module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"])
+        or (module_visible_in_active_portal("schedule") and access_profile["can_access_schedule"])
+    ):
         ops_items = []
-        if access_profile["can_access_instruments"]:
+        if module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"]:
             instrument_count = db.execute("SELECT COUNT(*) FROM instruments WHERE status = 'active'").fetchone()[0]
             instrument_label = "Instrument Management" if (
                 is_owner(user)
@@ -11847,34 +12741,39 @@ def sitemap():
             ) else "Instruments"
             instrument_hint = "Your machine workspace, maintenance, and queue controls" if instrument_label == "Instrument Management" else f"{instrument_count} active instruments"
             ops_items.append({"label": instrument_label, "hint": instrument_hint, "type": "link", "href": url_for("instruments")})
-        if access_profile["can_access_schedule"]:
+        if module_visible_in_active_portal("schedule") and access_profile["can_access_schedule"]:
             open_count = db.execute("SELECT COUNT(*) FROM sample_requests WHERE status NOT IN ('completed', 'rejected')").fetchone()[0]
             ops_items.append({"label": "Job Queue", "hint": f"{open_count} open jobs", "type": "link", "href": url_for("schedule")})
             ops_items.append({"label": "Completed Jobs", "hint": "View processed history", "type": "link", "href": url_for("schedule", bucket="completed")})
         if module_visible_in_active_portal("finance") and (access_profile.get("can_view_finance_stage") or is_owner(user)):
             ops_items.append({"label": "Finance Portal", "hint": "Billing, invoices, grants", "type": "link", "href": url_for("finance_portal")})
-        sections.append({
-            "key": "operations",
-            "title": "Operations",
-            "icon": "⚡",
-            "groups": [{"title": "Workspace", "entries": ops_items}],
-        })
+        if ops_items:
+            sections.append({
+                "key": "operations",
+                "title": "Operations",
+                "icon": "⚡",
+                "groups": [{"title": "Workspace", "entries": ops_items}],
+            })
 
     # Reporting section
-    if access_profile["can_access_calendar"] or access_profile["can_access_stats"]:
+    if (
+        (module_visible_in_active_portal("calendar") and access_profile["can_access_calendar"])
+        or (module_visible_in_active_portal("stats") and access_profile["can_access_stats"])
+    ):
         report_items = []
-        if access_profile["can_access_calendar"]:
+        if module_visible_in_active_portal("calendar") and access_profile["can_access_calendar"]:
             report_items.append({"label": "Calendar", "hint": "Weekly schedule and downtime", "type": "link", "href": url_for("calendar")})
             report_items.append({"label": "Subscribe Calendar (.ics)", "hint": "Add to Google Calendar / Apple Calendar / Outlook", "type": "link", "href": url_for("calendar_ics")})
-        if access_profile["can_access_stats"]:
+        if module_visible_in_active_portal("stats") and access_profile["can_access_stats"]:
             report_items.append({"label": "Statistics", "hint": "Operations control dashboard", "type": "link", "href": url_for("stats")})
             report_items.append({"label": "Data Export", "hint": "Generate Excel reports", "type": "link", "href": url_for("visualizations")})
-        sections.append({
-            "key": "reporting",
-            "title": "Reporting",
-            "icon": "📊",
-            "groups": [{"title": "Views", "entries": report_items}],
-        })
+        if report_items:
+            sections.append({
+                "key": "reporting",
+                "title": "Reporting",
+                "icon": "📊",
+                "groups": [{"title": "Views", "entries": report_items}],
+            })
 
     # Administration section — admins only
     if access_profile["can_manage_members"]:
@@ -11889,7 +12788,7 @@ def sitemap():
             admin_items.append({"label": "Leave Queue", "hint": "Approve/reject leave requests", "type": "link", "href": url_for("admin_leave_queue")})
             admin_items.append({"label": "Attendance Overview", "hint": "Daily attendance for all staff", "type": "link", "href": url_for("admin_attendance_calendar")})
         system_items = [
-            {"label": "Server Port", "type": "text", "value": "5055"},
+            {"label": "Server Port", "type": "text", "value": os.environ.get("LAB_SCHEDULER_PORT", "5055")},
             {"label": "Database", "type": "text", "value": "SQLite (local)"},
         ]
         sections.append({
@@ -12203,8 +13102,11 @@ def login():
 
     # Apex tenant-routing: if someone lands on catalysterp.org/login with
     # portal=hq or portal=lab, bounce them to the right tenant subdomain.
-    # Apex has no ERP users of its own — its login DB is just the picker shell.
+    # Apex has no ERP users of its own — its login DB is just the picker
+    # shell. In-subdomain /login?portal=* still works normally.
+    # See docs/DEPLOY_CHECKLIST_2026_04_16.md for the tenant map.
     host = (request.host or "").lower().split(":")[0]
+    host_portal_slug = _host_bound_portal_slug(host)
     APEX_HOSTS = {"catalysterp.org", "www.catalysterp.org"}
     TENANT_REDIRECTS = {
         "lab": "https://mitwpu-rnd.catalysterp.org/login",
@@ -12217,12 +13119,22 @@ def login():
         session["requested_portal"] = portal_arg
     elif request.method == "GET" and "portal" in request.args and portal_arg not in ERP_PORTALS:
         session.pop("requested_portal", None)
+    if host_portal_slug:
+        session["requested_portal"] = host_portal_slug
     if request.method == "GET" and current_user() is not None:
         return redirect(url_for("index"))
     if request.method == "POST":
+        ip = request.headers.get("CF-Connecting-IP", request.remote_addr or "")
+        blocked, seconds = _login_limiter.is_blocked(ip)
+        if blocked:
+            flash(
+                f"Too many failed attempts. Try again in {seconds // 60}m {seconds % 60}s.",
+                "error",
+            )
+            return _render_login_response(session.get("requested_portal") or host_portal_slug, status_code=429)
         login_id = request.form["email"].strip().lower()
         password = request.form["password"]
-        requested_portal = session.get("requested_portal")
+        requested_portal = (request.form.get("portal") or session.get("requested_portal") or host_portal_slug or "").strip().lower() or None
         # Accept either the full email OR just the short username (local-part
         # of the email) so users who type "kondhalkar" land the same row as
         # "kondhalkar@mitwpu.edu.in". When the input has no '@', we prefer
@@ -12265,13 +13177,25 @@ def login():
             (login_id, login_id, login_id, login_id, requested_portal or "", requested_portal or ""),
         )
         if user and user["invite_status"] == "active" and check_password_hash(user["password_hash"], password):
+            _login_limiter.clear(ip)
+            portals = _user_portals(user["id"])
+            portal_slugs = {row_value(p, "slug", "") for p in portals}
+            if host_portal_slug and host_portal_slug not in portal_slugs:
+                log_action(
+                    user["id"],
+                    "auth",
+                    user["id"],
+                    "login_blocked_wrong_tenant",
+                    {"host": host, "required_portal": host_portal_slug},
+                )
+                flash("This account is not enabled for this ERP.", "error")
+                return _render_login_response(host_portal_slug, status_code=403)
             session.clear()
             session["user_id"] = user["id"]
             session.permanent = True
             if requested_portal in ERP_PORTALS:
                 session["requested_portal"] = requested_portal
             log_action(user["id"], "auth", user["id"], "login", {"ip": request.remote_addr or ""})
-            portals = _user_portals(user["id"])
             selected_portal = _select_portal_slug(portals, requested_portal)
             if selected_portal:
                 session["active_portal"] = selected_portal
@@ -12306,15 +13230,12 @@ def login():
             "auth",
             failed_uid or 0,
             "login_failed",
-            {"login": login_id, "ip": request.remote_addr or ""},
+            {"login": login_id, "ip": ip},
         )
+        _login_limiter.record_failure(ip)
         flash("Invalid login.", "error")
-    portal_slug = session.get("requested_portal")
-    return render_template(
-        "login.html",
-        login_portal_slug=portal_slug,
-        login_portal=ERP_PORTALS.get(portal_slug),
-    )
+    portal_slug = session.get("requested_portal") or host_portal_slug
+    return _render_login_response(portal_slug)
 
 
 @app.route("/portals")
@@ -12357,9 +13278,43 @@ def portal_switch_legacy(slug: str):
 def logout():
     uid = session.get("user_id")
     if uid:
+        work_session_key = session.get("_work_session_key")
+        if work_session_key:
+            execute(
+                "UPDATE user_work_sessions SET ended_at = ?, last_seen_at = ? WHERE user_id = ? AND session_key = ? AND ended_at IS NULL",
+                (now_iso(), now_iso(), uid, work_session_key),
+            )
         log_action(uid, "auth", uid, "logout", {})
     session.clear()
     return redirect(url_for("login"))
+
+
+def _apply_no_store_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+def _render_login_response(portal_slug: str | None = None, *, status_code: int = 200):
+    portal_slug = portal_slug or _host_bound_portal_slug()
+    response = make_response(
+        render_template(
+            "login.html",
+            login_portal_slug=portal_slug,
+            login_portal=ERP_PORTALS.get(portal_slug),
+        ),
+        status_code,
+    )
+    return _apply_no_store_headers(response)
+
+
+def _render_change_password_response(*, status_code: int = 200):
+    response = make_response(
+        render_template("change_password.html", title="Change Password"),
+        status_code,
+    )
+    return _apply_no_store_headers(response)
 
 
 # ── Google OAuth routes ─────────────────────────────────────────
@@ -12472,6 +13427,47 @@ def _notify_ai_request_routed(
     )
 
 
+def _notify_ai_request_decided(
+    *,
+    user_id: int | None,
+    action_type: str,
+    decision: str,
+    action_label: str = "",
+    action_id: int | None = None,
+    summary: str = "",
+    note: str = "",
+    href: str = "",
+) -> None:
+    """Tell a submitter that their AI-routed request was approved or rejected."""
+    if not user_id:
+        return
+    label = (action_label or action_type or "request").replace("_", " ").strip().title()
+    decision_key = (decision or "").strip().lower()
+    if decision_key == "approved":
+        title = f"AI request approved: {label}"
+        body = f"Your {label.lower()} passed human review."
+        if summary:
+            body += f" Result: {summary}"
+        elif note:
+            body += f" Note: {note}"
+        category = "task"
+    else:
+        title = f"AI request needs changes: {label}"
+        body = f"Your {label.lower()} was not approved yet."
+        if note:
+            body += f" Reviewer note: {note}"
+        category = "warning"
+    notify(
+        user_id,
+        category,
+        title,
+        body,
+        href,
+        source_type="ai_prospective_action",
+        source_id=action_id,
+    )
+
+
 def unread_system_notification_count(user) -> int:
     """Count of unread system notifications for a user."""
     row = query_one(
@@ -12520,7 +13516,7 @@ def _assignable_users_for(user):
             "SELECT id, name, email FROM users WHERE active = 1 AND invite_status = 'active' AND id != ? ORDER BY name",
             (user["id"],),
         )
-    if user["role"] == "instrument_admin":
+    if user_has_role(user, "instrument_admin"):
         rows = query_all(
             """SELECT DISTINCT u.id, u.name, u.email FROM users u
                WHERE u.active = 1 AND u.invite_status = 'active' AND u.id != ? AND (
@@ -12530,7 +13526,7 @@ def _assignable_users_for(user):
             (user["id"], user["id"], user["id"]),
         )
         return rows
-    if user["role"] == "finance_admin":
+    if user_has_role(user, "finance_admin"):
         return query_all(
             "SELECT id, name, email FROM users WHERE role = 'finance_admin' AND active = 1 AND id != ? ORDER BY name",
             (user["id"],),
@@ -13016,12 +14012,10 @@ def _instrument_detail_context(user, instrument_id: int) -> dict[str, object]:
     can_edit = user["role"] in {"super_admin", "site_admin"} or can_manage_instrument(user["id"], instrument_id, user["role"])
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     can_edit_assignments = is_owner(user) or user["role"] in {"super_admin", "site_admin"}
+    can_archive_instrument = user_has_role(user, "super_admin")
+    can_restore_instrument = user_has_role(user, "super_admin")
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_archive_instrument = user["role"] == "super_admin"
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_restore_instrument = user["role"] == "super_admin"
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_add_downtime_here = user["role"] == "super_admin" or can_manage_instrument(user["id"], instrument_id, user["role"])
+    can_add_downtime_here = user_has_role(user, "super_admin") or can_manage_instrument(user["id"], instrument_id, user["role"])
     return {
         "instrument": instrument,
         "can_edit": can_edit,
@@ -13184,8 +14178,7 @@ def _instrument_detail_handle_post(user, instrument_id: int, instrument, context
         flash("Downtime block added.", "success")
         return redirect(url_for("instrument_detail", instrument_id=instrument_id))
     if action == "save_approval_config":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if not (is_owner(user) or user["role"] == "super_admin"):
+        if not (is_owner(user) or user_has_role(user, "super_admin")):
             abort(403)
         db = get_db()
         old_notify = {}
@@ -15535,6 +16528,8 @@ def dev_panel():
     hot_wave = next((w for w in waves if w.get("status") == "hot"), None)
     pipeline_shipped = sum(1 for w in waves if w.get("status") == "shipped")
     pipeline_total = len(waves)
+    debug_summary = debug_issue_summary(limit=6)
+    queue_summary = action_queue_summary(limit=6)
 
     # ── Infrastructure tile data ──────────────────────────
     peak_cpu = 0.0
@@ -15601,6 +16596,8 @@ def dev_panel():
         pipeline_shipped=pipeline_shipped,
         pipeline_total=pipeline_total,
         crawler_health=crawler_health,
+        debug_summary=debug_summary,
+        queue_summary=queue_summary,
         doc_files=DEV_PANEL_DOC_FILES,
         infra_stats=infra_stats,
         entity_counts=entity_counts,
@@ -16787,6 +17784,162 @@ def my_profile():
     return redirect(url_for("user_profile", user_id=current_user()["id"]))
 
 
+# ── Testing plan page (tester + admin access) ─────────────────────
+# Renders docs/TESTING_PLAN_TEJVEER.md as HTML for Tejveer (role
+# 'tester') to read on-site. Admins can see it too so they can
+# review what Tejveer is working against. No markdown library
+# dependency — converter below handles the limited subset of
+# markdown used in the plan file (headings, lists, bold, code,
+# tables, blockquotes, horizontal rules).
+
+_TESTING_PLAN_PATH = BASE_DIR / "docs" / "TESTING_PLAN_TEJVEER.md"
+
+
+def _render_plan_markdown(text: str) -> str:
+    """Tiny markdown → HTML converter. Deliberately minimal; covers
+    the syntax actually used in TESTING_PLAN_TEJVEER.md. Not a
+    general-purpose markdown engine."""
+    import html as _html
+
+    escaped = _html.escape(text)
+    lines = escaped.split("\n")
+    out = []
+    in_ul = False
+    in_ol = False
+    in_table = False
+    table_rows = []
+
+    def close_lists():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+        if in_ol:
+            out.append("</ol>")
+            in_ol = False
+
+    def flush_table():
+        nonlocal in_table, table_rows
+        if not in_table:
+            return
+        # table_rows is list of lists of cell strings
+        # header row is first; separator row (---) is second
+        if len(table_rows) >= 2:
+            header = table_rows[0]
+            body = table_rows[2:]  # skip the --- separator
+            out.append("<table>")
+            out.append("<thead><tr>")
+            for cell in header:
+                out.append(f"<th>{cell.strip()}</th>")
+            out.append("</tr></thead>")
+            if body:
+                out.append("<tbody>")
+                for row in body:
+                    out.append("<tr>")
+                    for cell in row:
+                        out.append(f"<td>{cell.strip()}</td>")
+                    out.append("</tr>")
+                out.append("</tbody>")
+            out.append("</table>")
+        in_table = False
+        table_rows = []
+
+    def inline(s: str) -> str:
+        # **bold** → <strong>
+        import re as _re
+        s = _re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+        # `code` → <code>
+        s = _re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+        return s
+
+    import re as _re
+    for raw in lines:
+        line = raw.rstrip()
+        # Table detection: lines with | and at least 2 pipes
+        if line.startswith("|") and line.count("|") >= 2:
+            close_lists()
+            cells = [c for c in line.strip().strip("|").split("|")]
+            in_table = True
+            table_rows.append([inline(c) for c in cells])
+            continue
+        if in_table:
+            flush_table()
+
+        if not line.strip():
+            close_lists()
+            out.append("")
+            continue
+
+        # Horizontal rule
+        if line.strip() in ("---", "***", "___"):
+            close_lists()
+            out.append("<hr/>")
+            continue
+
+        # Headings
+        m = _re.match(r"^(#{1,6})\s+(.*)$", line)
+        if m:
+            close_lists()
+            level = len(m.group(1))
+            out.append(f"<h{level}>{inline(m.group(2))}</h{level}>")
+            continue
+
+        # Blockquote
+        m = _re.match(r"^>\s?(.*)$", line)
+        if m:
+            close_lists()
+            out.append(f"<blockquote>{inline(m.group(1))}</blockquote>")
+            continue
+
+        # Unordered list
+        m = _re.match(r"^(\s*)[-*]\s+(.*)$", line)
+        if m:
+            if not in_ul:
+                close_lists()
+                out.append("<ul>")
+                in_ul = True
+            out.append(f"<li>{inline(m.group(2))}</li>")
+            continue
+
+        # Ordered list
+        m = _re.match(r"^(\s*)\d+\.\s+(.*)$", line)
+        if m:
+            if not in_ol:
+                close_lists()
+                out.append("<ol>")
+                in_ol = True
+            out.append(f"<li>{inline(m.group(2))}</li>")
+            continue
+
+        # Plain paragraph
+        close_lists()
+        out.append(f"<p>{inline(line)}</p>")
+
+    close_lists()
+    flush_table()
+    return "\n".join(out)
+
+
+@app.route("/me/testing-plan")
+@login_required
+def testing_plan_page():
+    user = current_user()
+    role = (user["role"] if user else "") or ""
+    if role not in {"tester", "super_admin", "site_admin", "owner", "instrument_admin"}:
+        abort(404)
+    try:
+        plan_text = _TESTING_PLAN_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        plan_text = "(testing plan file not found on disk — ask the operator to sync from ~/.claude/agent-orchestration/TESTING_PLAN_TEJVEER.md)"
+    plan_html = _render_plan_markdown(plan_text)
+    return render_template(
+        "testing_plan.html",
+        plan_content=plan_text,
+        plan_html=plan_html,
+        current_user_name=(user["name"] if user else ""),
+    )
+
+
 @app.route("/manual")
 @login_required
 def role_manual():
@@ -16800,6 +17953,24 @@ def role_manual():
             reason=prompt.get("reason"),
             notice=prompt.get("notice", ""),
         ),
+    )
+
+
+@app.route("/dev")
+@app.route("/dev/")
+def dev_site():
+    """Project status page — intended for the LOCAL demo triad ONLY.
+    Gated to DEMO_MODE so production CATALYST (DEMO_MODE=0) returns
+    404 here, keeping the live site free of dev-facing surfaces.
+    The static HTML at static/devsite/index.html still ships in the
+    repo (deploy artifact), but the route serves it only when the
+    instance is booted in demo mode. Source-of-truth lives in
+    sahajpur-university/dev-site/; regen via its generate.py."""
+    if not DEMO_MODE:
+        abort(404)
+    return send_from_directory(
+        str(Path(__file__).resolve().parent / "static" / "devsite"),
+        "index.html",
     )
 
 
@@ -16840,6 +18011,26 @@ def getting_started():
                 "Click any row for the full audit trail, files, and status.",
             ],
             "primary": {"label": "My Queue", "href": url_for("schedule") + "?mine=1"},
+        })
+
+    if role == "tester":
+        quickpaths.append({
+            "title": "Run the tester sweep in order",
+            "steps": [
+                "Open your testing plan first so the sequence stays consistent.",
+                "Use Sitemap to open every area and log bugs the moment you hit them.",
+                "Turn on debug mode when needed so click-pinning and voice notes capture the exact surface.",
+            ],
+            "primary": {"label": "Open testing plan", "href": url_for("testing_plan_page")},
+        })
+        quickpaths.append({
+            "title": "Check restricted and operational pages safely",
+            "steps": [
+                "Use Queue, Sitemap, and Profile pages as a read-only sweep unless the operator gives a specific mutation to test.",
+                "If a page blocks you unexpectedly, file feedback from that exact page before moving on.",
+                "For visual bugs, call out whether the problem appears in light mode, dark mode, mobile width, or desktop width.",
+            ],
+            "primary": {"label": "Open sitemap", "href": url_for("sitemap")},
         })
 
     if "operator" in roles:
@@ -16940,11 +18131,7 @@ def change_password():
         if len(portals) > 1 and not selected_portal:
             return redirect(url_for("portal_picker"))
         return redirect(url_for("role_manual"))
-    response = make_response(render_template("change_password.html", title="Change Password"))
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+    return _render_change_password_response()
 
 
 @app.route("/history/processed")
@@ -16957,7 +18144,7 @@ def processed_history():
 
 def _user_profile_target(viewer, user_id: int):
     target_user = query_one(
-        "SELECT id, name, email, role, invite_status, active, member_code, "
+        "SELECT id, name, email, role, invite_status, active, member_code, attendance_number, "
         "COALESCE(office_location, '') AS office_location, "
         "COALESCE(website, '') AS website "
         "FROM users WHERE id = ?",
@@ -16971,6 +18158,20 @@ def _user_profile_target(viewer, user_id: int):
 
 
 def _user_profile_activity_payload(viewer, user_id: int) -> dict[str, object]:
+    if not module_visible_in_active_portal("instruments"):
+        empty_summary = {
+            "total_jobs": 0,
+            "total_samples": 0,
+            "completed_jobs": 0,
+            "open_jobs": 0,
+        }
+        return {
+            "rows": [],
+            "handled_rows": [],
+            "originated_count": 0,
+            "submitted_summary": empty_summary,
+            "handled_summary": empty_summary,
+        }
     scope_clauses, scope_params = request_scope_sql(viewer, "sr")
     rows = query_all(
         f"""
@@ -17043,8 +18244,7 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
     can_edit_user_value = (
         can_manage_members(viewer)
         and (not is_owner(target_user) or is_owner(viewer))
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+        and (not user_has_role(target_user, "super_admin") or user_has_role(viewer, "super_admin"))
     )
     can_edit_metadata_value = viewer["id"] == target_user["id"] or can_edit_user_value
     instrument_roster: list[sqlite3.Row] = []
@@ -17053,7 +18253,9 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
     assigned_operator_ids: set[int] = set()
     assigned_faculty_ids: set[int] = set()
     assigned_requester_ids: set[int] = set()
-    if can_edit_user_value:
+    vehicle_roster: list[sqlite3.Row] = []
+    assigned_vehicle_ids: set[int] = set()
+    if can_edit_user_value and module_visible_in_active_portal("instruments"):
         instrument_roster = query_all(
             "SELECT id, name, code, category, location FROM instruments WHERE status = 'active' ORDER BY category, name"
         )
@@ -17078,6 +18280,16 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
             )
         }
         instrument_categories = sorted({(row["category"] or "Uncategorized") for row in instrument_roster})
+    if can_edit_user_value and module_visible_in_active_portal("vehicles"):
+        vehicle_roster = query_all(
+            "SELECT id, name, registration_no, vehicle_type FROM vehicles WHERE status = 'active' ORDER BY name"
+        )
+        assigned_vehicle_ids = {
+            row["vehicle_id"] for row in query_all(
+                "SELECT vehicle_id FROM vehicle_driver_assignments WHERE user_id = ?",
+                (user_id,),
+            )
+        }
     return {
         "can_edit_user": can_edit_user_value,
         "can_edit_metadata": can_edit_metadata_value,
@@ -17087,6 +18299,8 @@ def _user_profile_assignment_payload(viewer, target_user, user_id: int) -> dict[
         "assigned_operator_ids": assigned_operator_ids,
         "assigned_faculty_ids": assigned_faculty_ids,
         "assigned_requester_ids": assigned_requester_ids,
+        "vehicle_roster": vehicle_roster,
+        "assigned_vehicle_ids": assigned_vehicle_ids,
     }
 
 
@@ -17095,16 +18309,27 @@ def _user_profile_role_payload(viewer, target_user, can_edit_user_value: bool) -
     if can_edit_user_value and target_user["id"] != viewer["id"] and not is_owner(target_user):
         base_roles = allowed_user_role_change_roles(viewer)
         role_choices = [(role, role_display_name(role)) for role in base_roles]
-    layered_role_choices = [] if lab_profile_mode_active() else [
-        ("operator", "Operator"),
-        ("instrument_admin", "Instrument Admin"),
-        ("faculty_in_charge", "Faculty in Charge"),
-        ("professor_approver", "Professor Approver"),
-        ("finance_admin", "Finance Admin"),
-    ] + (
-        [("site_admin", "Site Admin")]
-        if viewer["role"] == "super_admin" else []
-    )
+    if lab_profile_mode_active():
+        layered_role_choices = []
+    elif operations_portal_active():
+        layered_role_choices = [
+            ("operator", "Operator"),
+            ("finance_admin", "Finance Admin"),
+        ] + (
+            [("site_admin", "Site Admin")]
+            if user_has_role(viewer, "super_admin") else []
+        )
+    else:
+        layered_role_choices = [
+            ("operator", "Operator"),
+            ("instrument_admin", "Instrument Admin"),
+            ("faculty_in_charge", "Faculty in Charge"),
+            ("professor_approver", "Professor Approver"),
+            ("finance_admin", "Finance Admin"),
+        ] + (
+            [("site_admin", "Site Admin")]
+            if user_has_role(viewer, "super_admin") else []
+        )
     return {
         "role_choices": role_choices,
         "target_role_set": user_role_set(target_user),
@@ -17199,7 +18424,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
     if action == "remove_access":
         if not can_manage_members(viewer):
             abort(403)
-        if target_user["role"] != "requester" or is_owner(target_user) or target_user["id"] == viewer["id"]:
+        if not user_has_role(target_user, "requester") or is_owner(target_user) or target_user["id"] == viewer["id"]:
             abort(403)
         execute("UPDATE users SET active = 0 WHERE id = ?", (user_id,))
         log_action(viewer["id"], "user", user_id, "member_deactivated", {"email": target_user["email"]})
@@ -17211,7 +18436,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             abort(403)
         if is_owner(target_user) or target_user["id"] == viewer["id"]:
             abort(403)
-        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+        if user_has_role(target_user, "super_admin") and not user_has_role(viewer, "super_admin"):
             abort(403)
         archive_reason = (request.form.get("archive_reason") or "").strip()
         _archive_and_retire_user(viewer, target_user, archive_reason=archive_reason)
@@ -17230,7 +18455,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             abort(403)
         if is_owner(target_user) and not is_owner(viewer):
             abort(403)
-        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+        if user_has_role(target_user, "super_admin") and not user_has_role(viewer, "super_admin"):
             abort(403)
         temp_password = generate_temp_password()
         execute(
@@ -17255,7 +18480,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         can_admin_edit_user = (
             can_manage_members(viewer)
             and (not is_owner(target_user) or is_owner(viewer))
-            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+            and (not user_has_role(target_user, "super_admin") or user_has_role(viewer, "super_admin"))
         )
         if not can_admin_edit_user and target_user["id"] != viewer["id"]:
             abort(403)
@@ -17296,9 +18521,9 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
                 return jsonify({"ok": False, "error": "invalid_role"}), 400
             flash("Pick a valid role.", "error")
             return redirect(url_for("user_profile", user_id=user_id))
-        if new_role in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+        if new_role in {"site_admin", "super_admin"} and not user_has_role(viewer, "super_admin"):
             abort(403)
-        if target_user["role"] in {"site_admin", "super_admin"} and viewer["role"] != "super_admin":
+        if target_user["role"] in {"site_admin", "super_admin"} and not user_has_role(viewer, "super_admin"):
             abort(403)
         execute(
             "UPDATE users SET role = ?, invite_status = 'active', active = 1, role_manual_notice = ? WHERE id = ?",
@@ -17335,14 +18560,14 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             abort(403)
         if is_owner(target_user) and not is_owner(viewer):
             abort(403)
-        if target_user["role"] == "super_admin" and viewer["role"] != "super_admin":
+        if user_has_role(target_user, "super_admin") and not user_has_role(viewer, "super_admin"):
             abort(403)
         checked = set(request.form.getlist("extra_roles"))
         layered_roles = {
             "operator", "instrument_admin", "faculty_in_charge",
             "professor_approver", "finance_admin",
         }
-        if viewer["role"] == "super_admin":
+        if user_has_role(viewer, "super_admin"):
             layered_roles |= {"site_admin"}
         grant_user_role(user_id, target_user["role"], viewer["id"])
         for role_name in layered_roles:
@@ -17387,7 +18612,7 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
             "instrument_requesters": _ids("requester_ids"),
         }
         manageable_rows = query_all("SELECT id FROM instruments WHERE status = 'active'")
-        if viewer["role"] != "super_admin":
+        if not user_has_role(viewer, "super_admin"):
             manageable_rows = [
                 row for row in manageable_rows
                 if can_manage_instrument(viewer["id"], row["id"], viewer["role"])
@@ -17425,6 +18650,55 @@ def _handle_user_profile_actions(viewer, target_user, user_id: int, action: str)
         flash("Instrument assignments saved.", "success")
         return redirect(url_for("user_profile", user_id=user_id))
 
+    if action == "update_user_vehicle_assignments":
+        if not can_manage_members(viewer):
+            abort(403)
+        if is_owner(target_user) and not is_owner(viewer):
+            abort(403)
+
+        desired_vehicle_ids = {
+            int(v) for v in request.form.getlist("vehicle_ids")
+            if str(v).strip().isdigit()
+        }
+        active_vehicle_ids = {
+            row["id"] for row in query_all(
+                "SELECT id FROM vehicles WHERE status = 'active'"
+            )
+        }
+        desired_vehicle_ids &= active_vehicle_ids
+        current_vehicle_ids = {
+            row["vehicle_id"] for row in query_all(
+                "SELECT vehicle_id FROM vehicle_driver_assignments WHERE user_id = ?",
+                (user_id,),
+            )
+        }
+
+        for vehicle_id in desired_vehicle_ids | current_vehicle_ids:
+            driver_ids = [
+                row["user_id"] for row in query_all(
+                    """
+                    SELECT user_id
+                      FROM vehicle_driver_assignments
+                     WHERE vehicle_id = ?
+                     ORDER BY is_primary DESC, created_at ASC, user_id ASC
+                    """,
+                    (vehicle_id,),
+                )
+            ]
+            if vehicle_id in desired_vehicle_ids:
+                if user_id not in driver_ids:
+                    driver_ids.append(user_id)
+            else:
+                driver_ids = [driver_id for driver_id in driver_ids if driver_id != user_id]
+            _sync_vehicle_driver_assignments(vehicle_id, driver_ids)
+
+        log_action(
+            viewer["id"], "user", user_id, "user_vehicle_assignments_updated",
+            {"email": target_user["email"], "vehicle_count": len(desired_vehicle_ids)},
+        )
+        flash("Vehicle assignments saved.", "success")
+        return redirect(url_for("user_profile", user_id=user_id))
+
     return None
 
 
@@ -17444,6 +18718,16 @@ def user_profile(user_id: int):
     role_payload = _user_profile_role_payload(viewer, target_user, assignment_payload["can_edit_user"])
     reset_pw_info = _user_profile_reset_password_info(user_id)
     instrument_groups = instrument_groups_all()
+    assigned_vehicles = query_all(
+        """
+        SELECT DISTINCT v.id, v.name, v.registration_no, v.vehicle_type
+          FROM vehicle_driver_assignments vda
+          JOIN vehicles v ON v.id = vda.vehicle_id
+         WHERE vda.user_id = ?
+         ORDER BY v.name ASC
+        """,
+        (user_id,),
+    ) if module_visible_in_active_portal("vehicles") else []
     return render_template(
         "user_detail.html",
         target_user=target_user,
@@ -17454,30 +18738,32 @@ def user_profile(user_id: int):
         handled_summary=activity_payload["handled_summary"],
         originated_count=activity_payload["originated_count"],
         is_self=viewer["id"] == target_user["id"],
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        can_remove_access=can_manage_members(viewer) and target_user["role"] == "requester" and target_user["active"] and target_user["id"] != viewer["id"],
+        can_remove_access=can_manage_members(viewer) and user_has_role(target_user, "requester") and target_user["active"] and target_user["id"] != viewer["id"],
         can_archive_user=(
             can_manage_members(viewer)
             and target_user["id"] != viewer["id"]
             and target_user["active"]
             and not is_owner(target_user)
-            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+            and (not user_has_role(target_user, "super_admin") or user_has_role(viewer, "super_admin"))
         ),
         can_reset_password=(
             can_manage_members(viewer)
             and target_user["id"] != viewer["id"]
             and (not is_owner(target_user) or is_owner(viewer))
-            # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-            and (target_user["role"] != "super_admin" or viewer["role"] == "super_admin")
+            and (not user_has_role(target_user, "super_admin") or user_has_role(viewer, "super_admin"))
         ),
         can_edit_user=assignment_payload["can_edit_user"],
         can_edit_metadata=assignment_payload["can_edit_metadata"],
+        show_lab_work_summary=module_visible_in_active_portal("instruments"),
         instrument_roster=assignment_payload["instrument_roster"],
         instrument_categories=assignment_payload["instrument_categories"],
         assigned_admin_ids=assignment_payload["assigned_admin_ids"],
         assigned_operator_ids=assignment_payload["assigned_operator_ids"],
         assigned_faculty_ids=assignment_payload["assigned_faculty_ids"],
         assigned_requester_ids=assignment_payload["assigned_requester_ids"],
+        vehicle_roster=assignment_payload["vehicle_roster"],
+        assigned_vehicle_ids=assignment_payload["assigned_vehicle_ids"],
+        assigned_vehicles=assigned_vehicles,
         lab_profile_mode=lab_profile_mode_active(),
         role_choices=role_payload["role_choices"],
         target_role_set=role_payload["target_role_set"],
@@ -17491,6 +18777,117 @@ def user_profile(user_id: int):
             int(g["id"]): instrument_group_member_ids(int(g["id"]))
             for g in instrument_groups
         },
+    )
+
+
+def _can_view_user_hours(viewer: sqlite3.Row | None, target_user: sqlite3.Row) -> bool:
+    if viewer is None:
+        return False
+    if viewer["id"] == target_user["id"]:
+        return True
+    return can_manage_members(viewer)
+
+
+@app.route("/me/heartbeat", methods=["POST"])
+@login_required
+@csrf.exempt
+def me_heartbeat():
+    user = current_user()
+    payload = request.get_json(silent=True) or {}
+    try:
+        active_seconds = int(payload.get("active_seconds") or 0)
+    except (TypeError, ValueError):
+        active_seconds = 0
+    session_row = _touch_work_session(
+        user,
+        path=(payload.get("path") or request.path),
+        add_active_seconds=active_seconds,
+        heartbeat=True,
+    )
+    return jsonify(
+        ok=True,
+        session_key=row_value(session_row, "session_key", ""),
+        active_seconds=row_value(session_row, "active_seconds", 0),
+    )
+
+
+@app.route("/admin/users/<int:user_id>/hours")
+@login_required
+def admin_user_hours(user_id: int):
+    viewer = current_user()
+    target_user = query_one(
+        "SELECT id, name, email, role, attendance_number FROM users WHERE id = ?",
+        (user_id,),
+    )
+    if target_user is None:
+        abort(404)
+    if not _can_view_user_hours(viewer, target_user):
+        abort(403)
+    sessions = query_all(
+        """
+        SELECT *
+          FROM user_work_sessions
+         WHERE user_id = ?
+         ORDER BY started_at DESC
+         LIMIT 120
+        """,
+        (user_id,),
+    )
+    daily_rows = query_all(
+        """
+        SELECT substr(started_at, 1, 10) AS day,
+               COUNT(*) AS session_count,
+               COALESCE(SUM(active_seconds), 0) AS active_seconds,
+               COALESCE(SUM(request_count), 0) AS request_count,
+               MIN(started_at) AS first_seen_at,
+               MAX(last_seen_at) AS last_seen_at
+          FROM user_work_sessions
+         WHERE user_id = ?
+         GROUP BY substr(started_at, 1, 10)
+         ORDER BY day DESC
+         LIMIT 30
+        """,
+        (user_id,),
+    )
+    totals = query_one(
+        """
+        SELECT COUNT(*) AS session_count,
+               COALESCE(SUM(active_seconds), 0) AS active_seconds,
+               COALESCE(SUM(request_count), 0) AS request_count,
+               COALESCE(SUM(heartbeat_count), 0) AS heartbeat_count
+          FROM user_work_sessions
+         WHERE user_id = ?
+        """,
+        (user_id,),
+    ) or {"session_count": 0, "active_seconds": 0, "request_count": 0, "heartbeat_count": 0}
+    last_7 = query_one(
+        """
+        SELECT COALESCE(SUM(active_seconds), 0) AS active_seconds
+          FROM user_work_sessions
+         WHERE user_id = ? AND started_at >= ?
+        """,
+        (user_id, (datetime.utcnow() - timedelta(days=7)).isoformat(timespec="seconds")),
+    )
+    last_30 = query_one(
+        """
+        SELECT COALESCE(SUM(active_seconds), 0) AS active_seconds
+          FROM user_work_sessions
+         WHERE user_id = ? AND started_at >= ?
+        """,
+        (user_id, (datetime.utcnow() - timedelta(days=30)).isoformat(timespec="seconds")),
+    )
+    open_session = next((row for row in sessions if not row_value(row, "ended_at")), None)
+    return render_template(
+        "admin_user_hours.html",
+        target_user=target_user,
+        sessions=sessions,
+        daily_rows=daily_rows,
+        totals=totals,
+        open_session=open_session,
+        last_7_seconds=(last_7["active_seconds"] if last_7 else 0),
+        last_30_seconds=(last_30["active_seconds"] if last_30 else 0),
+        can_manage_members=can_manage_members(viewer),
+        title=f"{target_user['name']} Hours",
     )
 
 
@@ -17565,8 +18962,7 @@ def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_st
         placeholders = ",".join("?" for _ in instrument_ids)
         clauses.append(f"sr.instrument_id IN ({placeholders})")
         params.extend(instrument_ids)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    elif user["role"] == "requester":
+    elif user_has_role(user, "requester"):
         clauses.append("sr.requester_id = ?")
         params.append(user["id"])
     if filters.get("instrument_id"):
@@ -17607,8 +19003,7 @@ def calendar_events_payload(user: sqlite3.Row, filters: dict[str, str], range_st
         downtime_clauses.append(f"idt.instrument_id IN ({placeholders})")
         downtime_params.extend(instrument_ids)
     downtime_rows = []
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if filters.get("show_maintenance", "1") == "1" and (user["role"] != "requester" or instrument_ids):
+    if filters.get("show_maintenance", "1") == "1" and (not user_has_role(user, "requester") or instrument_ids):
         downtime_rows = query_all(
             f"""
             SELECT idt.*, i.name AS instrument_name, i.code AS instrument_code, u.name AS created_by_name
@@ -17711,12 +19106,11 @@ def calendar():
     if len(visible_instruments) == 1 and not filters.get("instrument_id"):
         filters["instrument_id"] = str(visible_instruments[0]["id"])
     if request.method == "POST":
-        # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if user["role"] != "super_admin" and not assigned_instrument_ids(user):
+        if not user_has_role(user, "super_admin") and not assigned_instrument_ids(user):
             abort(403)
         instrument_id = int(request.form["instrument_id"])
         # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-        if user["role"] != "super_admin" and not can_manage_instrument(user["id"], instrument_id, user["role"]):
+        if not user_has_role(user, "super_admin") and not can_manage_instrument(user["id"], instrument_id, user["role"]):
             abort(403)
         start_time = request.form["start_time"]
         end_time = request.form["end_time"]
@@ -17737,10 +19131,9 @@ def calendar():
     context = calendar_data(filters)
     instruments = visible_instruments
     operators = query_all("SELECT id, name FROM users WHERE role IN ('operator', 'instrument_admin', 'super_admin') ORDER BY name")
+    can_add_downtime = user_has_role(user, "super_admin") or bool(assigned_instrument_ids(user))
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_add_downtime = user["role"] == "super_admin" or bool(assigned_instrument_ids(user))
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    managed_instruments = instruments if user["role"] == "super_admin" else [i for i in instruments if can_manage_instrument(user["id"], i["id"], user["role"])]
+    managed_instruments = instruments if user_has_role(user, "super_admin") else [i for i in instruments if can_manage_instrument(user["id"], i["id"], user["role"])]
     return render_template(
         "calendar.html",
         filters=filters,
@@ -18195,11 +19588,23 @@ def attendance_api_quick_mark():
         status = "present"
     if not code or len(code) < 2:
         return jsonify({"ok": False, "error": "Code too short"})
-    # Find by short_code, member_code, or name prefix
-    target = query_one(
-        "SELECT id, name, short_code FROM users WHERE UPPER(short_code) = ? AND active = 1",
-        (code,),
-    )
+    # Find by attendance_number (Nikita's numeric quick-mark —
+    # 2026-04-15), then short_code (3-letter), then member_code,
+    # then name prefix.
+    target = None
+    if code.isdigit():
+        try:
+            target = query_one(
+                "SELECT id, name, short_code FROM users WHERE attendance_number = ? AND active = 1",
+                (int(code),),
+            )
+        except Exception:
+            target = None
+    if not target:
+        target = query_one(
+            "SELECT id, name, short_code FROM users WHERE UPPER(short_code) = ? AND active = 1",
+            (code,),
+        )
     if not target:
         # Fallback: try member_code
         target = query_one(
@@ -18384,6 +19789,7 @@ def leave_request_new():
 
 @app.route("/admin/leave", methods=["GET"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_queue():
     """Admin view: all pending leave requests across the facility."""
     user = current_user()
@@ -18418,6 +19824,7 @@ def admin_leave_queue():
 
 @app.route("/admin/leave/<int:leave_id>/approve", methods=["POST"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_approve(leave_id: int):
     """Approve a leave request."""
     user = current_user()
@@ -18434,6 +19841,7 @@ def admin_leave_approve(leave_id: int):
 
 @app.route("/admin/leave/<int:leave_id>/reject", methods=["POST"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_leave_reject(leave_id: int):
     """Reject a leave request."""
     user = current_user()
@@ -18451,6 +19859,7 @@ def admin_leave_reject(leave_id: int):
 
 @app.route("/admin/attendance", methods=["GET"])
 @login_required
+@permission_required(_attendance_admin_scope)
 def admin_attendance_calendar():
     """Admin view: attendance overview for all users on a given date."""
     user = current_user()
@@ -18614,6 +20023,7 @@ def instrument_notify(instrument_id: int):
 
 @app.route("/admin/maintenance/upcoming")
 @login_required
+@permission_required(_can_view_audit_log)
 def admin_calibrations_upcoming():
     """NABL-facing dashboard: calibrations due in the next 30 days
     across all instruments. Admin/owner gated."""
@@ -18885,8 +20295,7 @@ def generate_visualization_export():
     instrument_id_value = request.form.get("instrument_id", "").strip()
     group_name = request.form.get("group_name", "").strip()
     instrument_id = int(instrument_id_value) if instrument_id_value else None
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if instrument_id is not None and not (can_view_instrument_history(user, instrument_id) or user["role"] == "super_admin"):
+    if instrument_id is not None and not (can_view_instrument_history(user, instrument_id) or user_has_role(user, "super_admin")):
         abort(403)
     if group_name and not can_view_group_visualization(user, group_name):
         abort(403)
@@ -18922,8 +20331,7 @@ def download_export(filename: str):
     export_row = query_one("SELECT * FROM generated_exports WHERE filename = ?", (filename,))
     if export_row is None:
         abort(404)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    if user["role"] != "super_admin" and export_row["created_by_user_id"] != user["id"]:
+    if not user_has_role(user, "super_admin") and export_row["created_by_user_id"] != user["id"]:
         abort(403)
     return send_from_directory(EXPORT_DIR, filename, as_attachment=True)
 
@@ -18981,7 +20389,6 @@ def request_calendar_card(request_id: int):
 
 
 def _admin_users_permissions(user) -> dict[str, bool]:
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     lab_mode = lab_profile_mode_active()
     allowed_open_roles = {"super_admin", "site_admin"}
     if lab_mode:
@@ -18991,8 +20398,7 @@ def _admin_users_permissions(user) -> dict[str, bool]:
         abort(403)
     can_create_users = is_owner(user) or user["role"] in allowed_open_roles
     can_delete_members = is_owner(user)
-    # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
-    can_elevate_members = is_owner(user) or user["role"] == "super_admin"
+    can_elevate_members = is_owner(user) or user_has_role(user, "super_admin")
     return {
         "can_create_users": can_create_users,
         "can_delete_members": can_delete_members,
@@ -19068,9 +20474,12 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
             )
             created_user = query_one("SELECT id FROM users WHERE email = ?", (email,))
             if created_user:
+                target_portal = active_portal_slug() or session.get("requested_portal")
+                if target_portal not in ERP_PORTALS and role == "requester":
+                    target_portal = "lab"
                 assign_user_to_portals(
                     created_user["id"],
-                    [active_portal_slug() or "lab"],
+                    [target_portal] if target_portal in ERP_PORTALS else [],
                     portal_role="admin" if role in {"site_admin", "super_admin"} else "member",
                 )
             log_action(user["id"], "user", 0, "user_created", {"email": email, "role": role, "member_code": member_code})
@@ -19115,9 +20524,12 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
             )
             new_user = query_one("SELECT id FROM users WHERE email = ?", (row["email"],))
             if new_user:
+                target_portal = active_portal_slug() or session.get("requested_portal")
+                if target_portal not in ERP_PORTALS and row["role"] == "requester":
+                    target_portal = "lab"
                 assign_user_to_portals(
                     new_user["id"],
-                    [active_portal_slug() or "lab"],
+                    [target_portal] if target_portal in ERP_PORTALS else [],
                     portal_role="admin" if row["role"] in {"site_admin", "super_admin"} else "member",
                 )
             log_action(
@@ -19201,6 +20613,51 @@ def _admin_users_handle_post(user, permissions: dict[str, bool]) -> bool:
     return True
 
 
+def _admin_user_category(row: sqlite3.Row | dict[str, object]) -> dict[str, str | int]:
+    designation = (row_value(row, "designation", "") or "").strip()
+    department = (row_value(row, "department", "") or "").strip()
+    role = (row_value(row, "role", "") or "").strip()
+    designation_l = designation.lower()
+    department_l = department.lower()
+    role_l = role.lower()
+
+    if "cook" in designation_l or "chef" in designation_l:
+        label, rank = "Cooks", 10
+    elif "mess boy" in designation_l or "messboy" in designation_l:
+        label, rank = "Mess Boys", 20
+    elif "mess" in designation_l:
+        label, rank = "Mess Staff", 25
+    elif "driver" in designation_l:
+        label, rank = "Drivers", 30
+    elif "clean" in designation_l or "housekeep" in designation_l:
+        label, rank = "Housekeeping", 40
+    elif "security" in designation_l:
+        label, rank = "Security", 50
+    elif "account" in designation_l or "finance" in designation_l:
+        label, rank = "Accounts & Finance", 60
+    elif "manager" in designation_l or "supervisor" in designation_l:
+        label, rank = "Managers", 70
+    elif designation:
+        label, rank = designation.title(), 80
+    elif role_l in {"site_admin", "super_admin"}:
+        label, rank = "Managers", 90
+    elif role_l == "finance_admin":
+        label, rank = "Accounts & Finance", 100
+    elif role_l == "operator":
+        label, rank = "Operators", 110
+    elif role_l in {"instrument_admin", "faculty_in_charge", "professor_approver"}:
+        label, rank = "Academic & Instrument Leads", 120
+    elif department_l:
+        label, rank = department.title(), 130
+    else:
+        label, rank = "General Profiles", 140
+
+    slug = "-".join(
+        part for part in "".join(ch.lower() if ch.isalnum() else " " for ch in label).split()
+    ) or "general-profiles"
+    return {"slug": slug, "label": label, "rank": rank}
+
+
 def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, object]:
     # 5000-user scaling fix: admins + owners are always small sets
     # (< ~100 combined) so an unbounded query is fine. Members
@@ -19226,8 +20683,10 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         # Lab operators expect this directory to show the active people
         # who actually run the facility, not only the top-level admins.
         admin_rows = query_all(
-            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+            "       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
             f"FROM users {portal_join}"
+            "LEFT JOIN salary_config sc ON sc.user_id = users.id "
             f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
             f"ORDER BY CASE WHEN LOWER(users.email) IN ({owner_placeholders}) THEN 0 ELSE 1 END, "
             "CASE users.role "
@@ -19241,8 +20700,10 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         )
     else:
         admin_rows = query_all(
-            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+            "SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+            "       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
             f"FROM users {portal_join}"
+            "LEFT JOIN salary_config sc ON sc.user_id = users.id "
             f"WHERE users.active = 1 {portal_where} AND users.role != 'requester' "
             "ORDER BY users.role, users.name",
             tuple(portal_params),
@@ -19265,6 +20726,7 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         )
         member_where += " AND ep.slug = ? AND ep.is_active = 1"
         member_params.append(portal_slug)
+    member_from += " LEFT JOIN salary_config sc ON sc.user_id = users.id"
     if member_q:
         member_where += " AND (LOWER(users.name) LIKE ? OR LOWER(users.email) LIKE ? OR LOWER(COALESCE(users.member_code, '')) LIKE ?)"
         like = f"%{member_q.lower()}%"
@@ -19274,7 +20736,8 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         tuple(member_params),
     )["c"]
     members = query_all(
-        f"SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code "
+        f"SELECT users.id, users.name, users.email, users.role, users.invite_status, users.active, users.member_code, "
+        f"       COALESCE(sc.designation, '') AS designation, COALESCE(sc.department, '') AS department "
         f"{member_from} {member_where} ORDER BY users.name LIMIT ?",
         tuple(member_params) + (MEMBERS_CAP,),
     )
@@ -19310,6 +20773,34 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
             admin_groups["operators"].append(row)
         else:
             admin_groups["other_profiles"].append(row)
+    category_filter = ((request.args.get("category") or "").strip().lower())
+    category_buckets: dict[str, dict[str, object]] = {}
+    category_source = list(admins) + list(members) + list(owners)
+    for row in category_source:
+        cat = _admin_user_category(row)
+        bucket = category_buckets.setdefault(
+            cat["slug"],
+            {
+                "slug": cat["slug"],
+                "label": cat["label"],
+                "rank": cat["rank"],
+                "count": 0,
+                "users": [],
+            },
+        )
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["users"].append(row)
+    category_groups = sorted(
+        (
+            {
+                **bucket,
+                "users": sorted(bucket["users"], key=lambda item: ((row_value(item, "name", "") or "").lower())),
+            }
+            for bucket in category_buckets.values()
+            if not category_filter or bucket["slug"] == category_filter
+        ),
+        key=lambda bucket: (int(bucket["rank"]), -(int(bucket["count"])), str(bucket["label"]).lower()),
+    )
     return {
         "members": members,
         "members_total": members_total,
@@ -19320,6 +20811,8 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         "owners": owners,
         "pending_users": pending_users,
         "lab_profile_mode": lab_profile_mode_active(),
+        "category_groups": category_groups,
+        "category_filter": category_filter,
     }
 
 
@@ -19452,6 +20945,7 @@ def admin_password_reset_reject(request_id: int):
 
 @app.route("/admin/users", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_open_user_admin)
 def admin_users():
     user = current_user()
     permissions = _admin_users_permissions(user)
@@ -19480,6 +20974,8 @@ def admin_users():
         admin_groups=list_payload["admin_groups"],
         owners=list_payload["owners"],
         pending_users=list_payload["pending_users"],
+        category_groups=list_payload["category_groups"],
+        category_filter=list_payload["category_filter"],
         can_create_users=permissions["can_create_users"],
         can_delete_members=permissions["can_delete_members"],
         can_elevate_members=permissions["can_elevate_members"],
@@ -19547,16 +21043,30 @@ def _can_edit_org_chart(user) -> bool:
 def personnel_chart():
     """Deco-mesh style org chart — blobs + arrows, drag to rewire."""
     user = current_user()
-    users = query_all(
-        """SELECT id, name, email, role, member_code, office_location,
-                  org_node_x, org_node_y
-             FROM users
-            WHERE active = 1 AND invite_status = 'active'
-            ORDER BY name"""
-    )
-    edges = query_all(
-        "SELECT user_id, manager_id FROM reporting_structure"
-    )
+    portal_slug = active_portal_slug()
+    user_sql = """
+        SELECT users.id, users.name, users.email, users.role, users.member_code, users.office_location,
+               users.org_node_x, users.org_node_y
+          FROM users
+    """
+    user_params: list[object] = []
+    if portal_slug:
+        user_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = users.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+         WHERE users.active = 1 AND users.invite_status = 'active'
+           AND ep.slug = ? AND ep.is_active = 1
+        """
+        user_params.append(portal_slug)
+    else:
+        user_sql += " WHERE users.active = 1 AND users.invite_status = 'active'"
+    user_sql += " ORDER BY users.name"
+    users = query_all(user_sql, tuple(user_params))
+    visible_user_ids = {u["id"] for u in users}
+    edges = [
+        row for row in query_all("SELECT user_id, manager_id FROM reporting_structure")
+        if row["user_id"] in visible_user_ids and row["manager_id"] in visible_user_ids
+    ]
     laid_out = _org_chart_layout(users, edges)
     edge_pairs = []
     for e in edges:
@@ -19635,6 +21145,7 @@ def personnel_chart_pin():
 
 @app.route("/admin/org/setup", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_edit_org_chart)
 def admin_org_setup():
     """HR-admin wizard: bulk-create a fresh org in one pass.
 
@@ -19691,6 +21202,7 @@ def admin_org_setup():
 
 @app.route("/admin/onboard", methods=["GET", "POST"])
 @login_required
+@permission_required(_can_invite_users)
 def admin_onboard():
     """Streamlined new-member onboarding wizard.
 
@@ -19903,8 +21415,84 @@ def vehicles_list():
     }
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
+    driver_map = _vehicle_driver_map([v["id"] for v in vehicles])
     return render_template("vehicles.html", vehicles=vehicles, totals=totals,
+                           driver_map=driver_map,
                            can_manage=can_manage, all_users=all_users)
+
+
+def _clean_vehicle_driver_ids(raw_values: list[str] | tuple[str, ...] | None) -> list[int]:
+    cleaned: list[int] = []
+    for raw in raw_values or []:
+        value = (raw or "").strip()
+        if not value:
+            continue
+        try:
+            user_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if user_id > 0 and user_id not in cleaned:
+            cleaned.append(user_id)
+    return cleaned
+
+
+def _vehicle_driver_rows(vehicle_id: int) -> list[sqlite3.Row]:
+    return query_all(
+        """
+        SELECT u.id, u.name, u.email, COALESCE(vda.is_primary, 0) AS is_primary
+          FROM vehicle_driver_assignments vda
+          JOIN users u ON u.id = vda.user_id
+         WHERE vda.vehicle_id = ?
+         ORDER BY vda.is_primary DESC, u.name ASC
+        """,
+        (vehicle_id,),
+    )
+
+
+def _vehicle_driver_map(vehicle_ids: list[int] | tuple[int, ...]) -> dict[int, list[dict[str, object]]]:
+    cleaned_ids = [int(vehicle_id) for vehicle_id in vehicle_ids if int(vehicle_id) > 0]
+    if not cleaned_ids:
+        return {}
+    placeholders = ",".join("?" for _ in cleaned_ids)
+    rows = query_all(
+        f"""
+        SELECT vda.vehicle_id, u.id, u.name, COALESCE(vda.is_primary, 0) AS is_primary
+          FROM vehicle_driver_assignments vda
+          JOIN users u ON u.id = vda.user_id
+         WHERE vda.vehicle_id IN ({placeholders})
+         ORDER BY vda.vehicle_id ASC, vda.is_primary DESC, u.name ASC
+        """,
+        tuple(cleaned_ids),
+    )
+    mapping: dict[int, list[dict[str, object]]] = {vehicle_id: [] for vehicle_id in cleaned_ids}
+    for row in rows:
+        mapping.setdefault(row["vehicle_id"], []).append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "is_primary": bool(row["is_primary"]),
+            }
+        )
+    return mapping
+
+
+def _sync_vehicle_driver_assignments(vehicle_id: int, driver_ids: list[int]) -> None:
+    execute("DELETE FROM vehicle_driver_assignments WHERE vehicle_id = ?", (vehicle_id,))
+    primary_driver_id = driver_ids[0] if driver_ids else None
+    execute(
+        "UPDATE vehicles SET assigned_driver_user_id = ? WHERE id = ?",
+        (primary_driver_id, vehicle_id),
+    )
+    timestamp = now_iso()
+    for idx, user_id in enumerate(driver_ids):
+        execute(
+            """
+            INSERT OR REPLACE INTO vehicle_driver_assignments
+            (vehicle_id, user_id, is_primary, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (vehicle_id, user_id, 1 if idx == 0 else 0, timestamp),
+        )
 
 
 @app.route("/vehicles/new", methods=["POST"])
@@ -19919,7 +21507,10 @@ def vehicle_create():
     name = request.form.get("name", "").strip()
     registration_no = request.form.get("registration_no", "").strip()
     vehicle_type = request.form.get("vehicle_type", "car").strip()
-    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    driver_ids = _clean_vehicle_driver_ids(
+        request.form.getlist("driver_user_ids") or [request.form.get("assigned_driver_user_id", "")]
+    )
+    assigned_driver = driver_ids[0] if driver_ids else None
     purchase_date = request.form.get("purchase_date", "").strip() or None
     purchase_cost = float(request.form.get("purchase_cost", "0") or "0")
     insurance_expiry = request.form.get("insurance_expiry", "").strip() or None
@@ -19936,9 +21527,10 @@ def vehicle_create():
            status, purchase_date, purchase_cost, insurance_expiry, notes, created_at)
            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)""",
         (name, registration_no, vehicle_type,
-         int(assigned_driver) if assigned_driver else None,
+         assigned_driver,
          purchase_date, purchase_cost, insurance_expiry, notes, now_iso()),
     )
+    _sync_vehicle_driver_assignments(new_id, driver_ids)
     log_action(user["id"], "vehicle", new_id, "vehicle_created",
                {"name": name, "registration_no": registration_no})
     flash(f"{name} added to fleet.", "success")
@@ -19955,10 +21547,8 @@ def vehicle_detail(vehicle_id: int):
     vehicle = query_one("SELECT * FROM vehicles WHERE id = ?", (vehicle_id,))
     if not vehicle:
         abort(404)
-    driver = None
-    if vehicle["assigned_driver_user_id"]:
-        driver = query_one("SELECT id, name, email FROM users WHERE id = ?",
-                           (vehicle["assigned_driver_user_id"],))
+    drivers = _vehicle_driver_rows(vehicle_id)
+    driver = drivers[0] if drivers else None
     logs = query_all("""
         SELECT vl.*, u.name AS logged_by_name
           FROM vehicle_logs vl
@@ -19972,12 +21562,22 @@ def vehicle_detail(vehicle_id: int):
     can_manage = is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin"})
     # Assigned vehicles for cross-link from personnel
     assigned_vehicles = []
-    if vehicle["assigned_driver_user_id"]:
+    if drivers:
         assigned_vehicles = query_all(
-            "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ? AND id != ?",
-            (vehicle["assigned_driver_user_id"], vehicle_id))
+            """
+            SELECT DISTINCT v.id, v.name, v.registration_no
+              FROM vehicle_driver_assignments vda
+              JOIN vehicle_driver_assignments peer ON peer.user_id = vda.user_id
+              JOIN vehicles v ON v.id = peer.vehicle_id
+             WHERE vda.vehicle_id = ? AND v.id != ?
+             ORDER BY v.name ASC
+            """,
+            (vehicle_id, vehicle_id),
+        )
     all_users = query_all("SELECT id, name FROM users ORDER BY name") if can_manage else []
     return render_template("vehicle_detail.html", vehicle=vehicle, driver=driver,
+                           drivers=drivers,
+                           selected_driver_ids=[row["id"] for row in drivers],
                            logs=logs, fuel_total=fuel_total, maint_total=maint_total,
                            other_total=other_total, can_manage=can_manage,
                            assigned_vehicles=assigned_vehicles,
@@ -20042,7 +21642,10 @@ def vehicle_edit(vehicle_id: int):
     name = request.form.get("name", "").strip() or vehicle["name"]
     registration_no = request.form.get("registration_no", "").strip() or vehicle["registration_no"]
     vehicle_type = request.form.get("vehicle_type", "").strip() or vehicle["vehicle_type"]
-    assigned_driver = request.form.get("assigned_driver_user_id", "").strip()
+    driver_ids = _clean_vehicle_driver_ids(
+        request.form.getlist("driver_user_ids") or [request.form.get("assigned_driver_user_id", "")]
+    )
+    assigned_driver = driver_ids[0] if driver_ids else None
     purchase_date = request.form.get("purchase_date", "").strip() or vehicle["purchase_date"]
     purchase_cost = float(request.form.get("purchase_cost", "") or vehicle["purchase_cost"])
     insurance_expiry = request.form.get("insurance_expiry", "").strip() or vehicle["insurance_expiry"]
@@ -20052,9 +21655,10 @@ def vehicle_edit(vehicle_id: int):
            assigned_driver_user_id=?, purchase_date=?, purchase_cost=?,
            insurance_expiry=?, notes=? WHERE id=?""",
         (name, registration_no, vehicle_type,
-         int(assigned_driver) if assigned_driver else None,
+         assigned_driver,
          purchase_date, purchase_cost, insurance_expiry, notes, vehicle_id),
     )
+    _sync_vehicle_driver_assignments(vehicle_id, driver_ids)
     log_action(user["id"], "vehicle", vehicle_id, "vehicle_updated", {"name": name})
     flash(f"{name} updated.", "success")
     return redirect(url_for("vehicle_detail", vehicle_id=vehicle_id))
@@ -20131,16 +21735,29 @@ def personnel_list():
     if not _personnel_access(user):
         abort(403)
     can_edit = _personnel_can_edit(user)
-    staff = query_all("""
+    portal_slug = active_portal_slug()
+    staff_sql = """
         SELECT u.id, u.name, u.email, u.role, u.short_code, u.active,
                mgr.name AS manager_name,
                sc.monthly_salary, sc.designation, sc.department, sc.join_date
           FROM users u
+    """
+    staff_params: list[object] = []
+    if portal_slug:
+        staff_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = u.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+        """
+    staff_sql += """
           LEFT JOIN reporting_structure rs ON rs.user_id = u.id
           LEFT JOIN users mgr ON mgr.id = rs.manager_id
           LEFT JOIN salary_config sc ON sc.user_id = u.id
-         ORDER BY u.name
-    """)
+    """
+    if portal_slug:
+        staff_sql += " WHERE ep.slug = ? AND ep.is_active = 1"
+        staff_params.append(portal_slug)
+    staff_sql += " ORDER BY u.name"
+    staff = query_all(staff_sql, tuple(staff_params))
     # Get today's attendance for quick-mark widget
     from datetime import date as _date
     today = _date.today().isoformat()
@@ -20169,7 +21786,20 @@ def personnel_detail(user_id: int):
         abort(404)
     if not _personnel_access(user):
         abort(403)
-    employee = query_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    portal_slug = active_portal_slug()
+    employee_sql = "SELECT users.* FROM users"
+    employee_params: list[object] = []
+    if portal_slug:
+        employee_sql += """
+          JOIN erp_user_portals eup ON eup.user_id = users.id
+          JOIN erp_portals ep ON ep.id = eup.portal_id
+        """
+    employee_sql += " WHERE users.id = ?"
+    employee_params.append(user_id)
+    if portal_slug:
+        employee_sql += " AND ep.slug = ? AND ep.is_active = 1"
+        employee_params.append(portal_slug)
+    employee = query_one(employee_sql, tuple(employee_params))
     if not employee:
         abort(404)
     salary_cfg = query_one("SELECT * FROM salary_config WHERE user_id = ?", (user_id,))
@@ -20185,8 +21815,15 @@ def personnel_detail(user_id: int):
     days_worked = _attendance_days_worked(user_id, today.year, today.month)
     # Assigned vehicles
     assigned_vehicles = query_all(
-        "SELECT id, name, registration_no FROM vehicles WHERE assigned_driver_user_id = ?",
-        (user_id,))
+        """
+        SELECT DISTINCT v.id, v.name, v.registration_no
+          FROM vehicle_driver_assignments vda
+          JOIN vehicles v ON v.id = vda.vehicle_id
+         WHERE vda.user_id = ?
+         ORDER BY v.name ASC
+        """,
+        (user_id,),
+    )
     can_edit = _personnel_can_edit(user)
     manager_id = _line_manager_id_for_user(user_id)
     manager_row = query_one("SELECT id, name, role FROM users WHERE id = ?", (manager_id,)) if manager_id else None
@@ -20624,6 +22261,7 @@ def company_books():
 
 @app.route("/vendors")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_list():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -20653,6 +22291,7 @@ def vendor_list():
 
 @app.route("/vendors/bulk", methods=["POST"])
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_bulk_create():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -20704,6 +22343,7 @@ def vendor_bulk_create():
 
 @app.route("/vendors/new", methods=["GET", "POST"])
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_new():
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -20761,6 +22401,7 @@ def vendor_new():
 
 @app.route("/vendors/<int:vendor_id>")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_detail(vendor_id):
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -20800,6 +22441,7 @@ def vendor_detail(vendor_id):
 
 @app.route("/vendors/<int:vendor_id>/approval", methods=["POST"])
 @login_required
+@permission_required(_user_can_approve_vendors)
 def vendor_approval_action(vendor_id: int):
     if not portal_route_enabled("vendor_payments"):
         abort(404)
@@ -20847,6 +22489,7 @@ def vendor_approval_action(vendor_id: int):
 
 @app.route("/payments")
 @login_required
+@permission_required(_user_can_manage_payments)
 def vendor_payments_list():
     """Main payment list — shows all POs grouped by status."""
     if not portal_route_enabled("vendor_payments"):
@@ -21658,6 +23301,7 @@ def _user_is_ca_auditor(user) -> bool:
 
 @app.route("/audit")
 @login_required
+@permission_required(_user_is_ca_auditor)
 def ca_audit_dashboard():
     """CA audit dashboard — overview of audit status across all transactions."""
     if not portal_route_enabled("vendor_payments"):
@@ -23907,6 +25551,7 @@ def ai_action_decide(action_id: int):
         return redirect(url_for("inbox"))
     decision = request.form.get("decision", "").strip()
     note = request.form.get("note", "").strip()
+    action_type = row_value(action, "action_type", "")
     if decision == "reject":
         if not note:
             flash("Rejection requires a note.", "warning")
@@ -23916,6 +25561,14 @@ def ai_action_decide(action_id: int):
             "decided_at=?, decided_by_user_id=? WHERE id=?",
             (note, now_iso(), user["id"], action_id),
         )
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="rejected",
+            action_id=action_id,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(f"Rejected action #{action_id}.", "success")
         return redirect(url_for("inbox"))
     if decision != "approve":
@@ -23923,7 +25576,6 @@ def ai_action_decide(action_id: int):
         return redirect(url_for("inbox"))
     # Approve: advance to next stage if one exists, else materialise.
     stage = row_value(action, "approver_stage", "area_admin")
-    action_type = row_value(action, "action_type", "")
     route = query_one(
         "SELECT * FROM ai_action_routes WHERE action_type = ?", (action_type,)
     )
@@ -23955,11 +25607,33 @@ def ai_action_decide(action_id: int):
         (note, now_iso(), user["id"], table, new_id, action_id),
     )
     if table and new_id:
+        summary_text = f"Created {table} #{new_id}."
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="approved",
+            action_id=action_id,
+            summary=summary_text,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(
             f"Approved action #{action_id} and created {table} #{new_id}.",
             "success",
         )
     else:
+        summary_text = (
+            f"Approved for manual follow-through in {table or action_type}."
+        )
+        _notify_ai_request_decided(
+            user_id=row_value(action, "submitted_by_user_id"),
+            action_type=action_type,
+            decision="approved",
+            action_id=action_id,
+            summary=summary_text,
+            note=note,
+            href=url_for("ai_advisor_log"),
+        )
         flash(
             f"Approved action #{action_id}. Materialisation for {table or action_type} "
             f"isn't wired yet — complete the entry manually in the module UI.",
@@ -23974,8 +25648,26 @@ def ai_advisor_log():
     """View processed AI advisor entries for the current user."""
     user = current_user()
     entries = query_all(
-        "SELECT * FROM ai_advisor_queue WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
-        (user["id"],))
+        """SELECT aq.*,
+                  pa.id AS routed_action_id,
+                  pa.action_type AS routed_action_type,
+                  pa.status AS routed_action_status,
+                  pa.approver_stage AS routed_approver_stage,
+                  pa.decision_note AS routed_decision_note,
+                  pa.decided_at AS routed_decided_at,
+                  pa.materialised_table AS routed_materialised_table,
+                  pa.materialised_row_id AS routed_materialised_row_id,
+                  approver.name AS routed_approver_name
+           FROM ai_advisor_queue aq
+           LEFT JOIN ai_prospective_actions pa
+             ON pa.source_queue_id = aq.id
+           LEFT JOIN users approver
+             ON approver.id = pa.assigned_approver_id
+           WHERE aq.user_id = ?
+           ORDER BY aq.created_at DESC
+           LIMIT 50""",
+        (user["id"],),
+    )
     return render_template("ai_advisor_log.html", entries=entries)
 
 
@@ -24141,7 +25833,7 @@ def dispatch_console():
 def ai_advisor_trigger_batch():
     """Manually trigger AI advisor batch processing (owner/super_admin only)."""
     user = current_user()
-    if not (is_owner(user) or user["role"] == "super_admin"):
+    if not (is_owner(user) or user_has_role(user, "super_admin")):
         flash("Only owners can trigger batch processing.", "warning")
         return redirect(url_for("index"))
     count = ai_advisor_batch_process(f"manual-{now_iso()}")
@@ -24985,6 +26677,55 @@ def _normalize_feedback_text(raw_text: str) -> str:
     return text
 
 
+def _feedback_context_summary(context_json: str) -> str:
+    """Render the highest-signal parts of a feedback context blob as markdown."""
+    raw = (context_json or "").strip()
+    if not raw:
+        return ""
+    try:
+        ctx = json.loads(raw)
+    except Exception:
+        return ""
+
+    lines: list[str] = []
+    hover = ctx.get("hover")
+    if hover:
+        lines.append(f"- hover target: `{hover}`")
+
+    pointer = ctx.get("pointer") or {}
+    if isinstance(pointer, dict) and pointer:
+        px = pointer.get("pageX", pointer.get("page_x"))
+        py = pointer.get("pageY", pointer.get("page_y"))
+        vx = pointer.get("x")
+        vy = pointer.get("y")
+        parts = []
+        if vx is not None and vy is not None:
+            parts.append(f"viewport `{vx},{vy}`")
+        if px is not None and py is not None:
+            parts.append(f"page `{px},{py}`")
+        if parts:
+            lines.append("- pointer: " + " · ".join(parts))
+
+    clicks = ctx.get("captured_clicks") or []
+    if isinstance(clicks, list) and clicks:
+        lines.append("- captured clicks:")
+        for click in clicks[-5:]:
+            if not isinstance(click, dict):
+                continue
+            selector = click.get("selector") or "unknown"
+            path = click.get("path") or ctx.get("path") or "?"
+            cx = click.get("page_x", click.get("pageX", "?"))
+            cy = click.get("page_y", click.get("pageY", "?"))
+            mode = click.get("mode") or "capture"
+            lines.append(f"  - `{selector}` on `{path}` at `{cx},{cy}` via `{mode}`")
+
+    pointer_trail = ctx.get("pointer_trail") or []
+    if isinstance(pointer_trail, list) and pointer_trail:
+        lines.append(f"- pointer trail samples: `{len(pointer_trail)}`")
+
+    return "**Captured context:**\n" + "\n".join(lines) if lines else ""
+
+
 def _append_feedback_entry(
     *,
     user: sqlite3.Row | None,
@@ -25012,6 +26753,7 @@ def _append_feedback_entry(
         user_label = "anonymous"
     portal_slug = active_portal_slug() or "?"
     cleaned_text = _normalize_feedback_text(text)
+    context_summary = _feedback_context_summary(context_json)
     entry = (
         f"\n## {now_iso()}\n\n"
         f"**User:** {user_label}  \n"
@@ -25020,6 +26762,8 @@ def _append_feedback_entry(
         f"**Source:** `{source}`  \n\n"
         f"{cleaned_text}\n"
     )
+    if context_summary:
+        entry += f"\n{context_summary}\n"
     ctx = (context_json or "").strip()
     if ctx:
         # Cap payload size so a runaway client can't blow up the log.
@@ -25203,22 +26947,62 @@ def debug_feedback():
     Enriched server-side with the logged-in user's name, role, and
     the Flask endpoint that serves the page they were looking at.
     """
-    data = request.get_json(silent=True)
-    if not data or not data.get("text"):
-        return jsonify(ok=False, error="no text"), 400
-
     user = current_user()
-    page = data.get("page", "?")
-    ts = data.get("timestamp", datetime.now().isoformat())
-    grid = "grid visible" if data.get("grid_visible") else "grid off"
-    text = data["text"].strip()
+    data = request.get_json(silent=True)
+    if data and data.get("text"):
+        page = data.get("page", "?")
+        ts = data.get("timestamp", datetime.now().isoformat())
+        grid = "grid visible" if data.get("grid_visible") else "grid off"
+        text = data["text"].strip()
+        clicks = data.get("clicks", [])
+        context_payload = {
+            "timestamp": ts,
+            "grid_visible": bool(data.get("grid_visible")),
+            "clicks": clicks,
+            "client_context": data.get("context", {}),
+        }
+        response_mode = "json"
+    else:
+        title = (request.form.get("title") or "").strip()
+        severity = (request.form.get("severity") or "info").strip() or "info"
+        description = (request.form.get("description") or "").strip()
+        if not any([title, description]):
+            return jsonify(ok=False, error="no text"), 400
+        page = (request.form.get("page") or request.path).strip() or "?"
+        ts = datetime.now().isoformat()
+        grid = "mobile form"
+        text_parts = []
+        if title:
+            text_parts.append(f"Title: {title}")
+        text_parts.append(f"Severity: {severity}")
+        if description:
+            text_parts.append(description)
+        text = "\n\n".join(text_parts).strip()
+        clicks = []
+        screenshot = request.files.get("screenshot")
+        context_payload = {
+            "timestamp": ts,
+            "grid_visible": False,
+            "clicks": [],
+            "client_context": {
+                "user_agent": request.headers.get("User-Agent", ""),
+                "submitted_via": "debug_panel_form",
+                "screenshot_filename": screenshot.filename if screenshot and screenshot.filename else "",
+            },
+        }
+        response_mode = "redirect"
 
-    clicks = data.get("clicks", [])
     click_lines = ""
     if clicks:
         click_lines = "\n**Click markers:**\n"
         for c in clicks:
-            click_lines += f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` ({c.get('page', '?')})\n"
+            action = c.get("action") or "click"
+            page_x = c.get("pageX", c.get("page_x", "?"))
+            page_y = c.get("pageY", c.get("page_y", "?"))
+            click_lines += (
+                f"- `{c.get('grid', '?')}` on `{c.get('element', '?')}` "
+                f"({c.get('page', '?')}) at `{page_x},{page_y}` via `{action}`\n"
+            )
 
     saved_to = _append_feedback_entry(
         user=user,
@@ -25231,15 +27015,22 @@ def debug_feedback():
         page=f"{page} ({grid})",
         source="debug-feedback",
         text=f"{text}\n\n{click_lines}".strip(),
-        context_json=json.dumps({
-            "timestamp": ts,
-            "grid_visible": bool(data.get("grid_visible")),
-            "clicks": clicks,
-            "client_context": data.get("context", {}),
-        }),
+        context_json=json.dumps(context_payload),
     )
+    if response_mode == "redirect":
+        flash("Debug report sent.", "success")
+        return redirect(url_for("debug_panel"))
 
     return jsonify(ok=True, saved_to=str(saved_to), issue_id=issue_id)
+
+
+@app.route("/debug", methods=["GET"])
+@login_required
+def debug_panel():
+    user = current_user()
+    if not (is_owner(user) or user_has_role(user, "tester") or user_has_role(user, "super_admin")):
+        abort(403)
+    return render_template("debug.html")
 
 
 @app.route("/feedback", methods=["POST"])
@@ -25282,6 +27073,7 @@ def site_feedback_submit():
 def global_search():
     user = current_user()
     q = request.args.get("q", "").strip()
+    portal_slug = active_portal_slug()
     shortcuts = [
         {"label": "Dashboard", "hint": "See current workload and action items.", "url": url_for("index")},
     ]
@@ -25298,17 +27090,40 @@ def global_search():
     results = []
     sections = []
     like = f"%{q}%"
-    instruments_found = [
-        {"type": "Instrument", "title": r["name"], "code": r["code"], "meta": "Machine", "url": url_for("instrument_detail", instrument_id=r["id"])}
-        for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
-    ]
-    requests_found = [
-        {"type": "Request", "title": r["title"], "code": r["request_no"], "meta": "Sample request", "url": url_for("request_detail", request_id=r["id"])}
-        for r in query_all("SELECT id, request_no, title FROM sample_requests WHERE request_no LIKE ? OR title LIKE ? OR sample_name LIKE ? LIMIT 6", (like, like, like))
-    ]
+    instruments_found = []
+    if module_visible_in_active_portal("instruments") and has_instrument_area_access(user):
+        instruments_found = [
+            {"type": "Instrument", "title": r["name"], "code": r["code"], "meta": "Machine", "url": url_for("instrument_detail", instrument_id=r["id"])}
+            for r in query_all("SELECT id, name, code FROM instruments WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
+        ]
+    requests_found = []
+    if module_visible_in_active_portal("queue") and can_access_schedule(user):
+        request_clauses, request_params = request_scope_sql(user, "sr")
+        request_clauses.append("(sr.request_no LIKE ? OR sr.title LIKE ? OR sr.sample_name LIKE ?)")
+        request_params.extend([like, like, like])
+        requests_found = [
+            {"type": "Request", "title": r["title"], "code": r["request_no"], "meta": "Sample request", "url": url_for("request_detail", request_id=r["id"])}
+            for r in query_all(
+                f"SELECT sr.id, sr.request_no, sr.title FROM sample_requests sr WHERE {' AND '.join(request_clauses)} LIMIT 6",
+                tuple(request_params),
+            )
+        ]
+    user_from = "FROM users u"
+    user_where = "WHERE (u.name LIKE ? OR u.email LIKE ?)"
+    user_params: list[object] = [like, like]
+    if portal_slug:
+        user_from += (
+            " JOIN erp_user_portals eup ON eup.user_id = u.id "
+            " JOIN erp_portals ep ON ep.id = eup.portal_id "
+        )
+        user_where += " AND ep.slug = ? AND ep.is_active = 1"
+        user_params.append(portal_slug)
     users_found = [
         {"type": "User", "title": r["name"], "code": r["email"], "meta": "User profile", "url": url_for("user_profile", user_id=r["id"])}
-        for r in query_all("SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ? LIMIT 6", (like, like))
+        for r in query_all(
+            f"SELECT DISTINCT u.id, u.name, u.email {user_from} {user_where} LIMIT 6",
+            tuple(user_params),
+        )
     ]
     grants_found = []
     if module_visible_in_active_portal("finance") and _user_can_view_finance(user):
@@ -25354,6 +27169,7 @@ def global_search():
 # ── Feature: Audit Log Viewer (admin-only) ──────────────────────────
 @app.route("/admin/audit-log")
 @login_required
+@permission_required(_can_view_audit_log)
 def audit_log_viewer():
     """Central audit log — visible only to owner, super_admin, site_admin."""
     user = current_user()
@@ -26175,6 +27991,25 @@ def _current_meal() -> str:
     return "lunch"
 
 
+@app.route("/attendance/quick")
+@login_required
+def attendance_quick_mark_page():
+    """Mobile-first numeric quick-mark page (Nikita 2026-04-15).
+
+    People call out their attendance_number (1, 2, 3 …) and an
+    admin-role user on a phone/kiosk types it into a big keypad,
+    confirms the name, and taps Mark Present. Backed by existing
+    APIs — see templates/attendance_quick.html header comment.
+    """
+    user = current_user()
+    if not (user_role_set(user) & {
+        "super_admin", "site_admin", "operator",
+        "instrument_admin", "finance_admin",
+    } or is_owner(user)):
+        abort(403)
+    return render_template("attendance_quick.html")
+
+
 @app.route("/attendance/qr")
 @login_required
 def qr_attendance_kiosk():
@@ -26337,6 +28172,11 @@ def _mess_access(user) -> bool:
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
 
 
+def _mess_portal_guard() -> None:
+    if not portal_route_enabled("mess"):
+        abort(404)
+
+
 # ── Monthly / Semester rotating pass tokens ──────────────────────
 def _mess_pass_secret() -> str:
     """Server-side secret for HMAC-based pass tokens. Derived from
@@ -26434,6 +28274,7 @@ def mess_camera_scan():
     """Phone camera scanner — uses html5-qrcode JS library to scan
     student QR codes from their phone screen. No app install needed."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -26453,6 +28294,7 @@ def mess_api_validate_scan():
     """AJAX endpoint for the camera scanner. Accepts a scanned token,
     validates it, records the entry, returns JSON."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     from datetime import date as _date, datetime as _dt
@@ -26511,6 +28353,7 @@ def mess_api_validate_scan():
 def mess_dashboard():
     """Mess management dashboard — today's meal counts, live scan."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, datetime as _dt
@@ -26561,6 +28404,7 @@ def mess_dashboard():
 def mess_scan():
     """Scan a student QR/barcode for mess entry."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, datetime as _dt
@@ -26642,6 +28486,7 @@ def mess_scan():
 def mess_students_list():
     """List all registered mess students."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     students = query_all(
@@ -26662,6 +28507,7 @@ def mess_students_list():
 def mess_student_new():
     """Register a new mess student."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     if request.method == "POST":
@@ -26718,6 +28564,7 @@ def mess_student_new():
 def mess_student_detail(student_id: int):
     """Student detail — meal history, QR code."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one(
@@ -26777,6 +28624,7 @@ def mess_student_detail(student_id: int):
 def mess_student_qr(student_id: int):
     """Printable QR card for a student."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT * FROM mess_students WHERE id = ?", (student_id,))
@@ -26790,6 +28638,7 @@ def mess_student_qr(student_id: int):
 def mess_student_toggle(student_id: int):
     """Activate/deactivate a student (graduation, withdrawal, etc)."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT id, name, is_active FROM mess_students WHERE id = ?", (student_id,))
@@ -26808,6 +28657,7 @@ def mess_student_toggle(student_id: int):
 def mess_student_edit(student_id: int):
     """Update student details."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     student = query_one("SELECT id FROM mess_students WHERE id = ?", (student_id,))
@@ -26851,6 +28701,7 @@ def mess_student_edit(student_id: int):
 def mess_api_search_student():
     """AJAX search for students — supports partial name, roll, department."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify([])
     q = request.args.get("q", "").strip()
@@ -26880,6 +28731,7 @@ def mess_api_search_student():
 def mess_api_lookup(code: str):
     """Quick lookup by roll number, QR token, or short numeric ID. Returns student info + photo for security gate."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         return jsonify({"error": "access denied"}), 403
     code = code.strip().upper()
@@ -26907,6 +28759,7 @@ def mess_api_lookup(code: str):
 @login_required
 def mess_student_photo(student_id: int):
     """Serve student photo from data directory."""
+    _mess_portal_guard()
     student = query_one("SELECT photo_path FROM mess_students WHERE id=?", (student_id,))
     if not student or not student["photo_path"]:
         abort(404)
@@ -26921,6 +28774,7 @@ def mess_student_photo(student_id: int):
 def mess_students_import():
     """Bulk import students from CSV. Columns: name, roll_number, department, year, hostel, room, meal_plan, phone"""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     import csv, io, secrets
@@ -26972,6 +28826,7 @@ def mess_batch_passes():
     """Generate pass links for all active students. Admin can copy/share
     or export as CSV for WhatsApp/SMS distribution."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -27021,6 +28876,7 @@ def mess_batch_passes():
 def mess_reports():
     """Mess reports — daily/weekly/monthly meal counts."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, timedelta
@@ -27079,6 +28935,7 @@ def mess_prep_log():
     """Food preparation planning — log plates prepared, track wastage.
     Uses 7-day historical average to predict demand."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date, timedelta, datetime as _dt
@@ -27184,6 +29041,7 @@ def mess_tally_export():
     """Export monthly mess consumption as Tally-compatible CSV for journal entries.
     Each day's total becomes a journal entry: debit Mess Expenses, credit Students' Mess Fee."""
     user = current_user()
+    _mess_portal_guard()
     if not _mess_access(user):
         abort(403)
     from datetime import date as _date
@@ -27243,6 +29101,11 @@ def _tuck_shop_access(user) -> bool:
     return is_owner(user) or bool(user_role_set(user) & {"super_admin", "site_admin", "operator", "instrument_admin", "finance_admin"})
 
 
+def _tuck_shop_portal_guard() -> None:
+    if not portal_route_enabled("tuck_shop"):
+        abort(404)
+
+
 def _next_token_number(issue_date: str) -> int:
     """Return the next token number for a given date (resets daily)."""
     row = query_one(
@@ -27257,8 +29120,7 @@ def _next_token_number(issue_date: str) -> int:
 def tuck_shop_dashboard():
     """Tuck shop overview: today's sales, tokens, quick links."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27313,8 +29175,7 @@ def tuck_shop_dashboard():
 def tuck_shop_terminal():
     """POS terminal — tap items, record sale."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     items = query_all(
@@ -27331,8 +29192,7 @@ def tuck_shop_terminal():
 def tuck_shop_items_manage():
     """Manage tuck shop item catalog."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     if request.method == "POST":
@@ -27356,6 +29216,7 @@ def tuck_shop_items_manage():
 def tuck_shop_item_toggle(item_id: int):
     """Toggle active/inactive for a tuck shop item."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
@@ -27372,6 +29233,7 @@ def tuck_shop_item_toggle(item_id: int):
 def tuck_shop_api_record_sale():
     """AJAX: Record a POS sale with line items. JSON in, JSON out."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27421,8 +29283,7 @@ def tuck_shop_api_record_sale():
 def tuck_shop_token_issue():
     """Payment counter screen — issue tokens."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27458,6 +29319,7 @@ def tuck_shop_token_issue():
 def tuck_shop_api_issue_token():
     """AJAX: Issue a new token at the payment counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27494,8 +29356,7 @@ def tuck_shop_api_issue_token():
 def tuck_shop_token_redeem():
     """Serving counter screen — redeem tokens."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27522,6 +29383,7 @@ def tuck_shop_token_redeem():
 def tuck_shop_api_redeem_token():
     """AJAX: Redeem a token at the serving counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27560,8 +29422,7 @@ def tuck_shop_api_redeem_token():
 def tuck_shop_daily_report():
     """Daily sales & token reconciliation report."""
     user = current_user()
-    if not module_enabled("tuck_shop"):
-        abort(404)
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27643,6 +29504,7 @@ def tuck_shop_daily_report():
 def tuck_shop_api_void_token():
     """AJAX: Void a token (cancellation at payment counter)."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27668,6 +29530,7 @@ def tuck_shop_api_void_token():
 def tuck_shop_item_edit(item_id: int):
     """Update a tuck shop item's price, name, or category."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     item = query_one("SELECT * FROM tuck_shop_items WHERE id = ?", (item_id,))
@@ -27687,6 +29550,7 @@ def tuck_shop_item_edit(item_id: int):
 def tuck_shop_report_csv():
     """CSV export of daily tuck shop report."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     from datetime import date as _date
@@ -27736,6 +29600,7 @@ def tuck_shop_report_csv():
 def tuck_shop_api_pending_tokens():
     """AJAX: Live-refresh pending tokens for serving counter."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify([])
     from datetime import date as _date
@@ -27761,6 +29626,7 @@ def tuck_shop_api_pending_tokens():
 def tuck_shop_api_today_stats():
     """AJAX: Live stats for payment counter header."""
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({})
     from datetime import date as _date
@@ -27788,6 +29654,7 @@ def tuck_shop_api_bank_match():
            "issue_date": "YYYY-MM-DD", "matched": 0|1}
     """
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         return jsonify({"ok": False, "error": "Access denied"}), 403
     data = request.get_json(force=True)
@@ -27832,6 +29699,7 @@ def tuck_shop_bank_reconcile():
     manual review.
     """
     user = current_user()
+    _tuck_shop_portal_guard()
     if not _tuck_shop_access(user):
         abort(403)
     report_date = (request.form.get("date") or "").strip()
@@ -28671,6 +30539,27 @@ def ai_pane_summary():
     for t in todos:
         items.append({"type": "todo", "text": f"Task: {t['title']}" + (" (urgent)" if t["priority"] == "urgent" else "")})
 
+    my_ai_routes = query_all(
+        """SELECT action_type, status, created_at
+           FROM ai_prospective_actions
+           WHERE submitted_by_user_id = ?
+           ORDER BY created_at DESC
+           LIMIT 3""",
+        (user["id"],),
+    )
+    for route in my_ai_routes:
+        label = (route["action_type"] or "request").replace("_", " ")
+        status = route["status"] or "awaiting_review"
+        if status == "awaiting_review":
+            text = f"AI-routed {label} awaiting human review"
+        elif status == "approved":
+            text = f"AI-routed {label} approved"
+        elif status == "rejected":
+            text = f"AI-routed {label} rejected"
+        else:
+            text = f"AI-routed {label} — {status.replace('_', ' ')}"
+        items.append({"type": "ai_route", "text": text})
+
     # Admin-specific: pending approvals
     if role in ("super_admin", "site_admin", "instrument_admin", "finance_admin", "approver"):
         pending_approvals = query_one(
@@ -28679,6 +30568,16 @@ def ai_pane_summary():
         )
         if pending_approvals and pending_approvals["c"]:
             items.append({"type": "approval", "text": f"{pending_approvals['c']} pending approval{'s' if pending_approvals['c'] > 1 else ''} for your role"})
+
+    pending_ai_reviews = query_one(
+        "SELECT COUNT(*) AS c FROM ai_prospective_actions WHERE assigned_approver_id = ? AND status = 'awaiting_review'",
+        (user["id"],),
+    )
+    if pending_ai_reviews and pending_ai_reviews["c"]:
+        items.append({
+            "type": "ai_review",
+            "text": f"{pending_ai_reviews['c']} AI-routed request{'s' if pending_ai_reviews['c'] > 1 else ''} awaiting your review",
+        })
 
     # Pending AI commands needing review
     pending_cmds = query_one(
@@ -28746,6 +30645,7 @@ def ai_pane_summary():
 
 @app.route("/admin/ai-log")
 @login_required
+@permission_required(_can_view_ai_admin_log)
 def ai_admin_log():
     """Admin view: all AI interactions across all users."""
     user = current_user()
@@ -29084,6 +30984,16 @@ if __name__ == "__main__":
     # devices can reach it at http://<host>:5055/.
     bind_host = os.environ.get("LAB_SCHEDULER_HOST", "127.0.0.1")
 
+    # LAB_SCHEDULER_PORT controls the bind port. Default 5055 matches
+    # the historical single-instance convention. Set explicitly when
+    # running the three-ERP-variant triad (scripts/start_erp_triad.sh)
+    # so each variant binds a distinct port (5101/5102/5103) without
+    # colliding with the production :5055.
+    try:
+        bind_port = int(os.environ.get("LAB_SCHEDULER_PORT", "5055"))
+    except ValueError:
+        bind_port = 5055
+
     # use_reloader watches .py files and auto-restarts on code changes.
     # Decoupled from LAB_SCHEDULER_DEBUG as of v1.4.5 — a laptop
     # operator editing app.py wants reload even without the debug
@@ -29107,7 +31017,7 @@ if __name__ == "__main__":
     else:
         auto_reload = bind_host in ("127.0.0.1", "localhost", "::1")
 
-    app.run(debug=is_debug, use_reloader=auto_reload, host=bind_host, port=5055,
+    app.run(debug=is_debug, use_reloader=auto_reload, host=bind_host, port=bind_port,
             extra_files=[
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),

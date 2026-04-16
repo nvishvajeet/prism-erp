@@ -21,8 +21,10 @@
 <section data-vis="{{ V }}">
   <div class="breadcrumb-trail" data-vis="{{ V }}">
     <a class="breadcrumb-link" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
+    {% if can_access_schedule_user %}
     <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
     <a class="breadcrumb-link" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue</a>
+    {% endif %}
     <span class="breadcrumb-separator" aria-hidden="true" data-vis="{{ V }}">/</span>
     <span class="breadcrumb-current" data-vis="{{ V }}">{{ sample_request["request_id"] }}</span>
   </div>
@@ -78,13 +80,13 @@
       {% endif %}
       {% if sample_request["status"] in ("draft_ai", "results_pending_approval") and can_manage %}
       <div class="ai-draft-callout" data-vis="{{ V }}">
-        <p style="font-weight:700;margin:0 0 0.5rem;" data-vis="{{ V }}">
+        <p class="ai-draft-heading" data-vis="{{ V }}">
           {% if sample_request["status"] == "draft_ai" %}AI Draft — Needs Your Approval{% else %}AI Results — Confirm Completion{% endif %}
         </p>
-        <p class="hint" style="margin:0 0 0.75rem;" data-vis="{{ V }}">
+        <p class="hint ai-draft-hint" data-vis="{{ V }}">
           {% if sample_request["status"] == "draft_ai" %}This request was created by the AI assistant. Review the details and approve to make it live, or reject to discard.{% else %}The AI attached results to this request. Confirm to mark it completed, or reject to revert.{% endif %}
         </p>
-        <form method="post" action="{{ url_for('ai_draft_approve', request_id=sample_request['id']) }}" style="display:flex;gap:0.5rem;" data-vis="{{ V }}">
+        <form method="post" action="{{ url_for('ai_draft_approve', request_id=sample_request['id']) }}" class="ai-draft-actions" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" name="verdict" value="approve" class="btn btn-primary" data-vis="{{ V }}">Approve</button>
           <button type="submit" name="verdict" value="reject" class="btn btn-reject-inline" data-vis="{{ V }}">Reject</button>
@@ -291,9 +293,14 @@
       <summary data-vis="{{ V }}">Approval Chain ({{ approval_steps|length }} steps)</summary>
       <div class="top-gap" data-vis="{{ V }}">
         {% for step in approval_steps %}
+        {% set _step_badge = 'status-completed' if step['status'] == 'approved'
+                            else 'status-rejected' if step['status'] == 'rejected'
+                            else 'status-submitted' if step['status'] == 'pending'
+                            else 'status-attention' if step['status'] == 'skipped'
+                            else 'status-' ~ step['status'] %}
         <div class="approval-chain-step approval-chain-{{ step['status'] }}" data-vis="{{ V }}">
           <span class="approval-chain-role" data-vis="{{ V }}">{{ step["step_order"] }}. {{ step["approver_role"].replace("_", " ").title() }}</span>
-          <span class="badge status-{{ step['status'] }}" data-vis="{{ V }}">{{ step["status"].title() }}</span>
+          <span class="badge {{ _step_badge }}" data-vis="{{ V }}">{{ step["status"].title() }}</span>
           {% if step["approver_name"] %}<span class="hint" data-vis="{{ V }}"> — {{ step["approver_name"] }}</span>{% endif %}
           {% if step["remarks"] %}<p class="hint" data-vis="{{ V }}">{{ step["remarks"] }}</p>{% endif %}
           {% if step["acted_at"] %}<p class="hint" data-vis="{{ V }}">{{ format_dt(step["acted_at"]) }}</p>{% endif %}

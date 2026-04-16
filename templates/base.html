@@ -15,6 +15,9 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <title>{{ title or org_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  {# Operation Trois Agents 2026-04-15 — Claude 1 UI polish layers. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ui_audit_2026_04_15.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_polish_v2.css') }}">
   <script>
     (function () {
       // Early theme bootstrap — runs in <head> before <body> paints so we
@@ -80,11 +83,22 @@
 <body{% if current_user %} data-user-role="{{ current_user.role }}"{% endif %}>
   <a class="skip-nav" href="#main-content">Skip to main content</a>
   <header class="topbar" data-vis="{{ V }}">
-    <div data-vis="{{ V }}">
-      <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">{{ org_name }}</a></h1>
-      {% if active_portal %}
-      <a href="{{ url_for('portal_picker') }}" class="text-link" style="font-size:0.75rem;margin-left:0.5rem;opacity:0.8;" data-vis="{{ V }}">{{ active_portal.icon }} {{ active_portal.name }}</a>
+    {% set is_ravikiran_portal = active_portal and active_portal.slug in ['hq', 'ravikiran_ops'] %}
+    <div class="topbar-brand" data-vis="{{ V }}">
+      {% if is_ravikiran_portal %}
+      <img
+        src="{{ url_for('static', filename='ravikiran-erp-logo.jpeg') }}"
+        alt="Ravikiran portal logo"
+        class="portal-brandmark"
+        data-vis="{{ V }}"
+      >
       {% endif %}
+      <div data-vis="{{ V }}">
+        <h1 data-vis="{{ V }}"><a class="brand-link" href="{{ url_for('index') }}" data-vis="{{ V }}">{{ org_name }}</a></h1>
+        {% if active_portal %}
+        <a href="{{ url_for('portal_picker') }}" class="text-link topbar-portal-link" data-vis="{{ V }}">{{ active_portal.icon }} {{ active_portal.name }}</a>
+        {% endif %}
+      </div>
     </div>
     {# ── Demo channel flip switch ──
        Lives between brand and user-box in the topbar. Visible only
@@ -201,7 +215,7 @@
 
     {# Global search #}
     <form action="{{ url_for('global_search') }}" method="get" class="nav-search" data-vis="{{ V }}">
-      <input type="search" name="q" placeholder="Search..." value="{{ request.args.get('q','') }}" autocomplete="off" data-vis="{{ V }}">
+      <input type="search" name="q" placeholder="Search..." aria-label="Global search" value="{{ request.args.get('q','') }}" autocomplete="off" data-vis="{{ V }}">
     </form>
     <a href="{{ url_for('quick_entry') }}" class="nav-quick-entry" title="Quick Entry" data-vis="{{ V }}">⚡</a>
 
@@ -322,15 +336,14 @@
 
   {# ── AI Hover Pane — extracted to partial ── #}
   {% include "_base_ai_pane.html" %}
-  {# Debug tools — loaded only for owner accounts. The ?debug=1 query
-     param is an owner-only shortcut; other users cannot enable the
-     overlay by URL, otherwise any authenticated user could inject the
-     debug JS by appending ?debug=1 to any page.
+  {# Debug tools — loaded only when ?debug=1 is present AND the current
+     account is an explicit debug role. The live debug lane uses only the
+     voice/grid recorder here; the older crawler grid overlay is excluded
+     because its extra floating controls can interfere with live testing.
      - Grid overlay: press 'g' to toggle numbered grid lines
      - Voice recorder: click Record, speak + click, click Stop
      - Feedback saved to logs/debug_feedback.md for Claude to fix #}
-  {% if is_owner_user|default(false) %}
-  <script defer src="{{ url_for('static', filename='grid-overlay.js') }}?v=12"></script>
+  {% if can_use_debug_overlay_user|default(false) and request.args.get('debug') == '1' %}
   <script defer src="{{ url_for('static', filename='debug-grid.js') }}?v=12"></script>
   {% endif %}
   {# ── Feedback + AI Form Assistant — extracted to partial ── #}

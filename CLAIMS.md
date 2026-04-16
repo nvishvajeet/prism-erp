@@ -77,6 +77,8 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| codex | docs-feedback-contrast | 2026-04-15T19:12:57Z | CLAIMS.md, static/styles.css, templates/login.html | pending |
+| codex | unify-debugger-system | 2026-04-15T20:28:00Z | CLAIMS.md, static/debug-grid.js, templates/base.html, docs/TESTING_PLAN_TEJVEER.md | pending |
 
 ## Stale-claim recovery
 
@@ -101,5 +103,3 @@ pre-receive sanity wave catches anything that slips past.
 
 | Agent | Task | Files | Timestamp |
 |-------|------|-------|-----------|
-| Codex | bulk user intake + user/vendor approval queues | app.py, templates/users.html, templates/vendors.html, templates/vendor_form.html, templates/vendor_detail.html | 2026-04-14 21:48 CEST |
-| claude-opus-4.6-insights | insights module phase 1 — scaffold + telemetry schema (no ingestion endpoint yet) | migrations/insights_schema.sql, templates/insights_*.html, app.py (MODULE_REGISTRY + scaffolded route stubs from new_module.sh), static/styles.css | 2026-04-15 15:15 CEST |

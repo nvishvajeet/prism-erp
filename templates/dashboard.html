@@ -1,10 +1,36 @@
 {% extends "base.html" %}
 {% from "_request_macros.html" import request_identity, instrument_name_link, status_block with context %}
-{% from "_page_macros.html" import card_heading, paginated_pane, stat_blob, chart_bar, kpi_grid, queue_action_stack, empty_state with context %}
+{% from "_page_macros.html" import card_heading, chart_bar, kpi_grid, empty_state with context %}
 {% block content %}
 {% set _lab_mode = lab_portal_mode %}
 
 <section class="dashboard-tiles" data-vis="{{ V }}">
+
+  {% if current_user and current_user['role'] == 'tester' %}
+  <article class="card tile tile-full-width tile-dash-quick-actions tile-dash-brief" data-vis="{{ V }}">
+    {{ card_heading("TESTER", "Start Here") }}
+    <p class="dash-brief-line" data-vis="{{ V }}">
+      Use this account to walk every page, report bugs clearly, and use the on-site AI feedback tools whenever something breaks or looks wrong.
+    </p>
+    <div class="qa-grid" data-vis="{{ V }}">
+      <a class="qa-card qa-card-primary" href="{{ url_for('testing_plan_page') }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">PLAN</span>
+        <span class="qa-label" data-vis="{{ V }}">Open your testing plan</span>
+      </a>
+      <a class="qa-card qa-card-ghost" href="{{ url_for('sitemap') }}" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">SWEEP</span>
+        <span class="qa-label" data-vis="{{ V }}">Test every page from sitemap</span>
+      </a>
+      <a class="qa-card qa-card-ghost" href="{{ url_for('index') }}?debug=1" data-vis="{{ V }}">
+        <span class="qa-eyebrow" data-vis="{{ V }}">FEEDBACK</span>
+        <span class="qa-label" data-vis="{{ V }}">Open AI debugger on this page</span>
+      </a>
+    </div>
+    <p class="hint top-gap" data-vis="{{ V }}">
+      First login uses a temporary password. Change it, then explore freely, then test page-by-page in both portals. Use the AI feedback tool to mark exact UI locations before submitting a bug.
+    </p>
+  </article>
+  {% endif %}
 
   {# ── TILE 0: Role hint removed — role visible in Settings / User Mgmt only ── #}
 
@@ -50,7 +76,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">✓ All caught up — no active notices</p>
+    {{ empty_state("✓ All caught up — no active notices") }}
     {% endif %}
   </article>
   {% endif %}
@@ -64,6 +90,9 @@
   {% endif %}
 
   {% include "_dashboard_ai_advisor.html" %}
+
+  {# ── TILE: AI RIG SCHEDULE — live agent rig status + weekly burst plan ── #}
+  {% include "_rig_schedule_tile.html" %}
 
   {# ── TILE: YOUR ACTION ITEMS — things needing this user's attention ── #}
   {% if dash_action_items %}
@@ -264,7 +293,7 @@
   {% elif portal_module_enabled('queue') and has_instrument_area_access_user and not quick_intake_rows %}
   <article class="card tile tile-full-width tile-dash-quick-intake tile-dash-operational" data-vis="{{ V }}">
     {{ card_heading("INTAKE", "Quick Intake") }}
-    <p class="hint" style="text-align:center;padding:1.5rem 0;" data-vis="{{ V }}">{{ "All caught up — no samples waiting for receipt" if _lab_mode else "All caught up — no samples awaiting action" }}</p>
+    {{ empty_state("All caught up — no samples waiting for receipt" if _lab_mode else "All caught up — no samples awaiting action") }}
   </article>
   {% endif %}
 

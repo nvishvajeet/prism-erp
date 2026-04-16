@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, metadata_grid with context %}
+{% from "_page_macros.html" import card_heading with context %}
 {% block hover_back %}<a href="{{ url_for('schedule') }}" class="hover-back-btn" title="Back to Queue">←</a>{% endblock %}
 {% block content %}
 
@@ -49,7 +49,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">Instrument</h3>
-        <label data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Select Instrument
           <select name="instrument_id" id="requestInstrumentSelect" required data-vis="{{ V }}">
             {% for instrument in instruments %}
             <option
@@ -66,15 +66,15 @@
           </select>
         </label>
         {% if can_submit_for_others %}
-        <label data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Submit On Behalf Of
           <select name="requester_id" data-vis="{{ V }}">
             {% for requester in requester_candidates %}
             <option value="{{ requester['id'] }}">{{ requester["name"] }} · {{ requester["email"] }}</option>
             {% endfor %}
           </select>
         </label>
-        <label data-vis="{{ V }}">
-          <textarea name="originator_note" rows="3" placeholder="Optional note" data-vis="{{ V }}"></textarea>
+        <label data-vis="{{ V }}">Originator Note
+          <textarea name="originator_note" rows="3" placeholder="Optional note explaining why you are submitting on this user's behalf" data-vis="{{ V }}"></textarea>
         </label>
         {% endif %}
       </section>
@@ -152,7 +152,7 @@
 
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">File</h3>
-        <label data-vis="{{ V }}">
+        <label data-vis="{{ V }}">Attach File (optional)
           <input type="file" name="initial_attachment" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.csv,.txt" data-vis="{{ V }}">
         </label>
       </section>

@@ -19,6 +19,9 @@
     <a class="btn" href="{{ url_for('attendance_team') }}" data-vis="{{ V }}">Team Attendance</a>
     {% endif %}
     <a class="btn" href="{{ url_for('qr_attendance_kiosk') }}" data-vis="{{ V }}">QR Kiosk</a>
+    {% if is_admin or is_manager %}
+    <a class="btn" href="{{ url_for('attendance_quick_mark_page') }}" data-vis="{{ V }}">Quick Mark (#)</a>
+    {% endif %}
     <a class="btn" href="{{ url_for('qr_my_code') }}" data-vis="{{ V }}">My QR</a>
   </div>
 </header>
@@ -165,7 +168,7 @@
       {% for m in team_members %}
       <div class="meta-row" data-vis="{{ V }}">
         <div data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ m.name }}</strong>
+          <strong data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=m.id) }}" data-vis="{{ V }}">{{ m.name }}</a></strong>
           <span class="hint" data-vis="{{ V }}">{{ m.email }}</span>
         </div>
         {% if m.today_status %}
@@ -186,7 +189,7 @@
       {% for lr in team_leave_requests %}
       <div class="meta-row" data-vis="{{ V }}">
         <div data-vis="{{ V }}">
-          <strong data-vis="{{ V }}">{{ lr.requester_name }}</strong>
+          <strong data-vis="{{ V }}"><a class="text-link" href="{{ url_for('user_profile', user_id=lr.user_id) }}" data-vis="{{ V }}">{{ lr.requester_name }}</a></strong>
           <span class="hint" data-vis="{{ V }}">{{ lr.leave_type|title }}: {{ lr.start_date }} → {{ lr.end_date }}</span>
           {% if lr.reason %}<span class="hint" data-vis="{{ V }}">{{ lr.reason }}</span>{% endif %}
         </div>

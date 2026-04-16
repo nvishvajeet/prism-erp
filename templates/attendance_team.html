@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import card_heading, person_chip, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('attendance_page') }}" class="hover-back-btn" title="Back to Attendance" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
@@ -35,7 +35,7 @@
     {{ card_heading("QUICK MARK", "Type 3-letter code → instant present") }}
     <div style="padding:0.75rem;" data-vis="{{ V }}">
       <div class="control-flex-wrap" data-vis="{{ V }}">
-        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL, MAN…)" autocomplete="off" autofocus data-vis="{{ V }}" style="font-size:1.5rem;text-transform:uppercase;letter-spacing:0.2em;max-width:20rem;font-family:monospace;font-weight:700;">
+        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL, MAN…)" aria-label="Staff quick-mark code entry" autocomplete="off" autofocus data-vis="{{ V }}" style="font-size:1.5rem;text-transform:uppercase;letter-spacing:0.2em;max-width:20rem;font-family:monospace;font-weight:700;">
         <select id="quickStatus" data-vis="{{ V }}">
           <option value="present" data-vis="{{ V }}">Present</option>
           <option value="half" data-vis="{{ V }}">Half Day</option>

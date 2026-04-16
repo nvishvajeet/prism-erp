@@ -3,18 +3,18 @@
 > Complete reference for the UI/UX system, CSS architecture, and
 > ERP module patterns. Read this before building anything.
 
-## System Stats (2026-04-13)
+## System Stats (2026-04-15)
 
 | Metric | Value |
 |--------|-------|
-| app.py | 16,587 lines |
-| styles.css | 9,684 lines |
-| Templates | 68 |
-| Routes | 140 |
-| Modules | 15 |
+| app.py | 29,352 lines |
+| styles.css | 10,284 lines |
+| Templates | 143 |
+| Routes | 265 |
+| Modules | 20 |
 | Roles | 9 crawler personas / 8+ product roles |
 | Instruments | 21 |
-| Crawler strategies | 25 |
+| Crawler strategies | 36 |
 
 ## The 6 UI Primitives
 
@@ -176,6 +176,26 @@ scripts/new_module.sh vehicle "Vehicle Fleet" "car" "Fleet management"
 .venv/bin/python -m crawlers wave sanity  # ~30s on tag push
 ```
 
+Current sanity-wave composition on this branch:
+
+- smoke 33
+- visibility 84
+- role_landing 27
+- topbar_badges 2
+- empty_states 2
+- dev_panel_readability 9
+- xhr_contracts 6
+- contrast_audit 13
+- csrf_token_present 156
+- css_variable_defined 2866
+- aria_label_present 1
+- label_for_matches_id 22
+- duplicate_id_in_template 284
+- hardcoded_url_in_template 56
+- agents_md_contract 8
+- parallel_claims 5
+- deploy_smoke 0
+
 ### Deep crawl:
 ```bash
 # Mac mini safety gate
@@ -195,13 +215,13 @@ ssh vishwajeet@100.115.176.118 "cd ~/Scheduler/Main && .venv/bin/python -m crawl
 
 | Check | Tool | Count |
 |-------|------|-------|
-| Route health | Python test client | 371 (7 roles × 53 routes) |
+| Route health | Python test client | 401 architecture checks / 84 visibility matrix / 33 smoke |
 | Smoke test | crawlers/smoke | 33 |
 | Visibility | crawlers/visibility | 84 |
-| Dead links | crawlers/dead_link | 4,481 |
+| Dead links | crawlers/dead_link | 6,372 |
 | Random walk | crawlers/random_walk | 800 |
 | WCAG contrast | crawlers/contrast_audit | 13 |
-| Template syntax | Jinja2 env | 52 |
+| Template syntax | Jinja2 env + static endpoint crawlers | 143 templates + structural template checks |
 | CSRF coverage | grep audit | 100% |
 
 ## Deployment Checklist

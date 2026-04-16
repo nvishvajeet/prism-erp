@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  CATALYST local demo service for the dev laptop.
+
+  Purpose:
+    * live service (`local.catalyst`) stays the main local ERP runtime
+    * demo service (`local.catalyst.demo`) stays separate on 127.0.0.1:5057
+      so demo-mode traffic never shares runtime state with live mode
+
+  Install:
+    ./scripts/install_launchd.sh --demo
+
+  Tail logs:
+    tail -f ~/Documents/Scheduler/Main/logs/server-demo.log
+
+  Notes:
+    * This plist still needs Full Disk Access for /bin/bash because the
+      working tree lives under ~/Documents. A symlink such as ~/Scheduler
+      still resolves into the TCC-protected tree and does not bypass the
+      launchd restriction.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.catalyst.demo</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/scripts/start.sh</string>
+        <string>--service</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>LAB_SCHEDULER_ENV_FILE</key>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/.env.demo</string>
+        <key>LAB_SCHEDULER_AUTORELOAD</key>
+        <string>0</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server-demo.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/server-demo.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

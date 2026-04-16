@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home">←</a>{% endblock %}
 {% block content %}
 
@@ -9,7 +9,7 @@
     <h2 class="inst-header-title" data-vis="{{ V }}">Tasks &amp; Todos</h2>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    <button id="toggleNewTask" class="btn btn-primary" onclick="document.getElementById('newTaskForm').toggleAttribute('hidden')" data-vis="{{ V }}">+ New</button>
+    <button id="toggleNewTask" type="button" class="btn btn-primary" data-toggle-target="#newTaskForm" data-toggle-alt="Cancel" data-vis="{{ V }}">+ New</button>
   </div>
 </header>
 
@@ -19,17 +19,17 @@
     <form method="post" action="{{ url_for('todo_new') }}" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-field" data-vis="{{ V }}">
-        <label data-vis="{{ V }}">Title</label>
-        <input type="text" name="title" required data-vis="{{ V }}">
+        <label for="todoTitle" data-vis="{{ V }}">Title</label>
+        <input id="todoTitle" type="text" name="title" required data-vis="{{ V }}">
       </div>
       <div class="form-field" data-vis="{{ V }}">
-        <label data-vis="{{ V }}">Details</label>
-        <textarea name="body" rows="2" data-vis="{{ V }}"></textarea>
+        <label for="todoBody" data-vis="{{ V }}">Details</label>
+        <textarea id="todoBody" name="body" rows="2" data-vis="{{ V }}"></textarea>
       </div>
       <div class="form-controls" data-vis="{{ V }}">
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Assign to</label>
-          <select name="assign_to" data-vis="{{ V }}">
+          <label for="todoAssignTo" data-vis="{{ V }}">Assign to</label>
+          <select id="todoAssignTo" name="assign_to" data-vis="{{ V }}">
             <option value="" data-vis="{{ V }}">Myself</option>
             {% for u in assignable_users %}
             <option value="{{ u.id }}" data-vis="{{ V }}">{{ u.name }} ({{ u.email }})</option>
@@ -37,20 +37,20 @@
           </select>
         </div>
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Priority</label>
-          <select name="priority" data-vis="{{ V }}">
+          <label for="todoPriority" data-vis="{{ V }}">Priority</label>
+          <select id="todoPriority" name="priority" data-vis="{{ V }}">
             <option value="normal" data-vis="{{ V }}">Normal</option>
             <option value="high" data-vis="{{ V }}">High</option>
             <option value="urgent" data-vis="{{ V }}">Urgent</option>
           </select>
         </div>
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Due date</label>
-          <input type="date" name="due_date" data-vis="{{ V }}">
+          <label for="todoDueDate" data-vis="{{ V }}">Due date</label>
+          <input id="todoDueDate" type="date" name="due_date" data-vis="{{ V }}">
         </div>
         <div class="form-field" data-vis="{{ V }}">
-          <label data-vis="{{ V }}">Category</label>
-          <select name="category" data-vis="{{ V }}">
+          <label for="todoCategory" data-vis="{{ V }}">Category</label>
+          <select id="todoCategory" name="category" data-vis="{{ V }}">
             {% for cat in categories %}
             <option value="{{ cat }}" data-vis="{{ V }}">{{ cat|capitalize }}</option>
             {% endfor %}
@@ -90,7 +90,7 @@
 {# ── Task list — inbox style ── #}
 <section class="inbox-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
-    <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" data-vis="{{ V }}">
+    <input type="text" id="todoSearch" class="table-search-input table-search-input-narrow" placeholder="Search tasks…" aria-label="Search tasks" data-vis="{{ V }}">
     {% if items %}
     {% for item in items %}
     <div class="inbox-row todo-card-row{% if item.status == 'done' %} inbox-row-done{% endif %}" data-vis="{{ V }}">
@@ -100,10 +100,10 @@
         <form method="post" action="{{ url_for('todo_complete', todo_id=item.id) }}" class="todo-check-form" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="tab" value="{{ tab }}">
-          <button type="submit" class="todo-checkbox" title="Mark done" data-vis="{{ V }}"></button>
+          <button type="submit" class="todo-checkbox" title="Mark done" aria-label="Mark task as done" data-vis="{{ V }}"></button>
         </form>
         {% else %}
-        <span class="todo-checkbox todo-checkbox-done" data-vis="{{ V }}">✓</span>
+        <span class="todo-checkbox todo-checkbox-done" aria-label="Task complete" role="img" data-vis="{{ V }}">✓</span>
         {% endif %}
       </div>
 
@@ -131,17 +131,17 @@
           <input type="hidden" name="tab" value="{{ tab }}">
           {% if item.status == 'open' %}
           <input type="hidden" name="status" value="in_progress">
-          <button type="submit" class="btn btn-sm btn-secondary" title="Start" data-vis="{{ V }}">▶</button>
+          <button type="submit" class="btn btn-sm btn-secondary" title="Start" aria-label="Start task" data-vis="{{ V }}">▶</button>
           {% elif item.status == 'in_progress' %}
           <input type="hidden" name="status" value="open">
-          <button type="submit" class="btn btn-sm btn-secondary" title="Pause" data-vis="{{ V }}">❚❚</button>
+          <button type="submit" class="btn btn-sm btn-secondary" title="Pause" aria-label="Pause task" data-vis="{{ V }}">❚❚</button>
           {% endif %}
         </form>
         {% endif %}
         <form method="post" action="{{ url_for('todo_delete', todo_id=item.id) }}" class="todo-delete-form inline-form inline-form-single" data-vis="{{ V }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="tab" value="{{ tab }}">
-          <button type="submit" class="text-link hint todo-delete-btn" title="Delete" data-vis="{{ V }}">✕</button>
+          <button type="submit" class="text-link hint todo-delete-btn" title="Delete" aria-label="Delete task" data-vis="{{ V }}">✕</button>
         </form>
       </div>
     </div>

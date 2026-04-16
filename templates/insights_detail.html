@@ -44,11 +44,14 @@
   <section class="card tile" style="grid-column: span 6" data-vis="{{ V }}">
     {{ card_heading("", "Activity") }}
     {% if events %}
-    <ul class="event-stream" data-vis="{{ V }}">
+    <div class="activity-feed" data-vis="{{ V }}">
       {% for ev in events %}
-      <li data-vis="{{ V }}">{{ ev["description"] }} <time data-vis="{{ V }}">{{ ev["created_at"] }}</time></li>
+      <div class="activity-entry" data-vis="{{ V }}">
+        <strong data-vis="{{ V }}">{{ ev["description"] }}</strong>
+        <span class="hint" data-vis="{{ V }}">{{ ev["created_at"] }}</span>
+      </div>
       {% endfor %}
-    </ul>
+    </div>
     {% else %}
     {{ empty_state("No activity yet.") }}
     {% endif %}

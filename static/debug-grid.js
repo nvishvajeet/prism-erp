@@ -129,6 +129,17 @@
     clickMarkerContainer.appendChild(tag);
   }
 
+  function targetDescriptor(target) {
+    if (!target || !target.tagName) return 'unknown';
+    var parts = [target.tagName.toLowerCase()];
+    if (target.id) parts.push('#' + target.id);
+    if (target.className && typeof target.className === 'string') {
+      var classes = target.className.split(/\s+/).filter(Boolean).slice(0, 2);
+      if (classes.length) parts.push('.' + classes.join('.'));
+    }
+    return parts.join('');
+  }
+
   function clearClickMarkers() {
     if (clickMarkerContainer) clickMarkerContainer.innerHTML = '';
     clickEvents = [];
@@ -164,17 +175,12 @@
     sessionStorage.removeItem('debugRecordingStart');
   }
 
-  // ── Mouse tracking during recording (hold C or Shift to log position) ──
+  // ── Mouse tracking during recording (hold Command/Meta to log position) ──
   var lastTrackTime = 0;
-  var cKeyDown = false;
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'c' && !e.target.closest('input,textarea,select,[contenteditable]')) cKeyDown = true;
-  });
-  document.addEventListener('keyup', function (e) { if (e.key === 'c') cKeyDown = false; });
   document.addEventListener('mousemove', function (e) {
     if (!isRecording) return;
-    // Hold 'c' key while moving mouse to log positions
-    if (!e.shiftKey && !cKeyDown) return;
+    // Uses the Meta key (Command on Mac, Windows key on Windows/Linux).
+    if (!e.metaKey) return;
     var now = Date.now();
     if (now - lastTrackTime < 200) return; // ~5 times per second
     lastTrackTime = now;
@@ -201,20 +207,25 @@
 
     var g = gridCoords(e.clientX, e.clientY);
     var label = 'R' + g.row + ',C' + g.col;
-    var nearest = e.target.closest('[class]');
-    var context = nearest ? '.' + nearest.className.split(/\s+/)[0] : e.target.tagName.toLowerCase();
+    var context = targetDescriptor(e.target.closest('[class], [id], a, button, input, textarea, select') || e.target);
+    var pageX = e.clientX + window.scrollX;
+    var pageY = e.clientY + window.scrollY;
+    var isInteractive = !!e.target.closest('a[href], button, input[type="submit"], input[type="button"], summary');
 
-    // If the click target is a link, save state and let navigation
-    // happen — recording resumes on the new page automatically.
+    // Recording mode defaults to capture-first: interactive clicks are
+    // pinned without navigating so the tester can report the exact spot.
+    // Hold Alt while clicking if you explicitly want to follow the link.
     var link = e.target.closest('a[href]');
-    if (link && link.href && !link.href.startsWith('javascript:')) {
-      var entry = '[Navigate: ' + label + ' → ' + link.pathname + ']';
+    if (link && link.href && !link.href.startsWith('javascript:') && e.altKey) {
+      var entry = '[Navigate: ' + label + ' → ' + link.pathname + ' on ' + context + ']';
       transcript += entry + ' ';
       clickEvents.push({
         grid: label, element: context,
         x: e.clientX, y: e.clientY,
+        pageX: pageX, pageY: pageY,
         page: window.location.pathname,
         navigateTo: link.pathname,
+        action: 'navigate',
       });
       saveSessionState();
       // Ensure ?debug=1 follows the navigation
@@ -224,15 +235,25 @@
       return; // let the browser navigate
     }
 
-    var entry = '[Click: ' + label + ' on ' + context + ']';
+    if (isInteractive) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    var entry = '[Click: ' + label + ' on ' + context + ' @ ' + pageX + ',' + pageY + ']';
     transcript += entry + ' ';
     clickEvents.push({
       grid: label, element: context,
       x: e.clientX, y: e.clientY,
+      pageX: pageX, pageY: pageY,
       page: window.location.pathname,
+      action: isInteractive ? 'capture-only' : 'inspect',
     });
 
     placeClickMarker(e.clientX, e.clientY, label);
+    if (transcriptEl) {
+      transcriptEl.textContent = transcript + (isInteractive ? ' [pinned without leaving page]' : '');
+    }
     updateTranscriptDisplay();
   }
 
@@ -359,7 +380,7 @@
     transcriptPanel.style.display = 'block';
     if (transcriptEl) transcriptEl.textContent = resumed
       ? 'Resumed recording (navigated from previous page)...'
-      : 'Listening... (click anywhere to mark a point)';
+      : 'Listening... (click to mark points; hold ⌘ / Ctrl while moving to pin hover locations)';
     updateTranscriptDisplay();
   }
 
@@ -388,7 +409,12 @@
         clicks: clicks,
         page: window.location.pathname,
         timestamp: new Date().toISOString(),
-        grid_visible: gridVisible
+        grid_visible: gridVisible,
+        context: {
+          href: window.location.href,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          click_count: clicks.length
+        }
       })
     }).then(function (r) { return r.json(); })
       .then(function () {

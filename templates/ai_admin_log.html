@@ -26,7 +26,7 @@
   {# ── Log Table ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("INTERACTIONS", "Last 100") }}
-    <input type="text" id="logSearch" class="table-search-input" placeholder="Search logs…" style="margin-bottom:0.5rem;width:100%;max-width:20rem;" data-vis="{{ V }}">
+    <input type="text" id="logSearch" class="table-search-input" placeholder="Search logs…" aria-label="Search AI admin logs" style="margin-bottom:0.5rem;width:100%;max-width:20rem;" data-vis="{{ V }}">
     {% if logs %}
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

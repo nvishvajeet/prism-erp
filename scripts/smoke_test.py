@@ -742,11 +742,19 @@ def main() -> None:
     # Admin resolve UI — /admin/password-reset lists, Resolve generates a temp
     # password + flashes it once + updates the user row. Spec: ROLE_SURFACES.md §3.
     with app.app.app_context():
+        kondhalkar = app.get_db().execute(
+            "SELECT id FROM users WHERE email = ?",
+            ("kondhalkar@catalyst.local",),
+        ).fetchone()
+        assert kondhalkar is not None, "seed user kondhalkar@catalyst.local missing"
+        kondhalkar_id = kondhalkar["id"]
+
+    with app.app.app_context():
         app.get_db().execute(
             "INSERT INTO password_reset_requests "
             "(username_entered, matched_user_id, status, requested_at) "
-            "VALUES ('kondhalkar@catalyst.local', 9, 'pending', ?)",
-            (app.now_iso(),),
+            "VALUES ('kondhalkar@catalyst.local', ?, 'pending', ?)",
+            (kondhalkar_id, app.now_iso()),
         )
         app.get_db().commit()
 
@@ -774,8 +782,11 @@ def main() -> None:
             (pw_req_id,),
         ).fetchone()
         assert req["status"] == "resolved"
-        assert req["resolved_by_user_id"] == 9
-        kon = app.get_db().execute("SELECT must_change_password FROM users WHERE id = 9").fetchone()
+        assert req["resolved_by_user_id"] == kondhalkar_id
+        kon = app.get_db().execute(
+            "SELECT must_change_password FROM users WHERE id = ?",
+            (kondhalkar_id,),
+        ).fetchone()
         assert kon["must_change_password"] == 1, "resolve must set must_change_password=1"
     # Non-admin forbidden
     client.get("/logout")
@@ -788,8 +799,8 @@ def main() -> None:
     with app.app.app_context():
         app.get_db().execute("DELETE FROM password_reset_requests")
         app.get_db().execute(
-            "UPDATE users SET must_change_password = 0, password_hash = ? WHERE id = 9",
-            (_gph("12345", method="pbkdf2:sha256"),),
+            "UPDATE users SET must_change_password = 0, password_hash = ? WHERE id = ?",
+            (_gph("12345", method="pbkdf2:sha256"), kondhalkar_id),
         )
         app.get_db().commit()
 

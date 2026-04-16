@@ -1,0 +1,89 @@
+/* mobile_polish_v2.css — Phase 1 D4 (CLAUDE1_LANE_UI_POLISH).
+ *
+ * Targeted mobile sweep to complement ui_audit_2026_04_15.css.
+ * Scope: viewport-conditional overrides at @media (max-width:640px)
+ * that tighten form and table behaviour on phones without
+ * touching anything the base stylesheet already handles correctly
+ * at ≤768px. No redesigns. Additive only.
+ *
+ * Companion audit: docs/MOBILE_POLISH_2026_04_15.md
+ */
+
+@media (max-width: 640px) {
+  /* Forms: labels are easier to scan when stacked and slightly
+   * larger. CATALYST's form-grid already stacks, but some dense
+   * form-sections shrink labels below 0.85rem. */
+  .form-grid label,
+  .action-form label {
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+
+  /* Primary action / submit on form-grid shouldn't land squeezed
+   * between fields. Give it breathing room + full width. */
+  .form-grid > button[type="submit"],
+  .form-grid .form-actions,
+  .action-form > button[type="submit"],
+  .action-form .form-actions {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  /* Narrow tiles: full-bleed at <640px so the tile padding isn't
+   * the dominant screen area. */
+  .card.tile,
+  .inst-tiles > .tile,
+  .finance-tiles > .tile,
+  .request-tiles > .tile,
+  .sitemap-tiles > .tile,
+  .dashboard-tiles > .tile {
+    padding-left: max(0.9rem, env(safe-area-inset-left, 0.9rem));
+    padding-right: max(0.9rem, env(safe-area-inset-right, 0.9rem));
+  }
+
+  /* Tables that already get `display:block; overflow-x:auto` at
+   * ≤768px sometimes have a stubborn inner wrapper with
+   * `white-space: normal`. Force nowrap on th/td so the horizontal
+   * scroll actually kicks in. (styles.css:8241 sets this but only
+   * for bare <table>; this catches .data-table-scroll wrappers.) */
+  .data-table th,
+  .data-table td {
+    white-space: nowrap;
+  }
+
+  /* Breadcrumb bars can overflow horizontally on narrow phones;
+   * let them scroll instead of wrapping into a tall chunk. */
+  nav.breadcrumb,
+  .breadcrumb-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav.breadcrumb::-webkit-scrollbar,
+  .breadcrumb-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Section headings get more room to breathe when the tile is
+   * full-width and the primary content is below. */
+  .section-head {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  /* Toast / flash messages: dock to bottom with safe-area. */
+  .toast-bar,
+  .flash-message,
+  .flash {
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
+  }
+}
+
+/* Reduce-motion respect extends beyond chooser + attendance_quick
+ * to any tile hover/lift animation in the app. */
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .card.tile {
+    transition: none !important;
+  }
+}

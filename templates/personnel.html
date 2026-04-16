@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import card_heading, person_chip, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
@@ -38,7 +38,7 @@
     {{ card_heading("QUICK ATTENDANCE", "Type 3-letter code → mark present") }}
     <div style="padding:0.75rem;" data-vis="{{ V }}">
       <div class="control-flex-wrap" data-vis="{{ V }}">
-        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL…)" autocomplete="off" data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.15em;max-width:16rem;font-family:monospace;font-weight:700;">
+        <input type="text" id="quickCode" placeholder="Type code (e.g. PRA, BAL…)" aria-label="Staff quick-mark code entry" autocomplete="off" data-vis="{{ V }}" style="font-size:1.25rem;text-transform:uppercase;letter-spacing:0.15em;max-width:16rem;font-family:monospace;font-weight:700;">
         <select id="quickStatus" data-vis="{{ V }}">
           <option value="present" data-vis="{{ V }}">Present</option>
           <option value="half" data-vis="{{ V }}">Half Day</option>
@@ -58,7 +58,7 @@
   {# ── ATTENTION · Staff Directory ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("STAFF", "Directory") }}
-    <input type="text" id="staffSearch" class="table-search-input" placeholder="Search staff…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="staffSearch" class="table-search-input" placeholder="Search staff…" aria-label="Search staff" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if staff %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

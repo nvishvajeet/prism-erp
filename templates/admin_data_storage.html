@@ -112,7 +112,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" data-vis="{{ V }}">
       <div class="form-field" data-vis="{{ V }}">
         <label data-vis="{{ V }}">Target Directory</label>
-        <input type="text" name="target_path" placeholder="/Volumes/ExternalSSD/catalyst" required data-vis="{{ V }}">
+        <input type="text" name="target_path" placeholder="/Volumes/ExternalSSD/catalyst" aria-label="Target directory path" required data-vis="{{ V }}">
       </div>
       <button type="submit" class="btn btn-primary" data-vis="{{ V }}"
         onclick="return confirm('Copy all data to this path? Server restart required after migration.')">

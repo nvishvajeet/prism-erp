@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading with context %}
-{% block hover_back %}<a href="{{ url_for('insights_list') }}" class="hover-back-btn" title="Back">&#8592;</a>{% endblock %}
+{% block hover_back %}<a href="{{ url_for('insights_list') }}" class="hover-back-btn" title="Back">←</a>{% endblock %}
 {% block content %}
 <header class="inst-header" data-vis="{{ V }}">
   <div class="inst-header-main" data-vis="{{ V }}">
-    <a class="text-link back-link" href="{{ url_for('insights_list') }}" data-vis="{{ V }}">&#8592; Insights</a>
+    <a class="text-link back-link" href="{{ url_for('insights_list') }}" data-vis="{{ V }}">← Insights</a>
     <h2 class="inst-header-title" data-vis="{{ V }}">New insight</h2>
   </div>
 </header>

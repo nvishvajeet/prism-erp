@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, kpi_grid, metadata_grid, person_chip, empty_state with context %}
+{% from "_page_macros.html" import card_heading, kpi_grid, metadata_grid, person_chip, empty_state with context %}
 {% block hover_back %}<a href="{{ url_for('finance_grants_list') }}" class="hover-back-btn" title="Back to Grants">←</a>{% endblock %}
 {% block content %}
 
@@ -31,13 +31,19 @@
       {"value": budget_fmt,     "label": "Total Budget"},
       {"value": spent_fmt,      "label": "Spent",      "tone": "green"},
       {"value": remaining_fmt,  "label": "Remaining",  "tone": "amber"},
-      {"value": utilization_pct ~ "%", "label": "Utilization"},
+      {"value": utilization_pct ~ "%", "label": "Utilization", "tone": utilization_tone|default(''), "sub": ("OK" if utilization_tier == 'ok' else ("WARN ≥80%" if utilization_tier == 'warn' else "CRIT ≥100%"))},
     ]) }}
     <div class="finance-grant-bar-row top-gap" data-vis="{{ V }}">
       <div class="finance-grant-bar" data-vis="{{ V }}">
         <div class="finance-grant-bar-fill {{ budget_util_class }} util-fill" style="--util-pct: {{ [utilization_pct, 100]|min }}%;" data-vis="{{ V }}"></div>
       </div>
     </div>
+    {% if utilization_tier in ('warn', 'crit') %}
+    <p class="hint top-gap" data-vis="{{ V }}">
+      <strong data-vis="{{ V }}">{{ 'Over budget' if utilization_tier == 'crit' else 'Budget warning' }}:</strong>
+      {{ utilization_alert }}
+    </p>
+    {% endif %}
   </article>
 
   <article class="card tile tile-span-3" data-vis="{{ V }}">

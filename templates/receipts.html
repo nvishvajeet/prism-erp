@@ -33,7 +33,7 @@
 <section class="inst-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Receipts") }}
-    <input type="text" id="receiptSearch" class="table-search-input" placeholder="Search receipts…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="receiptSearch" class="table-search-input" placeholder="Search receipts…" aria-label="Search receipts" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if receipts %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

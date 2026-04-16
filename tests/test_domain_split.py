@@ -29,6 +29,8 @@ os.environ["LAB_SCHEDULER_DEMO_MODE"] = "1"
 os.environ["LAB_SCHEDULER_DATA_DIR"] = str(Path(_tmp_dir.name))
 
 import app  # noqa: E402
+sys.path.insert(0, str(ROOT / "scripts"))
+import populate_live_demo  # noqa: E402
 
 
 FAILURES: list[str] = []
@@ -46,7 +48,13 @@ def run() -> int:
     if _tmp_db.exists():
         _tmp_db.unlink()
     app.DB_PATH = _tmp_db
+    # populate_live_demo snapshots app.DB_PATH at import time; repoint it to
+    # the throwaway DB or its main() still writes to the default location.
+    populate_live_demo.DB_PATH = _tmp_db
     app.init_db()
+    # populate peer aggregates (projects/invoices/payments) — smoke_test does
+    # the same; init_db alone leaves the v2.0 peer tables empty.
+    populate_live_demo.main()
 
     with app.app.app_context():
         import sqlite3

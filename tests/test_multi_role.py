@@ -75,7 +75,7 @@ def run() -> int:
 
         # --- 2. user_role_set for a known super_admin ---
         admin = app.query_one(
-            "SELECT id, role FROM users WHERE email = 'admin@lab.local'"
+            "SELECT id, role FROM users WHERE email = 'owner@catalyst.local'"
         )
         check("admin-user-exists", admin is not None)
         admin_roles = app.user_role_set(admin)
@@ -120,7 +120,7 @@ def run() -> int:
 
         # --- 5. user_role_set now includes the granted role ---
         admin_after_grant = app.query_one(
-            "SELECT id, role FROM users WHERE email = 'admin@lab.local'"
+            "SELECT id, role FROM users WHERE email = 'owner@catalyst.local'"
         )
         roles_after = app.user_role_set(admin_after_grant)
         check("multi-role-visible", "finance_admin" in roles_after)

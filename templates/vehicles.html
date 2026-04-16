@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, stat_blob, metadata_grid, person_chip, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import card_heading, person_chip, empty_state, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 
@@ -26,7 +26,7 @@
   {# ── ATTENTION · Fleet Table ── #}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("FLEET", "All Vehicles") }}
-    <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="vehSearch" class="table-search-input" placeholder="Search vehicles…" aria-label="Search vehicles" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if vehicles %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

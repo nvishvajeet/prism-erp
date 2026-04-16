@@ -48,7 +48,7 @@
           <td data-vis="{{ V }}">{{ v.created_by_name or "—" }}</td>
           <td data-vis="{{ V }}">
             {% if can_approve_vendors %}
-            <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" data-vis="{{ V }}">
+            <div class="link-row" data-vis="{{ V }}">
               <form method="post" action="{{ url_for('vendor_approval_action', vendor_id=v.id) }}" class="inline-form" data-vis="{{ V }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="approval_action" value="approve">
@@ -89,7 +89,7 @@
 
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "All Vendors") }}
-    <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
+    <input type="text" id="vendorSearch" class="table-search-input" placeholder="Search vendors…" aria-label="Search vendors" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if vendors %}
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">

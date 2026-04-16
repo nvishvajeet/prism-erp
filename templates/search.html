@@ -10,11 +10,11 @@
       {% endif %}
     {% endcall %}
     <p class="tile-lead" data-vis="{{ V }}">
-      Search across instruments, requests, people, and grants from one place.
+      Search across the active portal's people, work, and records from one place.
       Built for jump-navigation, not just lookup.
     </p>
     <form action="{{ url_for('global_search') }}" method="get" class="search-page-form" data-vis="{{ V }}">
-      <input type="search" name="q" value="{{ query }}" placeholder="Search instruments, requests, users, grants..." autofocus data-vis="{{ V }}">
+      <input type="search" name="q" value="{{ query }}" placeholder="Search people, work items, and records..." aria-label="Global search query" autofocus data-vis="{{ V }}">
       <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Search</button>
     </form>
     {% if query and query|length < 2 %}

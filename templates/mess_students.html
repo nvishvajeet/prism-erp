@@ -30,7 +30,7 @@
   {% if students %}
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("ALL STUDENTS", students|length|string ~ " total") }}
-    <input type="text" id="studentSearch" class="table-search-input" placeholder="Search students…" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
+    <input type="text" id="studentSearch" class="table-search-input" placeholder="Search students…" aria-label="Search students" data-vis="{{ V }}" style="margin:0.5rem 0.75rem;width:calc(100% - 1.5rem);max-width:20rem;">
     <table class="data-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -61,7 +61,7 @@
             </span>
           </td>
           <td data-vis="{{ V }}">
-            <a href="{{ url_for('mess_student_qr', student_id=s.id) }}" class="text-link" data-vis="{{ V }}" onclick="event.stopPropagation();">QR</a>
+            <a href="{{ url_for('mess_student_qr', student_id=s.id) }}" class="text-link js-stop-row-nav" data-vis="{{ V }}">QR</a>
           </td>
         </tr>
         {% endfor %}
@@ -77,6 +77,11 @@
 
 <script>
 (function(){
+  document.querySelectorAll('.js-stop-row-nav').forEach(function(link){
+    link.addEventListener('click', function(e){
+      e.stopPropagation();
+    });
+  });
   document.querySelectorAll('.clickable-row[data-href]').forEach(function(r){
     r.addEventListener('click',function(e){
       if(e.target.closest('a,button,input'))return;

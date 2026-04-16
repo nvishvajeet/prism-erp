@@ -43,16 +43,24 @@
         {% set show_item = false %}
       {% endif %}
       {% if show_item %}
+      {% if item.type == 'link' %}
+      <a href="{{ item.href }}" class="settings-item settings-item-link" data-vis="{{ V }}">
+        <div class="item-label" data-vis="{{ V }}">
+          <span class="item-title" data-vis="{{ V }}">{{ item.label }}</span>
+          {% if item.hint %}<span class="item-hint" data-vis="{{ V }}">{{ item.hint }}</span>{% endif %}
+        </div>
+        <div class="item-value" data-vis="{{ V }}">
+          <span class="link-item" data-vis="{{ V }}">{{ item.value or 'Open' }} →</span>
+        </div>
+      </a>
+      {% else %}
       <div class="settings-item" data-vis="{{ V }}">
         <div class="item-label" data-vis="{{ V }}">
           <span class="item-title" data-vis="{{ V }}">{{ item.label }}</span>
           {% if item.hint %}<span class="item-hint" data-vis="{{ V }}">{{ item.hint }}</span>{% endif %}
         </div>
-
         <div class="item-value" data-vis="{{ V }}">
-          {% if item.type == 'link' %}
-            <a href="{{ item.href }}" class="link-item" data-vis="{{ V }}">{{ item.value or 'Open' }} →</a>
-          {% elif item.type == 'toggle' %}
+          {% if item.type == 'toggle' %}
             <label class="toggle" data-vis="{{ V }}">
               <input type="checkbox" {% if item.checked %}checked{% endif %} data-action="{{ item.action or '' }}" data-vis="{{ V }}">
               <span class="toggle-rail" data-vis="{{ V }}"></span>
@@ -64,6 +72,7 @@
           {% endif %}
         </div>
       </div>
+      {% endif %}
       {% endif %}
       {% endfor %}
     </div>

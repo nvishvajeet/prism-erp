@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_page_macros.html" import card_heading, empty_state, kpi_grid with context %}
+{% from "_page_macros.html" import card_heading, kpi_grid with context %}
 {% block hover_back %}<a href="{{ url_for('vendor_payment_filing') }}" class="hover-back-btn" title="Back to Filing">←</a>{% endblock %}
 {% block content %}
 
@@ -10,7 +10,7 @@
     <span class="inst-header-code" data-vis="{{ V }}">{{ current_fy }}</span>
   </div>
   <div class="inst-header-actions" data-vis="{{ V }}">
-    <a class="btn" href="{{ url_for('filing_destroy_plan') }}" target="_blank" data-vis="{{ V }}">🖨 Destruction Plan</a>
+    <a class="btn" href="{{ url_for('filing_destroy_plan') }}" target="_blank" rel="noopener" data-vis="{{ V }}">🖨 Destruction Plan</a>
   </div>
 </header>
 

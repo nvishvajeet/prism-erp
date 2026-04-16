@@ -60,14 +60,14 @@ missing for the product to deserve a major-version identity?**
 | Public website / product shell | `partial` | root `index()` route + `portfolio.html` exist | needs a deliberate public-site information architecture, stronger capability storytelling, and shared design tokens with app surfaces |
 | Ravikiran deployment layer | `partial` | README names Ravikiran as a live deployment | needs explicit deployment-specific public pages / copy / onboarding instead of README-only representation |
 | Lab request workflow | `shipped` | request, queue, calendar, stats, instrument routes are live | main gap is refactor and semantic cleanup, not feature absence |
-| Finance portal | `shipped but expanding` | invoices, grants, payments, spend routes/templates exist | vendor registry, invoice PDF export, budget alerts still missing |
+| Finance portal | `shipped but expanding` | invoices, grants, payments, spend routes/templates exist | vendor registry, invoice PDF export; budget alerts **partial** (pct tier shown on grant detail, notify() wiring deferred) |
 | Attendance / leave | `partial` | attendance, leave request, team leave approval routes exist | missing visual leave calendar and broader HR summary surfaces |
 | Vehicles / fleet | `partial` | vehicles list/detail/log/edit/archive routes exist | trip logging needs clearer start/end, distance, purpose, and trends/reminders |
 | Personnel / payroll | `partial` | personnel list/detail/salary config routes exist | needs tighter payroll + attendance + document-vault integration |
 | Inbox + notifications spine | `shipped` | `/inbox`, `/notifications` live | continue unifying cross-module events so every portal uses the same pattern |
 | Tasks / letters / receipts | `shipped` | routes + templates exist | mostly polish, consistency, and cross-linking |
-| Vendor / procurement | `missing` | no dedicated vendor registry / PO / quote / GRN flow yet | needs a real procurement domain, likely starting inside finance |
-| Inventory / consumables | `missing` | no first-class inventory module in registry | needs stock, reorder, issue/consume, supplier linkage |
+| Vendor / procurement | `partial` | `/vendors` list/new/detail/approval routes + `vendor_payments*` routes, plus 11 vendor/vendor_payment templates are live | still needs PO / quote / GRN flow and deeper payment history beyond approvals |
+| Inventory / consumables | `partial` | `_instrument_detail_inventory.html` tile ships inside instrument detail; `/compute/inventory` route + `compute_inventory.html` exist | still needs first-class module with stock, reorder, issue/consume, supplier linkage, and low-stock alerts |
 | REST / integration layer | `missing` | health endpoints exist, but not a true ERP API surface | needs a scoped, documented API for mobile and external systems |
 | Structural portability | `partial` | module registry exists, but `app.py` is still monolithic | route/domain extraction or at least helperization required before v2.0 scale |
 
@@ -178,6 +178,15 @@ These are the best first waves to run on the `v2.0` path.
 | `W2.0.a1` | Vendor registry inside finance | closes the biggest missing finance/procurement gap |
 | `W2.0.a2` | Invoice PDF export | turns existing invoices into a complete operational artifact |
 | `W2.0.a3` | Budget alerts | makes grants proactive instead of passive |
+<!--
+W2.0.a3 status (2026-04-16 · claude-imac-erp-a): PARTIAL.
+Shipped: `grant_utilization()` helper in app.py, utilization tier
+(ok/warn/crit at 80% / 100%) surfaced on `finance_grant_detail.html`
+via KPI tone + alert strip. Deferred: notify() on first transition
+to warn/crit — needs a `grant_alert_state` dedupe table so we don't
+re-notify on every page render. See TODO in finance_grant_detail().
+-->
+
 | `W2.0.a4` | Leave calendar | upgrades attendance from records to planning |
 | `W2.0.a5` | Fleet trip logging | turns vehicles into a real operations domain |
 | `W2.0.b1` | Public website / Ravikiran unification pass | makes the outside of the product match the inside |

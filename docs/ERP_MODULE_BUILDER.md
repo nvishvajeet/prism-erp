@@ -16,6 +16,11 @@ Use this sequence and ignore the rest of the document until you need it:
 
 That is the shortest path to a real module.
 
+If you want the faster "which module shape, which first integration,
+which proof stack" version, read
+[`BUILD_ACCELERATION_PLAYBOOK.md`](BUILD_ACCELERATION_PLAYBOOK.md)
+next.
+
 ## The first-commit rule
 
 Your first module commit should aim for:
@@ -30,6 +35,8 @@ dashboards. Ship a stable `M1` module first and expand later.
 
 For the higher-level mental model, read
 [`ERP_FUTURE_BUILDER.md`](ERP_FUTURE_BUILDER.md).
+For the fastest safe execution order, read
+[`BUILD_ACCELERATION_PLAYBOOK.md`](BUILD_ACCELERATION_PLAYBOOK.md).
 
 ## Architecture Overview
 

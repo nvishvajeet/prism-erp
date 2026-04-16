@@ -30,6 +30,8 @@ os.environ["LAB_SCHEDULER_DEMO_MODE"] = "1"
 os.environ["LAB_SCHEDULER_DATA_DIR"] = str(Path(_tmp_dir.name))
 
 import app  # noqa: E402
+sys.path.insert(0, str(ROOT / "scripts"))
+import populate_live_demo  # noqa: E402
 
 
 FAILURES: list[str] = []
@@ -47,7 +49,17 @@ def run() -> int:
     if _tmp_db.exists():
         _tmp_db.unlink()
     app.DB_PATH = _tmp_db
+    # populate_live_demo snapshots app.DB_PATH at import time; repoint it to
+    # the throwaway DB or its main() still writes to the default location.
+    populate_live_demo.DB_PATH = _tmp_db
     app.init_db()
+    # populate peer aggregates (projects/invoices/payments) and demo users
+    # so the runtime write path has something to target — smoke_test does
+    # the same; init_db alone leaves the peer tables empty.
+    populate_live_demo.main()
+    # Disable CSRF for test_client runs — the test sends a grabbed token
+    # but form posts are easier without the double-check.
+    app.app.config["WTF_CSRF_ENABLED"] = False
 
     import sqlite3
     db = sqlite3.connect(str(_tmp_db))
@@ -90,7 +102,7 @@ def run() -> int:
         tok = re.search(r'name="csrf_token" value="([^"]+)"', r.data.decode()).group(1)
         c.post(
             "/login",
-            data={"email": "admin@lab.local", "password": "12345", "csrf_token": tok},
+            data={"email": "owner@catalyst.local", "password": "12345", "csrf_token": tok},
             follow_redirects=True,
         )
         inst = db.execute(
@@ -148,7 +160,7 @@ def run() -> int:
         tok = re.search(r'name="csrf_token" value="([^"]+)"', r.data.decode()).group(1)
         c.post(
             "/login",
-            data={"email": "admin@lab.local", "password": "12345", "csrf_token": tok},
+            data={"email": "owner@catalyst.local", "password": "12345", "csrf_token": tok},
             follow_redirects=True,
         )
         r = c.get("/finance")

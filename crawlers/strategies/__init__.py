@@ -34,3 +34,12 @@ from . import future_fixes_placeholder  # noqa: F401
 from . import ai_action_promotion      # noqa: F401
 from . import css_variable_defined     # noqa: F401
 from . import csrf_token_present       # noqa: F401
+from . import aria_label_present       # noqa: F401
+from . import url_for_endpoint_exists  # noqa: F401
+from . import duplicate_id_in_template  # noqa: F401
+from . import hardcoded_url_in_template  # noqa: F401
+from . import label_for_matches_id       # noqa: F401
+from . import external_link_noopener     # noqa: F401
+from . import no_inline_onclick          # noqa: F401
+from . import inline_style_attribute     # noqa: F401
+from . import macro_import_unused        # noqa: F401

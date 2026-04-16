@@ -14,6 +14,7 @@
   if (window.__CATALYST_TELEMETRY_OFF) return;
 
   var ENDPOINT = '/api/telemetry/batch';
+  var HEARTBEAT_ENDPOINT = '/me/heartbeat';
   var MAX_BATCH = 50;
   var IDLE_MS = 30000;   // user considered idle after 30s of no input
   var FLUSH_EVERY_MS = 60000;
@@ -31,6 +32,7 @@
   var path = window.location.pathname;
   var lastInput = Date.now();
   var activeMs = 0;
+  var heartbeatActiveMs = 0;
   var started = new Date().toISOString();
   var tickStart = Date.now();
   var ticking = false;
@@ -46,7 +48,9 @@
     if (document.hidden) { ticking = false; return; }
     var now = Date.now();
     if (now - lastInput < IDLE_MS) {
-      activeMs += now - tickStart;
+      var delta = now - tickStart;
+      activeMs += delta;
+      heartbeatActiveMs += delta;
     }
     tickStart = now;
     ticking = true;
@@ -56,6 +60,7 @@
 
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
+      sendHeartbeat();
       flushPageTime();
     } else {
       tickStart = Date.now();
@@ -76,6 +81,25 @@
     activeMs = 0;
     started = new Date().toISOString();
     send();
+  }
+
+  function sendHeartbeat() {
+    var activeSeconds = Math.round(heartbeatActiveMs / 1000);
+    heartbeatActiveMs = 0;
+    if (activeSeconds <= 0) return;
+    activeSeconds = Math.min(activeSeconds, 300);
+    try {
+      fetch(HEARTBEAT_ENDPOINT, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: path,
+          active_seconds: activeSeconds
+        }),
+        keepalive: true
+      }).catch(function () { /* swallow */ });
+    } catch (e) { /* swallow */ }
   }
 
   // Normalize human text into a stable, short slug suitable for use as
@@ -148,12 +172,19 @@
 
   // Periodic flush so long-running pages don't lose data
   window.setInterval(function () {
+    sendHeartbeat();
     flushPageTime();
   }, FLUSH_EVERY_MS);
 
   // Final flush on page unload
-  window.addEventListener('pagehide', flushPageTime);
-  window.addEventListener('beforeunload', flushPageTime);
+  window.addEventListener('pagehide', function () {
+    sendHeartbeat();
+    flushPageTime();
+  });
+  window.addEventListener('beforeunload', function () {
+    sendHeartbeat();
+    flushPageTime();
+  });
 
   function send() {
     if (pageTimeQueue.length === 0 && clickQueue.length === 0) return;

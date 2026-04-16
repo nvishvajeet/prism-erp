@@ -55,7 +55,7 @@
           <tr data-vis="{{ V }}">
             <td class="audit-cell-id" data-vis="{{ V }}">{{ row.id }}</td>
             <td class="audit-cell-time" data-vis="{{ V }}">{{ row.created_at[:19] }}</td>
-            <td data-vis="{{ V }}">{{ row.actor_name or ('system' if not row.actor_id else 'uid:' ~ row.actor_id) }}</td>
+            <td data-vis="{{ V }}">{% if row.actor_id and row.actor_name %}<a class="text-link" href="{{ url_for('user_profile', user_id=row.actor_id) }}" data-vis="{{ V }}">{{ row.actor_name }}</a>{% else %}{{ row.actor_name or ('system' if not row.actor_id else 'uid:' ~ row.actor_id) }}{% endif %}</td>
             <td data-vis="{{ V }}"><code>{{ row.entity_type }}:{{ row.entity_id }}</code></td>
             <td data-vis="{{ V }}"><code>{{ row.action }}</code></td>
             <td class="audit-cell-details" data-vis="{{ V }}">{{ row.payload_json if row.payload_json != '{}' else '' }}</td>

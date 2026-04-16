@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Nightly prune of stale Flask session files older than 7 days.
+
+  Install on the MBP:
+    cp ops/launchd/local.catalyst.session_cleanup.plist ~/Library/LaunchAgents/local.catalyst.session_cleanup.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/local.catalyst.session_cleanup.plist
+    launchctl kickstart -k gui/$(id -u)/local.catalyst.session_cleanup
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.catalyst.session_cleanup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/vishvajeetn/Documents/Scheduler/Main/scripts/cleanup_stale_sessions.py</string>
+        <string>--session-dir</string>
+        <string>/tmp/flask_session</string>
+        <string>--max-age-days</string>
+        <string>7</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>7</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/session-cleanup.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vishvajeetn/Documents/Scheduler/Main/logs/session-cleanup.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>

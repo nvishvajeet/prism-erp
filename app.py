@@ -68,14 +68,14 @@ DEMO_MODE = _DEMO_MODE_ENV in {"1", "true", "yes", "on"}
 # base.html reads DEMO_VARIANT to highlight the active pill and uses
 # DEMO_VARIANT_URLS to link to the other two. DEMO_VARIANT_URLS is a
 # compile-time default that can be overridden at launch via
-# CATALYST_DEMO_VARIANT_URLS="stable=https://localhost:5055,beta=...,alpha=..."
+# CATALYST_DEMO_VARIANT_URLS="stable=https://mitwpu-rnd.catalysterp.org,beta=...,alpha=..."
 # so the ports are not locked in the source. Live (catalysterp.org) sets
 # LAB_SCHEDULER_DEMO_MODE=0 and the widget is skipped entirely.
 DEMO_VARIANT = os.environ.get("CATALYST_DEMO_VARIANT", "stable").strip().lower() or "stable"
 _DEFAULT_DEMO_VARIANT_URLS = {
-    "stable": "https://localhost:5055",
-    "beta":   "https://localhost:5057",
-    "alpha":  "https://localhost:5058",
+    "stable": "https://mitwpu-rnd.catalysterp.org",
+    "beta":   "https://ravikiran.catalysterp.org",
+    "alpha":  "https://playground.catalysterp.org",
 }
 _variant_urls_override = os.environ.get("CATALYST_DEMO_VARIANT_URLS", "").strip()
 if _variant_urls_override:
@@ -90,9 +90,9 @@ if _variant_urls_override:
 else:
     DEMO_VARIANT_URLS = dict(_DEFAULT_DEMO_VARIANT_URLS)
 DEMO_VARIANT_LABELS = {
-    "stable": "Stable",
-    "beta":   "Beta",
-    "alpha":  "Alpha",
+    "stable": "MITWPU",
+    "beta":   "Ravikiran",
+    "alpha":  "Dev",
 }
 
 ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")

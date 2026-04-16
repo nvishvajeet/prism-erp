@@ -148,3 +148,22 @@ Append-only. Each agent adds their round at the bottom after shipping.
 ### Next checks
 - Confirm the mini has the updated branch and that the apex host now lands on the chooser or tenant target expected by the current tunnel setup.
 - Ship the next active-plan item from `docs/NEXT_WAVES.md` if the relay slot stays on this repo.
+
+---
+
+## Round R21 — Agent B Relay Slot — 2026-04-16 05:00 Europe/Paris
+
+### Shipped
+- Updated the demo-variant defaults in `app.py` so the stable, beta, and alpha pills now point at the public tenant hostnames instead of local loopback ports.
+- Kept the override path intact, so launch-time `CATALYST_DEMO_VARIANT_URLS` still wins when a machine needs a different topology.
+- Refreshed the inline comment to match the new public-host default map.
+
+### Verification
+- `.venv/bin/python scripts/smoke_test.py`
+
+### Blockers
+- None on this branch. The change is configuration-only and smoke passed after the edit.
+
+### Next checks
+- Load the demo-variant chooser in a browser and confirm the pills point at the expected live tenant hosts.
+- Continue the batch-3 parity work from `docs/THREE_AGENT_MASTER_PLAN_2026_04_16.md` if this relay slot remains active.

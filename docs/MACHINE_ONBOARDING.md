@@ -51,6 +51,8 @@ Rules:
 - Mini owns Lab live
 - iMac owns Ravikiran live
 - iMac is operated SSH-first; AnyDesk is secondary
+- after migration, Mini and iMac should not retain dev clones or
+  source-style ERP roots for ongoing work
 
 ---
 

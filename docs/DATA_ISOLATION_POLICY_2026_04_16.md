@@ -11,8 +11,8 @@ The enforced rules are:
    Lab ERP cookies now default to `lab_erp_*_session`, so browser sessions do not bleed between sites or lanes.
 
 3. Site-local admin identities are explicit.
-   Lab-only admin identities are `owner.lab@catalyst.local` and `admin.lab@catalyst.local`.
-   The legacy `owner@catalyst.local` identity is repaired onto HQ only.
+   Lab-only admin identities are `owner@mitwpu.edu.in` and `admin@mitwpu.edu.in`.
+   The legacy `owner@ravikiran.org` identity is repaired onto HQ only.
 
 4. Portal access is repaired at login.
    If seeded identities drift, login rewrites the protected portal assignments before session creation.

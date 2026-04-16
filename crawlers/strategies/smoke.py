@@ -27,13 +27,14 @@ CRITICAL_PATHS = [
 ]
 
 SMOKE_ROLES = [
-    ("owner@catalyst.local", "super_admin"),
-    ("anika@catalyst.local", "operator"),
-    ("user1@catalyst.local", "requester"),
+    ("owner@mitwpu.edu.in", "super_admin"),
+    ("anika@mitwpu.edu.in", "operator"),
+    ("user1@mitwpu.edu.in", "requester"),
 ]
 
 # Paths that are expected to return 403 for specific roles (by design).
 EXPECTED_403 = {
+    "operator": {"/schedule", "/calendar", "/instruments", "/stats", "/visualizations"},
     "requester": {"/schedule", "/calendar", "/instruments", "/stats", "/visualizations"},
 }
 

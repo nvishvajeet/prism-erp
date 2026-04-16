@@ -50,7 +50,7 @@ def main() -> None:
     issue_message = "The vial label is smudged and may need verification."
 
     # Use owner account — has access to all requests
-    login(client, "owner@catalyst.local")
+    login(client, "owner@ravikiran.org")
     response = client.post(
         "/requests/1",
         data={
@@ -207,7 +207,7 @@ def main() -> None:
         assert (app.BASE_DIR / slip_attachment["relative_path"]).exists()
 
     client.get("/logout")
-    login(client, "owner@catalyst.local")
+    login(client, "owner@ravikiran.org")
     response = client.post(
         "/requests/new",
         data={
@@ -234,7 +234,7 @@ def main() -> None:
         ).fetchone()
         assert admin_created is not None
         assert admin_created["requester_id"] == 11
-        admin_user = app.get_db().execute("SELECT id FROM users WHERE email = 'owner@catalyst.local'").fetchone()
+        admin_user = app.get_db().execute("SELECT id FROM users WHERE email = 'owner@ravikiran.org'").fetchone()
         assert admin_user is not None
         assert admin_created["created_by_user_id"] == admin_user["id"]
         assert "reassessment" in (admin_created["originator_note"] or "")
@@ -279,7 +279,7 @@ def main() -> None:
             "SELECT id FROM approval_steps WHERE sample_request_id = 1 AND approver_role = 'finance' ORDER BY id LIMIT 1"
         ).fetchone()
     if finance_step:
-        # Assign to finance admin (user 8 = meera@catalyst.local)
+        # Assign to finance admin (user 8 = meera@mitwpu.edu.in)
         response = client.post(
             "/requests/1",
             data={"action": "assign_approver", "step_id": str(finance_step["id"]), "approver_user_id": "8"},
@@ -320,7 +320,7 @@ def main() -> None:
     assert b"Operator Note updated" in response.data
     assert response.status_code == 200
     client.get("/logout")
-    login(client, "owner.lab@catalyst.local")
+    login(client, "owner@mitwpu.edu.in")
     with client.session_transaction() as sess:
         sess.pop("active_portal", None)
         sess.pop("requested_portal", None)
@@ -336,16 +336,16 @@ def main() -> None:
         data={
             "action": "create_user",
             "name": "Member Temp",
-            "email": "member.temp@catalyst.local",
+            "email": "member.temp@mitwpu.edu.in",
             "role": "requester",
         },
         follow_redirects=True,
     )
-    assert response.status_code == 200 or b"member.temp@catalyst.local" in response.data or b"Member Temp" in response.data
+    assert response.status_code == 200 or b"member.temp@mitwpu.edu.in" in response.data or b"Member Temp" in response.data
     from werkzeug.security import generate_password_hash as _gph
     with app.app.app_context():
         db = app.get_db()
-        temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@catalyst.local'").fetchone()
+        temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@mitwpu.edu.in'").fetchone()
         if temp_member is None:
             password_hash = _gph("12345", method="pbkdf2:sha256")
             db.execute(
@@ -354,9 +354,9 @@ def main() -> None:
                     (name, email, password_hash, role, invite_status, active, must_change_password, member_code)
                 VALUES (?, ?, ?, 'requester', 'active', 1, 0, ?)
                 """,
-                ("Member Temp", "member.temp@catalyst.local", password_hash, "REQ-TEMP"),
+                ("Member Temp", "member.temp@mitwpu.edu.in", password_hash, "REQ-TEMP"),
             )
-            temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@catalyst.local'").fetchone()
+            temp_member = db.execute("SELECT id FROM users WHERE email = 'member.temp@mitwpu.edu.in'").fetchone()
             assert temp_member is not None
             app.assign_user_to_portals(temp_member["id"], ["lab"], portal_role="member")
         temp_member_id = temp_member["id"]
@@ -368,7 +368,7 @@ def main() -> None:
         db.commit()
 
     client.get("/logout")
-    login(client, "member.temp@catalyst.local")
+    login(client, "member.temp@mitwpu.edu.in")
     response = client.get(f"/attachments/{attachment['id']}/download")
     assert response.status_code == 403
     assert client.get("/schedule").status_code == 403
@@ -380,7 +380,7 @@ def main() -> None:
     # The 403 checks above are the real guard. The home page may still
     # include nav shells; visibility is enforced server-side.
     assert response.status_code == 200
-    login(client, "owner@catalyst.local")
+    login(client, "owner@ravikiran.org")
 
     response = client.post(
         "/calendar?instrument_id=1&date=2026-04-06&view=week",
@@ -502,7 +502,7 @@ def main() -> None:
     assert b"Upload too large" in response.data
 
     client.get("/logout")
-    login(client, "meera@catalyst.local")
+    login(client, "meera@mitwpu.edu.in")
     response = client.get("/my/history", follow_redirects=True)
     assert response.status_code == 200
     # Visibility matrix (v1.2.x+): finance can browse instruments,
@@ -521,7 +521,7 @@ def main() -> None:
     assert b"Records" not in response.data
 
     client.get("/logout")
-    login(client, "dean@catalyst.local")
+    login(client, "dean@mitwpu.edu.in")
     assert client.get("/admin/users").status_code == 200
     response = client.post(
         f"/users/{temp_member_id}",
@@ -531,7 +531,7 @@ def main() -> None:
     assert b"Access removed" in response.data
 
     client.get("/logout")
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     response = client.get("/my/history", follow_redirects=True)
     assert response.status_code == 200
     response = client.get("/instruments")
@@ -577,7 +577,7 @@ def main() -> None:
         uploaded_instrument_photo.unlink(missing_ok=True)
 
     client.get("/logout")
-    login(client, "user1@catalyst.local")
+    login(client, "user1@mitwpu.edu.in")
     response = client.post(
         "/requests/new",
         data={
@@ -608,7 +608,7 @@ def main() -> None:
         assert queued_row["status"] == "submitted"
 
     client.get("/logout")
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     response = client.post(
         "/instruments/1",
         data={"action": "update_operation", "intake_mode": "accepting"},
@@ -625,7 +625,7 @@ def main() -> None:
         assert "released into review" in (released_row["remarks"] or "").lower()
 
     client.get("/logout")
-    response = client.post("/login", data={"email": "member.temp@catalyst.local", "password": "12345"}, follow_redirects=True)
+    response = client.post("/login", data={"email": "member.temp@mitwpu.edu.in", "password": "12345"}, follow_redirects=True)
     assert b"Invalid login" in response.data
 
     # Action Queue smoke — admin roles see the nav link and page, non-admin roles don't.
@@ -642,7 +642,7 @@ def main() -> None:
         app.get_db().commit()
 
     client.get("/logout")
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     home = client.get("/")
     assert b'href="/queue"' in home.data, "Action Queue nav link missing for instrument_admin"
     queue = client.get("/queue")
@@ -655,7 +655,7 @@ def main() -> None:
     assert b"Smoke Pending" in queue.data, "/queue body missing the injected 'Smoke Pending' row"
 
     client.get("/logout")
-    login(client, "anika@catalyst.local")
+    login(client, "anika@mitwpu.edu.in")
     home = client.get("/")
     assert b'href="/queue"' not in home.data, "Action Queue nav link should be hidden for operators"
     # /queue still returns 200 with empty-state — intentionally friendlier than 403
@@ -686,25 +686,25 @@ def main() -> None:
         "If this fails, the enumeration-defense flash copy has drifted."
     )
     # (d) POST with known user → same vague flash + row lands
-    r4 = client.post("/forgot-password", data={"email": "kondhalkar@catalyst.local"}, follow_redirects=True)
+    r4 = client.post("/forgot-password", data={"email": "kondhalkar@mitwpu.edu.in"}, follow_redirects=True)
     assert r4.status_code == 200
     assert b"admin has been notified" in r4.data
     with app.app.app_context():
         row = app.get_db().execute(
             "SELECT username_entered, matched_user_id, status FROM password_reset_requests "
-            "WHERE username_entered = 'kondhalkar@catalyst.local' ORDER BY id DESC LIMIT 1"
+            "WHERE username_entered = 'kondhalkar@mitwpu.edu.in' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         assert row is not None, "password_reset_requests row didn't land — schema missing or INSERT failed silently"
         assert row["matched_user_id"] is not None, "matched_user_id should be set for known-user request"
         assert row["status"] == "pending", f"new row should be 'pending', got {row['status']!r}"
     # (e) Admin sees the reset in /queue (Kondhalkar as instrument_admin)
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     queue = client.get("/queue")
     assert b"Password reset" in queue.data, (
         "/queue should surface the password_reset_requests row as 'Password reset' pill. "
         "Check _action_queue_items pwd_reset branch + MODULE_REGISTRY queue nav_access."
     )
-    assert b"kondhalkar@catalyst.local" in queue.data, "/queue should show the reset request's username"
+    assert b"kondhalkar@mitwpu.edu.in" in queue.data, "/queue should show the reset request's username"
     # Clean up so smoke is idempotent
     with app.app.app_context():
         app.get_db().execute("DELETE FROM password_reset_requests WHERE username_entered LIKE '%@%.local'")
@@ -713,8 +713,8 @@ def main() -> None:
     # login-ux-cleanup-v1 invariants + notify_admins_on_pw_reset.
     client.get("/logout")
     login_page = client.get("/login?demo=1")
-    assert b"owner@catalyst.local" not in login_page.data, (
-        "login.html leaked owner@catalyst.local in the username field on ?demo=1 — "
+    assert b"owner@ravikiran.org" not in login_page.data, (
+        "login.html leaked owner@ravikiran.org in the username field on ?demo=1 — "
         "the demo_public_email auto-fill was dropped in login-ux-cleanup-v1."
     )
     assert b"CATALYST CATALYST" not in login_page.data, (
@@ -730,7 +730,7 @@ def main() -> None:
         app.get_db().execute("DELETE FROM user_todos WHERE title LIKE 'Password reset requested%'")
         app.get_db().execute("DELETE FROM password_reset_requests")
         app.get_db().commit()
-    r = client.post("/forgot-password", data={"email": "kondhalkar@catalyst.local"}, follow_redirects=True)
+    r = client.post("/forgot-password", data={"email": "kondhalkar@mitwpu.edu.in"}, follow_redirects=True)
     assert r.status_code == 200
     with app.app.app_context():
         n_notif = app.get_db().execute(
@@ -761,25 +761,25 @@ def main() -> None:
     with app.app.app_context():
         kondhalkar = app.get_db().execute(
             "SELECT id FROM users WHERE email = ?",
-            ("kondhalkar@catalyst.local",),
+            ("kondhalkar@mitwpu.edu.in",),
         ).fetchone()
-        assert kondhalkar is not None, "seed user kondhalkar@catalyst.local missing"
+        assert kondhalkar is not None, "seed user kondhalkar@mitwpu.edu.in missing"
         kondhalkar_id = kondhalkar["id"]
 
     with app.app.app_context():
         app.get_db().execute(
             "INSERT INTO password_reset_requests "
             "(username_entered, matched_user_id, status, requested_at) "
-            "VALUES ('kondhalkar@catalyst.local', ?, 'pending', ?)",
+            "VALUES ('kondhalkar@mitwpu.edu.in', ?, 'pending', ?)",
             (kondhalkar_id, app.now_iso()),
         )
         app.get_db().commit()
 
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     listing = client.get("/admin/password-reset")
     assert listing.status_code == 200, f"GET /admin/password-reset expected 200, got {listing.status_code}"
     assert b"Pending" in listing.data, "admin pw-reset page missing 'Pending' section"
-    assert b"kondhalkar@catalyst.local" in listing.data, "seeded request not listed"
+    assert b"kondhalkar@mitwpu.edu.in" in listing.data, "seeded request not listed"
     assert client.get("/admin/password_reset").status_code == 200, "/admin/password_reset alias should 200"
     with app.app.app_context():
         row = app.get_db().execute(
@@ -807,7 +807,7 @@ def main() -> None:
         assert kon["must_change_password"] == 1, "resolve must set must_change_password=1"
     # Non-admin forbidden
     client.get("/logout")
-    login(client, "anika@catalyst.local")
+    login(client, "anika@mitwpu.edu.in")
     assert client.get("/admin/password-reset").status_code == 403, "operator should 403 on admin pw-reset"
     # Clean up — reset Kondhalkar's password hash to the seed default AND clear
     # the must_change_password flag. The resolve-password-reset earlier set BOTH
@@ -834,7 +834,7 @@ def main() -> None:
             "SELECT id FROM users WHERE email = 'inline-pending@test.local'"
         ).fetchone()
         target_id = target["id"]
-    login(client, "kondhalkar@catalyst.local")
+    login(client, "kondhalkar@mitwpu.edu.in")
     qbody = client.get("/queue").data
     assert b'name="action" value="approve_pending_user"' in qbody, (
         "/queue should render inline Approve form for account_pending rows"

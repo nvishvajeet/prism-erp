@@ -251,7 +251,7 @@ OWNER_EMAILS = {
     # Default: vishva (the demo seed super_admin).
     for email in os.environ.get(
         "OWNER_EMAILS",
-        "owner.lab@catalyst.local,owner@catalyst.local",
+        "owner@mitwpu.edu.in,owner@ravikiran.org",
     ).split(",")
     if email.strip()
 }
@@ -263,18 +263,18 @@ VENDOR_AUTO_APPROVE_THRESHOLD = float(os.environ.get("VENDOR_AUTO_APPROVE_THRESH
 # var; the built-in default is the Nikita super-admin account (password 12345).
 DEMO_PUBLIC_EMAIL = os.environ.get(
     "DEMO_PUBLIC_EMAIL",
-    "nikita" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner.lab@catalyst.local",
+    "nikita" if not int(os.environ.get("LAB_SCHEDULER_DEMO_MODE", "1")) else "owner@mitwpu.edu.in",
 )
 
 DEMO_ROLE_SWITCHES = {
-    "owner": {"label": "Owner", "email": "owner.lab@catalyst.local"},
-    "super_admin": {"label": "Super Admin", "email": "admin.lab@catalyst.local"},
-    "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@catalyst.local"},
-    "site_admin": {"label": "Site Admin", "email": "siteadmin@catalyst.local"},
-    "operator": {"label": "Operator", "email": "rahul.misal@catalyst.local"},
-    "member": {"label": "Member", "email": "user1@catalyst.local"},
-    "finance": {"label": "Finance", "email": "meera@catalyst.local"},
-    "professor": {"label": "Approver", "email": "approver@catalyst.local"},
+    "owner": {"label": "Owner", "email": "owner@mitwpu.edu.in"},
+    "super_admin": {"label": "Super Admin", "email": "admin@mitwpu.edu.in"},
+    "instrument_admin": {"label": "Instrument Admin", "email": "kondhalkar@mitwpu.edu.in"},
+    "site_admin": {"label": "Site Admin", "email": "siteadmin@mitwpu.edu.in"},
+    "operator": {"label": "Operator", "email": "anika@mitwpu.edu.in"},
+    "member": {"label": "Member", "email": "user1@mitwpu.edu.in"},
+    "finance": {"label": "Finance", "email": "meera@mitwpu.edu.in"},
+    "professor": {"label": "Approver", "email": "approver@mitwpu.edu.in"},
 }
 
 # ─── ERP Portal definitions ────────────────────────────────────────
@@ -921,7 +921,7 @@ if _AUTHLIB_AVAILABLE and GOOGLE_CLIENT_ID:
 
 # ── SendGrid / External Email ──────────────────────────────────
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
-SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "noreply@catalyst.local")
+SENDGRID_FROM = os.environ.get("SENDGRID_FROM", "noreply@mitwpu.edu.in")
 SENDGRID_DAILY_LIMIT = int(os.environ.get("SENDGRID_DAILY_LIMIT", "100"))
 
 
@@ -1362,7 +1362,7 @@ def verify_audit_chain(entity_type: str, entity_id: int) -> bool:
 def send_completion_email(sample_request: sqlite3.Row, results_summary: str) -> tuple[bool, str]:
     msg = EmailMessage()
     msg["Subject"] = f"Lab Result Ready: {sample_request['request_no']}"
-    msg["From"] = "noreply@lab.local"
+    msg["From"] = "noreply@mitwpu.edu.in"
     msg["To"] = sample_request["requester_email"]
     msg.set_content(
         "\n".join(
@@ -7321,11 +7321,11 @@ def _seed_demo_companies() -> None:
         # Balu Patil (driver) — these serve across all companies
         demo_pw_hash = generate_password_hash("12345", method="pbkdf2:sha256")
         staff = [
-            ("Prashant Chavre", "prashant@catalyst.local", "finance_admin",
+            ("Prashant Chavre", "prashant@ravikiran.org", "finance_admin",
              "Head Accountant — manages finances across all 4 companies"),
-            ("Sonal Patil", "sonal@catalyst.local", "finance_admin",
+            ("Sonal Patil", "sonal@ravikiran.org", "finance_admin",
              "Finance staff — attendance & payroll, primarily Ravikiran"),
-            ("Rahul Misal", "rahul@catalyst.local", "finance_admin",
+            ("Rahul Misal", "rahul@ravikiran.org", "finance_admin",
              "Finance staff — vendor payments & compliance"),
         ]
         for name, email, role, note in staff:
@@ -7340,9 +7340,9 @@ def _seed_demo_companies() -> None:
                     (uid, role, now))
         # CA team accounts for audit access
         ca_staff = [
-            ("CA Office", "ca@catalyst.local", "ca_auditor",
+            ("CA Office", "ca@ravikiran.org", "ca_auditor",
              "CA team login — external auditor access for transaction verification"),
-            ("CA Assistant", "ca2@catalyst.local", "ca_auditor",
+            ("CA Assistant", "ca2@ravikiran.org", "ca_auditor",
              "CA team assistant — audit review and statement matching"),
         ]
         for name, email, role, note in ca_staff:
@@ -7356,7 +7356,7 @@ def _seed_demo_companies() -> None:
                     "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
                     (uid, role, now))
         # Also give Prashant audit access
-        prashant_u = db.execute("SELECT id FROM users WHERE email='prashant@catalyst.local'").fetchone()
+        prashant_u = db.execute("SELECT id FROM users WHERE email='prashant@ravikiran.org'").fetchone()
         if prashant_u:
             cur.execute(
                 "INSERT OR IGNORE INTO user_roles (user_id, role, assigned_at) VALUES (?,?,?)",
@@ -7370,7 +7370,7 @@ def _seed_demo_companies() -> None:
         raj_id = db.execute("SELECT id FROM companies WHERE short_name='Raj'").fetchone()["id"]
         surya_id = db.execute("SELECT id FROM companies WHERE short_name='SuryaJyoti'").fetchone()["id"]
 
-        prashant = db.execute("SELECT id FROM users WHERE email='prashant@catalyst.local'").fetchone()
+        prashant = db.execute("SELECT id FROM users WHERE email='prashant@ravikiran.org'").fetchone()
         prashant_id = prashant["id"] if prashant else 1
 
         interco_vendors = [
@@ -7936,8 +7936,8 @@ def _seed_demo_grants() -> None:
         existing = db.execute("SELECT COUNT(*) AS c FROM grants").fetchone()["c"]
         if existing:
             return
-        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner.lab@catalyst.local'").fetchone()
-        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@catalyst.local'").fetchone()
+        admin_row = db.execute("SELECT id FROM users WHERE email = 'owner@mitwpu.edu.in'").fetchone()
+        approver_row = db.execute("SELECT id FROM users WHERE email = 'approver@mitwpu.edu.in'").fetchone()
         pi_admin = admin_row["id"] if admin_row else None
         pi_approver = approver_row["id"] if approver_row else None
         now_iso = datetime.utcnow().isoformat(timespec="seconds")
@@ -8000,10 +8000,10 @@ def _seed_demo_messages() -> None:
         def uid(email: str) -> int | None:
             row = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             return row["id"] if row else None
-        admin = uid("owner.lab@catalyst.local")
-        operator = uid("anika@catalyst.local")
-        requester = uid("user1@catalyst.local")
-        approver = uid("approver@catalyst.local")
+        admin = uid("owner@mitwpu.edu.in")
+        operator = uid("anika@mitwpu.edu.in")
+        requester = uid("user1@mitwpu.edu.in")
+        approver = uid("approver@mitwpu.edu.in")
         now = datetime.utcnow()
         seeds = [
             # (sender, recipient, subject, body, sent_offset_minutes, read)
@@ -8055,7 +8055,7 @@ def _seed_demo_notices() -> None:
         if existing:
             return
         admin_id_row = db.execute(
-            "SELECT id FROM users WHERE email = 'owner.lab@catalyst.local'"
+            "SELECT id FROM users WHERE email = 'owner@mitwpu.edu.in'"
         ).fetchone()
         admin_id = admin_id_row["id"] if admin_id_row else None
         demo_notices = [
@@ -8068,7 +8068,7 @@ def _seed_demo_notices() -> None:
             (
                 "site", None, "info",
                 "New grant application deadline: April 30",
-                "DST-SERB grant applications for the next funding cycle close April 30. PIs should submit instrument usage projections to the finance office by April 25. Contact finance@catalyst.local for the budget template.",
+                "DST-SERB grant applications for the next funding cycle close April 30. PIs should submit instrument usage projections to the finance office by April 25. Contact finance@mitwpu.edu.in for the budget template.",
                 admin_id,
             ),
             (
@@ -8136,18 +8136,18 @@ def seed_data() -> None:
     # Rebind every seeded persona's password on every boot so existing
     # demo DBs catch up without a re-seed.
     _persona_emails = (
-        "owner.lab@catalyst.local", "admin.lab@catalyst.local",
-        "owner@catalyst.local", "dean@catalyst.local", "kondhalkar@catalyst.local",
-        "siteadmin@catalyst.local", "anika@catalyst.local", "ravi@catalyst.local",
-        "chetan@catalyst.local", "meera@catalyst.local", "suresh@catalyst.local",
-        "approver@catalyst.local",
+        "owner@mitwpu.edu.in", "admin@mitwpu.edu.in",
+        "owner@ravikiran.org", "dean@mitwpu.edu.in", "kondhalkar@mitwpu.edu.in",
+        "siteadmin@mitwpu.edu.in", "anika@mitwpu.edu.in", "ravi@mitwpu.edu.in",
+        "chetan@mitwpu.edu.in", "meera@mitwpu.edu.in", "suresh@mitwpu.edu.in",
+        "approver@mitwpu.edu.in",
         "satyajeetn",
-        "user1@catalyst.local", "user2@catalyst.local", "user3@catalyst.local",
-        "user4@catalyst.local", "user5@catalyst.local",
+        "user1@mitwpu.edu.in", "user2@mitwpu.edu.in", "user3@mitwpu.edu.in",
+        "user4@mitwpu.edu.in", "user5@mitwpu.edu.in",
         # 2026-04-14 · Real team
         "nikita", "prashant",
-        "rahul.misal@catalyst.local", "sonal@catalyst.local",
-        "balaji.phunde@catalyst.local", "mangesh.ghule@catalyst.local",
+        "rahul.misal@ravikiran.org", "sonal@ravikiran.org",
+        "balaji.phunde@ravikiran.org", "mangesh.ghule@ravikiran.org",
         # 2026-04-15 · Tester
         "tejveer",
         # 2026-04-15 · Test accounts (one per non-tester role, see real_team)
@@ -8176,21 +8176,21 @@ def seed_data() -> None:
          "Kothrud HQ",                 ["lab", "hq"]),
         ("Prashant Chavre",    "prashant",                      "super_admin",
          "Kothrud HQ",                 ["lab", "hq"]),
-        ("Rahul Misal",        "rahul.misal@catalyst.local",    "operator",
+        ("Rahul Misal",        "rahul.misal@ravikiran.org",    "operator",
          "Kothrud HQ · Ravikiran",     ["hq"]),
-        ("Sonal",              "sonal@catalyst.local",          "operator",
+        ("Sonal",              "sonal@ravikiran.org",          "operator",
          "Kothrud HQ · Ravikiran",     ["hq"]),
-        ("Balaji Phunde",      "balaji.phunde@catalyst.local",  "operator",
+        ("Balaji Phunde",      "balaji.phunde@ravikiran.org",  "operator",
          "Ravikiran Fleet · Driver",   ["hq"]),
-        ("Mangesh Ghule",      "mangesh.ghule@catalyst.local",  "operator",
+        ("Mangesh Ghule",      "mangesh.ghule@ravikiran.org",  "operator",
          "Ravikiran Fleet · Driver",   ["hq"]),
         # 2026-04-15 · Tester — full-read, scoped-write (debugger/feedback only).
         # Username "tejveer", password "12345" (demo default, must_change on first login).
         ("Tejveer",            "tejveer",                       "tester",
          "Ravikiran · Tester",         ["lab", "hq"]),
-        ("Lab Owner",          "owner.lab@catalyst.local",     "super_admin",
+        ("Lab Owner",          "owner@mitwpu.edu.in",     "super_admin",
          "MIT-WPU Research · Owner",   ["lab"]),
-        ("Lab Admin",          "admin.lab@catalyst.local",     "super_admin",
+        ("Lab Admin",          "admin@mitwpu.edu.in",     "super_admin",
          "MIT-WPU Research · Admin",   ["lab"]),
         # 2026-04-15 · Test accounts — one per non-tester role, so Tejveer
         # can walk §7 of /me/testing-plan as every role. All passwords
@@ -8277,32 +8277,32 @@ def seed_data() -> None:
     # Password for ALL demo accounts: "12345"
     core_users = [
         # Owner (god-view via OWNER_EMAILS env var)
-        ("Facility Owner", "owner.lab@catalyst.local",  "super_admin"),
-        ("Lab Admin",      "admin.lab@catalyst.local",  "super_admin"),
-        ("Facility Owner", "owner@catalyst.local",      "super_admin"),
+        ("Facility Owner", "owner@mitwpu.edu.in",  "super_admin"),
+        ("Lab Admin",      "admin@mitwpu.edu.in",  "super_admin"),
+        ("Facility Owner", "owner@ravikiran.org",      "super_admin"),
         # Dean — super admin
-        ("Dr Bharat Chaudhari",  "dean@catalyst.local",          "super_admin"),
+        ("Dr Bharat Chaudhari",  "dean@mitwpu.edu.in",          "super_admin"),
         # Kondhalkar — admin across many instruments
-        ("Mr Vishal Kondhalkar", "kondhalkar@catalyst.local",    "instrument_admin"),
+        ("Mr Vishal Kondhalkar", "kondhalkar@mitwpu.edu.in",    "instrument_admin"),
         # Site admin
-        ("Site Admin",           "siteadmin@catalyst.local",         "site_admin"),
+        ("Site Admin",           "siteadmin@mitwpu.edu.in",         "site_admin"),
         # Operators
-        ("Operator Anika",       "anika@catalyst.local",         "operator"),
-        ("Operator Ravi",        "ravi@catalyst.local",          "operator"),
-        ("Operator Chetan",      "chetan@catalyst.local",        "operator"),
+        ("Operator Anika",       "anika@mitwpu.edu.in",         "operator"),
+        ("Operator Ravi",        "ravi@mitwpu.edu.in",          "operator"),
+        ("Operator Chetan",      "chetan@mitwpu.edu.in",        "operator"),
         # Finance operators
-        ("Finance Meera",        "meera@catalyst.local",         "finance_admin"),
-        ("Finance Suresh",       "suresh@catalyst.local",        "finance_admin"),
+        ("Finance Meera",        "meera@mitwpu.edu.in",         "finance_admin"),
+        ("Finance Suresh",       "suresh@mitwpu.edu.in",        "finance_admin"),
         # Approver
-        ("Prof. Approver",       "approver@catalyst.local",      "professor_approver"),
+        ("Prof. Approver",       "approver@mitwpu.edu.in",      "professor_approver"),
         # Developer — Satyajeet
         ("Satyajeet Nagargoje",  "satyajeetn",                   "site_admin"),
         # Generic user accounts (User 1–5)
-        ("User One",             "user1@catalyst.local",         "requester"),
-        ("User Two",             "user2@catalyst.local",         "requester"),
-        ("User Three",           "user3@catalyst.local",         "requester"),
-        ("User Four",            "user4@catalyst.local",         "requester"),
-        ("User Five",            "user5@catalyst.local",         "requester"),
+        ("User One",             "user1@mitwpu.edu.in",         "requester"),
+        ("User Two",             "user2@mitwpu.edu.in",         "requester"),
+        ("User Three",           "user3@mitwpu.edu.in",         "requester"),
+        ("User Four",            "user4@mitwpu.edu.in",         "requester"),
+        ("User Five",            "user5@mitwpu.edu.in",         "requester"),
     ]
     for name, email, role in core_users:
         db.execute(
@@ -8314,13 +8314,13 @@ def seed_data() -> None:
 
     lab_profile_updates = [
         (
-            "dean@catalyst.local",
+            "dean@mitwpu.edu.in",
             "Dr Bharat Chaudhari",
             "MIT-WPU Research · Dean R&D",
             "https://research.mitwpu.edu.in/researcher/bharat-chaudhari",
         ),
         (
-            "kondhalkar@catalyst.local",
+            "kondhalkar@mitwpu.edu.in",
             "Mr Vishal Kondhalkar",
             "MIT-WPU Research & Development",
             "",
@@ -8479,44 +8479,44 @@ def seed_data() -> None:
 
     assignments = [
         # ── Kondhalkar is admin on most instruments ───────────────
-        ("kondhalkar@catalyst.local", "INST-001", "admin"),
-        ("kondhalkar@catalyst.local", "INST-002", "admin"),
-        ("kondhalkar@catalyst.local", "INST-003", "admin"),
-        ("kondhalkar@catalyst.local", "INST-004", "admin"),
-        ("kondhalkar@catalyst.local", "INST-005", "admin"),
-        ("kondhalkar@catalyst.local", "INST-006", "admin"),
-        ("kondhalkar@catalyst.local", "INST-007", "admin"),
-        ("kondhalkar@catalyst.local", "INST-008", "admin"),
-        ("kondhalkar@catalyst.local", "INST-009", "admin"),
-        ("kondhalkar@catalyst.local", "INST-010", "admin"),
-        ("kondhalkar@catalyst.local", "INST-011", "admin"),
-        ("kondhalkar@catalyst.local", "INST-012", "admin"),
-        ("kondhalkar@catalyst.local", "INST-013", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-001", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-002", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-003", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-004", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-005", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-006", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-007", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-008", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-009", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-010", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-011", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-012", "admin"),
+        ("kondhalkar@mitwpu.edu.in", "INST-013", "admin"),
 
         # ── Approver as faculty on imaging + spectroscopy ─────────
-        ("approver@catalyst.local",  "INST-001", "faculty"),
-        ("approver@catalyst.local",  "INST-002", "faculty"),
-        ("approver@catalyst.local",  "INST-003", "faculty"),
-        ("approver@catalyst.local",  "INST-004", "faculty"),
-        ("approver@catalyst.local",  "INST-005", "faculty"),
+        ("approver@mitwpu.edu.in",  "INST-001", "faculty"),
+        ("approver@mitwpu.edu.in",  "INST-002", "faculty"),
+        ("approver@mitwpu.edu.in",  "INST-003", "faculty"),
+        ("approver@mitwpu.edu.in",  "INST-004", "faculty"),
+        ("approver@mitwpu.edu.in",  "INST-005", "faculty"),
 
         # ── Operators spread across instruments ───────────────────
         # Anika: imaging cluster
-        ("anika@catalyst.local",     "INST-001", "operator"),
-        ("anika@catalyst.local",     "INST-009", "operator"),
+        ("anika@mitwpu.edu.in",     "INST-001", "operator"),
+        ("anika@mitwpu.edu.in",     "INST-009", "operator"),
         # Ravi: spectroscopy cluster
-        ("ravi@catalyst.local",      "INST-002", "operator"),
-        ("ravi@catalyst.local",      "INST-003", "operator"),
-        ("ravi@catalyst.local",      "INST-004", "operator"),
-        ("ravi@catalyst.local",      "INST-011", "operator"),
+        ("ravi@mitwpu.edu.in",      "INST-002", "operator"),
+        ("ravi@mitwpu.edu.in",      "INST-003", "operator"),
+        ("ravi@mitwpu.edu.in",      "INST-004", "operator"),
+        ("ravi@mitwpu.edu.in",      "INST-011", "operator"),
         # Chetan: surface + mechanical + battery
-        ("chetan@catalyst.local",    "INST-005", "operator"),
-        ("chetan@catalyst.local",    "INST-006", "operator"),
-        ("chetan@catalyst.local",    "INST-007", "operator"),
-        ("chetan@catalyst.local",    "INST-008", "operator"),
-        ("chetan@catalyst.local",    "INST-010", "operator"),
-        ("chetan@catalyst.local",    "INST-012", "operator"),
-        ("chetan@catalyst.local",    "INST-013", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-005", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-006", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-007", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-008", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-010", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-012", "operator"),
+        ("chetan@mitwpu.edu.in",    "INST-013", "operator"),
     ]
     for email, code, kind in assignments:
         _u = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
@@ -8627,9 +8627,9 @@ def _enforce_portal_isolation_defaults(db: sqlite3.Connection) -> None:
     portal_rows = db.execute("SELECT id, slug FROM erp_portals").fetchall()
     portal_id_by_slug = {row["slug"]: row["id"] for row in portal_rows}
     account_portals = {
-        "owner@catalyst.local": (["hq"], "owner"),
-        "owner.lab@catalyst.local": (["lab"], "owner"),
-        "admin.lab@catalyst.local": (["lab"], "owner"),
+        "owner@ravikiran.org": (["hq"], "owner"),
+        "owner@mitwpu.edu.in": (["lab"], "owner"),
+        "admin@mitwpu.edu.in": (["lab"], "owner"),
     }
     for email, (allowed_slugs, portal_role) in account_portals.items():
         user_row = db.execute("SELECT id FROM users WHERE lower(email) = lower(?)", (email,)).fetchone()
@@ -9139,7 +9139,7 @@ def inject_globals():
     access_profile = user_access_profile(user)
     role_set = user_role_set(user)
     ai_settings = _ai_settings_snapshot()
-    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner.lab@catalyst.local"
+    support_admin_email = sorted(OWNER_EMAILS)[0] if OWNER_EMAILS else "owner@mitwpu.edu.in"
     can_edit_user = bool(user and can_manage_members(user))
     can_approve_finance = bool(user and _user_can_edit_finance(user))
     can_manage_instruments = bool(user and _can_manage_any_instrument(user))
@@ -19001,7 +19001,7 @@ def download_reset_password_eml(user_id: int):
     msg = EmailMessage()
     msg["To"] = target_user["email"]
     msg["Subject"] = "Your CATALYST Account — Temporary Password"
-    msg["From"] = "CATALYST Admin <noreply@catalyst.local>"
+    msg["From"] = "CATALYST Admin <noreply@mitwpu.edu.in>"
     msg.set_content(
         f"Hello {target_user['name']},\n\n"
         f"Your CATALYST account password has been reset by an administrator.\n\n"
@@ -19337,7 +19337,7 @@ def calendar_ics():
             f"SUMMARY:[{r['inst_code']}] {r['title']}",
             f"DESCRIPTION:Sample: {r['sample_name']} | Request: {r['request_no']}",
             f"LOCATION:{r['inst_name']}",
-            f"UID:catalyst-req-{r['request_no']}@catalyst.local",
+            f"UID:catalyst-req-{r['request_no']}@mitwpu.edu.in",
             "END:VEVENT",
         ])
 
@@ -19369,7 +19369,7 @@ def calendar_ics():
         lines.extend([
             f"SUMMARY:[DOWNTIME] {d['inst_code']} — {d['reason'] or 'Scheduled maintenance'}",
             f"LOCATION:{d['inst_name']}",
-            f"UID:catalyst-dt-{d['inst_code']}-{start}@catalyst.local",
+            f"UID:catalyst-dt-{d['inst_code']}-{start}@mitwpu.edu.in",
             "END:VEVENT",
         ])
 
@@ -19402,7 +19402,7 @@ def calendar_ics():
                 f"SUMMARY:[CALIBRATION DUE] {cal['inst_code']} — {cal['title']}",
                 f"DESCRIPTION:Certificate: {cal['certificate_number'] or 'pending'}",
                 f"LOCATION:{cal['inst_name']}",
-                f"UID:catalyst-cal-{cal['inst_code']}-{dt}@catalyst.local",
+                f"UID:catalyst-cal-{cal['inst_code']}-{dt}@mitwpu.edu.in",
                 "END:VEVENT",
             ])
     except Exception:

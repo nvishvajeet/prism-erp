@@ -126,3 +126,25 @@ Append-only. Each agent adds their round at the bottom after shipping.
 ### Cross-repo note
 - Phase 1 remaining pool: dashboard tiles, mobile smoke. Demo data
   + landing page + vocab are now all shipped.
+
+---
+
+## Round R20 — Agent B Relay Slot — 2026-04-16 00:00 Europe/Paris
+
+### Shipped
+- Verified the apex login redirect for `portal=hq` and `portal=lab` now sends `catalysterp.org/login` traffic to the Ravikiran and Lab tenant subdomains, while leaving in-subdomain login flows unchanged.
+- Cleaned the redirect comment so it points at an existing deployment doc instead of a dead architecture reference.
+
+### Verification
+- ` .venv/bin/python scripts/smoke_test.py `
+- Focused Flask client check:
+  - `https://catalysterp.org/login?portal=hq` → `302` to `https://ravikiran.catalysterp.org/login`
+  - `https://catalysterp.org/login?portal=lab` → `302` to `https://mitwpu-rnd.catalysterp.org/login`
+  - `https://ravikiran.catalysterp.org/login?portal=hq` → `200` and no redirect
+
+### Blockers
+- None on the code path verified here.
+
+### Next checks
+- Confirm the mini has the updated branch and that the apex host now lands on the chooser or tenant target expected by the current tunnel setup.
+- Ship the next active-plan item from `docs/NEXT_WAVES.md` if the relay slot stays on this repo.

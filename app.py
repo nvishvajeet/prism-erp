@@ -112,6 +112,12 @@ DEMO_VARIANT_LABELS = {
 
 ORG_NAME = os.environ.get("CATALYST_ORG_NAME", "CATALYST")
 ORG_TAGLINE = os.environ.get("CATALYST_ORG_TAGLINE", "Open-source ERP for Research & Operations")
+ERP_PRODUCT = os.environ.get("ERP_PRODUCT", "lab-erp").strip() or "lab-erp"
+ERP_LANE = os.environ.get("ERP_LANE", "").strip().lower()
+_ERP_APP_ROOT_ENV = os.environ.get("ERP_APP_ROOT", "").strip()
+_ERP_DATA_ROOT_ENV = os.environ.get("ERP_DATA_ROOT", "").strip()
+ERP_APP_ROOT = Path(_ERP_APP_ROOT_ENV).expanduser().resolve() if _ERP_APP_ROOT_ENV else None
+ERP_DATA_ROOT = Path(_ERP_DATA_ROOT_ENV).expanduser().resolve() if _ERP_DATA_ROOT_ENV else None
 RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
 PROJECT_FILE_STEM = os.environ.get("LAB_ERP_PROJECT_FILE_STEM", "lab_erp").strip().lower() or "lab_erp"
@@ -212,6 +218,53 @@ def _prefer_runtime_dir(active_dir: Path, named_dirname: str, legacy_dirname: st
     return named_path
 
 
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def require_live_lane(product: str) -> None:
+    if ERP_PRODUCT != product or ERP_LANE != "live":
+        raise RuntimeError(f"{product} live-only operation refused outside the live lane.")
+
+
+def require_dev_lane(product: str) -> None:
+    if ERP_PRODUCT != product or ERP_LANE != "dev":
+        raise RuntimeError(f"{product} dev-only operation refused outside the dev lane.")
+
+
+def assert_runtime_root(expected_root: Path) -> None:
+    if ERP_APP_ROOT is None or ERP_APP_ROOT != expected_root.resolve():
+        raise RuntimeError(f"Runtime app root mismatch: expected {expected_root.resolve()} got {ERP_APP_ROOT!s}")
+
+
+def assert_data_root(expected_root: Path) -> None:
+    resolved_expected = expected_root.resolve()
+    if ERP_DATA_ROOT is None or ERP_DATA_ROOT != resolved_expected:
+        raise RuntimeError(f"Runtime data root mismatch: expected {resolved_expected} got {ERP_DATA_ROOT!s}")
+
+
+def _assert_runtime_lane_policy() -> None:
+    repo_data_root = (BASE_DIR / "data").resolve()
+    if ERP_LANE and _path_is_within(DATA_DIR, repo_data_root):
+        raise RuntimeError(
+            f"Refusing to boot with data root inside app tree: {DATA_DIR.resolve()}."
+            " Use the sibling lane data root instead."
+        )
+    if ERP_LANE:
+        if ERP_LANE not in {"live", "dev"}:
+            raise RuntimeError(f"Invalid ERP_LANE={ERP_LANE!r}; expected live or dev.")
+        assert_runtime_root(BASE_DIR)
+        assert_data_root(DATA_DIR)
+        if ERP_LANE == "live" and DEMO_MODE:
+            raise RuntimeError("Live lane cannot run with LAB_SCHEDULER_DEMO_MODE=1.")
+        if ERP_LANE == "dev" and not DEMO_MODE:
+            raise RuntimeError("Dev lane cannot run with LAB_SCHEDULER_DEMO_MODE=0.")
+
+
 def _bootstrap_runtime_data_dir() -> Path:
     if not DEMO_MODE:
         DATA_OPERATIONAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -244,12 +297,18 @@ def _bootstrap_runtime_data_dir() -> Path:
 
 
 _ACTIVE_DATA_DIR = _bootstrap_runtime_data_dir()
+_assert_runtime_lane_policy()
 
 DB_PATH = _prefer_runtime_file(_ACTIVE_DATA_DIR, _runtime_artifact_name("data", suffix=".db"), "lab_scheduler.db")
 EXPORT_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "exports", "exports")
 UPLOAD_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "uploads", "uploads")
 AI_UPLOAD_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "ai_uploads", "ai_uploads")
 RUNTIME_LOG_DIR = _prefer_runtime_dir(_ACTIVE_DATA_DIR, "logs", "logs")
+for _artifact in (DB_PATH, EXPORT_DIR, UPLOAD_DIR, AI_UPLOAD_DIR, RUNTIME_LOG_DIR):
+    if ERP_LANE and _path_is_within(Path(_artifact), (BASE_DIR / "data").resolve()):
+        raise RuntimeError(f"Runtime artifact escaped into app-local data dir: {Path(_artifact).resolve()}")
+    if ERP_LANE and ERP_DATA_ROOT and not _path_is_within(Path(_artifact), ERP_DATA_ROOT):
+        raise RuntimeError(f"Runtime artifact escaped the configured lane data root: {Path(_artifact).resolve()}")
 STATIC_DIR = BASE_DIR / "static"
 INSTRUMENT_IMAGE_DIR = STATIC_DIR / "instrument_images"
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "xlsx", "csv", "txt"}
@@ -27335,6 +27394,8 @@ def admin_data_storage():
     active_path = str(_ACTIVE_DATA_DIR.resolve())
     default_path = str((BASE_DIR / "data").resolve())
     is_custom = active_path != str((BASE_DIR / "data" / ("demo" if DEMO_MODE else "operational")).resolve())
+    lane_locked = bool(ERP_LANE and ERP_DATA_ROOT)
+    lane_root = str(ERP_DATA_ROOT) if ERP_DATA_ROOT else ""
 
     db_size = DB_PATH.stat().st_size if DB_PATH.exists() else 0
     upload_size = sum(f.stat().st_size for f in UPLOAD_DIR.rglob("*") if f.is_file()) if UPLOAD_DIR.exists() else 0
@@ -27361,6 +27422,7 @@ def admin_data_storage():
     return render_template("admin_data_storage.html",
         active_path=active_path, default_path=default_path,
         is_custom=is_custom, demo_mode=DEMO_MODE,
+        lane_locked=lane_locked, erp_lane=ERP_LANE, erp_product=ERP_PRODUCT, lane_root=lane_root,
         db_size_mb=round(db_size / (1024**2), 2),
         upload_size_mb=round(upload_size / (1024**2), 2),
         export_size_mb=round(export_size / (1024**2), 2),
@@ -27416,6 +27478,9 @@ def admin_data_migrate():
     """Migrate data to a new path. Copies DB + uploads + exports."""
     import shutil
     user = current_user()
+    if ERP_LANE and ERP_DATA_ROOT:
+        flash("This runtime is lane-managed. Change the sibling lane data root through the runtime topology, not from this panel.", "error")
+        return redirect(url_for("admin_data_storage"))
     target_base = request.form.get("target_path", "").strip()
     if not target_base:
         flash("No target path provided.", "error")

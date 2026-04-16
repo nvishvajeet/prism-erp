@@ -28,6 +28,30 @@ Adding a machine = giving it one (or more) of these roles: a new
 tenant, a tunnel connector redundancy peer, an SSH-fallback
 endpoint, or a crawler worker.
 
+## Current onboarding policy
+
+New live services must use isolated runtime roots:
+
+```text
+/Users/<user>/ERP-Instances/<product>/
+  live/
+    app/
+    data/
+  dev/
+    app/
+    data/
+```
+
+Rules:
+
+- `app/` is code only
+- `data/` is the only mutable runtime root
+- production hosts boot from `.../live/run.sh`, not from a source repo
+- MBP is dev-only
+- Mini owns Lab live
+- iMac owns Ravikiran live
+- iMac is operated SSH-first; AnyDesk is secondary
+
 ---
 
 ## Core onboarding (do this once per new machine)
@@ -108,66 +132,77 @@ restrict to specific users (the admin account only). Or CLI:
 sudo systemsetup -setremotelogin on
 ```
 
-### 6. Clone Scheduler/Main
+### 6. Create the runtime root
 
-Each machine gets its own working copy under `~/Scheduler/Main`
-(or `~/Documents/Scheduler/Main` on the dev machine — note that
-`~/Documents/**` triggers macOS TCC restrictions under launchd;
-production hosts should keep the working tree outside `Documents`).
+Create the product lane root before cloning any app code:
 
 ```bash
-# from whichever machine has the source (usually MBP), rsync over Tailscale:
+mkdir -p ~/ERP-Instances/<product>/live/{app,data}
+mkdir -p ~/ERP-Instances/<product>/dev/{app,data}
+```
+
+The live host should own only its product's `live/*` tree. Do not reuse
+`~/Scheduler/Main/data` as a live mutable root.
+
+### 7. Clone the app into `app/`
+
+Clone or sync the correct product repo into the lane's `app/` folder.
+Production hosts should keep the working tree outside `Documents` to
+avoid TCC restrictions under launchd.
+
+```bash
+# example: sync Lab live app to the Mini lane root
 rsync -a --delete \
   --exclude '.venv' --exclude '__pycache__' --exclude '*.pyc' \
   --exclude 'data' --exclude 'logs' --exclude '.git' \
   --exclude 'FOCS-submission' --exclude 'uploads*' \
   ~/Documents/Scheduler/Main/ \
-  <new-host>:Scheduler/Main/
+  <new-host>:ERP-Instances/lab-erp/live/app/
 ```
 
 Or `git clone` from the central bare once SSH access exists:
 
 ```bash
-ssh <mbp> 'cat .claude/git-server/lab-scheduler.git' | git clone -
-# or push/pull pattern per .claude/git-server/README.md
+git clone <origin> ~/ERP-Instances/<product>/<lane>/app
 ```
 
-### 7. Python venv + requirements
+### 8. Python venv + requirements
 
 ```bash
 ssh <new-host> '
-cd ~/Scheduler/Main
+cd ~/ERP-Instances/<product>/<lane>/app
 /usr/bin/python3 -m venv .venv       # Py 3.9 works, so does 3.13
 .venv/bin/pip install --upgrade pip wheel
 .venv/bin/pip install -r requirements.txt
 '
 ```
 
-### 8. Tenant env file
+### 9. Lane env file
 
-Every tenant instance has its own `.env.<tenant>` that gunicorn
-sources. Required keys (values must be **integer literals**, not
-`true`/`false` — `app.py` does `int(os.environ.get(...))`):
+Every lane has a sibling `.env` file at
+`~/ERP-Instances/<product>/<lane>/.env`. Required keys:
 
 ```ini
 LAB_SCHEDULER_SECRET_KEY=<64-hex>          # openssl rand -hex 32
-LAB_SCHEDULER_DEMO_MODE=0
+LAB_SCHEDULER_DEMO_MODE=<0 for live, 1 for dev>
 LAB_SCHEDULER_HOST=0.0.0.0                 # bind to all interfaces so tunnel can reach
 LAB_SCHEDULER_PORT=<port>
 LAB_SCHEDULER_HTTPS=0                      # 1 if you use certfile/keyfile
 LAB_SCHEDULER_CSRF=1
 LAB_SCHEDULER_COOKIE_SECURE=1
-OWNER_EMAILS=<comma,separated,emails>
-DEMO_PUBLIC_EMAIL=admin@<tenant>.catalysterp.org
+ERP_PRODUCT=<product>
+ERP_LANE=<lane>
+<PRODUCT>_RUNTIME_ROOT=~/ERP-Instances/<product>/<lane>
+<PRODUCT>_DATA_DIR=~/ERP-Instances/<product>/<lane>/data
 ```
 
 Port convention: apex 5055, mitwpu-rnd 5056, ravikiran 5057,
 playground 5058. Pick the next free port for a new tenant.
 
-### 9. LaunchAgent for the tenant gunicorn
+### 10. LaunchAgent for the lane runtime
 
-Write `~/Library/LaunchAgents/local.catalyst.<tenant>.plist` binding
-`0.0.0.0:<port>`. Template:
+Write `~/Library/LaunchAgents/local.catalyst.<tenant>.plist` so it runs
+the lane root wrapper, not a repo root. Template:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -178,12 +213,12 @@ Write `~/Library/LaunchAgents/local.catalyst.<tenant>.plist` binding
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>-lc</string>
-    <string>cd /Users/<user>/Scheduler/Main && set -a && . ./.env.<tenant> && set +a && exec ./.venv/bin/gunicorn app:app -w 2 -b 0.0.0.0:<port> --access-logfile - --error-logfile -</string>
+    <string>/Users/<user>/ERP-Instances/<product>/<lane>/run.sh</string>
+    <string>--service</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/<user>/Scheduler/Main</string>
-  <key>StandardOutPath</key><string>/Users/<user>/Scheduler/Main/logs/server-<tenant>.log</string>
-  <key>StandardErrorPath</key><string>/Users/<user>/Scheduler/Main/logs/server-<tenant>.log</string>
+  <key>WorkingDirectory</key><string>/Users/<user>/ERP-Instances/<product>/<lane></string>
+  <key>StandardOutPath</key><string>/Users/<user>/ERP-Instances/<product>/<lane>/data/logs/server.log</string>
+  <key>StandardErrorPath</key><string>/Users/<user>/ERP-Instances/<product>/<lane>/data/logs/server.log</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
@@ -214,21 +249,20 @@ Access. Otherwise launchd spawns will get `PermissionError:
 [Errno 1] Operation not permitted: .../pyvenv.cfg`. Easier:
 move the working tree to `~/Scheduler/Main` and avoid Documents.
 
-### 10. Bootstrap the DB
+### 11. Bootstrap the lane data
 
 Fresh machines need a seed DB. Copy the appropriate tenant's demo
 DB over:
 
 ```bash
-rsync -a <mbp>:Documents/Scheduler/Main/data/demo/<tenant>_ops/ \
-  <new-host>:Scheduler/Main/data/operational/
+rsync -a <mbp>:ERP-Instances/<product>/<source-lane>/data/ \
+  <new-host>:ERP-Instances/<product>/<target-lane>/data/
 ```
 
-`app.py`'s `init_db()` at line ~4610 creates any missing schema on
-first run, but starting with a seeded DB avoids "no such table:
-users" errors on the first /login hit.
+Do not copy `dev/data` into `live/data`. Seed live from an approved
+live snapshot only.
 
-### 11. Wire the tenant into the tunnel
+### 12. Wire the tenant into the tunnel
 
 Add the hostname + ingress rule via the Cloudflare API (see
 `NETWORK_AND_SERVER_ARCHITECTURE.md` → "Updating ingress / DNS").
@@ -243,7 +277,7 @@ Two API calls:
 
 Verify: `curl -sS -o /dev/null -w "%{http_code}\n" https://<new-host>.catalysterp.org/login` → 200.
 
-### 12. SSH-over-Cloudflare fallback
+### 13. SSH-over-Cloudflare fallback
 
 Give the machine an `ssh-<short>.catalysterp.org` entry so it's
 reachable even when Tailscale is down:

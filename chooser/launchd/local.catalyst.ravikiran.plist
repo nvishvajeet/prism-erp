@@ -2,11 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Ravikiran ERP — household/personal ERP wrapper.
-  Runs on port 5057. Addresses audit SEV2 #3 (Ravikiran has no
-  launchd plist on mini — dies on reboot).
-  Staged here for deploy-time install. Install after
-  ravikiran.catalysterp.org ingress is live in cloudflared.
+  Ravikiran ERP — household / estate live lane on the iMac.
+  Runs on port 5057 and must boot only from the isolated
+  /ERP-Instances/ravikiran-erp/live runtime root.
 
   Install:
     cp local.catalyst.ravikiran.plist ~/Library/LaunchAgents/
@@ -14,7 +12,8 @@
       ~/Library/LaunchAgents/local.catalyst.ravikiran.plist
     launchctl kickstart -k gui/$(id -u)/local.catalyst.ravikiran
 
-  ThrottleInterval is 60 (not 10) per audit SEV3 A recommendation.
+  Tail logs:
+    tail -f ~/ERP-Instances/ravikiran-erp/live/data/logs/server.log
 -->
 <plist version="1.0">
 <dict>
@@ -24,25 +23,23 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>-lc</string>
-    <string>cd ~/ravikiran-services &amp;&amp; exec .venv/bin/gunicorn app:app -w 2 -b 127.0.0.1:5057 --access-logfile - --error-logfile -</string>
+    <string>/Users/nv/ERP-Instances/ravikiran-erp/live/run.sh</string>
+    <string>--service</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/vishwajeet/ravikiran-services</string>
+  <string>/Users/nv/ERP-Instances/ravikiran-erp/live</string>
 
   <key>EnvironmentVariables</key>
   <dict>
-    <key>LAB_SCHEDULER_DEMO_MODE</key>
-    <string>1</string>
     <key>PYTHONUNBUFFERED</key>
     <string>1</string>
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/Users/vishwajeet/ravikiran-services/logs/server.log</string>
+  <string>/Users/nv/ERP-Instances/ravikiran-erp/live/data/logs/server.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/vishwajeet/ravikiran-services/logs/server.log</string>
+  <string>/Users/nv/ERP-Instances/ravikiran-erp/live/data/logs/server.log</string>
 
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

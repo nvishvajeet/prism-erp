@@ -34,6 +34,13 @@ if [ -n "${LAB_ERP_DATA_DIR:-}" ]; then
   export CATALYST_DATA_DIR="$LAB_ERP_DATA_DIR"
 fi
 
+if [ -n "${LAB_ERP_RUNTIME_ROOT:-}" ]; then
+  export ERP_PRODUCT="${ERP_PRODUCT:-lab-erp}"
+  export ERP_LANE="${ERP_LANE:-$([ "${LAB_SCHEDULER_DEMO_MODE:-1}" = "1" ] && echo dev || echo live)}"
+  export ERP_APP_ROOT="${ERP_APP_ROOT:-${LAB_ERP_RUNTIME_ROOT%/}/app}"
+  export ERP_DATA_ROOT="${ERP_DATA_ROOT:-${LAB_ERP_RUNTIME_ROOT%/}/data}"
+fi
+
 # Pick the venv python if it exists, fall back to system python.
 PY_BIN="python"
 if [ -x ".venv/bin/python" ]; then
@@ -55,6 +62,14 @@ case "$1" in
     echo "=== SERVICE MODE (Gunicorn) ==="
     export LAB_SCHEDULER_DEBUG=0
     export LAB_SCHEDULER_AUTORELOAD=0
+    if [ "${LAB_SCHEDULER_DEMO_MODE:-1}" = "0" ] && [ -z "${LAB_ERP_RUNTIME_ROOT:-}" ]; then
+      echo "error: live service mode requires LAB_ERP_RUNTIME_ROOT" >&2
+      exit 1
+    fi
+    if [ -n "${LAB_ERP_RUNTIME_ROOT:-}" ] && [ "$APP_DIR" != "${LAB_ERP_RUNTIME_ROOT%/}/app" ]; then
+      echo "error: service boot root mismatch; expected ${LAB_ERP_RUNTIME_ROOT%/}/app got $APP_DIR" >&2
+      exit 1
+    fi
 
     # Kill any stale process on our port so launchd restarts don't fail
     STALE_PIDS=$(lsof -ti "TCP:${BIND_PORT}" 2>/dev/null)

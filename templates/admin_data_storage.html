@@ -38,7 +38,13 @@
       </div>
       <div class="metadata-item" data-vis="{{ V }}">
         <span class="metadata-label" data-vis="{{ V }}">Custom Location</span>
-        <span class="metadata-value" data-vis="{{ V }}">{{ "Yes (CATALYST_DATA_DIR)" if is_custom else "Default (inside app directory)" }}</span>
+        <span class="metadata-value" data-vis="{{ V }}">
+          {% if lane_locked %}
+            Lane-managed ({{ erp_product }} {{ erp_lane }})
+          {% else %}
+            {{ "Yes (legacy custom path)" if is_custom else "Default (inside app directory)" }}
+          {% endif %}
+        </span>
       </div>
       <div class="metadata-item" data-vis="{{ V }}">
         <span class="metadata-label" data-vis="{{ V }}">Disk Total</span>
@@ -61,7 +67,7 @@
 </section>
 
 {# ── Available Volumes ── #}
-{% if volumes %}
+{% if volumes and not lane_locked %}
 <section class="dashboard-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Available Volumes") }}
@@ -104,6 +110,7 @@
 {% endif %}
 
 {# ── Custom Path Migration ── #}
+{% if not lane_locked %}
 <section class="dashboard-tiles" data-vis="{{ V }}">
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("", "Migrate to Custom Path") }}
@@ -121,6 +128,7 @@
     </form>
   </article>
 </section>
+{% endif %}
 
 {# ── How It Works ── #}
 <section class="dashboard-tiles" data-vis="{{ V }}">
@@ -128,9 +136,14 @@
     {{ card_heading("", "How Data Separation Works") }}
     <div class="hint" data-vis="{{ V }}">
       <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Program files</strong> (code, templates, static assets) stay in the app directory.</p>
-      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Data files</strong> (database, uploads, exports) can live anywhere — set <code data-vis="{{ V }}">CATALYST_DATA_DIR</code> in <code data-vis="{{ V }}">.env</code> to point to any mounted volume.</p>
+      {% if lane_locked %}
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Lane-managed runtime:</strong> this instance is locked to <code data-vis="{{ V }}">{{ lane_root }}</code>. Live and dev state stay in sibling <code data-vis="{{ V }}">data/</code> folders outside the app tree.</p>
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Migration policy:</strong> this panel does not move lane-managed data. Change runtime roots through the ERP isolation topology only.</p>
+      {% else %}
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Legacy mode:</strong> data can be redirected with <code data-vis="{{ V }}">CATALYST_DATA_DIR</code>, but new isolated runtimes should use product-specific lane roots instead.</p>
       <p data-vis="{{ V }}"><strong data-vis="{{ V }}">Adding more SSDs:</strong> Mount a new SSD at <code data-vis="{{ V }}">/Volumes/&lt;name&gt;</code>, then use the migrate button above. The app auto-discovers mounted volumes.</p>
-      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">After migration:</strong> Restart the CATALYST server. The new path is saved in <code data-vis="{{ V }}">.env</code> and persists across reboots.</p>
+      <p data-vis="{{ V }}"><strong data-vis="{{ V }}">After migration:</strong> Restart the server. The new path is saved in <code data-vis="{{ V }}">.env</code> and persists across reboots.</p>
+      {% endif %}
     </div>
   </article>
 </section>

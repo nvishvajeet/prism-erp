@@ -108,6 +108,23 @@
         <label data-vis="{{ V }}">Description
           <textarea name="description" rows="5" placeholder="What needs to be done, any preparation or handling note" required data-vis="{{ V }}"></textarea>
         </label>
+        <fieldset class="form-fieldset" data-vis="{{ V }}">
+          <legend data-vis="{{ V }}">Applicant Class</legend>
+          <div class="radio-group" data-vis="{{ V }}">
+            {% for cls in ['UG', 'BTech', 'MTech', 'MS', 'MSc', 'PhD', 'Other'] %}
+            <label class="radio-label" data-vis="{{ V }}">
+              <input type="radio" name="applicant_class" value="{{ cls }}" data-vis="{{ V }}"> {{ cls }}
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <label class="checkbox-label" data-vis="{{ V }}">
+          <input type="checkbox" name="is_magnetic" value="1" data-vis="{{ V }}">
+          Sample contains magnetic material
+        </label>
+        <label data-vis="{{ V }}">Output Format
+          <input type="text" name="output_format" placeholder="e.g. PDF report, raw data CSV, SEM image" data-vis="{{ V }}">
+        </label>
       </section>
 
       <section class="form-section" id="customFieldsSection" style="display:none" data-vis="{{ V }}">

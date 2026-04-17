@@ -5146,6 +5146,9 @@ def init_db() -> None:
                 result_email_status TEXT NOT NULL DEFAULT '',
                 result_email_sent_at TEXT,
                 completion_locked INTEGER NOT NULL DEFAULT 0,
+                applicant_class TEXT NOT NULL DEFAULT '',
+                is_magnetic INTEGER NOT NULL DEFAULT 0,
+                output_format TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
@@ -6881,6 +6884,10 @@ def init_db() -> None:
             "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE users ADD COLUMN employee_id TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE users ADD COLUMN designation TEXT NOT NULL DEFAULT ''",
+            # F2 — CRF PDF parity fields on sample_requests
+            "ALTER TABLE sample_requests ADD COLUMN applicant_class TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE sample_requests ADD COLUMN is_magnetic INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE sample_requests ADD COLUMN output_format TEXT NOT NULL DEFAULT ''",
             # v2.1 compute scheduler columns
             "ALTER TABLE compute_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'ai_prompt'",
             "ALTER TABLE compute_jobs ADD COLUMN software_id INTEGER",
@@ -14958,12 +14965,15 @@ def new_request():
         # v2.0.0 — INSERT skips legacy finance columns (dropped in
         # v2.0 migration). Billing lands in peer aggregates via
         # sync_request_to_peer_aggregates() below.
+        _f2_applicant_class = request.form.get("applicant_class", "").strip()
+        _f2_is_magnetic = 1 if request.form.get("is_magnetic") else 0
+        _f2_output_format = request.form.get("output_format", "").strip()
         request_id = execute(
             """
             INSERT INTO sample_requests
             (request_no, sample_ref, requester_id, created_by_user_id, originator_note, instrument_id, title, sample_name, sample_count, description, sample_origin,
-             priority, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             priority, status, applicant_class, is_magnetic, output_format, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request_no,
@@ -14979,6 +14989,9 @@ def new_request():
                 str(payload["sample_origin"]),
                 str(payload["priority"]),
                 initial_status,
+                _f2_applicant_class,
+                _f2_is_magnetic,
+                _f2_output_format,
                 created,
                 created,
             ),

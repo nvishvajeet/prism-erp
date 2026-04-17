@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Rig status</title>
+<meta http-equiv="refresh" content="60"><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f1117;color:#e8e8ea;margin:0;padding:24px;}
+    h1{font-size:22px;margin:0 0 16px;}
+    h2{font-size:16px;color:#9ca3af;margin:24px 0 8px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+    .card{background:#1a1d27;border-radius:8px;padding:16px;margin-bottom:12px;border:1px solid #2a2f3e;}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #242838;}
+    .row:last-child{border-bottom:0;}
+    .ok{color:#10b981;}.warn{color:#f59e0b;}.err{color:#ef4444;}
+    .bar{background:#242838;border-radius:4px;height:8px;width:200px;overflow:hidden;}
+    .bar>div{height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);}
+    .bar.ok>div{background:linear-gradient(90deg,#10b981,#34d399);}
+    .bar.warn>div{background:linear-gradient(90deg,#f59e0b,#fbbf24);}
+    .small{font-size:12px;color:#6b7280;}
+    .ts{font-size:11px;color:#4b5563;text-align:right;margin-top:24px;}
+    code{background:#242838;padding:2px 6px;border-radius:3px;font-size:12px;}
+    </style></head><body>
+<h1>🛠 Rig status — 2026-04-17 13:53 UTC</h1>
+
+<h2>Live tenants</h2>
+<div class="card"><div class="row"><span><code>catalysterp.org</code></span><span><span class="ok">200</span> <span class="small">972ms</span></span></div><div class="row"><span><code>mitwpu-rnd.catalysterp.org</code></span><span><span class="ok">200</span> <span class="small">817ms</span></span></div><div class="row"><span><code>ravikiran.catalysterp.org</code></span><span><span class="ok">200</span> <span class="small">996ms</span></span></div></div>
+
+<h2>UFBM countdown</h2>
+<div class="card">
+  <div class="row"><span>Sprint progress (13h elapsed, 6d left)</span><div class="bar "><div style="width:8%"></div></div></div>
+  <div class="small">2026-04-17 → 2026-04-24 — Ultra Fast Build Mode</div>
+</div>
+
+<h2>Codex burn velocity</h2>
+<div class="card">
+  <div class="row"><span>Commits last hour</span><span class="ok">48</span></div>
+  <div class="row"><span>Commits last 24h</span><span class="ok">483</span></div>
+  <div class="row"><span>Last 5 subjects</span></div>
+  <ul class="small"><li><code>feat(deploy): /api/version + version_check.js toast + auto-cherry-pick watcher</code></li><li><code>claim: station-paris — widen T_feedback-widgets-split scope</code></li><li><code>claim: station-paris — T_feedback-widgets-split</code></li><li><code>feat(tenancy): D4 — tenant_tag column on all user-owned tables for strict isolation</code></li><li><code>feat(requests): F2 — applicant_class + is_magnetic + output_format for CRF PDF parity</code></li></ul>
+</div>
+
+<h2>Tejveer/Nikita feedback (Ravikiran)</h2>
+<div class="card">
+  <div class="row"><span>Total entries in pool</span><span>35</span></div>
+  <div class="row"><span>Yesterday</span><span>25</span></div>
+  <div class="row"><span>Today</span><span class="ok">10</span></div>
+</div>
+
+<h2>Per-agent activity (24h)</h2>
+<div class="card"><div class="row"><span><strong>claude1</strong> <span class="small">on MBP</span></span><span><span class="ok">156m</span> active · 58 commits 24h · 2 last hr · last 15:28:50Z</span></div><div class="row"><span><strong>claude1+claude2</strong> <span class="small">on MBP+iMac</span></span><span><span class="ok">31m</span> active · 19 commits 24h · 0 last hr · last 12:57:23Z</span></div><div class="row"><span><strong>claude2</strong> <span class="small">on iMac</span></span><span><span class="ok">11m</span> active · 7 commits 24h · 0 last hr · last 00:46:45Z</span></div><div class="row"><span><strong>claude3</strong> <span class="small">on iMac</span></span><span><span class="ok">23m</span> active · 15 commits 24h · 1 last hr · last 14:54:34Z</span></div><div class="row"><span><strong>codex</strong> <span class="small">on MBP</span></span><span><span class="ok">433m</span> active · 216 commits 24h · 18 last hr · last 15:50:10Z</span></div><div class="row"><span><strong>other</strong> <span class="small">on ?</span></span><span><span class="ok">319m</span> active · 168 commits 24h · 27 last hr · last 15:48:44Z</span></div></div>
+
+<h2>Ollama crawlers (MBP)</h2>
+<div class="card"><div class="row"><code>com.ollama.ollama</code><span class="ok">0</span></div><div class="row"><code>homebrew.mxcl.ollama</code><span class="warn">1</span></div></div>
+
+<h2>Bucket inventory progress</h2>
+<div class="card"><div class="row"><span>B1 <span class="small">(4/8 shipped)</span></span><div class="bar "><div style="width:50%"></div></div></div><div class="row"><span>B2 <span class="small">(3/23 shipped)</span></span><div class="bar "><div style="width:13%"></div></div></div><div class="row"><span>B3 <span class="small">(9/26 shipped)</span></span><div class="bar "><div style="width:35%"></div></div></div><div class="row"><span>B4 <span class="small">(2/16 shipped)</span></span><div class="bar "><div style="width:12%"></div></div></div></div>
+
+<div class="ts">Auto-refresh every 60s · generated by scripts/gen_rig_status.py</div>
+</body></html>

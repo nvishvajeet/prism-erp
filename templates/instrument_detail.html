@@ -113,8 +113,11 @@
     {% endif %}
   </section>
 
-  {# ── Tile: Finance (finance_admin / super_admin / owner only) ── #}
-  {% if portal_module_enabled('finance') and (is_owner_user or current_user.role in ('finance_admin', 'super_admin', 'site_admin')) %}
+  {# ── Tile: Finance ── #}
+  {# finance roles can edit; instrument_admin can see their linked grant read-only #}
+  {% set _can_edit_finance = is_owner_user or current_user.role in ('finance_admin', 'super_admin', 'site_admin') %}
+  {% set _can_view_finance = _can_edit_finance or current_user.role == 'instrument_admin' %}
+  {% if portal_module_enabled('finance') and _can_view_finance %}
   <section class="card tile tile-span-3" data-vis="{{ V }}">
     {% call card_heading("", "Finance") %}
       {% if instrument.default_grant_id %}
@@ -122,6 +125,7 @@
       {% endif %}
     {% endcall %}
     <p class="tile-lead" data-vis="{{ V }}">Default grant for charging samples on this instrument.</p>
+    {% if _can_edit_finance %}
     <form method="post" data-vis="{{ V }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="update_finance">
@@ -135,6 +139,12 @@
       </label>
       <button type="submit" class="btn btn-primary btn-sm top-gap" data-vis="{{ V }}">Save</button>
     </form>
+    {% else %}
+    <p class="tile-lead" data-vis="{{ V }}">
+      {% for g in grants %}{% if g.id == instrument.default_grant_id %}{{ g.code }} — {{ g.name }}{% endif %}{% endfor %}
+      {% if not instrument.default_grant_id %}<em>No grant linked.</em>{% endif %}
+    </p>
+    {% endif %}
     {% if instrument.default_grant_id %}
     <div class="top-gap" data-vis="{{ V }}">
       <a class="text-link" href="{{ url_for('finance_grant_detail', grant_id=instrument.default_grant_id) }}" data-vis="{{ V }}">

@@ -115,6 +115,11 @@
   <article class="card tile tile-full-width" data-vis="{{ V }}">
     {{ card_heading("LOG HISTORY", logs|length|string ~ " entries") }}
     {% if logs %}
+    <p class="hint" data-vis="{{ V }}">Amount-bearing vehicle records automatically open an expense receipt for operator or finance review.</p>
+    {% if logs|selectattr('linked_receipt_id')|list %}
+    <p class="hint" data-vis="{{ V }}">Click a row with a linked receipt to open the underlying approval record.</p>
+    {% endif %}
+    <div class="data-table-scroll" data-vis="{{ V }}">
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -149,6 +154,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     {{ empty_state("No log entries yet.", hint="Add a fuel or maintenance record below.") }}
     {% endif %}

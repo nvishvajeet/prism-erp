@@ -9500,9 +9500,6 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 /* Right-aligned amount column in receipt tables */
 .col-amount { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* Receipt detail: constrain image */
-.receipt-img { max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; }
-
 /* Approve / Reject button distinction */
 .btn-approve {
   background: #059669; color: #fff; border: none;
@@ -9517,25 +9514,6 @@ tr.clickable-row:hover { background: var(--hover, rgba(0,0,0,0.04)); }
 :root[data-theme="dark"] .btn-reject { background: var(--surface); color: var(--muted); border-color: var(--line); }
 :root[data-theme="dark"] .btn-reject:hover { background: rgba(220,38,38,0.18); color: #fca5a5; border-color: #6f3b44; }
 
-/* File upload area */
-.file-upload-area {
-  position: relative; border: 2px dashed var(--border, #d1d5db); border-radius: 12px;
-  padding: 1.5rem; text-align: center; transition: border-color 0.2s, background 0.2s;
-  cursor: pointer;
-}
-.file-upload-area:hover,
-.file-upload-area.drag-over {
-  border-color: var(--accent); background: rgba(59,109,153,0.04);
-}
-.file-upload-area input[type="file"] {
-  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
-}
-.file-upload-label {
-  display: block; font-size: 0.88rem; color: var(--muted); pointer-events: none;
-}
-.file-upload-label strong { color: var(--accent); }
-:root[data-theme="dark"] .file-upload-area { border-color: var(--line); }
-:root[data-theme="dark"] .file-upload-area:hover { background: rgba(59,109,153,0.08); }
 
 /* =========================================================================
    POLISH — Schedule Queue & Request Detail (2026-04-12)
@@ -10562,44 +10540,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   color: var(--bg);
 }
 
-/* ---------- Receipt status badge — stage-driven color swatch -------
-   Stage badge for the receipt review pipeline. Previously assembled as
-   inline style with per-stage hex colors; consolidated on 2026-04-15
-   behind the `--color-*-bg` / `--color-*-ink` tokens so dark mode can
-   tune them in one place and no raw color lands in the template. */
-.receipt-stage-badge {
-  display: inline-block;
-  padding: 0.18rem 0.62rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-.receipt-stage-submitted {
-  background: var(--color-amber-bg);
-  color: var(--color-amber-ink);
-}
-.receipt-stage-categorised {
-  background: var(--color-blue-bg);
-  color: var(--color-blue-ink);
-}
-.receipt-stage-approved {
-  background: var(--color-green-bg);
-  color: var(--color-green-ink);
-}
-.receipt-stage-rejected {
-  background: var(--color-red-bg);
-  color: var(--color-red-ink);
-}
-.receipt-stage-default {
-  background: var(--line);
-  color: var(--muted);
-}
 
-/* ---------- Office location chip ---------------------------------
-   Small 📍 pill shown beside a user's name when their office is on
-   record. Pulled out of user_detail.html inline styles on 2026-04-15
-   so templates stay free of raw color hex. */
 .office-chip {
   display: inline-block;
   margin-left: 0.5rem;

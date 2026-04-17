@@ -1,0 +1,86 @@
+/* Upload and receipt presentation — route-scoped bundle */
+
+.receipt-img {
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.file-upload-area {
+  position: relative;
+  border: 2px dashed var(--border, #d1d5db);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+
+.file-upload-area:hover,
+.file-upload-area.drag-over {
+  border-color: var(--accent);
+  background: rgba(59, 109, 153, 0.04);
+}
+
+.file-upload-area input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-upload-label {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.file-upload-label strong {
+  color: var(--accent);
+}
+
+.receipt-stage-badge {
+  display: inline-block;
+  padding: 0.18rem 0.62rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.receipt-stage-submitted {
+  background: var(--color-amber-bg);
+  color: var(--color-amber-ink);
+}
+
+.receipt-stage-categorised {
+  background: var(--color-blue-bg);
+  color: var(--color-blue-ink);
+}
+
+.receipt-stage-approved {
+  background: var(--color-green-bg);
+  color: var(--color-green-ink);
+}
+
+.receipt-stage-rejected {
+  background: var(--color-red-bg);
+  color: var(--color-red-ink);
+}
+
+.receipt-stage-default {
+  background: var(--line);
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .file-upload-area {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .file-upload-area:hover {
+  background: rgba(59, 109, 153, 0.08);
+}

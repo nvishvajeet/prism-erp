@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading with context %}
+{% block page_styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles-uploads.css') }}">
+{% endblock %}
 {% block hover_back %}<a href="{{ url_for('tally_export_page') }}" class="hover-back-btn" title="Back to Tally">←</a>{% endblock %}
 {% block content %}
 

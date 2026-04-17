@@ -77,6 +77,7 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
+| claude3-imac | T_instrument-detail-bloat-diff | 2026-04-17T16:20+02:00 | templates/instrument_detail.html | pending |
 
 ## Stale-claim recovery
 
@@ -96,8 +97,3 @@ agents will pick the same task, edit the same file, and one of
 them will lose work to a rebase conflict. This file is the
 advisory lock. Git is the authoritative safety net — the
 pre-receive sanity wave catches anything that slips past.
-
-## Active Claims
-
-| Agent | Task | Files | Timestamp |
-|-------|------|-------|-----------|

@@ -31581,3 +31581,12 @@ if __name__ == "__main__":
                 str(Path(__file__).resolve().parent / "static" / "styles.css"),
                 str(Path(__file__).resolve().parent / "static" / "grid-overlay.js"),
             ])
+else:
+    # S3 — gunicorn import path: run init_db so schema is current on every
+    # worker boot. Closes the class of cold-start 500s where a new column
+    # was added to init_db() but the live DB hadn't been migrated yet.
+    # Idempotent: all ALTER TABLE calls inside init_db() are wrapped in
+    # try/except so running twice is safe. Skip via env var for scripts
+    # that manage their own DB lifecycle.
+    if os.environ.get("LAB_SCHEDULER_SKIP_INIT_DB") != "1":
+        init_db()

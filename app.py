@@ -2146,7 +2146,7 @@ def intake_mode_flags(mode: str | None) -> tuple[int, int]:
 
 
 def next_instrument_code() -> str:
-    row = query_one("SELECT code FROM instruments WHERE code LIKE 'INST-%' ORDER BY id DESC LIMIT 1")
+    row = query_one("SELECT code FROM instruments WHERE code LIKE 'INST-%' AND tenant_tag = ? ORDER BY id DESC LIMIT 1", (TENANT_TAG,))
     if row and row["code"]:
         try:
             number = int(str(row["code"]).split("-")[-1]) + 1
@@ -9312,7 +9312,8 @@ def inject_globals():
     nav_instruments_truncated = False
     if user and module_visible_in_active_portal("instruments") and access_profile["can_access_instruments"]:
         _all_nav = query_all(
-            "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' ORDER BY name"
+            "SELECT id, name, code, accepting_requests, soft_accept_enabled FROM instruments WHERE status = 'active' AND tenant_tag = ? ORDER BY name",
+            (TENANT_TAG,),
         )
         nav_instruments = _all_nav[:15]
         nav_instruments_truncated = len(_all_nav) > 15
@@ -10381,7 +10382,8 @@ def admin_notices():
     )
     # Instrument codes for the scope picker dropdown
     instrument_rows = query_all(
-        "SELECT code, name FROM instruments WHERE status = 'active' ORDER BY code"
+        "SELECT code, name FROM instruments WHERE status = 'active' AND tenant_tag = ? ORDER BY code",
+        (TENANT_TAG,),
     )
     can_post = _user_can_post_notice(user)
     mailing_lists = query_all("SELECT id, name FROM mailing_lists ORDER BY name")
@@ -10430,7 +10432,7 @@ def admin_notices_new():
             flash("Invalid role target.", "error")
             return redirect(url_for("admin_notices"))
     elif scope == "instrument":
-        codes = {r["code"] for r in query_all("SELECT code FROM instruments")}
+        codes = {r["code"] for r in query_all("SELECT code FROM instruments WHERE tenant_tag = ?", (TENANT_TAG,))}
         if scope_target not in codes:
             flash("Invalid instrument target.", "error")
             return redirect(url_for("admin_notices"))

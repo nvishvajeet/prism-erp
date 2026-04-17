@@ -1016,8 +1016,8 @@ def generate_receipt_reference(sample_origin: str) -> str:
         candidate = f"RCPT-{first_two}{random.randint(1000, 9999)}"
         # v2.0.0 — receipts live in payments, not sample_requests.
         existing = db.execute(
-            "SELECT 1 FROM payments WHERE receipt_number = ? LIMIT 1",
-            (candidate,),
+            "SELECT 1 FROM payments WHERE receipt_number = ? AND tenant_tag = ? LIMIT 1",
+            (candidate, TENANT_TAG),
         ).fetchone()
         if existing is None:
             return candidate
@@ -1032,8 +1032,8 @@ def generate_job_reference(sample_origin: str) -> str:
     while True:
         candidate = f"{prefix}{random.randint(100000, 999999)}"
         existing = db.execute(
-            "SELECT 1 FROM sample_requests WHERE request_no = ? LIMIT 1",
-            (candidate,),
+            "SELECT 1 FROM sample_requests WHERE request_no = ? AND tenant_tag = ? LIMIT 1",
+            (candidate, TENANT_TAG),
         ).fetchone()
         if existing is None:
             return candidate
@@ -1055,8 +1055,8 @@ def generate_sample_reference(instrument_name: str | None, sample_origin: str) -
     while True:
         candidate = f"{prefix}{origin_code}{random.randint(100000, 999999)}"
         existing = db.execute(
-            "SELECT 1 FROM sample_requests WHERE sample_ref = ? LIMIT 1",
-            (candidate,),
+            "SELECT 1 FROM sample_requests WHERE sample_ref = ? AND tenant_tag = ? LIMIT 1",
+            (candidate, TENANT_TAG),
         ).fetchone()
         if existing is None:
             return candidate
@@ -4861,14 +4861,14 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
 def scoped_instrument_count(user: sqlite3.Row) -> int:
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"super_admin", "site_admin", "professor_approver"}:
-        return query_one("SELECT COUNT(*) AS c FROM instruments WHERE status = 'active'")["c"]
+        return query_one("SELECT COUNT(*) AS c FROM instruments WHERE status = 'active' AND tenant_tag = ?", (TENANT_TAG,))["c"]
     instrument_ids = assigned_instrument_ids(user)
     if instrument_ids:
         placeholders = ",".join("?" for _ in instrument_ids)
-        row = query_one(f"SELECT COUNT(*) AS c FROM instruments WHERE status = 'active' AND id IN ({placeholders})", tuple(instrument_ids))
+        row = query_one(f"SELECT COUNT(*) AS c FROM instruments WHERE status = 'active' AND tenant_tag = ? AND id IN ({placeholders})", (TENANT_TAG, *instrument_ids))
         return row["c"] if row else 0
     if user_has_role(user, "requester"):
-        return query_one("SELECT COUNT(DISTINCT instrument_id) AS c FROM sample_requests WHERE requester_id = ?", (user["id"],))["c"]
+        return query_one("SELECT COUNT(DISTINCT instrument_id) AS c FROM sample_requests WHERE requester_id = ? AND tenant_tag = ?", (user["id"], TENANT_TAG))["c"]
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in {"finance_admin", "professor_approver"}:
         clauses, params = request_scope_sql(user, "sr")

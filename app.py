@@ -409,6 +409,10 @@ HOST_PORTAL_BINDINGS = {
 APP_VERSION = "1.0.0"
 
 app = Flask(__name__)
+# Record boot time for /api/version — consumed by static/version_check.js
+# to detect when a new deploy has landed (gunicorn workers re-read this
+# on every restart).
+app._boot_time_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 app.wsgi_app = ProxyFix(
     app.wsgi_app,
     x_for=1,
@@ -12887,6 +12891,38 @@ def api_health_check():
             "git_head": git_head,
         }
     )
+
+
+@app.route("/api/version")
+def api_version():
+    """Return the current deployed git sha + deploy time + tenant tag.
+
+    Used by static/version_check.js to detect when a new version has
+    been deployed. Client polls this every 60s; if the sha changes
+    from what the tab booted with, a "New version available" toast
+    appears and the user can click to reload.
+
+    Lightweight, unauthenticated — no PII, just build metadata.
+    """
+    import subprocess
+    sha = os.environ.get("GIT_HEAD_SHA") or ""
+    if not sha:
+        try:
+            sha = subprocess.check_output(
+                ["git", "-C", app.root_path, "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+            ).decode().strip()
+        except Exception:
+            sha = "unknown"
+    tenant = os.environ.get("LAB_ERP_RUNTIME_ROOT", "").split("/")[-1] or "lab"
+    return jsonify({
+        "sha": sha,
+        "deployed_at": getattr(app, "_boot_time_iso", ""),
+        "tenant": tenant,
+        "server_time": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+
 
 
 @app.route("/tester/plan")

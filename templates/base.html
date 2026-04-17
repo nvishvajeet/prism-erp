@@ -348,6 +348,7 @@
   {% endif %}
   {# ── Feedback + AI Form Assistant — extracted to partial ── #}
   {% include "_base_feedback_widgets.html" %}
+  <script defer src="{{ url_for('static', filename='version_check.js') }}"></script>
   <script defer src="{{ url_for('static', filename='base_shell.js') }}?v=1"></script>
   <script defer src="{{ url_for('static', filename='keybinds.js') }}"></script>
   <script defer src="{{ url_for('static', filename='intake-toggle.js') }}"></script>

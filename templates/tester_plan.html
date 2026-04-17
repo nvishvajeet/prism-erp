@@ -8,9 +8,25 @@
     <h2 class="card-heading-title" data-vis="{{ V }}">Checklist — test every page, report anything off</h2>
   </header>
   <p class="dash-brief-line" data-vis="{{ V }}">
-    Hi {{ user.name }}. Work through the table below one row at a time. Click the page link, do what "what to test" says, then use the feedback widget (bottom-right) to flag anything that looks wrong.
-    <strong>Severity:</strong> <code>polish</code> (cosmetic) &middot; <code>major</code> (degraded) &middot; <code>blocker</code> (can't use).
+    Hi {{ user.name }}. Two ways to test:
   </p>
+  <ol data-vis="{{ V }}" style="margin:0.5rem 0 0.75rem 1.25rem;padding:0;">
+    <li data-vis="{{ V }}"><strong>Guided (recommended):</strong> click <em>Start Guided Run</em> below. A hover pane appears bottom-left with the current step. Click Next to advance. We'll auto-walk you through all pages in order so coverage is complete.</li>
+    <li data-vis="{{ V }}"><strong>Free form:</strong> navigate on your own and use the feedback widget (bottom-right) whenever something looks off.</li>
+  </ol>
+  <p data-vis="{{ V }}" style="margin-top:0.5rem;"><strong>Severity:</strong> <code>polish</code> (cosmetic) &middot; <code>major</code> (degraded) &middot; <code>blocker</code> (can't use).</p>
+  <div data-vis="{{ V }}" style="margin-top:1rem;display:flex;gap:0.5rem;">
+    <form method="post" action="{{ url_for('tester_start') }}" style="margin:0;">
+      <button type="submit" class="btn btn-primary" style="background:#1e3a8a;color:#fff;border:none;padding:0.5rem 1rem;border-radius:0.4rem;font-weight:600;cursor:pointer;">
+        🧪 Start Guided Run
+      </button>
+    </form>
+    {% if tester_run_ctx %}
+    <form method="post" action="{{ url_for('tester_summary') }}" style="margin:0;">
+      <button type="submit" class="btn" style="padding:0.5rem 1rem;border-radius:0.4rem;cursor:pointer;">End current run + summary</button>
+    </form>
+    {% endif %}
+  </div>
 </article>
 
 <article class="card tile tile-full-width" data-vis="{{ V }}">

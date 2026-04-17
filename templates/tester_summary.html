@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+{% set V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin tester" %}
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">TESTER RUN · SUMMARY</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">{{ tenant|upper }} — {{ tested }}/{{ total }} tested · {{ issues }} issues · {{ skipped }} skipped</h2>
+  </header>
+  <p class="dash-brief-line" data-vis="{{ V }}">
+    Run started {{ started }}. {{ rows|length }} step entries logged. The underlying feedback entries (severity-tagged Issue reports) landed in the feedback log like any other report.
+  </p>
+  <div style="margin-top:1rem;" data-vis="{{ V }}">
+    <form method="post" action="{{ url_for('tester_start') }}" style="display:inline;">
+      <button type="submit" class="btn btn-primary">Start new run</button>
+    </form>
+    <a class="btn" href="{{ url_for('tester_plan') }}" style="margin-left:.5rem;">Back to checklist</a>
+  </div>
+</article>
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">DETAIL</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">Per-step log</h2>
+  </header>
+  <table class="sortable-table" data-vis="{{ V }}" style="margin-top:0.75rem;width:100%;">
+    <thead data-vis="{{ V }}">
+      <tr data-vis="{{ V }}">
+        <th data-vis="{{ V }}">#</th>
+        <th data-vis="{{ V }}">Route</th>
+        <th data-vis="{{ V }}">Title</th>
+        <th data-vis="{{ V }}">Status</th>
+        <th data-vis="{{ V }}">Timestamp (UTC)</th>
+      </tr>
+    </thead>
+    <tbody data-vis="{{ V }}">
+      {% for r in rows %}
+      <tr data-vis="{{ V }}">
+        <td data-vis="{{ V }}">{{ r.step_n }}</td>
+        <td data-vis="{{ V }}"><code>{{ r.route }}</code></td>
+        <td data-vis="{{ V }}">{{ r.title }}</td>
+        <td data-vis="{{ V }}">
+          {% if r.status == 'tested' %}<span style="color:#0a7c2f;font-weight:600;">✓ tested</span>
+          {% elif r.status == 'issue' %}<span style="color:#b32419;font-weight:600;">⚠ issue</span>
+          {% elif r.status == 'skipped' %}<span style="color:#9c7612;font-weight:600;">⏭ skipped</span>
+          {% else %}{{ r.status }}{% endif %}
+        </td>
+        <td data-vis="{{ V }}"><code>{{ r.ts }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endblock %}

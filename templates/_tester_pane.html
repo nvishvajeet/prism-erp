@@ -1,0 +1,81 @@
+{# Tester guided-flow hover pane.
+   Included from base.html when session has an active tester_run.
+   Like eruda / debug-grid overlay — floats bottom-left, can be
+   collapsed to a single button. Keyboard: → advance, ← prev,
+   S skip, I report issue, Esc minimize.
+#}
+{% if tester_run_ctx %}
+<div id="tester-pane" class="tester-pane" data-step-n="{{ tester_run_ctx.step_n }}"
+     data-total="{{ tester_run_ctx.total }}" data-route="{{ tester_run_ctx.route }}"
+     aria-label="Tester guided flow">
+  <button type="button" class="tester-pane-toggle" title="Minimize / expand tester pane (Esc)"
+          aria-label="Toggle tester pane" onclick="TesterPane.toggle()">🧪</button>
+  <div class="tester-pane-body">
+    <div class="tester-pane-head">
+      <span class="tester-pane-eyebrow">TESTER</span>
+      <span class="tester-pane-progress">Step {{ tester_run_ctx.step_n }} / {{ tester_run_ctx.total }}</span>
+      <span class="tester-pane-tally" title="tested / issues / skipped">
+        ✓ {{ tester_run_ctx.tested }}
+        · ⚠ {{ tester_run_ctx.issues }}
+        · ⏭ {{ tester_run_ctx.skipped }}
+      </span>
+    </div>
+    <div class="tester-pane-title">{{ tester_run_ctx.title }}</div>
+    <div class="tester-pane-hint">{{ tester_run_ctx.hint }}</div>
+    <div class="tester-pane-actions">
+      <form method="post" action="{{ url_for('tester_prev') }}" class="tpa-form">
+        <button type="submit" class="tpa-btn tpa-prev" title="Previous (←)">← Prev</button>
+      </form>
+      <form method="post" action="{{ url_for('tester_report_issue') }}" class="tpa-form">
+        <button type="submit" class="tpa-btn tpa-issue" title="Report issue (I)">⚠ Issue</button>
+      </form>
+      <form method="post" action="{{ url_for('tester_skip') }}" class="tpa-form">
+        <button type="submit" class="tpa-btn tpa-skip" title="Skip (S)">⏭ Skip</button>
+      </form>
+      <form method="post" action="{{ url_for('tester_advance') }}" class="tpa-form">
+        <button type="submit" class="tpa-btn tpa-next" title="Next (→ or Enter)">
+          {% if tester_run_ctx.is_last %}✓ Finish{% else %}✓ Next →{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var pane = document.getElementById('tester-pane');
+  if (!pane) return;
+  var body = pane.querySelector('.tester-pane-body');
+  var collapsed = false;
+  window.TesterPane = {
+    toggle: function(){
+      collapsed = !collapsed;
+      pane.classList.toggle('tester-pane-collapsed', collapsed);
+      try { localStorage.setItem('tester_pane_collapsed', collapsed ? '1' : '0'); } catch(e){}
+    }
+  };
+  try {
+    if (localStorage.getItem('tester_pane_collapsed') === '1') {
+      collapsed = true;
+      pane.classList.add('tester-pane-collapsed');
+    }
+  } catch(e){}
+  document.addEventListener('keydown', function(ev){
+    // Ignore when typing in an input/textarea/contenteditable
+    var t = ev.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+              t.isContentEditable || t.tagName === 'SELECT')) return;
+    if (ev.key === 'ArrowRight' || ev.key === 'Enter') {
+      pane.querySelector('.tpa-next').closest('form').submit();
+    } else if (ev.key === 'ArrowLeft') {
+      pane.querySelector('.tpa-prev').closest('form').submit();
+    } else if (ev.key === 's' || ev.key === 'S') {
+      pane.querySelector('.tpa-skip').closest('form').submit();
+    } else if (ev.key === 'i' || ev.key === 'I') {
+      pane.querySelector('.tpa-issue').closest('form').submit();
+    } else if (ev.key === 'Escape') {
+      window.TesterPane.toggle();
+    }
+  });
+})();
+</script>
+{% endif %}

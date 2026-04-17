@@ -10130,3 +10130,71 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+
+/* ── Tester guided-flow hover pane (operator 2026-04-17) ──
+   Floats bottom-left. Collapses to a single button. Like eruda/
+   debug-grid but purpose-built for manual test walkthroughs.
+*/
+.tester-pane {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 9998;   /* just under the feedback widget which is 9999 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 320px;
+  max-width: 380px;
+  padding: 0.75rem 0.85rem;
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  color: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px -12px rgba(0,0,0,0.4);
+  font: 0.85rem ui-sans-serif, system-ui, sans-serif;
+}
+.tester-pane-toggle {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: #0b2548;
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.tester-pane-body { display: flex; flex-direction: column; gap: 0.3rem; }
+.tester-pane.tester-pane-collapsed { min-width: 0; padding: 0; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; }
+.tester-pane.tester-pane-collapsed .tester-pane-body { display: none; }
+.tester-pane.tester-pane-collapsed .tester-pane-toggle { position: static; width: 48px; height: 48px; border: none; background: transparent; }
+.tester-pane-head { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: 0.75rem; }
+.tester-pane-eyebrow { background: rgba(255,255,255,0.18); padding: 0.1rem 0.45rem; border-radius: 0.25rem; font-weight: 700; letter-spacing: 0.12em; }
+.tester-pane-progress { font-weight: 600; }
+.tester-pane-tally { margin-left: auto; opacity: 0.9; font-size: 0.72rem; }
+.tester-pane-title { font-size: 0.98rem; font-weight: 650; line-height: 1.25; }
+.tester-pane-hint { font-size: 0.8rem; opacity: 0.92; line-height: 1.35; }
+.tester-pane-actions { display: flex; gap: 0.35rem; margin-top: 0.25rem; flex-wrap: wrap; }
+.tpa-form { margin: 0; }
+.tpa-btn {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.28);
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.tpa-btn:hover { background: rgba(255,255,255,0.24); }
+.tpa-next { background: #fff; color: #1e3a8a; border-color: #fff; }
+.tpa-next:hover { background: #e7f1ff; }
+.tpa-issue { background: rgba(255, 170, 60, 0.2); border-color: rgba(255, 170, 60, 0.5); }
+
+@media (max-width: 640px) {
+  .tester-pane { left: 8px; right: 8px; bottom: 8px; max-width: unset; }
+}
+

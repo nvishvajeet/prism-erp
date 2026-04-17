@@ -13117,17 +13117,235 @@ def api_version():
     })
 
 
+# ── Tester guided flow ───────────────────────────────────────────
+# Operator directive 2026-04-17: testers arriving; give them a
+# hovering pane (like the debug module) with a Next button that
+# walks them through every route in the ERP so coverage is complete.
+#
+# Session-only state (no new tables for MVP):
+#   session['tester_run'] = {"tenant": "lab", "current": 0,
+#                            "visited": [[n, status, iso_ts], ...],
+#                            "started_at": "..."}
+#
+# Spec: docs/TESTER_GUIDED_FLOW_2026_04_17.md
+# Checklist doc: docs/TESTER_CHECKLIST_2026_04_17.md
+
+TESTER_ROUTES_LAB: list[dict] = [
+    {"route": "/manual", "title": "Role Manual", "hint": "Onboarding renders, no 500"},
+    {"route": "/", "title": "Home / Dashboard", "hint": "Every tile routes to a real page"},
+    {"route": "/instruments", "title": "Instruments list", "hint": "22 rows — full CRF brochure"},
+    {"route": "/instruments/1", "title": "Instrument detail", "hint": "Make + model + operators listed"},
+    {"route": "/new-request", "title": "New request form", "hint": "All PDF fields present"},
+    {"route": "/schedule", "title": "Schedule / queue", "hint": "Table loads, filters work"},
+    {"route": "/personnel", "title": "Personnel", "hint": "14 canonical users, role badges correct"},
+    {"route": "/attendance", "title": "Attendance", "hint": "Page loads, no 500"},
+    {"route": "/finance", "title": "Finance portal", "hint": "Grants / Salary / Vendor-payments tiles"},
+    {"route": "/finance/grants", "title": "Grants list", "hint": "Row clickable -> detail"},
+    {"route": "/finance/salary", "title": "Salary schedule", "hint": "Monthly table, all users"},
+    {"route": "/finance/tax", "title": "Tax schedule", "hint": "Renders cleanly"},
+    {"route": "/payments", "title": "Purchase orders", "hint": "PO list + add/edit"},
+    {"route": "/vendors", "title": "Vendors", "hint": "List + detail edit"},
+    {"route": "/vehicles", "title": "Vehicles", "hint": "List + expense log"},
+    {"route": "/admin/users", "title": "Admin · Users", "hint": "14 rows, no phantom demo"},
+    {"route": "/admin/onboard", "title": "Admin · Onboard", "hint": "Invite form renders"},
+    {"route": "/admin/notices", "title": "Admin · Notices", "hint": "Compose + list"},
+    {"route": "/admin/dev_panel", "title": "Admin · Dev panel", "hint": "Telemetry + feedback tiles"},
+    {"route": "/debug", "title": "Debugger console", "hint": "Eruda panel loads"},
+    {"route": "/sitemap", "title": "Sitemap", "hint": "All links resolve"},
+    {"route": "/me", "title": "My profile", "hint": "Edit own info"},
+    {"route": "/me/security", "title": "My security", "hint": "Change password flow"},
+    {"route": "/notifications", "title": "Notifications", "hint": "Inbox renders"},
+]
+
+TESTER_ROUTES_RAVIKIRAN: list[dict] = [
+    {"route": "/", "title": "Home (Ravikiran)", "hint": "Ravikiran-branded landing"},
+    {"route": "/manual", "title": "Role Manual", "hint": "Tester manual"},
+    {"route": "/personnel", "title": "Personnel", "hint": "Household members"},
+    {"route": "/vehicles", "title": "Vehicles", "hint": "Vehicle list"},
+    {"route": "/vehicles/1", "title": "Vehicle detail", "hint": "Expense log, add-expense"},
+    {"route": "/vendors", "title": "Vendors", "hint": "Household vendors"},
+    {"route": "/payments", "title": "Payments / POs", "hint": "Edit flow"},
+    {"route": "/attendance", "title": "Attendance", "hint": "Household attendance"},
+    {"route": "/schedule", "title": "Schedule", "hint": "Task schedule"},
+    {"route": "/finance", "title": "Finance", "hint": "Ravikiran finance lanes"},
+    {"route": "/admin/users", "title": "Admin · Users", "hint": "Household + operators"},
+    {"route": "/admin/dev_panel", "title": "Admin · Dev panel", "hint": "Dev dashboard"},
+    {"route": "/debug", "title": "Debugger", "hint": "Eruda console"},
+    {"route": "/sitemap", "title": "Sitemap", "hint": "All routes"},
+    {"route": "/me", "title": "My profile", "hint": "Profile edit"},
+    {"route": "/me/security", "title": "My security", "hint": "Change password"},
+    {"route": "/notifications", "title": "Notifications", "hint": "Notice inbox"},
+]
+
+
+def _tester_checklist_for_active_tenant() -> list[dict]:
+    slug = (active_portal_slug() or "").lower()
+    if slug in {"hq", "ravikiran_ops"}:
+        return TESTER_ROUTES_RAVIKIRAN
+    return TESTER_ROUTES_LAB
+
+
+def _tester_run_active() -> dict | None:
+    run = session.get("tester_run")
+    if not isinstance(run, dict) or "current" not in run:
+        return None
+    return run
+
+
+def _tester_run_context() -> dict | None:
+    run = _tester_run_active()
+    if not run:
+        return None
+    checklist = _tester_checklist_for_active_tenant()
+    total = len(checklist)
+    if not total:
+        return None
+    current = max(0, min(int(run.get("current", 0) or 0), total - 1))
+    step = checklist[current]
+    visited = run.get("visited", []) or []
+    return {
+        "current": current,
+        "total": total,
+        "step_n": current + 1,
+        "route": step["route"],
+        "title": step["title"],
+        "hint": step["hint"],
+        "tested": sum(1 for v in visited if v and len(v) >= 2 and v[1] == "tested"),
+        "issues": sum(1 for v in visited if v and len(v) >= 2 and v[1] == "issue"),
+        "skipped": sum(1 for v in visited if v and len(v) >= 2 and v[1] == "skipped"),
+        "is_last": (current + 1) >= total,
+        "tenant": run.get("tenant", "lab"),
+    }
+
+
+@app.context_processor
+def _inject_tester_run_ctx():
+    try:
+        return {"tester_run_ctx": _tester_run_context()}
+    except Exception:
+        return {"tester_run_ctx": None}
+
+
+def _tester_mark_current(status: str) -> None:
+    run = _tester_run_active()
+    if not run:
+        return
+    visited = list(run.get("visited") or [])
+    visited.append([int(run.get("current", 0) or 0), status,
+                    datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")])
+    run["visited"] = visited
+    session["tester_run"] = run
+    session.modified = True
+
+
+@app.route("/tester/start", methods=["POST", "GET"])
+@login_required
+def tester_start():
+    checklist = _tester_checklist_for_active_tenant()
+    if not checklist:
+        return redirect(url_for("tester_plan"))
+    slug = (active_portal_slug() or "").lower()
+    tenant = "ravikiran" if slug in {"hq", "ravikiran_ops"} else "lab"
+    session["tester_run"] = {
+        "tenant": tenant,
+        "current": 0,
+        "visited": [],
+        "started_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    session.modified = True
+    return redirect(checklist[0]["route"])
+
+
+def _tester_step_redirect(run: dict, checklist: list[dict]):
+    session["tester_run"] = run
+    session.modified = True
+    if run.get("current", 0) >= len(checklist):
+        return redirect(url_for("tester_summary"))
+    return redirect(checklist[run["current"]]["route"])
+
+
+@app.route("/tester/advance", methods=["POST"])
+@login_required
+def tester_advance():
+    run = _tester_run_active()
+    if not run:
+        return redirect(url_for("tester_plan"))
+    _tester_mark_current("tested")
+    run = _tester_run_active() or run
+    run["current"] = int(run.get("current", 0) or 0) + 1
+    return _tester_step_redirect(run, _tester_checklist_for_active_tenant())
+
+
+@app.route("/tester/skip", methods=["POST"])
+@login_required
+def tester_skip():
+    run = _tester_run_active()
+    if not run:
+        return redirect(url_for("tester_plan"))
+    _tester_mark_current("skipped")
+    run = _tester_run_active() or run
+    run["current"] = int(run.get("current", 0) or 0) + 1
+    return _tester_step_redirect(run, _tester_checklist_for_active_tenant())
+
+
+@app.route("/tester/prev", methods=["POST"])
+@login_required
+def tester_prev():
+    run = _tester_run_active()
+    if not run:
+        return redirect(url_for("tester_plan"))
+    run["current"] = max(0, int(run.get("current", 0) or 0) - 1)
+    return _tester_step_redirect(run, _tester_checklist_for_active_tenant())
+
+
+@app.route("/tester/report-issue", methods=["POST"])
+@login_required
+def tester_report_issue():
+    run = _tester_run_active()
+    if not run:
+        return redirect(url_for("tester_plan"))
+    _tester_mark_current("issue")
+    checklist = _tester_checklist_for_active_tenant()
+    current = int(run.get("current", 0) or 0)
+    route = checklist[current]["route"] if current < len(checklist) else "/"
+    sep = "&" if "?" in route else "?"
+    return redirect(f"{route}{sep}open_feedback=1")
+
+
+@app.route("/tester/summary")
+@login_required
+def tester_summary():
+    run = _tester_run_active()
+    if not run:
+        return redirect(url_for("tester_plan"))
+    checklist = _tester_checklist_for_active_tenant()
+    visited = run.get("visited") or []
+    rows = []
+    for v in visited:
+        if not v or len(v) < 3:
+            continue
+        step_n, status, ts = v
+        if 0 <= step_n < len(checklist):
+            e = checklist[step_n]
+            rows.append({"step_n": step_n + 1, "route": e["route"],
+                         "title": e["title"], "status": status, "ts": ts})
+    started = run.get("started_at", "")
+    tenant = run.get("tenant", "lab")
+    session.pop("tester_run", None)
+    session.modified = True
+    return render_template("tester_summary.html",
+        rows=rows, started=started, tenant=tenant,
+        total=len(checklist),
+        tested=sum(1 for r in rows if r["status"] == "tested"),
+        issues=sum(1 for r in rows if r["status"] == "issue"),
+        skipped=sum(1 for r in rows if r["status"] == "skipped"),
+    )
+
 
 @app.route("/tester/plan")
 @login_required
 def tester_plan():
-    """Tester checklist — guides tejveer / tester through every page.
-
-    Rendered from `docs/TESTER_CHECKLIST_2026_04_17.md`. Available to
-    any authenticated user (primary role or user_roles includes
-    'tester' is the expected audience, but restricting by role would
-    prevent a super_admin from previewing — left open intentionally).
-    """
+    """Tester checklist — guides tejveer / tester through every page."""
     user = current_user()
     checklist_path = os.path.join(app.root_path, "docs", "TESTER_CHECKLIST_2026_04_17.md")
     try:

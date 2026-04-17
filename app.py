@@ -15352,11 +15352,25 @@ def build_request_detail_template_context(
            ORDER BY icf.display_order""",
         (request_id,),
     )
+    srp = None
+    try:
+        srp = query_one(
+            "SELECT srp.*, u.name AS approved_by_name "
+            "FROM sample_request_payments srp "
+            "LEFT JOIN users u ON u.id = srp.secretary_approved_by "
+            "WHERE srp.sample_request_id = ? ORDER BY srp.id DESC LIMIT 1",
+            (request_id,),
+        )
+    except Exception:
+        srp = None
+    can_secretary_approve = bool(can_manage and srp and not srp["secretary_approved"])
     return {
         "sample_request": sample_request,
         "card_policy": card_policy,
         "back_url": request.args.get("back", "").strip(),
         "can_manage": can_manage,
+        "srp": srp,
+        "can_secretary_approve": can_secretary_approve,
         "can_operate": can_operate,
         "can_upload_files": can_upload_files,
         "operators": operators,
@@ -15624,6 +15638,41 @@ def request_detail(request_id: int):
             actionable_step_ids=actionable_step_ids,
         ),
     )
+
+
+@app.route("/requests/<int:request_id>/secretary-approve", methods=["POST"])
+@login_required
+def secretary_approve_request(request_id: int):
+    """F4 — Secretary (super_admin) approves the payment for a sample request."""
+    blocked = _abort_if_not_lab_portal()
+    if blocked is not None:
+        return blocked
+    user = current_user()
+    if not _can_manage_requests(user):
+        abort(403)
+    sr = query_one("SELECT id, status, payment_id FROM sample_requests WHERE id = ?", (request_id,))
+    if sr is None:
+        abort(404)
+    srp = query_one("SELECT id, secretary_approved FROM sample_request_payments WHERE sample_request_id = ?", (request_id,))
+    if srp is None:
+        flash("No payment record found for this request.", "error")
+        return redirect(url_for("request_detail", request_id=request_id))
+    if srp["secretary_approved"]:
+        flash("Payment already approved.", "info")
+        return redirect(url_for("request_detail", request_id=request_id))
+    execute(
+        "UPDATE sample_request_payments SET secretary_approved = 1, secretary_approved_by = ?, secretary_approved_at = ? WHERE id = ?",
+        (user["id"], now_iso(), srp["id"]),
+    )
+    if sr["status"] in ("submitted", "under_review"):
+        try:
+            assert_status_transition(sr["status"], "under_review")
+        except Exception:
+            pass
+    log_action("sample_request", request_id, "secretary_approved_payment", user["id"], {"srp_id": srp["id"]})
+    get_db().commit()
+    flash("Payment approved. Request routed to operator.", "success")
+    return redirect(url_for("request_detail", request_id=request_id))
 
 
 def _handle_request_detail_admin_actions(

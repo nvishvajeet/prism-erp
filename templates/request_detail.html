@@ -356,6 +356,35 @@
   </article>
   {% endif %}
 
+  {# ── F4 — Payment tile (lab portal only, when payment_option set) ── #}
+  {% if srp %}
+  <article class="card tile tile-request-meta" data-vis="{{ V }}">
+    {{ card_heading("PAYMENT", "Option " ~ srp.payment_option if srp.payment_option else "Payment record") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if srp.payment_option == 'A' %}
+      <p data-vis="{{ V }}"><strong>Option A — Department Budget</strong></p>
+      {% if srp.dept_budget_code %}<p data-vis="{{ V }}">Budget Code: <code class="inline-code">{{ srp.dept_budget_code }}</code></p>{% endif %}
+      {% elif srp.payment_option == 'B' %}
+      <p data-vis="{{ V }}"><strong>Option B — Bank Transfer</strong></p>
+      {% if srp.amount %}<p data-vis="{{ V }}">Amount: ₹{{ "{:,.2f}".format(srp.amount) }}</p>{% endif %}
+      {% if srp.utr_number %}<p data-vis="{{ V }}">UTR: <code class="inline-code">{{ srp.utr_number }}</code></p>{% endif %}
+      {% if srp.payment_mode %}<p data-vis="{{ V }}">Mode: {{ srp.payment_mode }}</p>{% endif %}
+      {% if srp.bank_name %}<p data-vis="{{ V }}">Bank: {{ srp.bank_name }}</p>{% endif %}
+      {% endif %}
+      {% if srp.secretary_approved %}
+      <p class="hint" data-vis="{{ V }}">✓ Approved by {{ srp.approved_by_name or '—' }} on {{ srp.secretary_approved_at[:16] if srp.secretary_approved_at else '—' }}</p>
+      {% elif can_secretary_approve %}
+      <form method="post" action="{{ url_for('secretary_approve_request', request_id=sample_request.id) }}" style="margin-top:0.75rem" data-vis="{{ V }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary" data-vis="{{ V }}">Approve Payment &amp; Route to Operator</button>
+      </form>
+      {% else %}
+      <p class="hint" data-vis="{{ V }}">Awaiting secretary approval.</p>
+      {% endif %}
+    </div>
+  </article>
+  {% endif %}
+
   {# Activity tile extracted to keep parent under 400-line budget #}
   {% include "_request_detail_events.html" %}
 

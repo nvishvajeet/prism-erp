@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+{% set V = "all owner member requester finance_admin professor_approver faculty_in_charge operator instrument_admin site_admin super_admin tester" %}
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">TESTER</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">Checklist — test every page, report anything off</h2>
+  </header>
+  <p class="dash-brief-line" data-vis="{{ V }}">
+    Hi {{ user.name }}. Work through the table below one row at a time. Click the page link, do what "what to test" says, then use the feedback widget (bottom-right) to flag anything that looks wrong.
+    <strong>Severity:</strong> <code>polish</code> (cosmetic) &middot; <code>major</code> (degraded) &middot; <code>blocker</code> (can't use).
+  </p>
+</article>
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">DEBUGGER</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">Always-on tools while testing</h2>
+  </header>
+  <ul data-vis="{{ V }}" style="margin:0.5rem 0 0 1.25rem;padding:0;list-style:disc;">
+    <li data-vis="{{ V }}"><a href="{{ url_for('debug_index') if 'debug_index' in app.view_functions else '/debug' }}" data-vis="{{ V }}">/debug</a> — Eruda JS console, page inspector, network tab</li>
+    <li data-vis="{{ V }}"><a href="{{ url_for('dev_panel') }}" data-vis="{{ V }}">/admin/dev_panel</a> — live telemetry + feedback log + recent commits</li>
+    <li data-vis="{{ V }}">Feedback widget — the floating button bottom-right, available on every page. Screenshot + text submit in one click.</li>
+    <li data-vis="{{ V }}">If a page 500's — note the URL, screenshot, file as <code>blocker</code>.</li>
+  </ul>
+</article>
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">CHECKLIST</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">Full test plan</h2>
+  </header>
+  <div class="tester-plan-body" data-vis="{{ V }}" style="margin-top:0.75rem;">
+    <pre style="white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.85rem;line-height:1.5;background:var(--panel);padding:1rem;border-radius:var(--radius-md,8px);border:1px solid var(--line,#d6dee8);overflow-x:auto;">{{ raw_md }}</pre>
+  </div>
+</article>
+
+<article class="card tile tile-full-width" data-vis="{{ V }}">
+  <header class="card-heading-eyebrow" data-vis="{{ V }}">
+    <span class="card-scope-eyebrow" data-vis="{{ V }}">HOW TO REPORT</span>
+    <h2 class="card-heading-title" data-vis="{{ V }}">The feedback loop</h2>
+  </header>
+  <ol data-vis="{{ V }}" style="margin:0.5rem 0 0 1.25rem;padding:0;">
+    <li data-vis="{{ V }}">Click the floating <strong>feedback widget</strong> (bottom-right corner).</li>
+    <li data-vis="{{ V }}">It auto-captures the page URL + a screenshot.</li>
+    <li data-vis="{{ V }}">Write one sentence. Pick severity: polish / major / blocker.</li>
+    <li data-vis="{{ V }}">Submit. Entry lands in <code>logs/debug_feedback.md</code>.</li>
+    <li data-vis="{{ V }}">Bordeaux's feedback-watchdog picks it up within 1 second.</li>
+    <li data-vis="{{ V }}">Codex pair files a ticket within 15 min.</li>
+  </ol>
+</article>
+
+{% endblock %}

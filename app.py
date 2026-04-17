@@ -12847,6 +12847,27 @@ def api_health_check():
     )
 
 
+@app.route("/tester/plan")
+@login_required
+def tester_plan():
+    """Tester checklist — guides tejveer / tester through every page.
+
+    Rendered from `docs/TESTER_CHECKLIST_2026_04_17.md`. Available to
+    any authenticated user (primary role or user_roles includes
+    'tester' is the expected audience, but restricting by role would
+    prevent a super_admin from previewing — left open intentionally).
+    """
+    user = current_user()
+    checklist_path = os.path.join(app.root_path, "docs", "TESTER_CHECKLIST_2026_04_17.md")
+    try:
+        with open(checklist_path, "r", encoding="utf-8") as fh:
+            raw_md = fh.read()
+    except OSError:
+        raw_md = "# Tester Checklist\n\n_Checklist doc not found at expected path._"
+    return render_template("tester_plan.html", user=user, raw_md=raw_md)
+
+
+
 @app.route("/sitemap")
 @login_required
 def sitemap():

@@ -705,11 +705,7 @@ MODULE_REGISTRY = {
         "description": "User management + dev tools",
         "nav_endpoint": "dev_panel",
         "nav_active_endpoints": {"dev_panel", "admin_users", "user_profile"},
-        # Nav visible to anyone who can manage users, not just the owner.
-        # Fixes "user management portal not seen anymore" for site_admin /
-        # super_admin / instrument_admin roles. The underlying /admin/users
-        # route already permission-gates on can_create_users.
-        "nav_access": lambda ap, is_owner: is_owner or bool(ap.get("can_create_users")) or bool(ap.get("can_view_user_profiles")),
+        "nav_access": lambda ap, is_owner: is_owner or ap.get("_is_operational_nav") or bool(ap.get("can_create_users")) or bool(ap.get("can_view_user_profiles")),
     },
     "insights": {
         "label": "Insights",

@@ -16678,7 +16678,7 @@ def _dev_panel_safe_doc_name(name: str) -> str | None:
 
 
 @app.route("/admin/dev_panel")
-@owner_required
+@permission_required(_can_view_debug_surfaces)
 def dev_panel():
     """Owner-only development control panel."""
     progress = _dev_panel_progress()
@@ -16770,7 +16770,7 @@ def dev_panel():
 
 
 @app.route("/admin/dev_panel/doc")
-@owner_required
+@permission_required(_can_view_debug_surfaces)
 def dev_panel_doc():
     """Return the raw text of an allowlisted doc for the in-page viewer."""
     name = request.args.get("name", "README.md")
@@ -16827,7 +16827,7 @@ def _dev_panel_safe_tag(tag: str) -> str | None:
 
 
 @app.route("/admin/dev_panel/commit/<sha>")
-@owner_required
+@permission_required(_can_view_debug_surfaces)
 def dev_panel_commit(sha: str):
     """Mission Control drill-down: show a single commit's full body +
     files changed stat. Linked from the HISTORY tile rows."""
@@ -16864,7 +16864,7 @@ def dev_panel_commit(sha: str):
 
 
 @app.route("/admin/dev_panel/tag/<tag>")
-@owner_required
+@permission_required(_can_view_debug_surfaces)
 def dev_panel_tag(tag: str):
     """Mission Control drill-down: show a tag's full annotated message
     plus every commit between the previous tag and this one. Linked

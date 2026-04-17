@@ -9738,8 +9738,8 @@ def _dashboard_counts(user, db, where_sql: str, params: tuple, queue_statuses: t
 def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, recent_per_page: int) -> dict[str, object]:
     if user_has_role(user, "requester") and not has_instrument_area_access(user):
         recent_total = db.execute(
-            "SELECT COUNT(*) FROM sample_requests sr WHERE sr.requester_id = ?",
-            (user["id"],),
+            "SELECT COUNT(*) FROM sample_requests sr WHERE sr.requester_id = ? AND sr.tenant_tag = ?",
+            (user["id"], TENANT_TAG),
         ).fetchone()[0]
         recent_total_pages = max(1, math.ceil(recent_total / recent_per_page))
         recent_page = min(recent_page, recent_total_pages)
@@ -9751,11 +9751,11 @@ def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, rece
             JOIN instruments i ON i.id = sr.instrument_id
             LEFT JOIN users c ON c.id = sr.created_by_user_id
             LEFT JOIN users u ON u.id = sr.assigned_operator_id
-            WHERE sr.requester_id = ?
+            WHERE sr.requester_id = ? AND sr.tenant_tag = ?
             ORDER BY sr.created_at DESC
             LIMIT ? OFFSET ?
             """,
-            (user["id"], recent_per_page, (recent_page - 1) * recent_per_page),
+            (user["id"], TENANT_TAG, recent_per_page, (recent_page - 1) * recent_per_page),
         )
         return {
             "requests": requests_rows,
@@ -9812,7 +9812,7 @@ def _dashboard_recent_requests(user, db, clauses, params, recent_page: int, rece
 
 
 def _dashboard_queue_payload(user, where_sql: str, params: tuple) -> dict[str, object]:
-    instruments = query_all("SELECT * FROM instruments ORDER BY name")
+    instruments = query_all("SELECT * FROM instruments WHERE tenant_tag = ? ORDER BY name", (TENANT_TAG,))
     if user_has_role(user, "requester") and not has_instrument_area_access(user):
         instruments = []
     instrument_fifo_queue: list[dict] = []

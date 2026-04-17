@@ -77,7 +77,6 @@ it is safe to clear._
 
 | agent | task-id | started | files touched | target commit |
 |---|---|---|---|---|
-| claude3-imac | T_instrument-detail-bloat-diff | 2026-04-17T16:20+02:00 | templates/instrument_detail.html | pending |
 
 ## Stale-claim recovery
 

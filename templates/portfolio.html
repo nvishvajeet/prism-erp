@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, stat_blob, empty_state, chart_bar with context %}
+{% block page_styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles-calendar.css') }}">
+{% endblock %}
 {% block chart_scripts %}
   <script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
 {% endblock %}

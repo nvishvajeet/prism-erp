@@ -66,7 +66,7 @@
 </script>
 
 {# ─── Tile Grid ──────────────────────────────────────── #}
-<div class="inst-tiles" data-vis="{{ V }}">
+<div class="inst-tiles dev-panel-grid" data-vis="{{ V }}">
 
   {# ─── 2. INFRASTRUCTURE — Three engines + session stats ─── #}
   <section class="card tile tile-stats dev-panel-infra-tile" data-vis="{{ V }}">
@@ -114,6 +114,52 @@
   </section>
 
   <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("DELIVERY TRACKER", "What remains, what is next, what will take longer") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(delivery_tracker.remaining_count, "Remaining", "#", tone=(delivery_tracker.remaining_count and "active" or "completed")) }}
+      {{ stat_blob(delivery_tracker.completed_count, "Completed in tracker", "#", tone="completed") }}
+      {{ stat_blob(delivery_tracker.long_running_count, "Long-running", "#", tone="wait") }}
+      {{ stat_blob(delivery_tracker.phase1_count, "B1 phase-1 open", "#", tone="open") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if delivery_tracker.task_id %}
+      <p class="hint" data-vis="{{ V }}">
+        Source: <code data-vis="{{ V }}">{{ delivery_tracker.source }}</code>
+        · task id <code data-vis="{{ V }}">{{ delivery_tracker.task_id }}</code>
+      </p>
+      {% endif %}
+      {% if delivery_tracker.operator_intent %}
+      <p data-vis="{{ V }}">{{ delivery_tracker.operator_intent }}</p>
+      {% endif %}
+      {% if delivery_tracker.next_up %}
+      <strong data-vis="{{ V }}">Next up</strong>
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for task in delivery_tracker.next_up %}
+        <li class="dp-commit-row" data-vis="{{ V }}">
+          <code class="inline-code" data-vis="{{ V }}">{{ task.task_id }}</code>
+          <span data-vis="{{ V }}">{{ task.title }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if delivery_tracker.long_running %}
+      <strong data-vis="{{ V }}">Likely multi-burn tickets</strong>
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for task in delivery_tracker.long_running %}
+        <li class="dp-commit-row" data-vis="{{ V }}">
+          <code class="inline-code" data-vis="{{ V }}">{{ task.task_id }}</code>
+          <span data-vis="{{ V }}">{{ task.title }} · {{ task.note }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <div class="top-gap" data-vis="{{ V }}">
+        <button type="button" class="btn btn-sm dp-doc-tab" data-doc="active_task.md" data-vis="{{ V }}">Open active task</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card tile tile-stats" data-vis="{{ V }}">
     {{ card_heading("ACTION QUEUE", "Live routing pressure") }}
     <div class="tile-stat-stack" data-vis="{{ V }}">
       {{ stat_blob(queue_summary.active_queue|length, "Active buckets", "#", tone="active") }}
@@ -155,6 +201,110 @@
       </ul>
       {% else %}
       {{ empty_state("No open debug issues.", hint="Voice/debug submissions will show up here after they are logged.") }}
+      {% endif %}
+    </div>
+  </section>
+
+  {# ─── 3a2. RECENT DEBUGGER FEEDBACK TAIL — isolated per-instance (no contamination) ─── #}
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("FEEDBACK", "Recent debugger entries (this instance only)") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if feedback_log_tail %}
+      <p class="hint" data-vis="{{ V }}">
+        Last {{ feedback_log_tail|length }} entr{{ 'y' if feedback_log_tail|length == 1 else 'ies' }} from this runtime's
+        <code class="inline-code" data-vis="{{ V }}">debug_feedback.md</code>.
+        Newest first. Per-instance only — no cross-host data.
+      </p>
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for entry in feedback_log_tail %}
+        <li class="dp-commit-row" data-vis="{{ V }}" style="align-items:flex-start;">
+          <code class="inline-code" data-vis="{{ V }}" title="{{ entry.ts }}">{{ entry.ts[:16] }}</code>
+          <span data-vis="{{ V }}" style="flex:1;min-width:0;">
+            <strong data-vis="{{ V }}">{{ entry.user or '?' }}</strong>
+            {% if entry.role %}<span class="hint" data-vis="{{ V }}">({{ entry.role }})</span>{% endif %}
+            {% if entry.portal %}<span class="badge" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ entry.portal }}</span>{% endif %}
+            {% if entry.page %}<code class="inline-code" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ entry.page }}</code>{% endif %}
+            <br>
+            <span data-vis="{{ V }}" style="word-wrap:break-word;">{{ entry.text }}</span>
+            {% if entry.text_truncated %}<span class="hint" data-vis="{{ V }}" title="Text truncated for preview.">…</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No debugger feedback entries yet.", hint="Tester feedback via the 🎙 narrate chip or 'f'-hotkey panel will appear here.") }}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("MASTER BUG LOG", "Newest pooled debugger entries across synced hosts") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if master_feedback_tail %}
+      <p class="hint" data-vis="{{ V }}">
+        Read-only pooled view from synced <code class="inline-code" data-vis="{{ V }}">debug_feedback.md</code> files.
+        This does not rewrite tenant data; it only surfaces the latest bug reports in one place.
+      </p>
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for entry in master_feedback_tail %}
+        <li class="dp-commit-row" data-vis="{{ V }}" style="align-items:flex-start;">
+          <code class="inline-code" data-vis="{{ V }}" title="{{ entry.ts }}">{{ entry.ts[:16] }}</code>
+          <span data-vis="{{ V }}" style="flex:1;min-width:0;">
+            <strong data-vis="{{ V }}">{{ entry.user or '?' }}</strong>
+            {% if entry.source_label %}<span class="badge" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ entry.source_label }}</span>{% endif %}
+            {% if entry.portal %}<span class="badge" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ entry.portal }}</span>{% endif %}
+            {% if entry.page %}<code class="inline-code" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ entry.page }}</code>{% endif %}
+            <br>
+            <span data-vis="{{ V }}" style="word-wrap:break-word;">{{ entry.text }}</span>
+            {% if entry.text_truncated %}<span class="hint" data-vis="{{ V }}" title="Text truncated for preview.">…</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No pooled debugger entries available.", hint="Run the debug-feedback sync if you expect cross-host feedback here.") }}
+      {% endif %}
+    </div>
+  </section>
+
+  {# ─── TELEMETRY — 7-day usage summary ─── #}
+  <section class="card tile tile-stats" data-vis="{{ V }}">
+    {{ card_heading("TELEMETRY", "Last 7 days — page time + clicks") }}
+    <div class="tile-stat-stack" data-vis="{{ V }}">
+      {{ stat_blob(telemetry_stats.active_users, "Active users", "#", tone="active") }}
+      {{ stat_blob(telemetry_stats.active_hours|string ~ "h", "Active hours", "#", tone="completed") }}
+      {{ stat_blob(telemetry_stats.page_time_rows, "Page-time rows", "#", tone="wait") }}
+      {{ stat_blob(telemetry_stats.click_rows, "Click rows", "#", tone="active") }}
+    </div>
+    <div class="tile-info-body" data-vis="{{ V }}">
+      <p class="hint" data-vis="{{ V }}">Detailed breakdown available at
+        <a class="text-link" href="{{ url_for('insights_list') }}" data-vis="{{ V }}">Insights →</a>
+      </p>
+    </div>
+  </section>
+
+  {# ─── JS ERRORS — recent client-side errors ─── #}
+  <section class="card tile tile-full-width" data-vis="{{ V }}">
+    {{ card_heading("JS ERRORS", "Recent window.onerror / unhandledrejection (last 20)") }}
+    <div class="tile-info-body" data-vis="{{ V }}">
+      {% if js_errors %}
+      <ul class="dp-commit-list" data-vis="{{ V }}">
+        {% for e in js_errors %}
+        <li class="dp-commit-row" data-vis="{{ V }}" style="align-items:flex-start;">
+          <code class="inline-code" data-vis="{{ V }}" title="{{ e.created_at }}">{{ e.created_at[:16] }}</code>
+          <span data-vis="{{ V }}" style="flex:1;min-width:0;">
+            <strong data-vis="{{ V }}">{{ e.username or '?' }}</strong>
+            {% if e.error_type %}<span class="badge" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ e.error_type }}</span>{% endif %}
+            {% if e.path %}<code class="inline-code" data-vis="{{ V }}" style="margin-left:0.35rem;">{{ e.path }}</code>{% endif %}
+            <br>
+            <span data-vis="{{ V }}" style="word-wrap:break-word;">{{ e.message }}</span>
+            {% if e.source %}<span class="hint" data-vis="{{ V }}"> · {{ e.source }}{% if e.lineno %}:{{ e.lineno }}{% endif %}</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      {{ empty_state("No JS errors recorded.", hint="window.onerror and unhandledrejection events will appear here.") }}
       {% endif %}
     </div>
   </section>

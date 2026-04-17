@@ -16781,6 +16781,37 @@ def dev_panel():
         },
     }
 
+    # ── Telemetry stats (last 7 days) ──────────────────────
+    telemetry_stats: dict = {}
+    try:
+        _tt = query_one(
+            "SELECT COUNT(*) AS pt, SUM(active_ms)/1000 AS active_s, COUNT(DISTINCT user_id) AS users "
+            "FROM telemetry_page_time WHERE created_at >= datetime('now','-7 days')"
+        )
+        _tc = query_one(
+            "SELECT COUNT(*) AS clicks FROM telemetry_click WHERE created_at >= datetime('now','-7 days')"
+        )
+        telemetry_stats = {
+            "page_time_rows": (_tt["pt"] if _tt else 0) or 0,
+            "active_hours": round(((_tt["active_s"] if _tt else 0) or 0) / 3600, 1),
+            "active_users": (_tt["users"] if _tt else 0) or 0,
+            "click_rows": (_tc["clicks"] if _tc else 0) or 0,
+        }
+    except Exception:
+        telemetry_stats = {"page_time_rows": 0, "active_hours": 0.0, "active_users": 0, "click_rows": 0}
+
+    # ── Recent JS errors ───────────────────────────────────
+    js_errors: list = []
+    try:
+        js_errors = query_all(
+            "SELECT tje.created_at, u.name AS username, tje.path, "
+            "tje.message, tje.source, tje.lineno, tje.error_type "
+            "FROM telemetry_js_error tje LEFT JOIN users u ON tje.user_id = u.id "
+            "ORDER BY tje.created_at DESC LIMIT 20"
+        )
+    except Exception:
+        js_errors = []
+
     # ── System entity counts ──────────────────────────────
     entity_counts = {}
     for table_name in ["users", "instruments", "sample_requests", "purchase_orders",
@@ -16813,6 +16844,8 @@ def dev_panel():
         db_size_mb=db_size_mb,
         enabled_modules=sorted(ENABLED_MODULES),
         server_now_iso=datetime.now().astimezone().isoformat(timespec="seconds"),
+        telemetry_stats=telemetry_stats,
+        js_errors=js_errors,
     )
 
 

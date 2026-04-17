@@ -8288,7 +8288,123 @@ def _backfill_user_roles() -> None:
     finally:
         db.close()
 
+def _seed_operational_real_team() -> None:
+    """Idempotently seed the real team (nikita, prashant, tenant testers)
+    into
+    the operational DB.
 
+    Historically the operational DB was left empty on first boot — the
+    original comment on ``seed_data`` said "the first super_admin must
+    be created manually via init_db + a one-off script". In practice
+    that one-off never ran on this deploy, so nikita / prashant /
+    tejveer could not log in to the live Ravikiran instance.
+
+    This helper creates the Ravikiran real-team accounts plus a
+    dedicated tester account for each tenant (and a private Lab owner
+    / admin pair so the tenant has a functional owner row) on every
+    boot. ``INSERT OR IGNORE`` makes it safe to run on every startup,
+    and the follow-up ``UPDATE`` keeps the password hash in sync with
+    the shared demo password so bug-reporting sessions are not derailed
+    by half-finished forced password changes (same reasoning documented
+    inline in ``seed_data``).
+
+    Gated by ``not DEMO_MODE`` — demo deployments go through the fuller
+    ``seed_data`` path.
+    """
+    if DEMO_MODE:
+        return
+    try:
+        pw_hash = generate_password_hash("12345", method="pbkdf2:sha256")
+    except Exception:
+        return
+    db = tenant_db_connect("primary")
+    db.row_factory = sqlite3.Row
+    try:
+        try:
+            db.execute("SELECT id FROM users LIMIT 1")
+        except sqlite3.OperationalError:
+            # users table not created yet — init_db must run first.
+            return
+        # Ravikiran team members (nikita, prashant, tejveer) land in
+        # hq / ravikiran_ops only — NOT the `lab` portal. Lab R&D is
+        # for MIT-WPU researchers; the Ravikiran household ERP
+        # deliberately hides Instruments + Lab R&D surfaces from its
+        # own team. Observed 2026-04-16 on ravikiran.catalysterp.org:
+        # nikita was landing in Lab R&D view and seeing Instruments
+        # because her seed was granting `lab` as a portal + it was
+        # set is_default=1 on the iMac live DB. Scrubbed the live DB
+        # directly + removed `lab` from this seeder.
+        real_team = [
+            ("Nikita Nagargoje", "nikita",   "super_admin", "Kothrud HQ",            ["hq", "ravikiran_ops"]),
+            ("Prashant Chavre",  "prashant", "super_admin", "Kothrud HQ",            ["hq", "ravikiran_ops"]),
+            ("Tejveer",          "tejveer",     "tester",      "Ravikiran · Tester",      ["hq", "ravikiran_ops"]),
+            ("Lab Tester",       "lab.tester",  "tester",      "MIT-WPU Research · Tester", ["lab"]),
+            ("Lab Owner",        "owner@mitwpu.edu.in", "super_admin", "MIT-WPU Research · Owner", ["lab"]),
+            ("Lab Admin",        "admin@mitwpu.edu.in", "super_admin", "MIT-WPU Research · Admin", ["lab"]),
+        ]
+        for name, email, role, office, _portals in real_team:
+            db.execute(
+                """INSERT OR IGNORE INTO users
+                     (name, email, password_hash, role, invite_status,
+                      must_change_password, active, office_location)
+                   VALUES (?, ?, ?, ?, 'active', 0, 1, ?)""",
+                (name, email, pw_hash, role, office),
+            )
+            db.execute(
+                "UPDATE users SET password_hash = ?, active = 1, must_change_password = 0 "
+                "WHERE email = ?",
+                (pw_hash, email),
+            )
+            db.execute(
+                "UPDATE users SET office_location = ? "
+                "WHERE email = ? AND (office_location IS NULL OR office_location = '')",
+                (office, email),
+            )
+        db.commit()
+
+        portal_rows = db.execute("SELECT id, slug FROM erp_portals").fetchall()
+        portal_id_by_slug = {r["slug"]: r["id"] for r in portal_rows}
+        for name, email, role, _office, portals in real_team:
+            urow = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if not urow:
+                continue
+            uid = urow["id"]
+            default_slug = portals[0]
+            allowed_ids = [portal_id_by_slug[slug] for slug in portals if slug in portal_id_by_slug]
+            if allowed_ids:
+                db.execute(
+                    "DELETE FROM erp_user_portals WHERE user_id = ? AND portal_id NOT IN ({})".format(
+                        ",".join("?" for _ in allowed_ids)
+                    ),
+                    (uid, *allowed_ids),
+                )
+            for slug in portals:
+                pid = portal_id_by_slug.get(slug)
+                if pid is None:
+                    continue
+                portal_role = "owner" if role == "super_admin" else "member"
+                db.execute(
+                    """INSERT OR IGNORE INTO erp_user_portals
+                         (user_id, portal_id, portal_role, is_default, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (uid, pid, portal_role, 1 if slug == default_slug else 0, now_iso()),
+                )
+                db.execute(
+                    """UPDATE erp_user_portals
+                          SET portal_role = ?, is_default = ?
+                        WHERE user_id = ? AND portal_id = ?""",
+                    (portal_role, 1 if slug == default_slug else 0, uid, pid),
+                )
+            if allowed_ids:
+                db.execute(
+                    "UPDATE erp_user_portals SET is_default = 0 WHERE user_id = ? AND portal_id NOT IN ({})".format(
+                        ",".join("?" for _ in allowed_ids)
+                    ),
+                    (uid, *allowed_ids),
+                )
+        db.commit()
+    finally:
+        db.close()
 def seed_data() -> None:
     if not DEMO_MODE:
         # Production deployment — never seed demo accounts. The first
@@ -8321,8 +8437,8 @@ def seed_data() -> None:
         "nikita", "prashant",
         "rahul.misal@ravikiran.org", "sonal@ravikiran.org",
         "balaji.phunde@ravikiran.org", "mangesh.ghule@ravikiran.org",
-        # 2026-04-15 · Tester
-        "tejveer",
+        # 2026-04-15 · Testers
+        "tejveer", "lab.tester",
         # 2026-04-15 · Test accounts (one per non-tester role, see real_team)
         "test.super_admin", "test.site_admin", "test.instrument_admin",
         "test.faculty", "test.operator", "test.professor",
@@ -8357,10 +8473,13 @@ def seed_data() -> None:
          "Ravikiran Fleet · Driver",   ["hq"]),
         ("Mangesh Ghule",      "mangesh.ghule@ravikiran.org",  "operator",
          "Ravikiran Fleet · Driver",   ["hq"]),
-        # 2026-04-15 · Tester — full-read, scoped-write (debugger/feedback only).
-        # Username "tejveer", password "12345" (demo default, must_change on first login).
+        # 2026-04-15 · Tenant testers — full-read, scoped-write
+        # (debugger/feedback only). Usernames "tejveer" and
+        # "lab.tester", password "12345" (demo default).
         ("Tejveer",            "tejveer",                       "tester",
-         "Ravikiran · Tester",         ["lab", "hq"]),
+         "Ravikiran · Tester",         ["hq"]),
+        ("Lab Tester",         "lab.tester",                    "tester",
+         "MIT-WPU Research · Tester", ["lab"]),
         ("Lab Owner",          "owner@mitwpu.edu.in",     "super_admin",
          "MIT-WPU Research · Owner",   ["lab"]),
         ("Lab Admin",          "admin@mitwpu.edu.in",     "super_admin",

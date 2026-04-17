@@ -278,11 +278,19 @@ def main() -> None:
         finance_step = app.get_db().execute(
             "SELECT id FROM approval_steps WHERE sample_request_id = 1 AND approver_role = 'finance' ORDER BY id LIMIT 1"
         ).fetchone()
+        finance_admin = app.get_db().execute(
+            "SELECT id FROM users WHERE email = 'meera@mitwpu.edu.in' LIMIT 1"
+        ).fetchone()
     if finance_step:
-        # Assign to finance admin (user 8 = meera@mitwpu.edu.in)
+        assert finance_admin is not None
+        # Assign to the seeded finance admin by identity, not row order.
         response = client.post(
             "/requests/1",
-            data={"action": "assign_approver", "step_id": str(finance_step["id"]), "approver_user_id": "8"},
+            data={
+                "action": "assign_approver",
+                "step_id": str(finance_step["id"]),
+                "approver_user_id": str(finance_admin["id"]),
+            },
             follow_redirects=True,
         )
         assert response.status_code == 200

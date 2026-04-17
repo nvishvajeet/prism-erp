@@ -243,6 +243,15 @@
         </div>
       </section>
 
+      {% if lab_portal_mode %}
+      <section class="form-section" data-vis="{{ V }}">
+        <label class="checkbox-label" data-vis="{{ V }}">
+          <input type="checkbox" name="terms_accepted" value="1" required data-vis="{{ V }}">
+          I confirm that the sample details are accurate and I agree to the lab's terms and conditions for sample characterization.
+        </label>
+      </section>
+      {% endif %}
+
       <div class="new-request-submit-row" data-vis="{{ V }}">
         <button type="submit" class="primary-action" data-vis="{{ V }}">Create Request Card</button>
       </div>

@@ -5160,6 +5160,7 @@ def init_db() -> None:
                 output_format TEXT NOT NULL DEFAULT '',
                 tenant_tag TEXT NOT NULL DEFAULT 'lab',
                 payment_id INTEGER,
+                terms_accepted_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
@@ -6924,6 +6925,8 @@ def init_db() -> None:
             "ALTER TABLE sample_requests ADD COLUMN output_format TEXT NOT NULL DEFAULT ''",
             # F3 — sample request payment link
             "ALTER TABLE sample_requests ADD COLUMN payment_id INTEGER REFERENCES sample_request_payments(id)",
+            # F5 — T&C acceptance timestamp
+            "ALTER TABLE sample_requests ADD COLUMN terms_accepted_at TEXT",
             # D4 — tenant_tag for strict data isolation (all user-owned tables)
             f"ALTER TABLE users ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
             f"ALTER TABLE instruments ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
@@ -15132,6 +15135,13 @@ def new_request():
                     "UPDATE sample_requests SET payment_id = ? WHERE id = ?",
                     (_srp_id, request_id),
                 )
+
+        # F5 — record T&C acceptance timestamp if checkbox was checked
+        if request.form.get("terms_accepted"):
+            execute(
+                "UPDATE sample_requests SET terms_accepted_at = ? WHERE id = ?",
+                (now_iso(), request_id),
+            )
 
         # F1 — persist employee_id + designation back to the requester's profile if provided
         _emp_id = request.form.get("applicant_employee_id", "").strip()

@@ -70,6 +70,7 @@
     {{ card_heading("", "Purchase Orders") }}
     <input type="text" id="poSearch" class="table-search-input" placeholder="Search orders…" aria-label="Search purchase orders" data-vis="{{ V }}" style="margin-bottom:0.5rem;width:100%;max-width:20rem;">
     {% if orders %}
+    <div class="data-table-scroll" data-vis="{{ V }}">
     <table class="data-table sortable-table" data-vis="{{ V }}">
       <thead data-vis="{{ V }}">
         <tr data-vis="{{ V }}">
@@ -114,6 +115,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% else %}
     {{ empty_state("No purchase orders yet.", "Create a purchase order to start tracking vendor payments.", "New PO", url_for('vendor_payment_new')) }}
     {% endif %}

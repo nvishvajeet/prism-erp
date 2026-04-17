@@ -121,6 +121,9 @@ ERP_DATA_ROOT = Path(_ERP_DATA_ROOT_ENV).expanduser().resolve() if _ERP_DATA_ROO
 RUNTIME_LANE = "demo" if DEMO_MODE else "operational"
 RUNTIME_INSTANCE = DEMO_VARIANT if DEMO_MODE else "live"
 PROJECT_FILE_STEM = os.environ.get("LAB_ERP_PROJECT_FILE_STEM", "lab_erp").strip().lower() or "lab_erp"
+# D4 — tenant tag for strict data isolation. Derived from PROJECT_FILE_STEM
+# so every deployed instance auto-tags its own rows. Override via env var.
+TENANT_TAG = os.environ.get("CATALYST_TENANT_TAG", PROJECT_FILE_STEM.replace("_erp", "").rstrip("_")) or "lab"
 WORK_SESSION_IDLE_MINUTES = 30
 WORK_SESSION_HEARTBEAT_MAX_SECONDS = 300
 
@@ -4899,7 +4902,8 @@ def init_db() -> None:
                 invited_by INTEGER,
                 invite_status TEXT NOT NULL DEFAULT 'active',
                 active INTEGER NOT NULL DEFAULT 1,
-                member_code TEXT DEFAULT NULL
+                member_code TEXT DEFAULT NULL,
+                tenant_tag TEXT NOT NULL DEFAULT 'lab'
             );
 
             CREATE TABLE IF NOT EXISTS instruments (
@@ -4920,7 +4924,8 @@ def init_db() -> None:
                 reference_links TEXT NOT NULL DEFAULT '',
                 instrument_description TEXT NOT NULL DEFAULT '',
                 accepting_requests INTEGER NOT NULL DEFAULT 1,
-                soft_accept_enabled INTEGER NOT NULL DEFAULT 0
+                soft_accept_enabled INTEGER NOT NULL DEFAULT 0,
+                tenant_tag TEXT NOT NULL DEFAULT 'lab'
             );
 
             CREATE TABLE IF NOT EXISTS instrument_admins (
@@ -5149,6 +5154,7 @@ def init_db() -> None:
                 applicant_class TEXT NOT NULL DEFAULT '',
                 is_magnetic INTEGER NOT NULL DEFAULT 0,
                 output_format TEXT NOT NULL DEFAULT '',
+                tenant_tag TEXT NOT NULL DEFAULT 'lab',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
@@ -6888,6 +6894,15 @@ def init_db() -> None:
             "ALTER TABLE sample_requests ADD COLUMN applicant_class TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE sample_requests ADD COLUMN is_magnetic INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE sample_requests ADD COLUMN output_format TEXT NOT NULL DEFAULT ''",
+            # D4 — tenant_tag for strict data isolation (all user-owned tables)
+            f"ALTER TABLE users ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE instruments ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE sample_requests ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE payments ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE vendors ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE grants ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE vehicles ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
+            f"ALTER TABLE attendance ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
             # v2.1 compute scheduler columns
             "ALTER TABLE compute_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'ai_prompt'",
             "ALTER TABLE compute_jobs ADD COLUMN software_id INTEGER",

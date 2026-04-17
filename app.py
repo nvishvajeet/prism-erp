@@ -9897,9 +9897,9 @@ def _dashboard_cross_module_tiles(user) -> dict[str, object]:
             expiring_cutoff = (date.today() + timedelta(days=30)).isoformat()
             month_start = date.today().replace(day=1).isoformat()
             dash_fleet_status = {
-                "active_vehicles": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE status = 'active'") or {"c": 0})["c"],
+                "active_vehicles": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE status = 'active' AND tenant_tag = ?", (TENANT_TAG,)) or {"c": 0})["c"],
                 "fuel_this_month": (query_one("SELECT COALESCE(SUM(amount), 0) AS total FROM vehicle_logs WHERE log_type = 'fuel' AND log_date >= ?", (month_start,)) or {"total": 0})["total"],
-                "insurance_expiring": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE insurance_expiry IS NOT NULL AND insurance_expiry <= ? AND insurance_expiry >= ?", (expiring_cutoff, today_iso)) or {"c": 0})["c"],
+                "insurance_expiring": (query_one("SELECT COUNT(*) AS c FROM vehicles WHERE insurance_expiry IS NOT NULL AND insurance_expiry <= ? AND insurance_expiry >= ? AND tenant_tag = ?", (expiring_cutoff, today_iso, TENANT_TAG)) or {"c": 0})["c"],
             }
         if module_enabled("personnel"):
             today = date.today()
@@ -11682,7 +11682,9 @@ def _finance_portal_grant_kpis() -> dict:
           COALESCE(SUM(total_budget), 0) AS total_budget,
           COALESCE(SUM(CASE WHEN status = 'active' THEN total_budget END), 0) AS active_budget
         FROM grants
-        """
+        WHERE tenant_tag = ?
+        """,
+        (TENANT_TAG,),
     )
     grant_kpis = dict(row) if row else {
         "total_grants": 0, "active_grants": 0, "total_budget": 0, "active_budget": 0,
@@ -11977,7 +11979,7 @@ def finance_invoices_list():
     invoices = query_all(cte_sql, tuple(params))
 
     # Grants for filter dropdown
-    grants_list = query_all("SELECT id, code, name FROM grants ORDER BY name")
+    grants_list = query_all("SELECT id, code, name FROM grants WHERE tenant_tag = ? ORDER BY name", (TENANT_TAG,))
 
     return render_template(
         "finance_invoices.html",
@@ -12000,7 +12002,7 @@ def finance_invoice_new():
     if not _user_can_edit_finance(user):
         abort(403)
 
-    grants_list = query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name")
+    grants_list = query_all("SELECT id, code, name FROM grants WHERE status = 'active' AND tenant_tag = ? ORDER BY name", (TENANT_TAG,))
     requests_list = query_all(
         "SELECT id, request_no, title FROM sample_requests WHERE sample_origin = 'external' ORDER BY created_at DESC LIMIT 100"
     )
@@ -12390,7 +12392,7 @@ def finance_spend():
     all_entries = list(payment_rows) + list(expense_rows) + list(receipt_rows)
     all_entries.sort(key=lambda r: r["event_date"] or "", reverse=True)
 
-    grants_list = query_all("SELECT id, code, name FROM grants ORDER BY name")
+    grants_list = query_all("SELECT id, code, name FROM grants WHERE tenant_tag = ? ORDER BY name", (TENANT_TAG,))
 
     return render_template(
         "finance_spend.html",
@@ -12475,16 +12477,18 @@ def finance_grants_list():
           ), 0) AS sample_count
         FROM grants g
         LEFT JOIN users pi ON pi.id = g.pi_user_id
+        WHERE g.tenant_tag = ?
         ORDER BY
           CASE g.status WHEN 'active' THEN 0 ELSE 1 END,
           g.end_date
-        """
+        """,
+        (TENANT_TAG,),
     )
     totals_row = query_one(
         """
         SELECT
-          (SELECT COALESCE(SUM(total_budget), 0) FROM grants) AS total_budget,
-          (SELECT COUNT(*) FROM grants) AS grant_count,
+          (SELECT COALESCE(SUM(total_budget), 0) FROM grants WHERE tenant_tag = ?) AS total_budget,
+          (SELECT COUNT(*) FROM grants WHERE tenant_tag = ?) AS grant_count,
           (SELECT COALESCE(SUM(p.amount), 0)
              FROM payments p
              JOIN invoices inv ON inv.id = p.invoice_id
@@ -12495,7 +12499,8 @@ def finance_grants_list():
                       FROM grant_allocations ga
                      WHERE ga.project_id = sr.project_id
                 )) AS total_paid
-        """
+        """,
+        (TENANT_TAG, TENANT_TAG),
     )
     totals = dict(totals_row) if totals_row else {
         "total_budget": 0, "total_paid": 0, "grant_count": 0,
@@ -14733,7 +14738,7 @@ def _instrument_detail_read_model(user, instrument, instrument_id: int) -> dict[
             "SELECT * FROM instrument_inventory WHERE instrument_id = ? ORDER BY item_name",
             (instrument_id,),
         ),
-        "grants": query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
+        "grants": query_all("SELECT id, code, name FROM grants WHERE status = 'active' AND tenant_tag = ? ORDER BY name", (TENANT_TAG,)),
     }
 
 
@@ -20405,7 +20410,7 @@ def instrument_maintenance_log(instrument_id: int):
         entries=entries,
         upcoming_calibrations=upcoming_calibrations,
         can_add=can_view,
-        grants=query_all("SELECT id, code, name FROM grants WHERE status = 'active' ORDER BY name"),
+        grants=query_all("SELECT id, code, name FROM grants WHERE status = 'active' AND tenant_tag = ? ORDER BY name", (TENANT_TAG,)),
     )
 
 
@@ -27564,7 +27569,7 @@ def global_search():
     if module_visible_in_active_portal("finance") and _user_can_view_finance(user):
         grants_found = [
             {"type": "Grant", "title": r["name"], "code": r["code"], "meta": "Grant", "url": url_for("finance_grant_detail", grant_id=r["id"])}
-            for r in query_all("SELECT id, code, name FROM grants WHERE name LIKE ? OR code LIKE ? LIMIT 6", (like, like))
+            for r in query_all("SELECT id, code, name FROM grants WHERE tenant_tag = ? AND (name LIKE ? OR code LIKE ?) LIMIT 6", (TENANT_TAG, like, like))
         ]
     vendors_found = []
     po_found = []

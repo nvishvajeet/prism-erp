@@ -1,0 +1,374 @@
+.dev-panel-infra-tile .tile-stat-stack .stat {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 0.15rem;
+  min-height: 4.5rem;
+}
+
+.dev-panel-infra-tile .tile-stat-stack .stat span {
+  min-width: 0;
+  text-align: center;
+}
+
+.dev-panel-infra-tile .tile-stat-stack .stat small {
+  flex: 0 0 auto;
+  text-align: center;
+}
+
+/* Owner-only /admin/dev_panel surface */
+.dp-doc-wrap {
+  max-height: 22rem;
+  border: 1px solid var(--border, #d0d4dc);
+  border-radius: 8px;
+  background: var(--surface-2, #f6f7fa);
+}
+
+.dp-doc {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.dp-doc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.dev-panel-grid .dp-doc-tab {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--surface-alt);
+  color: var(--ink);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.dev-panel-grid .dp-doc-tab:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-alt));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line) 62%);
+}
+
+.dp-doc-tab-active {
+  background: var(--accent, #4c6ef5);
+  color: #fff;
+  border-color: var(--accent, #4c6ef5);
+}
+
+.dp-commit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dp-commit-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  font-size: 0.82rem;
+  align-items: baseline;
+}
+
+.dp-commit-when {
+  margin-left: auto;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.dp-crawler-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dev-panel-grid .tile-stat-stack .stat {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18rem;
+  text-align: center;
+  padding: 0.55rem 0.7rem;
+}
+
+.dev-panel-grid .tile-stat-stack .stat span {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.dev-panel-grid .tile-stat-stack .stat small {
+  width: 100%;
+  text-align: center;
+}
+
+/* Mission Control banner and drill-down pages */
+.mc-banner {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 1.25rem 2rem;
+  align-items: center;
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-lg, 14px);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #0b1220 88%, var(--accent, #4c6ef5)),
+    color-mix(in srgb, #0b1220 94%, var(--accent, #4c6ef5))
+  );
+  color: #e6ecf5;
+  border: 1px solid color-mix(in srgb, var(--accent, #4c6ef5) 30%, #0b1220);
+  box-shadow: 0 8px 28px -18px color-mix(in srgb, var(--accent, #4c6ef5) 40%, transparent);
+}
+
+.mc-banner-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.mc-banner-brand {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #fff;
+}
+
+.mc-banner-sep {
+  color: color-mix(in srgb, #e6ecf5 40%, transparent);
+  font-size: 1.1rem;
+}
+
+.mc-banner-role {
+  font-size: 0.82rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent, #4c6ef5) 75%, #ffffff);
+  font-weight: 600;
+}
+
+.mc-banner-tag {
+  display: flex;
+  align-items: center;
+}
+
+.mc-banner-version {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, #0b1220 50%, #000);
+  color: #7cffd4;
+  border: 1px solid color-mix(in srgb, #7cffd4 28%, #0b1220);
+  letter-spacing: 0.04em;
+}
+
+.mc-banner-status {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-self: end;
+}
+
+.mc-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, #0b1220 60%, transparent);
+  border: 1px solid color-mix(in srgb, #e6ecf5 10%, transparent);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.mc-light-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5a6475;
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.mc-light-ok .mc-light-dot {
+  background: #3ee07b;
+  box-shadow: 0 0 10px color-mix(in srgb, #3ee07b 70%, transparent);
+}
+
+.mc-light-warn .mc-light-dot {
+  background: #f2b44a;
+  box-shadow: 0 0 10px color-mix(in srgb, #f2b44a 70%, transparent);
+}
+
+.mc-light-info .mc-light-dot {
+  background: #4c9bff;
+  box-shadow: 0 0 10px color-mix(in srgb, #4c9bff 70%, transparent);
+  animation: mc-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes mc-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px color-mix(in srgb, #4c9bff 60%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 14px color-mix(in srgb, #4c9bff 90%, transparent);
+  }
+}
+
+.mc-light-label {
+  color: color-mix(in srgb, #e6ecf5 55%, transparent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.mc-light-value {
+  color: #e6ecf5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+}
+
+.dp-commit-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dp-commit-link:hover code.inline-code {
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 14%, var(--panel));
+  border-color: var(--accent, #4c6ef5);
+}
+
+.mc-drill-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+  grid-auto-flow: row dense;
+}
+
+.mc-drill-tiles > .tile {
+  min-width: 0;
+}
+
+.tile-mc-header {
+  grid-column: span 3;
+}
+
+.tile-mc-body {
+  grid-column: span 3;
+}
+
+.tile-mc-commits,
+.tile-mc-stat {
+  grid-column: 1 / -1;
+}
+
+.mc-header-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.mc-subject {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.mc-commit-body {
+  margin: 0.35rem 0 0 0;
+  padding: 0.9rem 1rem;
+  background: var(--panel-soft, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-md, 8px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.mc-stat-list,
+.mc-commit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mc-stat-line code {
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink);
+  display: block;
+}
+
+.mc-commit-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.06));
+  font-size: 0.88rem;
+}
+
+.mc-commit-row:last-child {
+  border-bottom: none;
+}
+
+.mc-commit-subject {
+  flex: 1;
+  color: var(--ink);
+}
+
+.mc-commit-meta {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .mc-banner {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+  }
+
+  .mc-banner-status {
+    justify-self: start;
+  }
+
+  .mc-drill-tiles {
+    grid-template-columns: 1fr;
+  }
+
+  .mc-drill-tiles > .tile {
+    grid-column: 1 / -1;
+  }
+}
+
+:root[data-theme="dark"] .mc-banner {
+  background: var(--panel-strong);
+  border-color: var(--line);
+  color: var(--ink);
+}

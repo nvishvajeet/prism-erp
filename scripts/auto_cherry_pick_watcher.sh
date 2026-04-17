@@ -46,7 +46,7 @@ git fetch --quiet origin v1.3.0-stable-release operation-trois-agents 2>&1 | tee
 # Shas that are on operation-trois-agents but NOT on v1.3.0-stable-release
 PENDING=$(git log --format='%H %s' origin/v1.3.0-stable-release..origin/operation-trois-agents 2>/dev/null | \
   grep -viE '^[0-9a-f]+ (claim:|conductor\(|docs\(rig\).*last burn log|WIP|wip)' | \
-  awk '{print $1}' | tac)  # reverse so oldest first
+  awk '{print $1}' | /usr/bin/tail -r)  # reverse so oldest first (macOS has tail -r, no tac)
 
 if [ -z "$PENDING" ]; then
   echo "[$ts] nothing pending — v1.3.0 is up to date with operation-trois-agents" >> "$LOG_FILE"

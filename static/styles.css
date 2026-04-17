@@ -7155,10 +7155,22 @@ a.person-chip:hover { background: var(--surface-alt, #f5f5f7); }
   border-color: color-mix(in srgb, var(--accent, #7fd1d4) 28%, var(--line, #d6dee8) 72%);
   box-shadow: 0 12px 24px -18px rgba(0, 0, 0, 0.55);
 }
+/* Tejveer 10:09 — "OPS Queue color different from others, keep it
+   uniform". Unify qa-card-primary with the base panel look so OPS
+   Queue reads as the same surface as Finance/Dev-panel/Inbox; the
+   primary CTA now signals hierarchy via a stronger left-accent bar
+   + border tint instead of a loud gradient wash. */
 .qa-card-primary {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 88%, white 12%), color-mix(in srgb, var(--accent) 70%, #12324f 30%));
-  border-color: color-mix(in srgb, var(--accent) 44%, rgba(255,255,255,0.14) 56%);
-  color: #f7fbff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel, #ffffff) 97%, #eef4f9 3%), color-mix(in srgb, var(--surface, #f7f7fb) 88%, #edf3f8 12%));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line, #d6dee8) 68%);
+  border-left: 3px solid color-mix(in srgb, var(--accent) 62%, var(--line, #d6dee8) 38%);
+  color: var(--ink);
+}
+:root[data-theme="dark"] .qa-card-primary {
+  background: var(--panel-strong);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line, #2a3342) 60%);
+  border-left-color: color-mix(in srgb, var(--accent) 70%, #1f2a38 30%);
+  color: var(--ink);
 }
 .qa-eyebrow {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

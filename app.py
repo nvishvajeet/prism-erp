@@ -6868,6 +6868,8 @@ def init_db() -> None:
             "ALTER TABLE invoices ADD COLUMN grant_id INTEGER REFERENCES grants(id)",
             "ALTER TABLE users ADD COLUMN google_id TEXT",
             "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN employee_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN designation TEXT NOT NULL DEFAULT ''",
             # v2.1 compute scheduler columns
             "ALTER TABLE compute_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'ai_prompt'",
             "ALTER TABLE compute_jobs ADD COLUMN software_id INTEGER",
@@ -14980,6 +14982,14 @@ def new_request():
             receipt_number=str(payload["receipt_number"]),
             grant_id=request_grant_id,
         )
+        # F1 — persist employee_id + designation back to the requester's profile if provided
+        _emp_id = request.form.get("applicant_employee_id", "").strip()
+        _desig = request.form.get("applicant_designation", "").strip()
+        if _emp_id or _desig:
+            execute(
+                "UPDATE users SET employee_id = COALESCE(NULLIF(?, ''), employee_id), designation = COALESCE(NULLIF(?, ''), designation) WHERE id = ?",
+                (_emp_id, _desig, int(payload["requester_id"])),
+            )
         get_db().commit()
         created_request = query_one(
             """

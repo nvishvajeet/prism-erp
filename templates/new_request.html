@@ -157,6 +157,19 @@
         </label>
       </section>
 
+      <section class="form-section" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Applicant Details</h3>
+        <p class="hint" data-vis="{{ V }}">Required for the official requisition record. Update your profile to prefill these fields permanently.</p>
+        <div class="new-request-inline-grid" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">PRN / Employee ID
+            <input type="text" name="applicant_employee_id" value="{{ current_user.employee_id if current_user else '' }}" placeholder="e.g. 12345678" data-vis="{{ V }}">
+          </label>
+          <label data-vis="{{ V }}">Designation
+            <input type="text" name="applicant_designation" value="{{ current_user.designation if current_user else '' }}" placeholder="e.g. PhD Scholar, Faculty" data-vis="{{ V }}">
+          </label>
+        </div>
+      </section>
+
       <div class="new-request-submit-row" data-vis="{{ V }}">
         <button type="submit" class="primary-action" data-vis="{{ V }}">Create Request Card</button>
       </div>

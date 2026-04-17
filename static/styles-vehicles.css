@@ -1,0 +1,61 @@
+/* Vehicle detail: registration numbers and driver names should wrap
+   rather than clip inside the metadata tile. */
+.vehicle-info-tile {
+  grid-column: span 4;
+}
+
+.vehicle-info-tile .meta-grid dd,
+.vehicle-info-tile .person-chip,
+.vehicle-info-tile .person-chip-body,
+.vehicle-info-tile .person-chip-name {
+  min-width: 0;
+}
+
+.vehicle-info-tile .person-chip {
+  max-width: 100%;
+}
+
+.vehicle-info-tile .person-chip-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+}
+
+.vehicle-info-tile .meta-grid-row {
+  align-items: start;
+}
+
+.vehicle-info-tile .meta-grid dd,
+.vehicle-info-tile .dp-metadata-row > :last-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.vehicle-info-tile .dp-metadata-row {
+  align-items: start;
+}
+
+.vehicle-info-tile .dp-metadata-row > * {
+  min-width: 0;
+}
+
+@media (max-width: 1200px) {
+  .vehicle-info-tile {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .vehicle-info-tile .meta-grid-row,
+  .vehicle-info-tile .dp-metadata-row {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+    gap: 0.2rem;
+  }
+}
+
+.vehicle-edit-tile .form-grid label,
+.vehicle-edit-tile .form-grid button {
+  min-width: 0;
+}

@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, person_chip, empty_state, kpi_grid with context %}
+{% block page_styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles-vehicles.css') }}">
+{% endblock %}
 {% block hover_back %}<a href="{{ url_for('index') }}" class="hover-back-btn" title="Back to Home" data-vis="{{ V }}">←</a>{% endblock %}
 {% block content %}
 

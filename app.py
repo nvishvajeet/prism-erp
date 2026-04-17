@@ -2407,8 +2407,8 @@ def nav_pending_counts(user) -> dict[str, int]:
     if user_has_role(user, "requester"):
         own = db.execute(
             "SELECT COUNT(*) FROM sample_requests "
-            "WHERE requester_id = ? AND status = 'awaiting_sample_submission'",
-            (user["id"],),
+            "WHERE requester_id = ? AND tenant_tag = ? AND status = 'awaiting_sample_submission'",
+            (user["id"], TENANT_TAG),
         ).fetchone()[0]
         if own:
             queue_total += int(own)
@@ -10009,7 +10009,8 @@ def index():
         {"reassign", "mark_received"} & set(profile["card_action_fields"])
     )
     operators = query_all(
-        "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') ORDER BY name"
+        "SELECT id, name FROM users WHERE role IN ('operator','instrument_admin','super_admin') AND tenant_tag = ? ORDER BY name",
+        (TENANT_TAG,),
     ) if has_instrument_area_access(user) and can_operate_queue else []
     # Upcoming downtime across all instruments (for dashboard)
     upcoming_downtime_all = []
@@ -10491,7 +10492,7 @@ def admin_mailing_lists():
              LEFT JOIN users u ON u.id = ml.created_by_user_id
              ORDER BY ml.name"""
     )
-    all_users = query_all("SELECT id, name, email FROM users WHERE active = 1 ORDER BY name")
+    all_users = query_all("SELECT id, name, email FROM users WHERE active = 1 AND tenant_tag = ? ORDER BY name", (TENANT_TAG,))
     return render_template("admin_mailing_lists.html", lists=lists, all_users=all_users)
 
 
@@ -12623,7 +12624,8 @@ def finance_grant_detail(grant_id: int):
         abort(404)
     # Candidates for Portfolio Manager / Administered By dropdowns
     admin_candidates = query_all(
-        "SELECT id, name FROM users WHERE role IN ('finance_admin','super_admin','site_admin','instrument_admin') ORDER BY name"
+        "SELECT id, name FROM users WHERE role IN ('finance_admin','super_admin','site_admin','instrument_admin') AND tenant_tag = ? ORDER BY name",
+        (TENANT_TAG,),
     )
     grant_members = query_all(
         """SELECT gm.id, gm.role, gm.added_at, u.id AS user_id, u.name, u.email,
@@ -12635,7 +12637,7 @@ def finance_grant_detail(grant_id: int):
             ORDER BY gm.role, u.name""",
         (grant_id,),
     )
-    all_users = query_all("SELECT id, name, email FROM users ORDER BY name")
+    all_users = query_all("SELECT id, name, email FROM users WHERE tenant_tag = ? ORDER BY name", (TENANT_TAG,))
     charged = query_all(
         f"""
         SELECT

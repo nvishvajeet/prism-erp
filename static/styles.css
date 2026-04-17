@@ -4043,6 +4043,25 @@ code {
   transform: translateY(-1px);
 }
 
+.dev-panel-infra-tile .tile-stat-stack .stat {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 0.15rem;
+  min-height: 4.5rem;
+}
+
+.dev-panel-infra-tile .tile-stat-stack .stat span {
+  min-width: 0;
+  text-align: center;
+}
+
+.dev-panel-infra-tile .tile-stat-stack .stat small {
+  flex: 0 0 auto;
+  text-align: center;
+}
+
 /* ── Tile: Queue (full width, filter pills, paginated) ── */
 .inst-tile-head-links {
   display: flex;

@@ -186,6 +186,49 @@
     flushPageTime();
   });
 
+  // JS error forwarding — window.onerror + unhandledrejection → /api/telemetry/js-error.
+  // Capped at 5 per session so a broken script doesn't spam the server.
+  var jsErrorCount = 0;
+  var JS_ERROR_MAX = 5;
+  var JS_ERROR_ENDPOINT = '/api/telemetry/js-error';
+
+  function sendJsError(message, source, lineno, colno, stack, errorType) {
+    if (jsErrorCount >= JS_ERROR_MAX) return;
+    jsErrorCount += 1;
+    try {
+      fetch(JS_ERROR_ENDPOINT, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          path: path,
+          message: String(message || '').slice(0, 512),
+          source: String(source || '').slice(0, 512),
+          lineno: lineno || 0,
+          colno: colno || 0,
+          stack: String(stack || '').slice(0, 4096),
+          error_type: String(errorType || '')
+        }),
+        keepalive: true
+      }).catch(function () { /* swallow */ });
+    } catch (e) { /* swallow */ }
+  }
+
+  var _origOnerror = window.onerror;
+  window.onerror = function (msg, src, line, col, err) {
+    sendJsError(msg, src, line, col, err && err.stack, err && err.name);
+    if (typeof _origOnerror === 'function') return _origOnerror.apply(this, arguments);
+  };
+
+  window.addEventListener('unhandledrejection', function (ev) {
+    var reason = ev.reason;
+    var msg = reason instanceof Error ? reason.message : String(reason || 'Unhandled rejection');
+    var stk = reason instanceof Error ? (reason.stack || '') : '';
+    var etype = reason instanceof Error ? reason.name : 'UnhandledRejection';
+    sendJsError(msg, '', 0, 0, stk, etype);
+  });
+
   function send() {
     if (pageTimeQueue.length === 0 && clickQueue.length === 0) return;
     var body = JSON.stringify({

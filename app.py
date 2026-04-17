@@ -5527,6 +5527,21 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_tc_action ON telemetry_click(action, created_at);
             CREATE INDEX IF NOT EXISTS idx_tc_user   ON telemetry_click(user_id, created_at);
 
+            CREATE TABLE IF NOT EXISTS telemetry_js_error (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                message TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT '',
+                lineno INTEGER NOT NULL DEFAULT 0,
+                colno INTEGER NOT NULL DEFAULT 0,
+                stack TEXT NOT NULL DEFAULT '',
+                error_type TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_tje_user ON telemetry_js_error(user_id, created_at);
+
             CREATE TABLE IF NOT EXISTS user_work_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -7132,6 +7147,11 @@ def _purge_stale_telemetry(retention_days: int = 90) -> None:
             )
             cur.execute(
                 "DELETE FROM telemetry_click "
+                "WHERE created_at < datetime('now', ?)",
+                (f'-{int(retention_days)} day',),
+            )
+            cur.execute(
+                "DELETE FROM telemetry_js_error "
                 "WHERE created_at < datetime('now', ?)",
                 (f'-{int(retention_days)} day',),
             )
@@ -31158,6 +31178,144 @@ def api_telemetry_batch():
         200,
         {'Content-Type': 'application/json'},
     )
+
+
+@app.route('/api/telemetry/js-error', methods=['POST'])
+@login_required
+def api_telemetry_js_error():
+    """Ingest a single client-side JS error from window.onerror / unhandledrejection."""
+    user = current_user()
+    payload = request.get_json(silent=True) or {}
+    session_id = _safe_telemetry_str(payload.get('session_id'), _TELEMETRY_MAX_SESSION_LEN)
+    if not session_id:
+        return ('{"ok":false}', 400, {'Content-Type': 'application/json'})
+    message   = _safe_telemetry_str(payload.get('message'),    512) or ''
+    source    = _safe_telemetry_str(payload.get('source'),     512) or ''
+    stack     = _safe_telemetry_str(payload.get('stack'),     4096) or ''
+    error_type = _safe_telemetry_str(payload.get('error_type'), 128) or ''
+    path      = _safe_telemetry_str(payload.get('path'), _TELEMETRY_MAX_PATH_LEN) or ''
+    try:
+        lineno = int(payload.get('lineno') or 0)
+        colno  = int(payload.get('colno')  or 0)
+    except (TypeError, ValueError):
+        lineno = colno = 0
+    if not message:
+        return ('{"ok":false}', 400, {'Content-Type': 'application/json'})
+    execute(
+        'INSERT INTO telemetry_js_error '
+        '(user_id, session_id, path, message, source, lineno, colno, stack, error_type) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (user['id'], session_id, path, message, source, lineno, colno, stack, error_type),
+    )
+    return ('{"ok":true}', 200, {'Content-Type': 'application/json'})
+
+
+def _render_payroll_dashboard(endpoint_name: str):
+    """Shared payroll dashboard for both /payroll and /personnel/payroll."""
+    user = current_user()
+    if not portal_route_enabled("personnel"):
+        abort(404)
+    if not _personnel_access(user):
+        abort(403)
+    can_edit = _personnel_can_edit(user)
+    today = date.today()
+    year = int(request.args.get("year", today.year))
+    month_num = int(request.args.get("month", today.month))
+    month_name = date(year, month_num, 1).strftime("%B")
+    dim = _days_in_month(year, month_num)
+
+    staff_configs = query_all("""
+        SELECT sc.*, u.name, u.email
+          FROM salary_config sc
+          JOIN users u ON u.id = sc.user_id
+         ORDER BY u.name
+    """)
+    payroll_rows = []
+    for sc in staff_configs:
+        uid = sc["user_id"]
+        days_worked = _attendance_days_worked(uid, year, month_num)
+        base = sc["monthly_salary"] or 0
+        existing_payment = query_one(
+            "SELECT * FROM salary_payments WHERE user_id = ? AND year = ? AND month = ?",
+            (uid, year, f"{month_num:02d}")
+        )
+        calculated_pay = (base / dim) * days_worked if dim > 0 else 0
+        payroll_rows.append({
+            "user_id": uid,
+            "name": sc["name"],
+            "email": sc["email"],
+            "designation": sc["designation"],
+            "department": sc["department"],
+            "monthly_salary": base,
+            "days_in_month": dim,
+            "days_worked": days_worked,
+            "calculated_pay": round(calculated_pay, 2),
+            "payment": existing_payment,
+        })
+    total_payable = sum(r["calculated_pay"] for r in payroll_rows if not r["payment"] or r["payment"]["status"] == "pending")
+    total_paid = sum(r["payment"]["net_pay"] for r in payroll_rows if r["payment"] and r["payment"]["status"] == "paid")
+    return render_template(
+        "payroll.html",
+        payroll=payroll_rows,
+        year=year,
+        month_num=month_num,
+        month_name=month_name,
+        days_in_month=dim,
+        can_edit=can_edit,
+        total_payable=total_payable,
+        total_paid=total_paid,
+        today=today.isoformat(),
+        payroll_nav_endpoint=endpoint_name,
+    )
+
+
+@app.route("/payroll", methods=["GET"])
+@login_required
+def payroll_page():
+    return _render_payroll_dashboard("payroll_page")
+
+
+@app.route("/filing", methods=["GET"])
+@login_required
+def filing_page():
+    if not portal_route_enabled("vendor_payments"):
+        abort(404)
+    user = current_user()
+    if not _user_can_manage_payments(user):
+        abort(403)
+
+    current_fy = current_indian_fy()
+    filing_counts = query_one("""
+        SELECT COUNT(*) AS total_folders,
+               SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_folders,
+               SUM(CASE WHEN status = 'archived' THEN 1 ELSE 0 END) AS archived_folders,
+               SUM(CASE WHEN status = 'destroyed' THEN 1 ELSE 0 END) AS destroyed_folders
+          FROM physical_files
+    """) or {}
+    recent_physical_files = query_all("""
+        SELECT pf.*,
+               c.short_name AS company_short
+          FROM physical_files pf
+          LEFT JOIN companies c ON c.id = pf.company_id
+         ORDER BY COALESCE(pf.created_at, '') DESC, pf.id DESC
+         LIMIT 10
+    """)
+    recent_exports = query_all("""
+        SELECT ge.*,
+               u.name AS created_by_name
+          FROM generated_exports ge
+          LEFT JOIN users u ON u.id = ge.created_by_user_id
+         ORDER BY COALESCE(ge.created_at, '') DESC, ge.id DESC
+         LIMIT 10
+    """)
+
+    return render_template(
+        "filing.html",
+        current_fy=current_fy,
+        filing_counts=filing_counts,
+        recent_physical_files=recent_physical_files,
+        recent_exports=recent_exports,
+    ), 200
 
 
 if __name__ == "__main__":

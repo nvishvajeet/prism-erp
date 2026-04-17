@@ -2236,27 +2236,29 @@ def _default_user_for_approval_role(db: sqlite3.Connection, role: str, instrumen
     """
     if role == "finance":
         rows = db.execute(
-            "SELECT id FROM users WHERE role = 'finance_admin' AND active = 1 ORDER BY id"
+            "SELECT id FROM users WHERE role = 'finance_admin' AND active = 1 AND tenant_tag = ? ORDER BY id",
+            (TENANT_TAG,),
         ).fetchall()
     elif role == "professor":
         rows = db.execute(
             """
             SELECT u.id FROM users u
             LEFT JOIN instrument_faculty_admins ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
-            WHERE u.active = 1 AND (ifa.instrument_id IS NOT NULL OR u.role IN ('professor_approver', 'super_admin'))
+            WHERE u.active = 1 AND u.tenant_tag = ?
+              AND (ifa.instrument_id IS NOT NULL OR u.role IN ('professor_approver', 'super_admin'))
             ORDER BY (ifa.instrument_id IS NOT NULL) DESC, u.id
             """,
-            (instrument_id,),
+            (instrument_id, TENANT_TAG),
         ).fetchall()
     elif role == "operator":
         rows = db.execute(
             """
             SELECT u.id FROM users u
             JOIN instrument_operators io ON io.user_id = u.id
-            WHERE io.instrument_id = ? AND u.active = 1
+            WHERE io.instrument_id = ? AND u.active = 1 AND u.tenant_tag = ?
             ORDER BY u.id
             """,
-            (instrument_id,),
+            (instrument_id, TENANT_TAG),
         ).fetchall()
     else:
         rows = []
@@ -2430,7 +2432,8 @@ def nav_pending_counts(user) -> dict[str, int]:
         aq = 0
         try:
             aq += db.execute(
-                "SELECT COUNT(*) FROM users WHERE invite_status = 'pending_approval'"
+                "SELECT COUNT(*) FROM users WHERE invite_status = 'pending_approval' AND tenant_tag = ?",
+                (TENANT_TAG,),
             ).fetchone()[0] or 0
         except Exception:
             pass
@@ -3162,7 +3165,8 @@ def can_view_group_visualization(user: sqlite3.Row, group_name: str) -> bool:
 def approval_candidate_options(step_role: str, instrument_id: int) -> list[sqlite3.Row]:
     if step_role == "finance":
         return query_all(
-            "SELECT id, name, email, role FROM users WHERE active = 1 AND role IN ('finance_admin', 'site_admin', 'super_admin') ORDER BY name"
+            "SELECT id, name, email, role FROM users WHERE active = 1 AND tenant_tag = ? AND role IN ('finance_admin', 'site_admin', 'super_admin') ORDER BY name",
+            (TENANT_TAG,),
         )
     if step_role == "professor":
         return query_all(
@@ -3170,14 +3174,14 @@ def approval_candidate_options(step_role: str, instrument_id: int) -> list[sqlit
             SELECT DISTINCT u.id, u.name, u.email, u.role
             FROM users u
             LEFT JOIN instrument_faculty_admins ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
-            WHERE u.active = 1
+            WHERE u.active = 1 AND u.tenant_tag = ?
               AND (
                 ifa.instrument_id IS NOT NULL OR
                 u.role IN ('professor_approver', 'site_admin', 'super_admin')
               )
             ORDER BY u.name
             """,
-            (instrument_id,),
+            (instrument_id, TENANT_TAG),
         )
     return query_all(
         """
@@ -3186,7 +3190,7 @@ def approval_candidate_options(step_role: str, instrument_id: int) -> list[sqlit
         LEFT JOIN instrument_operators io ON io.user_id = u.id AND io.instrument_id = ?
         LEFT JOIN instrument_admins ia ON ia.user_id = u.id AND ia.instrument_id = ?
         LEFT JOIN instrument_faculty_admins ifa ON ifa.user_id = u.id AND ifa.instrument_id = ?
-        WHERE u.active = 1
+        WHERE u.active = 1 AND u.tenant_tag = ?
           AND (
             io.instrument_id IS NOT NULL OR
             ia.instrument_id IS NOT NULL OR
@@ -3195,7 +3199,7 @@ def approval_candidate_options(step_role: str, instrument_id: int) -> list[sqlit
           )
         ORDER BY u.name
         """,
-        (instrument_id, instrument_id, instrument_id),
+        (instrument_id, instrument_id, instrument_id, TENANT_TAG),
     )
 
 
@@ -4754,8 +4758,13 @@ def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) ->
     role = user["role"]
     status_clause = "WHERE status = 'active'" if active_only else ""
     if role in FULL_REQUEST_ACCESS_ROLES:
+        if status_clause:
+            tenant_clause = "AND tenant_tag = ?"
+        else:
+            tenant_clause = "WHERE tenant_tag = ?"
         result = query_all(
-            f"SELECT id, name, code, status FROM instruments {status_clause} ORDER BY name"
+            f"SELECT id, name, code, status FROM instruments {status_clause} {tenant_clause} ORDER BY name",
+            (TENANT_TAG,),
         )
     else:
         instrument_ids = assigned_instrument_ids(user)
@@ -4763,8 +4772,8 @@ def visible_instruments_for_user(user: sqlite3.Row, active_only: bool = True) ->
             placeholders = ",".join("?" for _ in instrument_ids)
             status_and = "AND status = 'active'" if active_only else ""
             result = query_all(
-                f"SELECT id, name, code, status FROM instruments WHERE id IN ({placeholders}) {status_and} ORDER BY name",
-                tuple(instrument_ids),
+                f"SELECT id, name, code, status FROM instruments WHERE id IN ({placeholders}) {status_and} AND tenant_tag = ? ORDER BY name",
+                tuple(instrument_ids) + (TENANT_TAG,),
             )
         else:
             result = []
@@ -4800,8 +4809,8 @@ def request_scope_sql(user: sqlite3.Row, alias: str = "sr") -> tuple[list[str], 
         if cached is not None:
             clauses, params = cached
             return list(clauses), list(params)
-    clauses: list[str] = []
-    params: list = []
+    clauses: list[str] = [f"{alias}.tenant_tag = ?"]
+    params: list = [TENANT_TAG]
     # TODO [v1.5.0 multi-role]: replace <var>["role"] == X / in {...} with has_role(<var>, X) once user_roles junction lands (v1.5.0).
     if user["role"] in FULL_REQUEST_ACCESS_ROLES:
         result = (tuple(clauses), tuple(params))
@@ -11163,9 +11172,10 @@ def message_compose():
     q = (request.args.get("q") or "").strip()
     RECIPIENT_CAP = 200
     params: list = [user["id"], user["id"], user["id"]]
-    where_extra = ""
+    where_extra = " AND u.tenant_tag = ?"
+    params.append(TENANT_TAG)
     if q:
-        where_extra = " AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)"
+        where_extra += " AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)"
         like = f"%{q.lower()}%"
         params.extend([like, like])
     # Recency ranking: MAX(last message exchanged with this user) desc,
@@ -13063,8 +13073,8 @@ def sitemap():
 
     # Administration section — admins only
     if access_profile["can_manage_members"]:
-        user_count = db.execute("SELECT COUNT(*) FROM users WHERE active = 1").fetchone()[0]
-        invited_count = db.execute("SELECT COUNT(*) FROM users WHERE invite_status = 'invited'").fetchone()[0]
+        user_count = db.execute("SELECT COUNT(*) FROM users WHERE active = 1 AND tenant_tag = ?", (TENANT_TAG,)).fetchone()[0]
+        invited_count = db.execute("SELECT COUNT(*) FROM users WHERE invite_status = 'invited' AND tenant_tag = ?", (TENANT_TAG,)).fetchone()[0]
         admin_items = [
             {"label": "User Management", "hint": f"{user_count} active, {invited_count} pending invites", "type": "link", "href": url_for("admin_users")},
             {"label": "Notices", "hint": "Post site-wide announcements", "type": "link", "href": url_for("admin_notices")},
@@ -14190,15 +14200,15 @@ def instruments():
             flash("Instrument was created, but could not be reopened immediately.", "success")
             return redirect(url_for("instruments"))
         abort(400)
-    instrument_filter = ""
-    params: list = []
+    instrument_filter = "WHERE i.tenant_tag = ?"
+    params: list = [TENANT_TAG]
     if not user_access_profile(user)["can_view_all_instruments"]:
         ids = assigned_instrument_ids(user)
         if not ids:
             rows = []
             return render_template("instruments.html", instruments=rows, visible_links={})
         placeholders = ",".join("?" for _ in ids)
-        instrument_filter = f"WHERE i.id IN ({placeholders})"
+        instrument_filter += f" AND i.id IN ({placeholders})"
         params.extend(ids)
     rows = query_all(
         f"""
@@ -21093,6 +21103,8 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
         )
         portal_where = " AND ep.slug = ? AND ep.is_active = 1 "
         portal_params.append(portal_slug)
+    portal_where += " AND users.tenant_tag = ? "
+    portal_params.append(TENANT_TAG)
     owner_placeholders = ",".join("?" for _ in OWNER_EMAILS)
     if lab_profile_mode_active():
         # Lab operators expect this directory to show the active people
@@ -21130,9 +21142,9 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
     # admin users directory.
     if not is_owner(viewer):
         owners = []
-    member_where = "WHERE users.role = 'requester'"
+    member_where = f"WHERE users.role = 'requester' AND users.tenant_tag = ?"
     member_from = "FROM users"
-    member_params: list[object] = []
+    member_params: list[object] = [TENANT_TAG]
     if portal_slug:
         member_from = (
             "FROM users "
@@ -21166,10 +21178,11 @@ def _admin_users_list_payload(viewer: sqlite3.Row | None = None) -> dict[str, ob
           JOIN erp_user_portals eup ON eup.user_id = users.id
           JOIN erp_portals ep ON ep.id = eup.portal_id
         """
-        pending_sql += " WHERE users.invite_status = 'pending_approval' AND ep.slug = ? AND ep.is_active = 1"
-        pending_params.append(portal_slug)
+        pending_sql += " WHERE users.invite_status = 'pending_approval' AND users.tenant_tag = ? AND ep.slug = ? AND ep.is_active = 1"
+        pending_params.extend([TENANT_TAG, portal_slug])
     else:
-        pending_sql += " WHERE users.invite_status = 'pending_approval'"
+        pending_sql += " WHERE users.invite_status = 'pending_approval' AND users.tenant_tag = ?"
+        pending_params.append(TENANT_TAG)
     pending_sql += " ORDER BY users.id DESC LIMIT 100"
     pending_users = query_all(pending_sql, tuple(pending_params))
     admin_groups = {
@@ -22169,8 +22182,11 @@ def personnel_list():
           LEFT JOIN salary_config sc ON sc.user_id = u.id
     """
     if portal_slug:
-        staff_sql += " WHERE ep.slug = ? AND ep.is_active = 1"
-        staff_params.append(portal_slug)
+        staff_sql += " WHERE ep.slug = ? AND ep.is_active = 1 AND u.tenant_tag = ?"
+        staff_params.extend([portal_slug, TENANT_TAG])
+    else:
+        staff_sql += " WHERE u.tenant_tag = ?"
+        staff_params.append(TENANT_TAG)
     staff_sql += " ORDER BY u.name"
     staff = query_all(staff_sql, tuple(staff_params))
     # Get today's attendance for quick-mark widget

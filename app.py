@@ -5159,6 +5159,7 @@ def init_db() -> None:
                 is_magnetic INTEGER NOT NULL DEFAULT 0,
                 output_format TEXT NOT NULL DEFAULT '',
                 tenant_tag TEXT NOT NULL DEFAULT 'lab',
+                payment_id INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
@@ -5460,6 +5461,29 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);
             CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at);
+
+            -- F3 — sample request payment branch (Option A: dept-budget, Option B: bank transfer)
+            -- Kept separate from payments/invoices so it never touches the live expense-portal tables.
+            CREATE TABLE IF NOT EXISTS sample_request_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sample_request_id INTEGER NOT NULL,
+                payment_option TEXT NOT NULL DEFAULT '',
+                dept_budget_code TEXT NOT NULL DEFAULT '',
+                utr_number TEXT NOT NULL DEFAULT '',
+                payment_mode TEXT NOT NULL DEFAULT '',
+                bank_name TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL DEFAULT 0,
+                payment_proof_file_id INTEGER,
+                secretary_approved INTEGER NOT NULL DEFAULT 0,
+                secretary_approved_by INTEGER,
+                secretary_approved_at TEXT,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (sample_request_id) REFERENCES sample_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (payment_proof_file_id) REFERENCES request_attachments(id) ON DELETE SET NULL,
+                FOREIGN KEY (secretary_approved_by) REFERENCES users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_srp_request ON sample_request_payments(sample_request_id);
 
             CREATE TABLE IF NOT EXISTS grant_allocations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -6898,6 +6922,8 @@ def init_db() -> None:
             "ALTER TABLE sample_requests ADD COLUMN applicant_class TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE sample_requests ADD COLUMN is_magnetic INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE sample_requests ADD COLUMN output_format TEXT NOT NULL DEFAULT ''",
+            # F3 — sample request payment link
+            "ALTER TABLE sample_requests ADD COLUMN payment_id INTEGER REFERENCES sample_request_payments(id)",
             # D4 — tenant_tag for strict data isolation (all user-owned tables)
             f"ALTER TABLE users ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
             f"ALTER TABLE instruments ADD COLUMN tenant_tag TEXT NOT NULL DEFAULT '{TENANT_TAG}'",
@@ -15083,6 +15109,30 @@ def new_request():
             receipt_number=str(payload["receipt_number"]),
             grant_id=request_grant_id,
         )
+        # F3 — create sample_request_payments row if Option A or B was selected
+        _pay_opt = request.form.get("payment_option", "").strip()
+        if _pay_opt in ("A", "B"):
+            _srp_id = execute(
+                "INSERT INTO sample_request_payments "
+                "(sample_request_id, payment_option, dept_budget_code, utr_number, "
+                "payment_mode, bank_name, amount) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    request_id,
+                    _pay_opt,
+                    request.form.get("dept_budget_code", "").strip() if _pay_opt == "A" else "",
+                    request.form.get("utr_number", "").strip() if _pay_opt == "B" else "",
+                    request.form.get("payment_mode", "").strip() if _pay_opt == "B" else "",
+                    request.form.get("payment_bank_name", "").strip() if _pay_opt == "B" else "",
+                    float(request.form.get("payment_amount") or 0) if _pay_opt == "B" else 0.0,
+                ),
+            )
+            if _srp_id:
+                execute(
+                    "UPDATE sample_requests SET payment_id = ? WHERE id = ?",
+                    (_srp_id, request_id),
+                )
+
         # F1 — persist employee_id + designation back to the requester's profile if provided
         _emp_id = request.form.get("applicant_employee_id", "").strip()
         _desig = request.form.get("applicant_designation", "").strip()

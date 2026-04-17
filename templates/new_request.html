@@ -167,6 +167,62 @@
       </section>
       {% endif %}
 
+      {% if lab_portal_mode %}
+      <section class="form-section" id="paymentOptionCard" data-vis="{{ V }}">
+        <h3 data-vis="{{ V }}">Payment</h3>
+        <p class="hint" data-vis="{{ V }}">Select how this sample characterization will be paid for.</p>
+        <div class="radio-group" data-vis="{{ V }}">
+          <label class="radio-label" data-vis="{{ V }}"><input type="radio" name="payment_option" value="" checked data-vis="{{ V }}"> Not applicable / pending</label>
+          <label class="radio-label" data-vis="{{ V }}"><input type="radio" name="payment_option" value="A" id="payOptA" data-vis="{{ V }}"> Option A — Department Budget</label>
+          <label class="radio-label" data-vis="{{ V }}"><input type="radio" name="payment_option" value="B" id="payOptB" data-vis="{{ V }}"> Option B — External / Bank Transfer</label>
+        </div>
+        <div id="payOptAFields" style="display:none" data-vis="{{ V }}">
+          <label data-vis="{{ V }}">Department Budget Code
+            <input type="text" name="dept_budget_code" placeholder="e.g. LAB-CSE-2526" data-vis="{{ V }}">
+          </label>
+        </div>
+        <div id="payOptBFields" style="display:none" data-vis="{{ V }}">
+          <div class="new-request-inline-grid" data-vis="{{ V }}">
+            <label data-vis="{{ V }}">Amount (₹)
+              <input type="number" step="0.01" min="0" name="payment_amount" data-vis="{{ V }}">
+            </label>
+            <label data-vis="{{ V }}">Payment Mode
+              <select name="payment_mode" data-vis="{{ V }}">
+                <option value="">— Select —</option>
+                <option value="NEFT">NEFT</option>
+                <option value="RTGS">RTGS</option>
+                <option value="IMPS">IMPS</option>
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="DD">DD / Cheque</option>
+              </select>
+            </label>
+          </div>
+          <label data-vis="{{ V }}">UTR / Transaction ID
+            <input type="text" name="utr_number" placeholder="12-digit UTR or transaction reference" data-vis="{{ V }}">
+          </label>
+          <label data-vis="{{ V }}">Bank Name
+            <input type="text" name="payment_bank_name" placeholder="e.g. SBI, HDFC" data-vis="{{ V }}">
+          </label>
+          <label data-vis="{{ V }}">Payment Proof (receipt / screenshot)
+            <input type="file" name="payment_proof" accept=".pdf,.png,.jpg,.jpeg" data-vis="{{ V }}">
+          </label>
+        </div>
+      </section>
+      <script>
+      (function(){
+        var a=document.getElementById('payOptA'),b=document.getElementById('payOptB');
+        var af=document.getElementById('payOptAFields'),bf=document.getElementById('payOptBFields');
+        function refresh(){
+          af.style.display=a&&a.checked?'':'none';
+          bf.style.display=b&&b.checked?'':'none';
+        }
+        document.querySelectorAll('input[name="payment_option"]').forEach(function(r){r.addEventListener('change',refresh);});
+        refresh();
+      })();
+      </script>
+      {% endif %}
+
       <section class="form-section" data-vis="{{ V }}">
         <h3 data-vis="{{ V }}">File</h3>
         <label data-vis="{{ V }}">Attach File (optional)

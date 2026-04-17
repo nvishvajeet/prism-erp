@@ -148,13 +148,15 @@
   {% if current_user %}
   <nav class="nav" data-vis="{{ V }}">
     {% set endpoint = request.endpoint or '' %}
+    {% set is_lab_shell = active_portal and active_portal.slug == 'lab' %}
+    {% set queue_label = 'Job Scheduling' if is_lab_shell else 'Queue' %}
 
     {# Home — always first #}
     <a class="{% if endpoint == 'index' %}nav-active{% endif %}" href="{{ url_for('index') }}" data-vis="{{ V }}">Home</a>
 
     {# Queue + Statistics — top-level, always visible (these were buried in the Instruments dropdown and users couldn't find them) #}
     {% if portal_module_enabled('schedule') and can_access_schedule_user %}
-    <a class="{% if endpoint == 'schedule' %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
+    <a class="{% if endpoint == 'schedule' %}nav-active{% endif %}" href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ queue_label }}{% if nav_pending_counts.queue %}<span class="topbar-count-badge" data-vis="{{ V }}">{{ nav_pending_counts.queue }}</span>{% endif %}</a>
     {% endif %}
     {% if portal_module_enabled('stats') and can_access_stats_user %}
     <a class="{% if endpoint == 'stats' %}nav-active{% endif %}" href="{{ url_for('stats') }}" data-vis="{{ V }}">Stats</a>
@@ -174,7 +176,7 @@
         <div class="nav-menu" role="menu" aria-label="{{ nav.label }}" data-vis="{{ V }}">
           <a href="{{ nav.url }}" data-vis="{{ V }}"><strong>All Instruments</strong></a>
           {% if portal_module_enabled('schedule') and can_access_schedule_user %}
-          <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">Queue{% if nav_pending_counts.queue %} ({{ nav_pending_counts.queue }}){% endif %}</a>
+          <a href="{{ url_for('schedule') }}" data-vis="{{ V }}">{{ queue_label }}{% if nav_pending_counts.queue %} ({{ nav_pending_counts.queue }}){% endif %}</a>
           {% endif %}
           {% if portal_module_enabled('calendar') and can_access_calendar_user %}
           <a href="{{ url_for('calendar') }}" data-vis="{{ V }}">Calendar</a>
@@ -182,7 +184,12 @@
           {% if portal_module_enabled('stats') and can_access_stats_user %}
           <a href="{{ url_for('stats') }}" data-vis="{{ V }}">Statistics</a>
           {% endif %}
+          {% if portal_module_enabled('compute') %}
+          <a href="{{ url_for('compute_software_list') }}" data-vis="{{ V }}">Software</a>
+          {% endif %}
+          {% if portal_module_enabled('schedule') and can_access_schedule_user %}
           <a href="{{ url_for('new_request') }}" data-vis="{{ V }}">New Request</a>
+          {% endif %}
           {% if nav_instruments %}
           <hr style="border:none;border-top:1px solid var(--line);margin:0.3rem 0" data-vis="{{ V }}">
           {% for inst in nav_instruments[:8] %}

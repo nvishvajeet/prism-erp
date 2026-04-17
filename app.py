@@ -364,7 +364,7 @@ ERP_PORTALS = {
         "icon": "🔬",
         "color": "blue",
         "modules": [
-            "instruments", "queue", "finance",
+            "instruments", "queue", "compute", "finance",
             "attendance", "inbox", "notifications", "todos", "admin",
         ],
     },
@@ -496,7 +496,11 @@ MODULE_REGISTRY = {
         "nav_type": "dropdown",
         # Operational staff nav: owner, super/site admin, instrument_admin, operator, finance_admin.
         # NOT approvers, requesters, faculty — they access instruments via Settings or direct links.
-        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+        "nav_access": lambda ap, is_owner: (
+            ap.get("_is_operational_nav")
+            or ap.get("can_access_instruments")
+            or is_owner
+        ),
     },
     "finance": {
         "label": "Finance",
@@ -682,13 +686,18 @@ MODULE_REGISTRY = {
         "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
     },
     "compute": {
-        "label": "Compute",
+        "label": "Software",
         "icon": "\U0001f9e0",
         "nav_order": 11,
-        "description": "AI job submission (Claude API)",
+        "description": "Software catalog + compute jobs",
         "nav_endpoint": "compute_list",
         "nav_active_endpoints": {"compute_list", "compute_new", "compute_detail", "compute_software_list", "compute_software_detail", "compute_inventory", "compute_admin_storage"},
-        "nav_access": lambda ap, is_owner: ap.get("_is_operational_nav") or is_owner,
+        "nav_access": lambda ap, is_owner: (
+            ap.get("_is_operational_nav")
+            or ap.get("can_access_schedule")
+            or ap.get("can_access_instruments")
+            or is_owner
+        ),
     },
     "queue": {
         "label": "Queue",

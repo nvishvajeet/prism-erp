@@ -4685,7 +4685,10 @@ def _can_open_user_admin(user: sqlite3.Row | None) -> bool:
     allowed_open_roles = {"super_admin", "site_admin"}
     if lab_profile_mode_active():
         allowed_open_roles.add("instrument_admin")
-    return is_owner(user) or user["role"] in allowed_open_roles
+    # Use user_role_set() so secondary roles (from user_roles junction)
+    # grant admin access. E.g. `tester` primary + `super_admin` secondary
+    # (the tester account on Lab ERP, per K12) gets /admin/users visibility.
+    return is_owner(user) or bool(user_role_set(user) & allowed_open_roles)
 
 
 def _can_invite_users(user: sqlite3.Row | None) -> bool:
@@ -5588,6 +5591,20 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_tje_user ON telemetry_js_error(user_id, created_at);
+
+            -- Soft-delete archive for retired users. Was lazy-created via
+            -- _ensure_user_archive_table() on first retire; moved to init_db
+            -- 2026-04-17 so schema-drift audit reports clean 94/94 tables and
+            -- cold-start tenants don't race the first archive operation.
+            CREATE TABLE IF NOT EXISTS archived_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                archived_at TEXT NOT NULL,
+                archived_by_user_id INTEGER,
+                archive_reason TEXT,
+                snapshot_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_archived_users_user ON archived_users(user_id);
 
             CREATE TABLE IF NOT EXISTS user_work_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

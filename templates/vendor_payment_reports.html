@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, kpi_grid, empty_state with context %}
+{% block chart_scripts %}
+  <script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
+{% endblock %}
 {% block hover_back %}<a href="{{ url_for('vendor_payments_list') }}" class="hover-back-btn" title="Back to Payments">←</a>{% endblock %}
 {% block content %}
 

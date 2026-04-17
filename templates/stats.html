@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_page_macros.html" import card_heading, paginated_pane, stat_blob with context %}
+{% block chart_scripts %}
+  <script src="{{ url_for('static', filename='vendor/chart.js/chart.umd.min.js') }}"></script>
+{% endblock %}
 {% block content %}
 
 <section class="stats-tiles" data-vis="{{ V }}">
